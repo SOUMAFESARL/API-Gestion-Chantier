@@ -1,0 +1,23 @@
+Bonjour,
+
+L'espace de {{ raison_sociale }} est en ligne. Voici son adresse — conservez ce
+message, c'est la seule fois où elle vous est communiquée par écrit.
+
+L'ADRESSE DE VOTRE ESPACE
+{{ adresse_espace }}
+
+VOTRE IDENTIFIANT
+{{ email_admin }}
+
+Votre mot de passe est celui que vous avez choisi à l'activation. Nous ne le
+connaissons pas et ne pouvons pas vous le rappeler.
+
+Pour entrer :
+{{ lien_connexion }}
+
+Votre essai gratuit de {{ jours_essai }} jours a commencé aujourd'hui : toutes
+les fonctionnalités sont ouvertes, sans engagement et sans moyen de paiement.
+Nous vous préviendrons avant la fin.
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

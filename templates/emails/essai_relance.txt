@@ -1,0 +1,27 @@
+Bonjour,
+{% if jours_restants == 0 %}
+L'essai gratuit de {{ raison_sociale }} s'est terminé. Votre espace est passé en
+lecture seule : tout reste consultable, rien ne peut plus être saisi.
+{% elif jours_restants == 1 %}
+L'essai gratuit de {{ raison_sociale }} se termine demain. Sans souscription,
+votre espace passera en lecture seule : tout restera consultable, mais plus rien
+ne pourra être saisi.
+{% else %}
+Il reste {{ jours_restants }} jours à l'essai gratuit de {{ raison_sociale }}.
+{% endif %}
+CE QUE VOUS AVEZ DÉJÀ CONSTRUIT
+- {{ bilan.projets }} {% if bilan.projets == 1 %}projet{% else %}projets{% endif %}
+- {{ bilan.rapports }} {% if bilan.rapports == 1 %}rapport journalier{% else %}rapports journaliers{% endif %}
+- {{ bilan.collaborateurs }} {% if bilan.collaborateurs == 1 %}collaborateur{% else %}collaborateurs{% endif %}
+
+{% if jours_restants == 0 %}Ces données sont conservées et vous seront restituées intégralement dès la
+souscription.{% else %}Tout cela reste en place, quelle que soit votre décision.{% endif %}
+
+Choisir un plan :
+{{ lien_abonnement }}
+
+Vous recevez ce message parce que vous administrez l'espace de
+{{ raison_sociale }}.
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

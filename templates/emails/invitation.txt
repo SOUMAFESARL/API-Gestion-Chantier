@@ -1,0 +1,18 @@
+Bonjour{% if destinataire %} {{ destinataire }}{% endif %},
+{% if nom_projet %}
+Vous avez été invité à rejoindre le chantier « {{ nom_projet }} »{% if raison_sociale %} de {{ raison_sociale }}{% endif %} sur
+CCD Digital, avec le rôle de {{ role_libelle }}.
+{% else %}
+Vous avez été invité à rejoindre l'espace de gestion de chantier{% if raison_sociale %} de
+{{ raison_sociale }}{% endif %} sur CCD Digital, avec le rôle de {{ role_libelle }}.
+{% endif %}
+Activez votre compte en suivant ce lien, valable {{ heures_validite }} heures.
+Vous choisirez votre mot de passe à ce moment-là :
+
+{{ lien }}
+
+Si vous n'attendiez pas cette invitation, ignorez ce message : aucun compte ne
+sera créé.
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

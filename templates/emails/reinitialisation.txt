@@ -1,0 +1,16 @@
+Bonjour,
+{% if motif == "blocage" %}
+Votre compte CCD Digital a été bloqué après cinq tentatives de connexion
+échouées. Choisir un nouveau mot de passe le débloque immédiatement.
+{% else %}
+Vous avez demandé à réinitialiser votre mot de passe.
+{% endif %}
+Suivez ce lien, valable une heure. Toutes vos sessions ouvertes seront fermées :
+
+{{ lien }}
+
+Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : votre mot
+de passe reste inchangé.
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

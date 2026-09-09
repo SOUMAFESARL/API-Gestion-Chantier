@@ -1,0 +1,35 @@
+# CCD Digital — dépendances communes à tous les environnements
+# Django 5.2 LTS : supporté jusqu'en avril 2028, et compatible django-tenants.
+# Ne pas passer en Django 6 tant que django-tenants ne l'annonce pas explicitement.
+
+Django>=5.2,<6.0
+django-tenants>=3.7
+
+# API
+djangorestframework>=3.15
+djangorestframework-simplejwt>=5.4
+django-filter>=24.0
+django-cors-headers>=4.0
+drf-spectacular>=0.27
+
+# Base de données
+psycopg[binary]>=3.2
+
+# Configuration par variables d'environnement
+python-decouple>=3.8
+
+# Tâches asynchrones et planifiées
+celery>=5.4
+redis>=5.0
+django-celery-beat>=2.7
+
+# Stockage objet (S3 / MinIO)
+django-storages>=1.14
+boto3>=1.34
+
+# Images (photos de chantier, logos et traitement graphique)
+Pillow>=10.0
+numpy>=2.0
+
+# Hachage bcrypt des mots de passe — Socle Commun §2.1
+bcrypt>=4.0

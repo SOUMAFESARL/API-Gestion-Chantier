@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}Réinitialisez votre mot de passe CCD Digital{% endblock %}
+{% block preheader %}Un lien valable une heure pour choisir un nouveau mot de passe.{% endblock %}
+{% block titre %}{% if motif == "blocage" %}Débloquez votre compte{% else %}Réinitialisez votre mot de passe{% endif %}{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+{% if motif == "blocage" %}
+<p style="margin:0 0 14px 0;">Votre compte CCD Digital a été bloqué après <strong style="color:#1E1D1B;">cinq tentatives de connexion échouées</strong>. Choisir un nouveau mot de passe le débloque immédiatement.</p>
+{% else %}
+<p style="margin:0 0 14px 0;">Vous avez demandé à réinitialiser votre mot de passe.</p>
+{% endif %}
+<p style="margin:0 0 14px 0;">Suivez ce lien, valable <strong style="color:#1E1D1B;">une heure</strong>. Toutes vos sessions ouvertes seront fermées.</p>
+{% endblock %}
+{% block action %}{% include "emails/_bouton.html" with url=lien libelle="Choisir un nouveau mot de passe" %}{% endblock %}
+{% block apres %}
+<p style="margin:0 0 14px 0;"><span style="font-size:14px;color:#8A8680;">Si vous n'êtes pas à l'origine de cette demande, ignorez ce message&nbsp;: votre mot de passe reste inchangé.</span></p>
+{% endblock %}

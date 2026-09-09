@@ -1,0 +1,22 @@
+Bonjour,
+
+Votre inscription pour {{ raison_sociale }} est presque terminée.
+{% if regenere %}
+Une demande était déjà en cours pour cette adresse. Ce nouveau lien remplace
+le précédent, qui ne fonctionne plus.
+{% endif %}
+Choisissez votre mot de passe et activez votre espace en suivant ce lien,
+valable 48 heures :
+
+{{ lien }}
+
+CE QUI SE PASSERA ENSUITE
+Vous choisissez votre mot de passe, puis nous créons votre espace — cela prend
+moins d'une minute. Vous recevrez alors un second message avec son adresse, et
+votre essai gratuit de {{ jours_essai }} jours commencera.
+
+Passé le délai de 48 heures, aucun espace n'aura été créé et vous pourrez
+recommencer avec la même adresse.
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

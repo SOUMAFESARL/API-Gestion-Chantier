@@ -1,0 +1,21 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}Activez votre espace CCD Digital{% endblock %}
+{% block preheader %}Votre inscription pour {{ raison_sociale }} est presque terminée.{% endblock %}
+{% block titre %}Activez votre espace{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+<p style="margin:0 0 14px 0;">Votre inscription pour <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong> est presque terminée.</p>
+{% if regenere %}
+<p style="margin:0 0 14px 0;">Une demande était déjà en cours pour cette adresse. <strong style="color:#1E1D1B;">Ce nouveau lien remplace le précédent</strong>, qui ne fonctionne plus.</p>
+{% endif %}
+<p style="margin:0 0 14px 0;">Choisissez votre mot de passe et activez votre espace en suivant ce lien, valable <strong style="color:#1E1D1B;">48 heures</strong>.</p>
+{% endblock %}
+{% block action %}{% include "emails/_bouton.html" with url=lien libelle="Activer mon espace" %}{% endblock %}
+{% block apres %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;"><tr><td style="background:#FAFAF8;border-left:3px solid #D4652A;border-radius:4px;padding:14px 18px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#4F4C47;">
+<div style="font-weight:bold;color:#1E1D1B;margin-bottom:6px;">Ce qui se passera ensuite</div>
+Vous choisissez votre mot de passe, puis nous créons votre espace — cela prend moins d'une minute. Vous recevrez alors un second message avec son adresse, et votre essai gratuit de {{ jours_essai }} jours commencera.
+</td></tr></table>
+<p style="margin:0 0 14px 0;">Passé le délai de 48 heures, aucun espace n'aura été créé et vous pourrez recommencer avec la même adresse.</p>
+{% endblock %}

@@ -1,0 +1,14 @@
+Bonjour,
+
+L'espace de {{ raison_sociale }} est {{ statut_libelle|lower }} depuis le
+{{ date_effet }}. Il n'est pas accessible pour le moment.
+
+{% if conservation_jusqu_au %}Vos données sont conservées jusqu'au {{ conservation_jusqu_au }} et vous seront
+restituées intégralement à la réactivation.{% else %}Vos données sont conservées.{% endif %}
+
+POUR RÉACTIVER VOTRE ESPACE
+Écrivez à {{ email_commercial }}{% if telephone_commercial %} ou appelez le {{ telephone_commercial }}{% endif %}.
+Précisez le nom de votre entreprise : nous retrouverons votre dossier.
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

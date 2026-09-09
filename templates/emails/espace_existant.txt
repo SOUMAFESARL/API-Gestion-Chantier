@@ -1,0 +1,14 @@
+Bonjour,
+
+Votre entreprise {{ raison_sociale }} dispose déjà d'un espace sur CCD Digital.
+Vous pouvez vous y connecter dès maintenant :
+
+{{ lien_connexion }}
+
+Mot de passe oublié ? Choisissez-en un nouveau ici — vous recevrez un lien
+par email :
+
+{{ lien_reinitialisation }}
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

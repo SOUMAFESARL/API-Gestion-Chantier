@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}Invitation à rejoindre {{ raison_sociale|default:"votre espace CCD Digital" }}{% endblock %}
+{% block preheader %}Vous êtes invité comme {{ role_libelle }}{% if nom_projet %} sur le chantier {{ nom_projet }}{% endif %}.{% endblock %}
+{% block titre %}{% if nom_projet %}Invitation au chantier {{ nom_projet }}{% else %}Vous êtes invité à rejoindre {{ raison_sociale|default:"un espace CCD Digital" }}{% endif %}{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour{% if destinataire %} {{ destinataire }}{% endif %},</p>
+{% if nom_projet %}
+<p style="margin:0 0 14px 0;">Vous avez été invité à rejoindre le chantier <strong style="color:#1E1D1B;">{{ nom_projet }}</strong>{% if raison_sociale %} de {{ raison_sociale }}{% endif %} sur CCD Digital, avec le rôle de <strong style="color:#1E1D1B;">{{ role_libelle }}</strong>.</p>
+{% else %}
+<p style="margin:0 0 14px 0;">Vous avez été invité à rejoindre l'espace de gestion de chantier{% if raison_sociale %} de <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong>{% endif %} sur CCD Digital, avec le rôle de <strong style="color:#1E1D1B;">{{ role_libelle }}</strong>.</p>
+{% endif %}
+<p style="margin:0 0 14px 0;">Activez votre compte en suivant ce lien, valable <strong style="color:#1E1D1B;">{{ heures_validite }} heures</strong>. Vous choisirez votre mot de passe à ce moment-là.</p>
+{% endblock %}
+{% block action %}{% include "emails/_bouton.html" with url=lien libelle="Activer mon compte" %}{% endblock %}
+{% block apres %}
+<p style="margin:0 0 14px 0;"><span style="font-size:14px;color:#8A8680;">Si vous n'attendiez pas cette invitation, ignorez ce message&nbsp;: aucun compte ne sera créé.</span></p>
+{% endblock %}

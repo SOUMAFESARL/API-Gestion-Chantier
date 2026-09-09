@@ -1,0 +1,28 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}{% if jours_restants == 0 %}Votre essai CCD Digital est terminé{% else %}Votre essai CCD Digital se termine{% endif %}{% endblock %}
+{% block preheader %}{% if jours_restants == 0 %}Votre espace est passé en lecture seule.{% elif jours_restants == 1 %}Il reste un jour d'essai.{% else %}Il reste {{ jours_restants }} jours d'essai.{% endif %}{% endblock %}
+{% block titre %}{% if jours_restants == 0 %}Votre essai est terminé{% elif jours_restants == 1 %}Dernier jour d'essai{% else %}Il vous reste {{ jours_restants }} jours d'essai{% endif %}{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+{% if jours_restants == 0 %}
+<p style="margin:0 0 14px 0;">L'essai gratuit de <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong> s'est terminé. Votre espace est passé en <strong style="color:#1E1D1B;">lecture seule</strong>&nbsp;: tout reste consultable, rien ne peut plus être saisi.</p>
+{% elif jours_restants == 1 %}
+<p style="margin:0 0 14px 0;">L'essai gratuit de <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong> se termine <strong style="color:#1E1D1B;">demain</strong>. Sans souscription, votre espace passera en lecture seule&nbsp;: tout restera consultable, mais plus rien ne pourra être saisi.</p>
+{% else %}
+<p style="margin:0 0 14px 0;">Il reste <strong style="color:#1E1D1B;">{{ jours_restants }} jours</strong> à l'essai gratuit de <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong>.</p>
+{% endif %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;"><tr><td style="background:#FAFAF8;border-left:3px solid #D4652A;border-radius:4px;padding:14px 18px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#4F4C47;">
+<div style="font-weight:bold;color:#1E1D1B;margin-bottom:8px;">Ce que vous avez déjà construit</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#4F4C47;">
+<tr><td style="padding:2px 0;">{{ bilan.projets }} {% if bilan.projets == 1 %}projet{% else %}projets{% endif %}</td></tr>
+<tr><td style="padding:2px 0;">{{ bilan.rapports }} {% if bilan.rapports == 1 %}rapport journalier{% else %}rapports journaliers{% endif %}</td></tr>
+<tr><td style="padding:2px 0;">{{ bilan.collaborateurs }} {% if bilan.collaborateurs == 1 %}collaborateur{% else %}collaborateurs{% endif %}</td></tr>
+</table>
+<div style="font-size:13px;color:#8A8680;margin-top:8px;">{% if jours_restants == 0 %}Ces données sont conservées et vous seront restituées intégralement dès la souscription.{% else %}Tout cela reste en place, quelle que soit votre décision.{% endif %}</div>
+</td></tr></table>
+{% endblock %}
+{% block action %}{% include "emails/_bouton.html" with url=lien_abonnement libelle="Choisir un plan" %}{% endblock %}
+{% block apres %}
+<p style="margin:0 0 14px 0;"><span style="font-size:14px;color:#8A8680;">Vous recevez ce message parce que vous administrez l'espace de {{ raison_sociale }}.</span></p>
+{% endblock %}

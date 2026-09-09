@@ -1,0 +1,25 @@
+﻿services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ccd_digital}
+      POSTGRES_USER: ${POSTGRES_USER:-ccd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ccd}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  postgres_data:

@@ -101,7 +101,7 @@ jobs:
           username: ${{ secrets.CPANEL_FTP_USERNAME }}
           password: ${{ secrets.CPANEL_FTP_PASSWORD }}
 
-          protocol: ftps
+          protocol: ftp
           port: 21
 
           local-dir: ./

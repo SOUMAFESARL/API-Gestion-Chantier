@@ -146,4 +146,7 @@ Le backend est prêt et écoute sur :
 ---
 
 ## 🤝 Besoin d'aide ?
+
+Pour configurer les mises à jour automatiques du serveur depuis GitHub, voir le
+[guide de déploiement cPanel](docs/deploiement-cpanel.md).
 Si vous rencontrez une erreur ou avez une question, contactez l'équipe technique SOUMAFE SARL.

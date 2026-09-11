@@ -23,6 +23,8 @@ htmlcov/
 staticfiles/
 media/
 db.sqlite3
+tmp/
+passenger.log
 
 # Editeurs / OS
 .idea/

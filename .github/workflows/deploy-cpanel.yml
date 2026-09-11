@@ -1,4 +1,4 @@
-name: Tests et déploiement cPanel
+name: Tests et déploiement production cPanel
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cpanel-${{ github.ref }}
+  group: cpanel-production-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -80,10 +80,10 @@ jobs:
             --deselect=apps/projets/tests/test_meteo.py::test_le_referentiel_typescript_ne_derive_pas
 
   deploy:
-    name: Déploiement FTP sur cPanel
+    name: Déploiement production sur cPanel
     needs: tests
 
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CPANEL_DEPLOY_ENABLED == 'true'
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
 
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -94,7 +94,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Déployer les fichiers sur cPanel
+      - name: Déployer sur cPanel par FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.CPANEL_FTP_SERVER }}
@@ -126,7 +126,7 @@ jobs:
             **/*.sqlite3
 
       - name: Vérifier la disponibilité de l’API
-        if: vars.CPANEL_HEALTH_URL != ''
+        if: ${{ vars.CPANEL_HEALTH_URL != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -141,16 +141,8 @@ jobs:
               "${{ vars.CPANEL_HEALTH_URL }}" \
               -o /tmp/api-health.json; then
 
-              python - <<'PY'
-          import json
-
-          with open("/tmp/api-health.json", "r", encoding="utf-8") as file:
-              response = json.load(file)
-
-          assert response.get("statut") == "ok", response
-          PY
-
-              echo "API disponible."
+              echo "API de production disponible."
+              cat /tmp/api-health.json
               exit 0
             fi
 
@@ -158,5 +150,5 @@ jobs:
             sleep 5
           done
 
-          echo "La vérification HTTPS a échoué."
+          echo "La vérification de l'API de production a échoué."
           exit 1

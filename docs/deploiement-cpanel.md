@@ -40,14 +40,14 @@ Créer `.env` à partir de `.env.example` sur le serveur, puis renseigner :
 - `DJANGO_SETTINGS_MODULE=config.settings.cpanel` ;
 - `DJANGO_ALLOWED_HOSTS=api.exemple.ci,.api.exemple.ci` et
   `DOMAINE_PRINCIPAL=api.exemple.ci` selon les domaines réellement utilisés ;
-- les paramètres PostgreSQL de cPanel, y compris les préfixes du compte ;
+- les paramètres PostgreSQL de cPanel ou d'une base managée externe (recommandé : **Supabase PostgreSQL 17** via pooler IPv4 `aws-1-eu-west-3.pooler.supabase.com:5432`, ce qui contourne les versions obsolètes PostgreSQL 13/14 de certains OS cPanel et garantit les droits complets `CREATE SCHEMA`) ;
 - `FRONTEND_URL` et `CORS_ALLOWED_ORIGINS` avec les URL HTTPS du frontend ;
 - les paramètres SMTP et S3 définis dans `config/settings/production.py` ;
 - un service Redis accessible pour le cache et Celery.
 
 Le backend utilise des schémas PostgreSQL : l'utilisateur doit pouvoir créer
-des schémas dans sa base. La présence de PostgreSQL dans cPanel ne garantit pas
-ce droit. Configurer aussi les domaines et certificats HTTPS des tenants.
+des schémas dans sa base (`django-tenants`). La présence de PostgreSQL dans cPanel ne garantit pas
+ce droit, raison pour laquelle une base managée externe (Supabase) avec droits administrateur est particulièrement recommandée. Configurer aussi les domaines et certificats HTTPS des tenants.
 Le proxy de l'hébergeur doit transmettre correctement le protocole HTTPS.
 
 Passenger ne lance pas les workers Celery ni Celery Beat. Si les tâches

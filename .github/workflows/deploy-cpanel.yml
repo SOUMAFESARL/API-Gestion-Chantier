@@ -1,10 +1,14 @@
-name: Tests et deploiement cPanel
+name: Tests et déploiement cPanel
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
   workflow_dispatch:
 
 permissions:
@@ -16,100 +20,143 @@ concurrency:
 
 jobs:
   tests:
+    name: Tests Django
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     services:
       postgres:
         image: postgres:16
+
         env:
           POSTGRES_USER: ccd
           POSTGRES_PASSWORD: test-only
           POSTGRES_DB: ccd_digital
-        ports: ["5432:5432"]
+
+        ports:
+          - 5432:5432
+
         options: >-
           --health-cmd "pg_isready -U ccd -d ccd_digital"
-          --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       DJANGO_SETTINGS_MODULE: config.settings.test
       DJANGO_SECRET_KEY: ci-only-secret-key-not-used-in-production
+
       POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
       POSTGRES_USER: ccd
       POSTGRES_PASSWORD: test-only
       POSTGRES_DB: ccd_digital
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Récupérer le code
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+
+      - name: Installer Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements/*.txt
-      - run: python -m pip install -r requirements/local.txt
-      - run: python manage.py check
-      # Ce test compare un fichier d'un autre depot, absent du backend.
-      # Il doit etre execute dans une CI qui extrait aussi le vrai frontend.
-      - name: Tests du backend
-        run: >-
-          python -m pytest apps -q
-          --deselect=apps/projets/tests/test_meteo.py::test_le_referentiel_typescript_ne_derive_pas
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/local.txt
+
+      - name: Vérifier la configuration Django
+        run: |
+          python manage.py check
+
+      - name: Exécuter les tests backend
+        run: |
+          python -m pytest apps -q \
+            --deselect=apps/projets/tests/test_meteo.py::test_le_referentiel_typescript_ne_derive_pas
 
   deploy:
+    name: Déploiement FTP sur cPanel
     needs: tests
+
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CPANEL_DEPLOY_ENABLED == 'true'
+
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
-      SSH_USER: ${{ secrets.CPANEL_SSH_USER }}
-      SSH_PORT: ${{ vars.CPANEL_SSH_PORT || '22' }}
-      APP_ROOT: ${{ vars.CPANEL_APP_ROOT }}
-      PYTHON_BIN: ${{ vars.CPANEL_PYTHON_BIN }}
-      HEALTH_URL: ${{ vars.CPANEL_HEALTH_URL }}
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Récupérer le code
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Configurer SSH et verifier les parametres
-        env:
-          SSH_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
-          KNOWN_HOSTS: ${{ secrets.CPANEL_SSH_KNOWN_HOSTS }}
+
+      - name: Déployer les fichiers sur cPanel
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.CPANEL_FTP_SERVER }}
+          username: ${{ secrets.CPANEL_FTP_USERNAME }}
+          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
+
+          protocol: ftps
+          port: 21
+
+          local-dir: ./
+          server-dir: /public_html/api-chantier/
+
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/__pycache__/**
+            **/*.pyc
+            **/.env
+            **/.env.*
+            **/venv/**
+            **/env/**
+            **/.venv/**
+            **/node_modules/**
+            **/tests/**
+            **/.pytest_cache/**
+            **/media/**
+            **/staticfiles/**
+            **/*.sqlite3
+
+      - name: Vérifier la disponibilité de l’API
+        if: vars.CPANEL_HEALTH_URL != ''
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$SSH_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
-          [[ "$SSH_USER" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_-]*$ ]]
-          [[ "$SSH_PORT" =~ ^[0-9]+$ ]]
-          [[ "$APP_ROOT" =~ ^/home/[a-zA-Z0-9_./-]+$ ]]
-          [[ "$PYTHON_BIN" =~ ^/home/[a-zA-Z0-9_./-]+$ ]]
-          [[ "$HEALTH_URL" == https://* ]]
-          test -n "$SSH_KEY"
-          test -n "$KNOWN_HOSTS"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
-      - name: Mettre a jour le commit teste et redemarrer Passenger
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf -v remote_command 'bash -s -- %q %q %q' "$APP_ROOT" "$PYTHON_BIN" "$GITHUB_SHA"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
-            -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$remote_command" < scripts/deploy-cpanel.sh
-      - name: Verifier la reponse HTTPS
-        shell: bash
-        run: |
-          set -euo pipefail
+
           for attempt in {1..12}; do
-            if curl --fail --silent --show-error --connect-timeout 10 --max-time 20 \
-                "$HEALTH_URL" -o /tmp/api-health.json && \
-                python -c 'import json; assert json.load(open("/tmp/api-health.json"))["statut"] == "ok"'; then
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 10 \
+              --max-time 20 \
+              "${{ vars.CPANEL_HEALTH_URL }}" \
+              -o /tmp/api-health.json; then
+
+              python - <<'PY'
+          import json
+
+          with open("/tmp/api-health.json", "r", encoding="utf-8") as file:
+              response = json.load(file)
+
+          assert response.get("statut") == "ok", response
+          PY
+
+              echo "API disponible."
               exit 0
             fi
+
+            echo "API indisponible. Nouvelle tentative dans 5 secondes..."
             sleep 5
           done
-          echo 'La verification HTTPS a echoue. Consulter les journaux Passenger.' >&2
+
+          echo "La vérification HTTPS a échoué."
           exit 1
-      - name: Retirer la cle du runner
-        if: always()
-        run: rm -f ~/.ssh/id_ed25519

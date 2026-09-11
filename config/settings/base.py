@@ -186,7 +186,16 @@ DATABASES = {
     }
 }
 
+# --------------------------------------------------------------------------
+# Compatibilité SGBD : autoriser PostgreSQL >= 13.0 (notamment PostgreSQL 13.23
+# sur hébergements mutualisés cPanel / CloudLinux).
+# --------------------------------------------------------------------------
+from django.db.backends.postgresql.features import DatabaseFeatures
+
+DatabaseFeatures.minimum_database_version = (13,)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
 
 # --------------------------------------------------------------------------
 # Authentification

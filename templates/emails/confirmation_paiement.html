@@ -1,0 +1,32 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}Confirmation de paiement — {{ raison_sociale }}{% endblock %}
+{% block preheader %}Votre paiement a bien été reçu et validé. Votre facture {{ numero_facture }} est disponible.{% endblock %}
+{% block titre %}Paiement validé avec succès{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+<p style="margin:0 0 14px 0;">Nous vous confirmons la bonne réception de votre paiement pour l'abonnement de <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong> sur CCD Digital.</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;">
+  <tr>
+    <td style="background:#FAFAF8;border-left:3px solid #1E7E34;border-radius:4px;padding:16px 20px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#4F4C47;">
+      <div style="font-size:12px;color:#8A8680;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Numéro de Facture OHADA</div>
+      <div style="font-family:Consolas,Courier New,monospace;font-size:16px;font-weight:bold;color:#1E1D1B;margin-bottom:12px;">{{ numero_facture }}</div>
+
+      <div style="font-size:12px;color:#8A8680;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Forfait activé</div>
+      <div style="font-size:15px;font-weight:600;color:#1E1D1B;margin-bottom:12px;">{{ forfait }}</div>
+
+      <div style="font-size:12px;color:#8A8680;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Montant réglé</div>
+      <div style="font-size:15px;font-weight:bold;color:#1E7E34;margin-bottom:12px;">{{ montant_fcfa }} FCFA (TTC) via {{ mode_paiement }}</div>
+
+      <div style="font-size:12px;color:#8A8680;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Abonnement valide jusqu'au</div>
+      <div style="font-size:14px;color:#1E1D1B;">{{ date_fin }}</div>
+
+      <div style="font-size:11px;color:#8A8680;margin-top:12px;">Référence transaction : {{ transaction_id }}</div>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 14px 0;">Votre espace de travail et tous vos projets sont actifs sans interruption. Vous pouvez consulter et télécharger votre facture certifiée depuis votre tableau de bord.</p>
+{% endblock %}
+{% block action %}{% include "emails/_bouton.html" with url=lien_tableau_de_bord|default:"http://localhost:3000/tableau-de-bord" libelle="Accéder à mon espace" %}{% endblock %}

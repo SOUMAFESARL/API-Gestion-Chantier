@@ -5,6 +5,8 @@ Gère l'initialisation de paiement et la vérification des transactions CinetPay
 Intègre un mode simulation automatique lorsque les clés d'API ne sont pas encore configurées.
 """
 
+import hashlib
+import hmac
 import logging
 from typing import Any
 from urllib.parse import urlencode
@@ -33,11 +35,13 @@ class CinetPayClient:
         self,
         api_key: str | None = None,
         site_id: str | None = None,
+        secret_key: str | None = None,
         checkout_url: str | None = None,
         check_url: str | None = None,
     ):
         self.api_key = api_key or getattr(settings, "CINETPAY_API_KEY", "")
         self.site_id = site_id or getattr(settings, "CINETPAY_SITE_ID", "")
+        self.secret_key = secret_key or getattr(settings, "CINETPAY_SECRET_KEY", "")
         self.checkout_url = checkout_url or getattr(
             settings, "CINETPAY_CHECKOUT_URL", "https://api-checkout.cinetpay.com/v2/payment"
         )
@@ -49,6 +53,37 @@ class CinetPayClient:
     def est_en_mode_simulation(self) -> bool:
         """Indique si le client opère en mode simulation locale (sans clés CinetPay réelles)."""
         return not (self.api_key and self.site_id)
+
+    def verifier_signature(self, corps_brut: bytes | str, token_recu: str | None) -> bool:
+        """Vérifie l'empreinte HMAC-SHA256 (en-tête X-Token) d'une notification webhook.
+
+        - Si `secret_key` est renseigné et `token_recu` fourni, calcule le HMAC-SHA256
+          du corps de requête et le compare à temps constant avec `token_recu`.
+        - Si `secret_key` est renseigné mais `token_recu` absent, la notification est rejetée.
+        - Si aucune `secret_key` n'est configurée (mode simulation locale ou test),
+          la validation est acceptée et la sécurité repose sur la contre-interrogation directe.
+        """
+        if not self.secret_key:
+            return True
+
+        if not token_recu:
+            logger.warning(
+                "Notification CinetPay reçue sans X-Token alors que secret_key est configurée."
+            )
+            return False
+
+        try:
+            if isinstance(corps_brut, str):
+                corps_brut = corps_brut.encode("utf-8")
+            signature_calculee = hmac.new(
+                self.secret_key.encode("utf-8"),
+                corps_brut or b"",
+                hashlib.sha256,
+            ).hexdigest()
+            return hmac.compare_digest(signature_calculee.lower(), token_recu.strip().lower())
+        except Exception as e:
+            logger.error(f"Erreur lors du calcul HMAC CinetPay : {e}")
+            return False
 
     def initier_paiement(
         self,

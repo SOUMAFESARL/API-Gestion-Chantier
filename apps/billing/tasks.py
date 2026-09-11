@@ -121,3 +121,25 @@ def _clore_essai(abonnement) -> None:
     abonnement.statut = abonnement.Statut.SUSPENDU
     abonnement.lecture_seule_depuis = abonnement.lecture_seule_depuis or tz.now()
     abonnement.save(update_fields=["statut", "lecture_seule_depuis", "modifie_le"])
+
+
+@shared_task
+def verifier_paiements_en_attente() -> dict:
+    """Vérification automatique et réconciliation des transactions CinetPay en attente.
+
+    Tourne dans le schéma `public` (tables billing) sur un intervalle régulier (ex: 10 min).
+    Interroge l'API CinetPay pour valider les règlements dont la notification n'est pas parvenue
+    ou a été retardée.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage de la tâche Celery de réconciliation des paiements CinetPay...")
+    resultat = PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=5,
+        timeout_heures=48,
+    )
+    logger.info(
+        f"Fin de la réconciliation CinetPay : {resultat.get('confirmes')} confirmés, "
+        f"{resultat.get('echoues')} échoués, {resultat.get('en_attente')} en attente."
+    )
+    return resultat

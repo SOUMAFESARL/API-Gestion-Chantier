@@ -18,6 +18,7 @@ from apps.billing.serializers import (
     PlanCatalogueSerializer,
     StatutPaiementResponseSerializer,
 )
+from apps.billing.services.cinetpay import CinetPayClient
 from apps.billing.services.paiement import PaiementAbonnementService
 
 logger = logging.getLogger(__name__)
@@ -118,10 +119,21 @@ class CinetPayWebhookView(APIView):
         responses={200: dict},
     )
     def post(self, request):
+        # 1. Vérification de l'authenticité de la notification via X-Token (HMAC SHA-256)
+        client = CinetPayClient()
+        x_token = request.headers.get("x-token") or request.META.get("HTTP_X_TOKEN")
+
+        if not client.verifier_signature(request.body, x_token):
+            logger.warning("Notification CinetPay rejetée : signature HMAC (X-Token) invalide.")
+            return Response(
+                {"status": "REJECTED", "message": "Signature de notification invalide."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # CinetPay peut poster en application/x-www-form-urlencoded ou application/json
         payload = request.data or {}
 
-        # Récupération de l'identifiant de transaction (selon conventions CinetPay)
+        # 2. Récupération de l'identifiant de transaction (selon conventions CinetPay)
         transaction_id = (
             payload.get("cpm_trans_id")
             or payload.get("transaction_id")
@@ -143,6 +155,10 @@ class CinetPayWebhookView(APIView):
             donnees_webhook=payload,
         )
 
+        # Si le site_id était invalide, renvoyer 400
+        if resultat.get("statut") == "SITE_INVALIDE":
+            return Response(resultat, status=status.HTTP_400_BAD_REQUEST)
+
         # CinetPay exige impérativement un HTTP 200 pour considérer la notification reçue
         return Response(resultat, status=status.HTTP_200_OK)
 
@@ -163,14 +179,14 @@ class StatutPaiementView(APIView):
         with schema_context(get_public_schema_name()):
             paiement = (
                 PaiementAbonnement.objects.filter(reference_transaction=transaction_id)
-                .select_related("facture__abonnement", "facture__entreprise")
+                .select_related("facture__abonnement__plan", "facture__entreprise")
                 .first()
             )
 
             if not paiement:
                 paiement = (
                     PaiementAbonnement.objects.filter(reference_commande=transaction_id)
-                    .select_related("facture__abonnement", "facture__entreprise")
+                    .select_related("facture__abonnement__plan", "facture__entreprise")
                     .first()
                 )
 
@@ -197,11 +213,19 @@ class StatutPaiementView(APIView):
                 "statut": paiement.statut,
                 "statut_affichage": paiement.get_statut_display(),
                 "mode_paiement": paiement.get_mode_display(),
+                "moyen_paiement": paiement.get_mode_display(),
                 "montant_fcfa": paiement.montant_fcfa,
                 "numero_facture": paiement.facture.numero,
+                "reference_facture": paiement.facture.numero,
                 "paye_le": paiement.paye_le,
                 "abonnement_actif": est_actif,
+                "est_valide": est_actif,
                 "date_fin": abonnement.date_fin if est_actif else None,
+                "abonnement_expire_le": (
+                    abonnement.date_fin.isoformat() if est_actif and abonnement.date_fin else None
+                ),
+                "entreprise": paiement.facture.entreprise.raison_sociale,
+                "plan": abonnement.plan.libelle,
             }
 
             serializer = StatutPaiementResponseSerializer(data)

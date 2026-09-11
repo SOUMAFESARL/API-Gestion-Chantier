@@ -225,3 +225,147 @@ def test_consulter_statut_paiement_api(client_tenant, entreprise_et_admin):
     assert data["transaction_id"] == tx_id
     assert data["statut"] in ["CONFIRME", "INITIE"]
     assert data["montant_fcfa"] == 49000
+    assert data["reference_facture"] is not None
+    assert data["entreprise"] == entreprise.raison_sociale
+
+
+@pytest.mark.django_db
+def test_webhook_cinetpay_hmac_valide_et_invalide(client_tenant, entreprise_et_admin, settings):
+    """Le webhook valide les requêtes avec signature HMAC correcte et rejette les fausses."""
+    import hashlib
+    import hmac
+    import json
+
+    settings.CINETPAY_SECRET_KEY = "cle_secrete_ultra_securisee"
+    entreprise = entreprise_et_admin["entreprise"]
+    plan = Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE)
+
+    res = PaiementAbonnementService.initier_paiement(
+        entreprise=entreprise,
+        plan=plan,
+        cycle="MENSUEL",
+    )
+    tx_id = res["transaction_id"]
+
+    donnees = {"cpm_trans_id": tx_id}
+    corps_bytes = json.dumps(donnees).encode("utf-8")
+
+    # 1. Test avec signature invalide -> 403 Forbidden
+    resp_invalide = client_tenant.post(
+        "/api/v1/cinetpay/webhook/",
+        data=corps_bytes,
+        content_type="application/json",
+        headers={"x-token": "mauvaise_signature_123"},
+    )
+    assert resp_invalide.status_code == status.HTTP_403_FORBIDDEN
+    assert resp_invalide.json()["status"] == "REJECTED"
+
+    # 2. Test avec signature HMAC-SHA256 valide -> 200 OK
+    signature_valide = hmac.new(
+        b"cle_secrete_ultra_securisee",
+        corps_bytes,
+        hashlib.sha256,
+    ).hexdigest()
+
+    resp_valide = client_tenant.post(
+        "/api/v1/cinetpay/webhook/",
+        data=corps_bytes,
+        content_type="application/json",
+        headers={"x-token": signature_valide},
+    )
+    assert resp_valide.status_code == status.HTTP_200_OK
+    assert resp_valide.json()["statut"] == "CONFIRME"
+
+
+@pytest.mark.django_db
+def test_webhook_cinetpay_site_id_invalide(client_tenant, entreprise_et_admin, settings):
+    """Une notification avec un site_id erroné est rejetée."""
+    settings.CINETPAY_SECRET_KEY = ""  # pas de HMAC pour tester isolément le site_id
+    settings.CINETPAY_SITE_ID = "SITE_OFFICIEL_123"
+
+    entreprise = entreprise_et_admin["entreprise"]
+    plan = Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE)
+
+    res = PaiementAbonnementService.initier_paiement(
+        entreprise=entreprise,
+        plan=plan,
+        cycle="MENSUEL",
+    )
+    tx_id = res["transaction_id"]
+
+    resp = client_tenant.post(
+        "/api/v1/cinetpay/webhook/",
+        data={
+            "cpm_trans_id": tx_id,
+            "cpm_site_id": "PIRATE_SITE",
+        },
+        format="json",
+    )
+    assert resp.status_code == status.HTTP_400_BAD_REQUEST
+    assert resp.json()["statut"] == "SITE_INVALIDE"
+
+
+@pytest.mark.django_db
+def test_reconciliation_automatique_tache_celery_et_commande(entreprise_et_admin):
+    """La tâche Celery et la commande vérifient automatiquement les paiements en attente."""
+    from apps.billing.tasks import verifier_paiements_en_attente
+
+    entreprise = entreprise_et_admin["entreprise"]
+    plan = Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE)
+
+    # 1. Initialisation de deux paiements en attente
+    res1 = PaiementAbonnementService.initier_paiement(entreprise=entreprise, plan=plan)
+    tx1 = res1["transaction_id"]
+
+    # Exécution de la commande CLI sur tx1
+    call_command("verifier_paiements_cinetpay", transaction_id=tx1)
+
+    with schema_context(get_public_schema_name()):
+        p1 = PaiementAbonnement.objects.get(reference_transaction=tx1)
+        assert p1.statut == PaiementAbonnement.Statut.CONFIRME
+
+    # 2. Deuxième paiement testé par la tâche Celery de réconciliation
+    res2 = PaiementAbonnementService.initier_paiement(entreprise=entreprise, plan=plan)
+    tx2 = res2["transaction_id"]
+
+    # Simuler que tx2 a été créée il y a 10 minutes pour être éligible au seuil
+    with schema_context(get_public_schema_name()):
+        PaiementAbonnement.objects.filter(reference_transaction=tx2).update(
+            cree_le=timezone.now() - timedelta(minutes=10)
+        )
+
+    # Exécution de la tâche Celery
+    stats = verifier_paiements_en_attente()
+    assert stats["confirmes"] >= 1
+
+    with schema_context(get_public_schema_name()):
+        p2 = PaiementAbonnement.objects.get(reference_transaction=tx2)
+        assert p2.statut == PaiementAbonnement.Statut.CONFIRME
+
+
+@pytest.mark.django_db
+def test_email_confirmation_envoye_sur_validation(entreprise_et_admin):
+    """Un email de confirmation récapitulant la facture OHADA est émis lors de la validation."""
+    from django.core import mail
+
+    mail.outbox.clear()
+
+    entreprise = entreprise_et_admin["entreprise"]
+    plan = Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE)
+
+    res = PaiementAbonnementService.initier_paiement(
+        entreprise=entreprise,
+        plan=plan,
+        cycle="MENSUEL",
+    )
+    tx_id = res["transaction_id"]
+
+    PaiementAbonnementService.traiter_notification_webhook(tx_id)
+
+    # Vérification que l'email a été envoyé au contact de l'entreprise
+    assert len(mail.outbox) == 1
+    email = mail.outbox[0]
+    assert entreprise.email_contact in email.to
+    assert "Confirmation de paiement" in email.subject
+    assert "49000 FCFA" in email.body or "49 000 FCFA" in email.body or "49000" in email.body
+    assert "Maître d'Œuvre" in email.body

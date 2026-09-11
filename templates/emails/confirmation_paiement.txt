@@ -1,0 +1,18 @@
+Bonjour,
+
+Nous vous confirmons la bonne réception de votre paiement pour l'abonnement de {{ raison_sociale|safe }} sur CCD Digital.
+
+RÉCAPITULATIF DE LA TRANSACTION
+- Facture OHADA : {{ numero_facture }}
+- Forfait : {{ forfait|safe }}
+- Montant réglé : {{ montant_fcfa }} FCFA (TTC) via {{ mode_paiement }}
+- Date de fin d'abonnement : {{ date_fin }}
+- Référence transaction : {{ transaction_id }}
+
+Votre espace de travail et tous vos projets sont actifs sans interruption. Vous pouvez consulter et télécharger votre facture certifiée depuis votre tableau de bord.
+
+Pour accéder à votre espace :
+{{ lien_tableau_de_bord|default:"http://localhost:3000/tableau-de-bord" }}
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

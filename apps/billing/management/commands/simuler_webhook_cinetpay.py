@@ -1,5 +1,6 @@
 """Commande pour simuler la réception d'un webhook CinetPay en local."""
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django_tenants.utils import get_public_schema_name, schema_context
 
@@ -9,7 +10,6 @@ from apps.billing.services.paiement import PaiementAbonnementService
 
 class Command(BaseCommand):
     help = "Simule la notification IPN de CinetPay pour valider une transaction en local."
-
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -78,9 +78,10 @@ class Command(BaseCommand):
 
             self.stdout.write(f"Simulation du webhook CinetPay pour la transaction {tx_id}...")
 
+            site_id_simule = getattr(settings, "CINETPAY_SITE_ID", "") or "SIM_SITE_ID"
             donnees_simulees = {
                 "cpm_trans_id": tx_id,
-                "cpm_site_id": "SIM_SITE_ID",
+                "cpm_site_id": site_id_simule,
                 "cpm_amount": "49000",
                 "cpm_currency": "XOF",
                 "payment_method": moyen,

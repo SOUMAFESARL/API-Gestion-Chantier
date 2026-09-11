@@ -16,6 +16,11 @@ urlpatterns = [
     path("cinetpay/initier/", InitierPaiementView.as_view(), name="cinetpay-initier"),
     path("cinetpay/webhook/", CinetPayWebhookView.as_view(), name="cinetpay-webhook"),
     path(
+        "billing/cinetpay/webhook/",
+        CinetPayWebhookView.as_view(),
+        name="billing-cinetpay-webhook",
+    ),
+    path(
         "cinetpay/statut/<str:transaction_id>/",
         StatutPaiementView.as_view(),
         name="cinetpay-statut",

@@ -41,3 +41,9 @@ REST_FRAMEWORK = {
         "invitation_accepter": None,
     },
 }
+
+# CinetPay : simulation par défaut dans la suite de tests
+CINETPAY_API_KEY = ""
+CINETPAY_SITE_ID = ""
+CINETPAY_SECRET_KEY = "test_secret_key"
+

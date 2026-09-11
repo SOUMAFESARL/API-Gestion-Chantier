@@ -21,58 +21,59 @@ from django.core.management.base import BaseCommand
 
 from apps.billing.models import Plan
 
-# Les limites viennent du Socle §6.2 pour le MVP — 50 projets par compte, 10 Go
-# de documents — et de la maquette M10 pour la répartition entre plans. Elles
-# sont, elles, décidées : ce sont des capacités, pas des prix.
+# Forfaits personnalisés BTP — Capacités et tarifs (en centimes de FCFA)
 PLANS = [
     {
-        "code": Plan.Code.STARTER,
-        "libelle": "Starter",
+        "code": Plan.Code.BATISSEUR,
+        "libelle": "Bâtisseur",
         "limite_projets": 3,
         "limite_utilisateurs": 5,
         "limite_stockage_mo": 2_000,
         "acces_ia": False,
+        "prix_mensuel_montant": 19_000_00,  # 19 000 FCFA
+        "prix_annuel_montant": 190_000_00,  # 190 000 FCFA
     },
     {
-        "code": Plan.Code.PRO,
-        "libelle": "Pro",
+        "code": Plan.Code.MAITRE_OEUVRE,
+        "libelle": "Maître d'Œuvre",
         "limite_projets": 50,
         "limite_utilisateurs": 25,
         "limite_stockage_mo": 10_000,
         "acces_ia": True,
+        "prix_mensuel_montant": 49_000_00,  # 49 000 FCFA
+        "prix_annuel_montant": 490_000_00,  # 490 000 FCFA
     },
     {
-        "code": Plan.Code.ENTERPRISE,
-        "libelle": "Enterprise",
-        # `None` signifie **illimité**, jamais zéro. Les confondre ferait du
-        # plan le plus cher le plus restrictif de tous.
+        "code": Plan.Code.PROMOTEUR,
+        "libelle": "Promoteur",
         "limite_projets": None,
         "limite_utilisateurs": None,
         "limite_stockage_mo": None,
         "acces_ia": True,
+        "prix_mensuel_montant": 119_000_00,  # 119 000 FCFA
+        "prix_annuel_montant": 1_190_000_00,  # 1 190 000 FCFA
     },
 ]
 
 
 class Command(BaseCommand):
-    help = "Crée les trois plans d'abonnement, sans tarif (arbitrage A7 ouvert)."
+    help = "Crée ou met à jour les trois forfaits BTP (Bâtisseur, Maître d'Œuvre, Promoteur)."
 
     def handle(self, *args, **options):
         for definition in PLANS:
-            plan, cree = Plan.objects.get_or_create(
-                code=definition["code"],
-                defaults={k: v for k, v in definition.items() if k != "code"},
+            code = definition["code"]
+            defaults = {k: v for k, v in definition.items() if k != "code"}
+            plan, cree = Plan.objects.update_or_create(
+                code=code,
+                defaults=defaults,
             )
-            etat = "créé" if cree else "déjà présent"
-            self.stdout.write(self.style.SUCCESS(f"Plan {etat} : {plan.libelle}"))
+            etat = "créé" if cree else "mis à jour"
+            tarif_desc = (
+                f"{plan.prix_mensuel_montant / 100:,.0f} FCFA/mois"
+                if plan.prix_mensuel_montant
+                else "sans tarif"
+            )
+            self.stdout.write(self.style.SUCCESS(f"Plan {etat} : {plan.libelle} ({tarif_desc})"))
 
-        sans_tarif = Plan.objects.filter(prix_mensuel_montant__isnull=True).count()
-        if sans_tarif:
-            self.stdout.write("")
-            self.stdout.write(
-                self.style.WARNING(
-                    f"{sans_tarif} plan(s) sans tarif — arbitrage A7. "
-                    "La facturation ne peut pas émettre tant que la Direction n'a "
-                    "pas tranché, et l'écran affiche « — »."
-                )
-            )
+        # Désactiver les anciens codes génériques pour qu'ils ne soient plus proposés
+        Plan.objects.filter(code__in=["STARTER", "PRO", "ENTERPRISE"]).update(est_actif=False)

@@ -44,7 +44,7 @@ def test_consulter_abonnement_tenant(client_tenant, admin_user):
     data = response.json()
 
     assert data["statut"] == Abonnement.Statut.ESSAI
-    assert data["plan"]["code"] == Plan.Code.PRO
+    assert data["plan"]["code"] in [Plan.Code.MAITRE_OEUVRE, Plan.Code.PRO]
     assert data["jours_essai_restants"] == 14
     assert data["est_expire"] is False
     assert data["lecture_seule"] is False

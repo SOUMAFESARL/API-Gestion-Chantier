@@ -488,14 +488,17 @@ def provisionner(identifiant) -> None:
         # — ce qui n'empêche pas d'essayer, seulement de facturer.
         from apps.billing.models import JOURS_ESSAI, Abonnement, Plan
 
-        plan = Plan.objects.filter(code=Plan.Code.PRO).first()
+        plan = (
+            Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
+            or Plan.objects.filter(code=Plan.Code.PRO).first()
+        )
         if plan is None:
             # Une base sans plans est une base incomplète : `peupler_plans` n'a
             # pas été passée. On le dit plutôt que de laisser l'entreprise sans
             # abonnement, ce qui se verrait bien plus tard et bien plus mal.
             raise RuntimeError(
-                "Aucun plan PRO en base — passer `manage.py peupler_plans` avant "
-                "de provisionner une entreprise."
+                "Aucun plan d'essai (Maître d'Œuvre / Pro) en base — "
+                "passer `manage.py peupler_plans` avant de provisionner une entreprise."
             )
 
         debut = timezone.localdate()

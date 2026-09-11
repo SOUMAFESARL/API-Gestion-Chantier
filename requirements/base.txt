@@ -33,3 +33,7 @@ numpy>=2.0
 
 # Hachage bcrypt des mots de passe — Socle Commun §2.1
 bcrypt>=4.0
+
+# Client HTTP (appels CinetPay, webhooks tiers)
+requests>=2.31.0
+

@@ -39,21 +39,24 @@ class AbonnementView(APIView):
 
             # Auto-provisionnement de l'essai si manquant (ex: compte créé avant la migration)
             if abonnement is None:
-                plan_pro = Plan.objects.filter(code=Plan.Code.PRO).first()
-                if not plan_pro:
-                    plan_pro = Plan.objects.create(
-                        code=Plan.Code.PRO,
-                        libelle="Pro",
-                        limite_projets=20,
-                        limite_utilisateurs=10,
-                        limite_stockage_mo=5000,
+                plan_essai = (
+                    Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
+                    or Plan.objects.filter(code=Plan.Code.PRO).first()
+                )
+                if not plan_essai:
+                    plan_essai = Plan.objects.create(
+                        code=Plan.Code.MAITRE_OEUVRE,
+                        libelle="Maître d'Œuvre",
+                        limite_projets=50,
+                        limite_utilisateurs=25,
+                        limite_stockage_mo=10000,
                         acces_ia=True,
                         est_actif=True,
                     )
                 aujourdhui = timezone.localdate()
                 abonnement = Abonnement.objects.create(
                     entreprise=tenant,
-                    plan=plan_pro,
+                    plan=plan_essai,
                     date_debut=aujourdhui,
                     date_fin=aujourdhui + timedelta(days=JOURS_ESSAI),
                     fin_essai=aujourdhui + timedelta(days=JOURS_ESSAI),

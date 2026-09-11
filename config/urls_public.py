@@ -43,7 +43,8 @@ urlpatterns = [
     # Les règles de mot de passe sont servies aux deux territoires : l'écran
     # d'activation les demande avant qu'aucun tenant n'existe.
     path("api/v1/", include("apps.referentiels.urls")),
-    # à venir : path("api/v1/billing/", …)    plans, abonnements, factures
+    # Plans, abonnements, factures et webhooks de paiement CinetPay
+    path("api/v1/", include("apps.billing.urls")),
 ]
 
 # --- Outils de développement, s'ils sont présents ---------------------------

@@ -30,8 +30,8 @@ HOTE = "demo.localhost"
 def plan_starter(db):
     """Un plan à trois sièges — assez petit pour être atteint dans un test."""
     plan, _ = Plan.objects.update_or_create(
-        code=Plan.Code.STARTER,
-        defaults={"libelle": "Starter", "limite_utilisateurs": 3},
+        code=Plan.Code.BATISSEUR,
+        defaults={"libelle": "Bâtisseur", "limite_utilisateurs": 3},
     )
     return plan
 

@@ -1,6 +1,6 @@
 """Production cPanel : Passenger sert aussi les fichiers statiques WhiteNoise."""
 
-from .production import *  # noqa: F403
+from .production import *
 from .production import MIDDLEWARE
 
 MIDDLEWARE = list(MIDDLEWARE)

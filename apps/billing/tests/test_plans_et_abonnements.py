@@ -54,55 +54,47 @@ def entreprise(db):
 
 
 # ---------------------------------------------------------------------------
-# A7 — aucun tarif inventé
+# Forfaits BTP — Tarifs et Quotas
 # ---------------------------------------------------------------------------
 @pytest.mark.django_db
-def test_aucun_plan_ne_porte_de_tarif_invente(plans):
-    """**Arbitrage A7.** « 49 000 FCFA/mois » n'apparaît que dans la maquette
-    M10 : ni le CDC, ni le MVP, ni le backlog ne le mentionnent.
-
-    Un réglage absent se remarque ; un réglage plausible ne se remarque pas.
-    """
-    assert plans.count() == 3
-    for plan in plans:
-        assert plan.prix_mensuel_montant is None, plan.libelle
-        assert plan.prix_annuel_montant is None, plan.libelle
-        assert plan.tarif_connu is False
+def test_tarifs_plans_btp_configures(plans):
+    """Les 3 forfaits BTP portent leurs tarifs configurés (en centimes de FCFA)."""
+    assert plans.filter(est_actif=True).count() == 3
+    for plan in plans.filter(est_actif=True):
+        assert plan.prix_mensuel_montant is not None, plan.libelle
+        assert plan.prix_annuel_montant is not None, plan.libelle
+        assert plan.tarif_connu is True
 
 
 @pytest.mark.django_db
 def test_peupler_les_plans_est_idempotent(plans):
-    """Relancer la commande ne défait pas un tarif que la Direction aurait tranché."""
+    """Relancer la commande ne crée pas de doublons."""
     from django.core.management import call_command
-
-    pro = Plan.objects.get(code=Plan.Code.PRO)
-    pro.prix_mensuel_montant = 4_900_000  # 49 000 FCFA en centimes
-    pro.save(update_fields=["prix_mensuel_montant", "modifie_le"])
 
     call_command("peupler_plans", verbosity=0)
 
-    assert Plan.objects.count() == 3
-    assert Plan.objects.get(code=Plan.Code.PRO).prix_mensuel_montant == 4_900_000
+    assert Plan.objects.filter(est_actif=True).count() == 3
+    assert Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE).prix_mensuel_montant == 4_900_000
 
 
 @pytest.mark.django_db
 def test_illimite_se_dit_null_et_jamais_zero(plans):
     """Confondre les deux ferait du plan le plus cher le plus restrictif."""
-    enterprise = Plan.objects.get(code=Plan.Code.ENTERPRISE)
-    starter = Plan.objects.get(code=Plan.Code.STARTER)
+    promoteur = Plan.objects.get(code=Plan.Code.PROMOTEUR)
+    batisseur = Plan.objects.get(code=Plan.Code.BATISSEUR)
 
-    assert enterprise.limite_projets is None
-    assert enterprise.limite_utilisateurs is None
-    assert starter.limite_projets == 3
+    assert promoteur.limite_projets is None
+    assert promoteur.limite_utilisateurs is None
+    assert batisseur.limite_projets == 3
 
 
 @pytest.mark.django_db
 def test_un_prix_negatif_est_refuse_en_base(plans):
     """La contrainte vit en base, pas seulement dans un service."""
-    pro = Plan.objects.get(code=Plan.Code.PRO)
+    mo = Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE)
 
     with pytest.raises(IntegrityError), transaction.atomic():
-        Plan.objects.filter(pk=pro.pk).update(prix_mensuel_montant=-1)
+        Plan.objects.filter(pk=mo.pk).update(prix_mensuel_montant=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +107,7 @@ def test_le_compteur_de_jours_se_calcule_et_ne_se_stocke_pas(plans, entreprise):
     debut = timezone.localdate()
     abonnement = Abonnement.objects.create(
         entreprise=entreprise,
-        plan=Plan.objects.get(code=Plan.Code.PRO),
+        plan=Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE),
         date_debut=debut,
         date_fin=debut + timedelta(days=JOURS_ESSAI),
         fin_essai=debut + timedelta(days=JOURS_ESSAI),
@@ -138,7 +130,7 @@ def test_une_seule_entreprise_ne_peut_avoir_deux_abonnements_vivants(plans, entr
     debut = timezone.localdate()
     commun = {
         "entreprise": entreprise,
-        "plan": Plan.objects.get(code=Plan.Code.PRO),
+        "plan": Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE),
         "date_debut": debut,
         "date_fin": debut + timedelta(days=30),
     }
@@ -155,7 +147,7 @@ def test_un_abonnement_resilie_libere_la_place(plans, entreprise):
     debut = timezone.localdate()
     commun = {
         "entreprise": entreprise,
-        "plan": Plan.objects.get(code=Plan.Code.PRO),
+        "plan": Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE),
         "date_debut": debut,
         "date_fin": debut + timedelta(days=30),
     }
@@ -176,7 +168,7 @@ def test_une_date_de_suppression_sans_annonce_est_refusee(plans, entreprise):
     debut = timezone.localdate()
     abonnement = Abonnement.objects.create(
         entreprise=entreprise,
-        plan=Plan.objects.get(code=Plan.Code.PRO),
+        plan=Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE),
         date_debut=debut,
         date_fin=debut + timedelta(days=30),
         statut=Abonnement.Statut.RESILIE,
@@ -195,7 +187,7 @@ def test_une_fin_anterieure_au_debut_est_refusee(plans, entreprise):
     with pytest.raises(IntegrityError), transaction.atomic():
         Abonnement.objects.create(
             entreprise=entreprise,
-            plan=Plan.objects.get(code=Plan.Code.PRO),
+            plan=Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE),
             date_debut=debut,
             date_fin=debut - timedelta(days=1),
         )

@@ -408,3 +408,15 @@ LOGGING = {
     },
     "root": {"handlers": ["console"], "level": config("LOG_LEVEL", default="INFO")},
 }
+
+# --------------------------------------------------------------------------
+# CinetPay — Passerelle de paiement (Orange Money, Wave, MTN MoMo, Carte)
+# --------------------------------------------------------------------------
+CINETPAY_API_KEY = config("CINETPAY_API_KEY", default="")
+CINETPAY_SITE_ID = config("CINETPAY_SITE_ID", default="")
+CINETPAY_SECRET_KEY = config("CINETPAY_SECRET_KEY", default="")
+CINETPAY_NOTIFY_URL = config("CINETPAY_NOTIFY_URL", default="")
+CINETPAY_CHECKOUT_URL = config("CINETPAY_CHECKOUT_URL", default="https://api-checkout.cinetpay.com/v2/payment")
+CINETPAY_CHECK_URL = config("CINETPAY_CHECK_URL", default="https://api-checkout.cinetpay.com/v2/payment/check")
+
+

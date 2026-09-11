@@ -14,36 +14,32 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleBase
 
-__all__ = ["Abonnement", "Plan", "RelanceEssai"]
+from .facture import Facture
+from .paiement import PaiementAbonnement
 
-# Durée de l'essai gratuit — 14 jours en plan Pro, MLD §4.4 et parcours T-025.
+__all__ = ["Abonnement", "Facture", "PaiementAbonnement", "Plan", "RelanceEssai"]
+
+# Durée de l'essai gratuit — 14 jours en plan Maître d'Œuvre, MLD §4.4 et parcours T-025.
 JOURS_ESSAI = 14
 
 
 class Plan(ModeleBase):
     """Un niveau d'abonnement — MLD §4.3.
 
-    **Les deux prix sont nullables, et c'est un écart assumé au MLD**, qui les
-    déclare `NOT NULL`.
-
-    L'arbitrage **A7** est ouvert : « 49 000 FCFA/mois » n'apparaît que dans la
-    maquette M10, et ce montant n'a de source ni au CDC, ni au MVP, ni au
-    backlog. Il est né d'un dessin, pas d'une décision.
-
-    *C'est exactement le risque que T-017 §13 décrivait : **un réglage absent se
-    remarque, un réglage plausible ne se remarque pas.*** Une fois dessiné,
-    49 000 FCFA a de bonnes chances d'arriver en production sans que personne ne
-    se souvienne qu'il était un bouche-trou. `NULL` se remarque : l'écran
-    affiche « — » et la facturation refuse de partir.
-
-    Le `NOT NULL` reviendra quand la Direction aura tranché — et le MLD est à
-    mettre à jour dans le même mouvement.
+    Forfaits BTP :
+    - Bâtisseur (BATISSEUR) : maîtres d'œuvre indépendants, petits chantiers.
+    - Maître d'Œuvre (MAITRE_OEUVRE) : PME du BTP, plusieurs équipes et chantiers.
+    - Promoteur (PROMOTEUR) : grands comptes, entreprises générales, illimité.
     """
 
     class Code(models.TextChoices):
-        STARTER = "STARTER", _("Starter")
-        PRO = "PRO", _("Pro")
-        ENTERPRISE = "ENTERPRISE", _("Enterprise")
+        BATISSEUR = "BATISSEUR", _("Bâtisseur")
+        MAITRE_OEUVRE = "MAITRE_OEUVRE", _("Maître d'Œuvre")
+        PROMOTEUR = "PROMOTEUR", _("Promoteur")
+        # Rétrocompatibilité :
+        STARTER = "STARTER", _("Starter (Ancien)")
+        PRO = "PRO", _("Pro (Ancien)")
+        ENTERPRISE = "ENTERPRISE", _("Enterprise (Ancien)")
 
     code = models.CharField(_("code"), max_length=20, choices=Code.choices, unique=True)
     libelle = models.CharField(_("libellé"), max_length=100)

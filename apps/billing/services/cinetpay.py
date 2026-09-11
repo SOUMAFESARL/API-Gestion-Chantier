@@ -128,6 +128,25 @@ class CinetPayClient:
             data = response.json()
         except requests.RequestException as e:
             logger.error(f"Erreur de connexion CinetPay checkout : {e}")
+            if getattr(settings, "DEBUG", False):
+                logger.warning(
+                    "Mode DEBUG actif : bascule automatique en simulation locale "
+                    "car le serveur CinetPay n'est pas joignable."
+                )
+                params = {
+                    "transaction_id": transaction_id,
+                    "token": f"sim_token_{transaction_id}",
+                    "simulated": "1",
+                }
+                return {
+                    "code": "201",
+                    "message": "CREATED (SIMULATION)",
+                    "data": {
+                        "payment_token": f"sim_token_{transaction_id}",
+                        "payment_url": f"{return_url}?{urlencode(params)}",
+                    },
+                    "api_response_id": f"sim_resp_{transaction_id}",
+                }
             raise CinetPayError(f"Impossible de joindre CinetPay : {e}") from e
         except ValueError as e:
             logger.error(f"Réponse CinetPay non JSON : {response.text}")
@@ -189,6 +208,30 @@ class CinetPayClient:
             data = response.json()
         except requests.RequestException as e:
             logger.error(f"Erreur de connexion CinetPay check : {e}")
+            if getattr(settings, "DEBUG", False):
+                logger.warning(
+                    "Mode DEBUG actif : vérification simulée ACCEPTED "
+                    "car le serveur CinetPay n'est pas joignable."
+                )
+                return {
+                    "statut": "ACCEPTED",
+                    "code": "00",
+                    "message": "SUCCES (SIMULATION LOCALE)",
+                    "montant": 49000,
+                    "devise": "XOF",
+                    "moyen_paiement": "WAVE",
+                    "donnees_brutes": {
+                        "code": "00",
+                        "message": "SUCCES",
+                        "data": {
+                            "amount": "49000",
+                            "currency": "XOF",
+                            "status": "ACCEPTED",
+                            "payment_method": "WAVE",
+                            "operator_id": f"OP_SIM_{transaction_id}",
+                        },
+                    },
+                }
             msg = f"Impossible de vérifier la transaction auprès de CinetPay : {e}"
             raise CinetPayError(msg) from e
         except ValueError as e:

@@ -36,14 +36,45 @@ class Command(BaseCommand):
                     .first()
                 )
                 if not dernier:
-                    self.stdout.write(
-                        self.style.ERROR(
-                            "Aucune transaction en attente trouvée. "
-                            "Spécifiez un --transaction-id ou initiez un paiement via l'API."
-                        )
+                    from apps.billing.models import Plan
+                    from apps.tenants.models import Entreprise
+
+                    entreprise = Entreprise.objects.exclude(schema_name="public").first()
+                    plan = (
+                        Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
+                        or Plan.objects.first()
                     )
-                    return
-                tx_id = dernier.reference_transaction or dernier.reference_commande
+
+                    if entreprise and plan:
+                        nom_ent = entreprise.raison_sociale or str(entreprise)
+                        self.stdout.write(
+                            self.style.NOTICE(
+                                "Aucune transaction en attente. "
+                                f"Initialisation automatique pour '{nom_ent}'..."
+                            )
+                        )
+                        init_res = PaiementAbonnementService.initier_paiement(
+                            entreprise=entreprise,
+                            plan=plan,
+                            cycle="MENSUEL",
+                        )
+                        tx_id = init_res["transaction_id"]
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"Transaction générée : {tx_id} ({init_res['montant_fcfa']} FCFA)"
+                            )
+                        )
+                    else:
+                        self.stdout.write(
+                            self.style.ERROR(
+                                "Aucune transaction en attente trouvée et aucune "
+                                "entreprise disponible.\n"
+                                "Spécifiez un --transaction-id ou initiez un paiement via l'API."
+                            )
+                        )
+                        return
+                else:
+                    tx_id = dernier.reference_transaction or dernier.reference_commande
 
             self.stdout.write(f"Simulation du webhook CinetPay pour la transaction {tx_id}...")
 

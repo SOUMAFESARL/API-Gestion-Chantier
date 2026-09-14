@@ -356,6 +356,9 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
+# À n'activer que si l'API doit volontairement être consommable depuis toute
+# origine web. Les permissions applicatives restent contrôlées par le JWT.
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=_liste)
 
 # --------------------------------------------------------------------------

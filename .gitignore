@@ -23,6 +23,8 @@ htmlcov/
 staticfiles/
 media/
 db.sqlite3
+.postgres-data/
+.postgres-init-password
 tmp/
 passenger.log
 

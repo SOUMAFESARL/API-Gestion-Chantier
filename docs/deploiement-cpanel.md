@@ -42,6 +42,8 @@ Créer `.env` à partir de `.env.example` sur le serveur, puis renseigner :
   `DOMAINE_PRINCIPAL=api.exemple.ci` selon les domaines réellement utilisés ;
 - les paramètres PostgreSQL de cPanel : le projet prend en charge **PostgreSQL 13.23+ local** présent par défaut sur les distributions cPanel (grâce au patch de compatibilité Django 5.2 activé dans le socle), ou une base managée externe si les connexions sortantes sont autorisées par l'hébergeur ;
 - `FRONTEND_URL` et `CORS_ALLOWED_ORIGINS` avec les URL HTTPS du frontend ;
+- ou `CORS_ALLOW_ALL_ORIGINS=True` si l'API doit volontairement accepter les
+  requêtes provenant de n'importe quelle origine web ;
 - les paramètres SMTP et S3 définis dans `config/settings/production.py` ;
 - un service Redis accessible pour le cache et Celery.
 

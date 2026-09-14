@@ -14,33 +14,26 @@ INSTALLED_APPS += ["django_extensions"]
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-# Les emails.
-#
-# **Par défaut, la console** : aucun service à lancer, et le lien s'y lit en
-# clair. Suffisant pour vérifier qu'un message part, pénible dès qu'il faut en
-# suivre le lien — c'est ce qui a fait naître deux raccourcis de développement.
-#
-# **Avec `docker compose up mailpit`, un vrai SMTP local** : les messages
-# arrivent dans une interface web à http://localhost:8025, où le lien se clique.
-# Mettre `EMAIL_MAILPIT=True` dans `.env`. Cela vaut pour **les six emails du
-# parcours**, pas seulement pour la réinitialisation, et cela ressemble à la
-# production — un fournisseur SMTP se substituera à Mailpit sans rien changer
-# d'autre que l'hôte.
-if config("EMAIL_MAILPIT", default=False, cast=bool):
+# Les emails en environnement local :
+# 1. Si EMAIL_BACKEND est explicitement défini dans .env, l'utiliser.
+# 2. Si EMAIL_MAILPIT=True, utiliser Mailpit local.
+# 3. Si un utilisateur SMTP est configuré (SYSTEM_SMTP_USER ou EMAIL_HOST_USER),
+#    utiliser le SMTP réel (ex: Gmail).
+# 4. Sinon, afficher les emails dans la console.
+_email_backend_env = config("EMAIL_BACKEND", default=None)
+if _email_backend_env:
+    EMAIL_BACKEND = _email_backend_env
+elif config("EMAIL_MAILPIT", default=False, cast=bool):
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    # Des variables **propres** à l'attrape-mail, et non `EMAIL_HOST` /
-    # `EMAIL_PORT` : celles-là décrivent le fournisseur de production et sont
-    # déjà posées dans `.env`, vides et sur le port 587. Les réutiliser faisait
-    # pointer Mailpit vers nulle part, sur le mauvais port.
     EMAIL_HOST = config("MAILPIT_HOST", default="localhost")
     EMAIL_PORT = config("MAILPIT_PORT", default=1025, cast=int)
     EMAIL_USE_TLS = False
     EMAIL_HOST_USER = ""
     EMAIL_HOST_PASSWORD = ""
+elif EMAIL_HOST_USER:
+    EMAIL_BACKEND = "apps.core.email_backend.ConfigurableEmailBackend"
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="ne-pas-repondre@ccd-digital.ci")
 
 # Exécution synchrone des tâches Celery : pratique tant que Redis n'est pas lancé.
 CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=True, cast=bool)

@@ -240,13 +240,31 @@ FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 DOMAINE_PRINCIPAL = config("DOMAINE_PRINCIPAL", default="localhost")
 
 # --------------------------------------------------------------------------
-# Le contact commercial, cité dans l'email d'espace suspendu.
-#
-# **Ces valeurs sont fictives et le resteront jusqu'à ce que la Direction
-# tranche.** Un numéro en `00 00 00 00` se remarque ; un numéro plausible ne se
-# remarque pas — c'est la même leçon que le prix des plans laissé à `NULL`
-# plutôt qu'à « 49 000 FCFA » (arbitrage A7).
+# Emails & Configuration SMTP (Gmail / Fournisseur SMTP)
 # --------------------------------------------------------------------------
+EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_SSL_CERT_VERIFY = config("EMAIL_SSL_CERT_VERIFY", default=True, cast=bool)
+
+# Supporte indifféremment SYSTEM_SMTP_USER / SYSTEM_SMTP_PASS ou EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
+EMAIL_HOST_USER = config(
+    "SYSTEM_SMTP_USER",
+    default=config("EMAIL_HOST_USER", default=""),
+)
+EMAIL_HOST_PASSWORD = config(
+    "SYSTEM_SMTP_PASS",
+    default=config("EMAIL_HOST_PASSWORD", default=""),
+)
+
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL",
+    default=f"CCD Digital <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "ne-pas-repondre@ccd-digital.ci",
+)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Le contact commercial, cité dans l'email d'espace suspendu.
 EMAIL_COMMERCIAL = config("EMAIL_COMMERCIAL", default="commercial@ccd-digital.ci")
 TELEPHONE_COMMERCIAL = config("TELEPHONE_COMMERCIAL", default="+225 27 00 00 00 00")
 

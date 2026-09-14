@@ -5,8 +5,11 @@ from rest_framework import serializers
 from apps.billing.models import Plan
 
 __all__ = [
+    "AnnulerPaiementRequestSerializer",
+    "AnnulerPaiementResponseSerializer",
     "InitierPaiementRequestSerializer",
     "InitierPaiementResponseSerializer",
+    "PaiementEnCoursSerializer",
     "PlanCatalogueSerializer",
     "StatutPaiementResponseSerializer",
 ]
@@ -92,3 +95,36 @@ class StatutPaiementResponseSerializer(serializers.Serializer):
     abonnement_expire_le = serializers.CharField(required=False, allow_null=True)
     entreprise = serializers.CharField(required=False, allow_null=True)
     plan = serializers.CharField(required=False, allow_null=True)
+
+
+class AnnulerPaiementRequestSerializer(serializers.Serializer):
+    """Paramètres pour annuler explicitement une transaction en cours (Option A2)."""
+
+    transaction_id = serializers.CharField(
+        help_text="Identifiant de transaction CinetPay ou référence de commande à annuler",
+    )
+    motif = serializers.CharField(
+        required=False,
+        default="Annulation demandée par l'utilisateur",
+        help_text="Motif facultatif de l'annulation",
+    )
+
+
+class AnnulerPaiementResponseSerializer(serializers.Serializer):
+    """Réponse confirmant l'annulation d'une transaction."""
+
+    statut = serializers.CharField()
+    transaction_id = serializers.CharField()
+    message = serializers.CharField()
+
+
+class PaiementEnCoursSerializer(serializers.Serializer):
+    """Détail d'un paiement en cours de confirmation Mobile Money."""
+
+    transaction_id = serializers.CharField()
+    reference_facture = serializers.CharField()
+    montant_fcfa = serializers.IntegerField()
+    forfait = serializers.CharField()
+    statut = serializers.CharField()
+    secondes_restantes = serializers.IntegerField()
+    cree_le = serializers.CharField(required=False, allow_null=True)

@@ -3,6 +3,7 @@
 import uuid
 
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleBase
@@ -26,9 +27,14 @@ class PaiementAbonnement(ModeleBase):
         VIREMENT = "VIREMENT", _("Virement Bancaire")
         AUTRE = "AUTRE", _("Autre")
 
+    DELAI_VERROU_MINUTES = 10
+
     class Statut(models.TextChoices):
         INITIE = "INITIE", _("Initié")
+        EN_ATTENTE_OPERATEUR = "EN_ATTENTE_OPERATEUR", _("En attente opérateur")
         CONFIRME = "CONFIRME", _("Confirmé")
+        ANNULE = "ANNULE", _("Annulé")
+        EXPIRE = "EXPIRE", _("Expiré")
         ECHOUE = "ECHOUE", _("Échoué")
         REMBOURSE = "REMBOURSE", _("Remboursé")
 
@@ -73,7 +79,7 @@ class PaiementAbonnement(ModeleBase):
 
     statut = models.CharField(
         _("statut"),
-        max_length=20,
+        max_length=30,
         choices=Statut.choices,
         default=Statut.INITIE,
         db_index=True,
@@ -108,3 +114,21 @@ class PaiementAbonnement(ModeleBase):
     @property
     def montant_fcfa(self) -> int:
         return int(self.montant // 100)
+
+    @property
+    def est_en_cours(self) -> bool:
+        """Indique si la transaction est dans la fenêtre active d'attente/verrouillage (10 min)."""
+        if self.statut in [self.Statut.INITIE, self.Statut.EN_ATTENTE_OPERATEUR]:
+            return self.secondes_restantes_verrou > 0
+        return False
+
+    @property
+    def secondes_restantes_verrou(self) -> int:
+        """Nombre de secondes restantes avant expiration du verrou (10 minutes par défaut)."""
+        if self.statut not in [self.Statut.INITIE, self.Statut.EN_ATTENTE_OPERATEUR]:
+            return 0
+        if not self.cree_le:
+            return 0
+        ecoule = (timezone.now() - self.cree_le).total_seconds()
+        restant = (self.DELAI_VERROU_MINUTES * 60) - ecoule
+        return max(0, int(restant))

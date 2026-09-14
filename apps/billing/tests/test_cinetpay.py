@@ -369,3 +369,216 @@ def test_email_confirmation_envoye_sur_validation(entreprise_et_admin):
     assert "Confirmation de paiement" in email.subject
     assert "49000 FCFA" in email.body or "49 000 FCFA" in email.body or "49000" in email.body
     assert "Maître d'Œuvre" in email.body
+
+
+@pytest.mark.django_db
+def test_verrou_initiation_10_minutes(client_tenant, entreprise_et_admin):
+    """Une tentative de paiement en cours bloque toute nouvelle tentative pendant 10 min (Option A2)."""
+    admin = entreprise_et_admin["admin"]
+    client_tenant.force_authenticate(user=admin)
+
+    url = "/api/v1/cinetpay/initier/"
+    payload = {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"}
+
+    # 1. Première tentative : succès
+    resp1 = client_tenant.post(url, payload, format="json")
+    assert resp1.status_code == status.HTTP_200_OK
+    tx_id = resp1.json()["transaction_id"]
+
+    # 2. Seconde tentative immédiate : 409 CONFLICT
+    resp2 = client_tenant.post(url, payload, format="json")
+    assert resp2.status_code == status.HTTP_409_CONFLICT
+    data2 = resp2.json()
+    assert data2["code"] == "PAIEMENT_EN_COURS"
+    assert data2["transaction_en_cours"]["transaction_id"] == tx_id
+    assert data2["transaction_en_cours"]["montant_fcfa"] == 49000
+    assert data2["transaction_en_cours"]["secondes_restantes"] > 500
+
+
+@pytest.mark.django_db
+def test_abandon_explicite_et_nouvelle_initiation(client_tenant, entreprise_et_admin):
+    """L'utilisateur peut explicitement annuler une tentative pour en relancer une nouvelle."""
+    admin = entreprise_et_admin["admin"]
+    client_tenant.force_authenticate(user=admin)
+
+    # 1. Initier un premier paiement
+    resp1 = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"},
+        format="json",
+    )
+    assert resp1.status_code == status.HTTP_200_OK
+    tx1 = resp1.json()["transaction_id"]
+
+    # 2. Annulation explicite via l'API
+    resp_annuler = client_tenant.post(
+        "/api/v1/cinetpay/annuler/",
+        {"transaction_id": tx1, "motif": "Changement de moyen de paiement"},
+        format="json",
+    )
+    assert resp_annuler.status_code == status.HTTP_200_OK
+    assert resp_annuler.json()["statut"] == "ANNULE"
+
+    with schema_context(get_public_schema_name()):
+        p1 = PaiementAbonnement.objects.get(reference_transaction=tx1)
+        assert p1.statut == PaiementAbonnement.Statut.ANNULE
+        assert p1.charge_utile["annulation"]["motif"] == "Changement de moyen de paiement"
+
+    # 3. Nouvelle initiation débloquée immédiatement
+    resp2 = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"},
+        format="json",
+    )
+    assert resp2.status_code == status.HTTP_200_OK
+    assert resp2.json()["transaction_id"] != tx1
+
+
+@pytest.mark.django_db
+def test_reutilisation_facture_meme_cycle_et_annulation_si_changement(client_tenant, entreprise_et_admin):
+    """Option A : Réutilisation de la facture si même formule, annulation si changement."""
+    admin = entreprise_et_admin["admin"]
+    client_tenant.force_authenticate(user=admin)
+
+    # 1. Première initiation : Maître d'Œuvre
+    res1 = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"},
+        format="json",
+    ).json()
+    fac1 = res1["numero_facture"]
+    tx1 = res1["transaction_id"]
+
+    # Annulation
+    client_tenant.post("/api/v1/cinetpay/annuler/", {"transaction_id": tx1}, format="json")
+
+    # 2. Deuxième initiation : MÊME formule Maître d'Œuvre MENSUEL -> Réutilisation de fac1
+    res2 = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"},
+        format="json",
+    ).json()
+    fac2 = res2["numero_facture"]
+    tx2 = res2["transaction_id"]
+    assert fac2 == fac1  # Même numéro OHADA réutilisé !
+
+    # Annulation
+    client_tenant.post("/api/v1/cinetpay/annuler/", {"transaction_id": tx2}, format="json")
+
+    # 3. Troisième initiation : NOUVELLE formule Bâtisseur -> Annulation fac1 et nouvelle fac3
+    res3 = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.BATISSEUR, "cycle": "MENSUEL"},
+        format="json",
+    ).json()
+    fac3 = res3["numero_facture"]
+    assert fac3 != fac1
+
+    with schema_context(get_public_schema_name()):
+        ancienne_facture = Facture.objects.get(numero=fac1)
+        assert ancienne_facture.statut == Facture.Statut.ANNULEE
+
+
+@pytest.mark.django_db
+def test_abonnement_expose_paiement_en_cours(client_tenant, entreprise_et_admin):
+    """GET /api/v1/abonnement/ inclut les informations de paiement_en_cours pour le frontend."""
+    admin = entreprise_et_admin["admin"]
+    client_tenant.force_authenticate(user=admin)
+
+    # Avant initiation : null
+    resp_init = client_tenant.get("/api/v1/abonnement/")
+    assert resp_init.status_code == status.HTTP_200_OK
+    assert resp_init.json()["paiement_en_cours"] is None
+
+    # Initiation
+    res_paiement = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"},
+        format="json",
+    ).json()
+    tx_id = res_paiement["transaction_id"]
+
+    # Après initiation : objet présent
+    resp_apres = client_tenant.get("/api/v1/abonnement/")
+    assert resp_apres.status_code == status.HTTP_200_OK
+    pec = resp_apres.json()["paiement_en_cours"]
+    assert pec is not None
+    assert pec["transaction_id"] == tx_id
+    assert pec["montant_fcfa"] == 49000
+    assert pec["forfait"] == "Maître d'Œuvre"
+    assert pec["secondes_restantes"] > 0
+
+
+@pytest.mark.django_db
+def test_resurrection_option_c1_si_debit_tardif(client_tenant, entreprise_et_admin):
+    """Option C1 : Une transaction annulée puis débitée est ressuscitée en CONFIRME et prolonge l'abonnement."""
+    admin = entreprise_et_admin["admin"]
+    client_tenant.force_authenticate(user=admin)
+
+    res = client_tenant.post(
+        "/api/v1/cinetpay/initier/",
+        {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"},
+        format="json",
+    ).json()
+    tx_id = res["transaction_id"]
+
+    # Le client clique sur "Annuler"
+    client_tenant.post("/api/v1/cinetpay/annuler/", {"transaction_id": tx_id}, format="json")
+
+    with schema_context(get_public_schema_name()):
+        p = PaiementAbonnement.objects.get(reference_transaction=tx_id)
+        assert p.statut == PaiementAbonnement.Statut.ANNULE
+        date_fin_initiale = p.facture.abonnement.date_fin
+
+    # Plus tard, le webhook CinetPay reçoit ACCEPTED (débit effectif chez l'opérateur)
+    PaiementAbonnementService.traiter_notification_webhook(tx_id)
+
+    with schema_context(get_public_schema_name()):
+        p.refresh_from_db()
+        # Statut ressuscité en CONFIRME
+        assert p.statut == PaiementAbonnement.Statut.CONFIRME
+        assert p.charge_utile.get("resurrection") is not None
+        assert p.facture.statut == Facture.Statut.PAYEE
+
+        # Prolongation effective de l'abonnement
+        abo = p.facture.abonnement
+        assert abo.statut == Abonnement.Statut.ACTIF
+        assert abo.date_fin > date_fin_initiale
+
+
+@pytest.mark.django_db
+def test_celery_reconciliation_echelonnee_et_expiration(entreprise_et_admin):
+    """Les tâches Celery vérifient les récentes (2-30 min) et marquent EXPIRE après 24h."""
+    from apps.billing.tasks import reconcilier_paiements_anciens, reconcilier_paiements_recents
+
+    entreprise = entreprise_et_admin["entreprise"]
+    plan = Plan.objects.get(code=Plan.Code.MAITRE_OEUVRE)
+
+    # 1. Paiement très ancien (25 heures d'âge)
+    res_vieux = PaiementAbonnementService.initier_paiement(entreprise=entreprise, plan=plan)
+    tx_vieux = res_vieux["transaction_id"]
+    with schema_context(get_public_schema_name()):
+        PaiementAbonnement.objects.filter(reference_transaction=tx_vieux).update(
+            cree_le=timezone.now() - timedelta(hours=25)
+        )
+
+    # 2. Paiement récent (5 min d'âge) - Verrou 10 min libéré car tx_vieux a 25h d'âge
+    res_recent = PaiementAbonnementService.initier_paiement(entreprise=entreprise, plan=plan)
+    tx_recent = res_recent["transaction_id"]
+    with schema_context(get_public_schema_name()):
+        PaiementAbonnement.objects.filter(reference_transaction=tx_recent).update(
+            cree_le=timezone.now() - timedelta(minutes=5)
+        )
+
+    # Exécution de reconcilier_paiements_recents
+    stats_recents = reconcilier_paiements_recents()
+    assert stats_recents["confirmes"] >= 1  # tx_recent est confirmé par la simulation
+
+    # Exécution de reconcilier_paiements_anciens
+    stats_anciens = reconcilier_paiements_anciens()
+    assert stats_anciens["expires"] >= 1  # tx_vieux passe à EXPIRE
+
+    with schema_context(get_public_schema_name()):
+        p_vieux = PaiementAbonnement.objects.get(reference_transaction=tx_vieux)
+        assert p_vieux.statut == PaiementAbonnement.Statut.EXPIRE
+        assert "motif_expiration" in p_vieux.charge_utile

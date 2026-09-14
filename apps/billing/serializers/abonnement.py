@@ -29,6 +29,7 @@ class AbonnementSerializer(serializers.ModelSerializer):
     jours_essai_restants = serializers.IntegerField(read_only=True)
     est_expire = serializers.SerializerMethodField()
     lecture_seule = serializers.SerializerMethodField()
+    paiement_en_cours = serializers.SerializerMethodField()
 
     class Meta:
         model = Abonnement
@@ -43,6 +44,7 @@ class AbonnementSerializer(serializers.ModelSerializer):
             "est_expire",
             "lecture_seule",
             "renouvellement_auto",
+            "paiement_en_cours",
         ]
 
     def get_est_expire(self, obj: Abonnement) -> bool:
@@ -55,3 +57,9 @@ class AbonnementSerializer(serializers.ModelSerializer):
     def get_lecture_seule(self, obj: Abonnement) -> bool:
         """Indique si l'espace est restreint en lecture seule."""
         return obj.lecture_seule_depuis is not None or self.get_est_expire(obj)
+
+    def get_paiement_en_cours(self, obj: Abonnement) -> dict | None:
+        """Retourne les détails d'un paiement en cours de confirmation Mobile Money."""
+        from apps.billing.services.paiement import PaiementAbonnementService
+
+        return PaiementAbonnementService.recuperer_paiement_en_cours(obj.entreprise)

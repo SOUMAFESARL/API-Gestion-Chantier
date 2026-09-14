@@ -5,6 +5,7 @@ Plans, abonnements, factures OHADA et paiements CinetPay.
 
 from apps.billing.views.abonnement import AbonnementView
 from apps.billing.views.cinetpay import (
+    AnnulerPaiementView,
     CinetPayWebhookView,
     InitierPaiementView,
     PlansCatalogueView,
@@ -13,6 +14,7 @@ from apps.billing.views.cinetpay import (
 
 __all__ = [
     "AbonnementView",
+    "AnnulerPaiementView",
     "CinetPayWebhookView",
     "InitierPaiementView",
     "PlansCatalogueView",

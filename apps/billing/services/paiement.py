@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from django_tenants.utils import get_public_schema_name, schema_context
 
@@ -19,7 +19,15 @@ from apps.core.enums import ActionAudit, StatutEntreprise
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["PaiementAbonnementService"]
+__all__ = ["PaiementAbonnementService", "PaiementEnCoursError"]
+
+
+class PaiementEnCoursError(Exception):
+    """Levée lorsqu'une session de paiement est déjà active pour l'entreprise (Option A2)."""
+
+    def __init__(self, message: str, transaction_en_cours: dict[str, Any]):
+        super().__init__(message)
+        self.transaction_en_cours = transaction_en_cours
 
 
 class PaiementAbonnementService:
@@ -59,6 +67,41 @@ class PaiementAbonnementService:
         Exécuté dans le schéma `public` (tables billing).
         """
         with schema_context(get_public_schema_name()):
+            # 0. Vérification du verrou d'initiation (Protection anti-double débit - Option A2)
+            limite_active = timezone.now() - timedelta(minutes=PaiementAbonnement.DELAI_VERROU_MINUTES)
+            paiement_actif = (
+                PaiementAbonnement.objects.filter(
+                    facture__entreprise=entreprise,
+                    statut__in=[
+                        PaiementAbonnement.Statut.INITIE,
+                        PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+                    ],
+                    cree_le__gte=limite_active,
+                )
+                .select_related("facture__abonnement__plan")
+                .order_by("-cree_le")
+                .first()
+            )
+            if paiement_actif:
+                tx_ref = paiement_actif.reference_transaction or paiement_actif.reference_commande
+                raise PaiementEnCoursError(
+                    f"Un paiement de {paiement_actif.montant_fcfa:,} FCFA est déjà en cours pour cette entreprise. "
+                    f"Veuillez attendre sa confirmation ou annuler la tentative avant d'en relancer une.",
+                    transaction_en_cours={
+                        "transaction_id": tx_ref,
+                        "reference_facture": paiement_actif.facture.numero,
+                        "montant_fcfa": paiement_actif.montant_fcfa,
+                        "forfait": paiement_actif.facture.abonnement.plan.libelle,
+                        "statut": paiement_actif.statut,
+                        "secondes_restantes": paiement_actif.secondes_restantes_verrou,
+                        "cree_le": (
+                            paiement_actif.cree_le.isoformat()
+                            if paiement_actif.cree_le
+                            else None
+                        ),
+                    },
+                )
+
             # 1. Validation du tarif
             if cycle == "ANNUEL":
                 prix_montant = plan.prix_annuel_montant
@@ -100,22 +143,63 @@ class PaiementAbonnementService:
             periode_fin = periode_debut + timedelta(days=duree_jours)
 
             with transaction.atomic():
-                # 4. Création de la facture OHADA
-                numero_facture = Facture.generer_prochain_numero()
-                facture = Facture.objects.create(
-                    numero=numero_facture,
-                    abonnement=abonnement,
-                    entreprise=entreprise,
-                    periode_debut=periode_debut,
-                    periode_fin=periode_fin,
-                    montant_ht=montant_ht,
-                    taux_tva=taux_tva,
-                    montant_tva=montant_tva,
-                    montant_ttc=montant_ttc,
-                    statut=Facture.Statut.EMISE,
-                    date_emission=aujourdhui,
-                    date_echeance=periode_debut + timedelta(days=7),
+                # 4. Gestion de la facture OHADA (Option A)
+                facture_existante = (
+                    Facture.objects.filter(
+                        entreprise=entreprise,
+                        statut=Facture.Statut.EMISE,
+                    )
+                    .order_by("-cree_le")
+                    .first()
                 )
+                if facture_existante:
+                    if (
+                        facture_existante.montant_ttc == montant_ttc
+                        and facture_existante.abonnement == abonnement
+                    ):
+                        # Réutilisation de la facture existante (même forfait et cycle)
+                        facture = facture_existante
+                        facture.periode_debut = periode_debut
+                        facture.periode_fin = periode_fin
+                        facture.date_echeance = periode_debut + timedelta(days=7)
+                        facture.save(
+                            update_fields=["periode_debut", "periode_fin", "date_echeance", "modifie_le"]
+                        )
+                    else:
+                        # Changement de forfait ou cycle : on annule l'ancienne facture
+                        facture_existante.statut = Facture.Statut.ANNULEE
+                        facture_existante.save(update_fields=["statut", "modifie_le"])
+                        numero_facture = Facture.generer_prochain_numero()
+                        facture = Facture.objects.create(
+                            numero=numero_facture,
+                            abonnement=abonnement,
+                            entreprise=entreprise,
+                            periode_debut=periode_debut,
+                            periode_fin=periode_fin,
+                            montant_ht=montant_ht,
+                            taux_tva=taux_tva,
+                            montant_tva=montant_tva,
+                            montant_ttc=montant_ttc,
+                            statut=Facture.Statut.EMISE,
+                            date_emission=aujourdhui,
+                            date_echeance=periode_debut + timedelta(days=7),
+                        )
+                else:
+                    numero_facture = Facture.generer_prochain_numero()
+                    facture = Facture.objects.create(
+                        numero=numero_facture,
+                        abonnement=abonnement,
+                        entreprise=entreprise,
+                        periode_debut=periode_debut,
+                        periode_fin=periode_fin,
+                        montant_ht=montant_ht,
+                        taux_tva=taux_tva,
+                        montant_tva=montant_tva,
+                        montant_ttc=montant_ttc,
+                        statut=Facture.Statut.EMISE,
+                        date_emission=aujourdhui,
+                        date_echeance=periode_debut + timedelta(days=7),
+                    )
 
                 # 5. Création de la transaction de paiement initiée
                 # Référence unique CinetPay (<= 100 caractères, alphanumérique)
@@ -187,6 +271,97 @@ class PaiementAbonnementService:
             }
 
     @classmethod
+    def annuler_paiement_en_cours(
+        cls,
+        entreprise,
+        transaction_id: str,
+        motif: str = "Annulation demandée par l'utilisateur",
+    ) -> dict[str, Any]:
+        """Permet à l'utilisateur d'abandonner explicitement une transaction en attente (Option A2)."""
+        with schema_context(get_public_schema_name()):
+            with transaction.atomic():
+                paiement = (
+                    PaiementAbonnement.objects.select_for_update()
+                    .filter(facture__entreprise=entreprise)
+                    .filter(
+                        models.Q(reference_transaction=transaction_id)
+                        | models.Q(reference_commande=transaction_id)
+                    )
+                    .select_related("facture")
+                    .first()
+                )
+                if not paiement:
+                    raise ValueError(f"Transaction « {transaction_id} » introuvable pour cette entreprise.")
+
+                if paiement.statut == PaiementAbonnement.Statut.CONFIRME:
+                    raise ValueError("Cette transaction a déjà été confirmée et ne peut plus être annulée.")
+
+                if paiement.statut in [
+                    PaiementAbonnement.Statut.INITIE,
+                    PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+                ]:
+                    ancien_statut = paiement.statut
+                    paiement.statut = PaiementAbonnement.Statut.ANNULE
+                    charge = dict(paiement.charge_utile or {})
+                    charge["annulation"] = {
+                        "motif": motif,
+                        "annule_le": timezone.now().isoformat(),
+                    }
+                    paiement.charge_utile = charge
+                    paiement.save(update_fields=["statut", "charge_utile", "modifie_le"])
+
+                    journaliser(
+                        action=ActionAudit.MODIFICATION,
+                        type_entite="PaiementAbonnement",
+                        entite_id=paiement.id,
+                        valeur_avant={"statut": ancien_statut},
+                        valeur_apres={"statut": PaiementAbonnement.Statut.ANNULE, "motif": motif},
+                    )
+
+                    return {
+                        "statut": "ANNULE",
+                        "transaction_id": transaction_id,
+                        "message": "La tentative de paiement a été annulée avec succès.",
+                    }
+
+                return {
+                    "statut": paiement.statut,
+                    "transaction_id": transaction_id,
+                    "message": f"La transaction est déjà à l'état {paiement.get_statut_display()}.",
+                }
+
+    @classmethod
+    def recuperer_paiement_en_cours(cls, entreprise) -> dict[str, Any] | None:
+        """Retourne les informations du paiement actuellement en cours s'il existe."""
+        with schema_context(get_public_schema_name()):
+            limite_active = timezone.now() - timedelta(minutes=PaiementAbonnement.DELAI_VERROU_MINUTES)
+            paiement = (
+                PaiementAbonnement.objects.filter(
+                    facture__entreprise=entreprise,
+                    statut__in=[
+                        PaiementAbonnement.Statut.INITIE,
+                        PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+                    ],
+                    cree_le__gte=limite_active,
+                )
+                .select_related("facture__abonnement__plan")
+                .order_by("-cree_le")
+                .first()
+            )
+            if not paiement:
+                return None
+
+            return {
+                "transaction_id": paiement.reference_transaction or paiement.reference_commande,
+                "reference_facture": paiement.facture.numero,
+                "montant_fcfa": paiement.montant_fcfa,
+                "forfait": paiement.facture.abonnement.plan.libelle,
+                "statut": paiement.statut,
+                "secondes_restantes": paiement.secondes_restantes_verrou,
+                "cree_le": paiement.cree_le.isoformat() if paiement.cree_le else None,
+            }
+
+    @classmethod
     def traiter_notification_webhook(
         cls,
         transaction_id: str,
@@ -198,10 +373,12 @@ class PaiementAbonnementService:
         2. Si déjà CONFIRMEE : acquitte immédiatement sans rejeu.
         3. Contrôle le site_id si fourni.
         4. Appelle CinetPay check_payment pour certifier le statut et le montant.
-        5. Si validé :
+        5. Verrouille la ligne en base de données (select_for_update).
+        6. Si validé :
+           - Résurrection (Règle C1) si la transaction avait été annulée/expirée mais a été débitée.
            - Paiement -> CONFIRME
            - Facture -> PAYEE
-           - Abonnement -> ACTIF (date_fin prolongée)
+           - Abonnement -> ACTIF (prolongé à partir de max(aujourd'hui, abonnement.date_fin))
            - Entreprise -> ACTIF (Règle R-113)
            - Envoi email confirmation & journalisation audit
         """
@@ -228,7 +405,7 @@ class PaiementAbonnementService:
                     "message": f"Transaction {transaction_id} introuvable.",
                 }
 
-            # Protection contre le rejeu (Idempotence)
+            # Protection contre le rejeu (Idempotence rapide avant appel distant)
             if paiement.statut == PaiementAbonnement.Statut.CONFIRME:
                 logger.info(
                     f"Transaction {transaction_id} déjà confirmée. Acquittement sans doublon."
@@ -268,15 +445,52 @@ class PaiementAbonnementService:
             moyen = verification.get("moyen_paiement", "")
 
             with transaction.atomic():
+                # Verrouillage pessimiste pour éliminer toute condition de concurrence (Race Condition)
+                paiement = (
+                    PaiementAbonnement.objects.select_for_update()
+                    .filter(id=paiement.id)
+                    .select_related("facture__abonnement__plan", "facture__entreprise")
+                    .first()
+                )
+                if not paiement:
+                    return {"statut": "INCONNU", "message": f"Transaction {transaction_id} introuvable."}
+
+                if paiement.statut == PaiementAbonnement.Statut.CONFIRME:
+                    return {
+                        "statut": "DEJA_CONFIRME",
+                        "transaction_id": transaction_id,
+                        "facture": paiement.facture.numero,
+                        "reference_facture": paiement.facture.numero,
+                    }
+
                 # Enregistrement de la charge utile brute pour audit et conformité
-                charge_totale = {
-                    "webhook": donnees_webhook or {},
-                    "verification": verification.get("donnees_brutes", {}),
-                    "verifie_le": timezone.now().isoformat(),
-                }
-                paiement.charge_utile = charge_totale
+                charge_totale = dict(paiement.charge_utile or {})
+                charge_totale.update(
+                    {
+                        "webhook": donnees_webhook or {},
+                        "verification": verification.get("donnees_brutes", {}),
+                        "verifie_le": timezone.now().isoformat(),
+                    }
+                )
 
                 if statut_cinet == "ACCEPTED":
+                    # Option C1 : Résurrection si la transaction était annulée ou expirée
+                    etait_annule_ou_expire = paiement.statut in [
+                        PaiementAbonnement.Statut.ANNULE,
+                        PaiementAbonnement.Statut.EXPIRE,
+                        PaiementAbonnement.Statut.ECHOUE,
+                    ]
+                    if etait_annule_ou_expire:
+                        logger.warning(
+                            f"RÉSURRECTION (Option C1) : Transaction {transaction_id} "
+                            f"initialement {paiement.statut} confirmée par l'opérateur. Prolongation d'abonnement appliquée."
+                        )
+                        charge_totale["resurrection"] = {
+                            "statut_precedent": paiement.statut,
+                            "resuscite_le": timezone.now().isoformat(),
+                            "motif": "Confirmation opérateur reçue a posteriori",
+                        }
+
                     # Contrôle de cohérence du montant (tolérance d'arrondi 100 FCFA)
                     if (
                         montant_paye_fcfa > 0
@@ -287,7 +501,8 @@ class PaiementAbonnementService:
                             f"attendu {paiement.montant_fcfa} FCFA, reçu {montant_paye_fcfa} FCFA."
                         )
                         paiement.statut = PaiementAbonnement.Statut.ECHOUE
-                        paiement.save(update_fields=["statut", "charge_utile"])
+                        paiement.charge_utile = charge_totale
+                        paiement.save(update_fields=["statut", "charge_utile", "modifie_le"])
                         return {
                             "statut": "ERREUR_MONTANT",
                             "message": (
@@ -296,9 +511,11 @@ class PaiementAbonnementService:
                         }
 
                     # Confirmation du paiement
+                    ancien_statut = paiement.statut
                     paiement.statut = PaiementAbonnement.Statut.CONFIRME
                     paiement.mode = cls.mapper_mode_paiement(moyen)
                     paiement.paye_le = timezone.now()
+                    paiement.charge_utile = charge_totale
                     paiement.save(
                         update_fields=["statut", "mode", "paye_le", "charge_utile", "modifie_le"]
                     )
@@ -308,7 +525,7 @@ class PaiementAbonnementService:
                     facture.statut = Facture.Statut.PAYEE
                     facture.save(update_fields=["statut", "modifie_le"])
 
-                    # Mise à jour de l'abonnement
+                    # Mise à jour de l'abonnement (Option C1 : prolongation sans écrasement)
                     abonnement = facture.abonnement
                     aujourdhui = timezone.localdate()
 
@@ -353,7 +570,7 @@ class PaiementAbonnementService:
                         action=ActionAudit.VALIDATION,
                         type_entite="PaiementAbonnement",
                         entite_id=paiement.id,
-                        valeur_avant={"statut": PaiementAbonnement.Statut.INITIE},
+                        valeur_avant={"statut": ancien_statut},
                         valeur_apres={
                             "statut": PaiementAbonnement.Statut.CONFIRME,
                             "facture": facture.numero,
@@ -378,17 +595,23 @@ class PaiementAbonnementService:
                         "montant_fcfa": paiement.montant_fcfa,
                     }
                 elif statut_cinet in ["PENDING", "WAITING", "PROCESSING"]:
+                    # Mise à jour vers EN_ATTENTE_OPERATEUR si la transaction n'est pas explicitement annulée
+                    if paiement.statut != PaiementAbonnement.Statut.ANNULE:
+                        paiement.statut = PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR
+                    paiement.charge_utile = charge_totale
+                    paiement.save(update_fields=["statut", "charge_utile", "modifie_le"])
                     logger.info(
-                        f"Transaction {transaction_id} en attente CinetPay ({statut_cinet})."
+                        f"Transaction {transaction_id} en attente opérateur ({statut_cinet})."
                     )
                     return {
-                        "statut": "EN_ATTENTE",
+                        "statut": "EN_ATTENTE_OPERATEUR",
                         "transaction_id": transaction_id,
                         "message": "Paiement en cours de traitement par l'opérateur.",
                     }
                 else:
-                    # Échec ou annulation confirmée
+                    # Échec ou annulation confirmée par l'opérateur
                     paiement.statut = PaiementAbonnement.Statut.ECHOUE
+                    paiement.charge_utile = charge_totale
                     paiement.save(update_fields=["statut", "charge_utile", "modifie_le"])
                     logger.warning(f"Paiement refusé pour {transaction_id} : statut={statut_cinet}")
                     return {
@@ -399,46 +622,61 @@ class PaiementAbonnementService:
     @classmethod
     def verifier_paiements_en_attente(
         cls,
-        delai_min_minutes: int = 5,
-        timeout_heures: int = 48,
+        delai_min_minutes: int = 2,
+        delai_max_minutes: int | None = None,
+        timeout_heures: int | None = 24,
     ) -> dict[str, Any]:
-        """Vérifie automatiquement toutes les transactions en attente auprès de CinetPay.
+        """Vérifie automatiquement les transactions en attente auprès de CinetPay.
 
-        - Analyse les paiements `INITIE` créés il y a au moins `delai_min_minutes` (laisse
-          le temps au client d'effectuer la saisie initiale sur son téléphone).
-        - Si une transaction a plus de `timeout_heures`, elle est marquée comme expirée (`ECHOUE`).
+        - Analyse les paiements `INITIE` et `EN_ATTENTE_OPERATEUR` créés il y a au moins `delai_min_minutes`.
+        - Si une transaction a plus de `timeout_heures` (si configuré), elle est marquée comme `EXPIRE`.
         - Pour les autres, interroge l'API CinetPay (check_payment) et applique les transitions.
         """
         with schema_context(get_public_schema_name()):
             maintenant = timezone.now()
             seuil_reconciliation = maintenant - timedelta(minutes=delai_min_minutes)
-            seuil_expiration = maintenant - timedelta(hours=timeout_heures)
 
-            # 1. Marquer les transactions dépassées comme expirées
-            anciennes = PaiementAbonnement.objects.filter(
-                statut=PaiementAbonnement.Statut.INITIE,
-                cree_le__lt=seuil_expiration,
-            )
+            # 1. Marquer les transactions dépassées comme expirées (si timeout_heures est défini)
             nb_expires = 0
-            for p in anciennes:
-                p.statut = PaiementAbonnement.Statut.ECHOUE
-                motif = f"Délai d'attente dépassé ({timeout_heures}h sans confirmation)."
-                p.charge_utile = {
-                    **(p.charge_utile or {}),
-                    "motif_echec": motif,
-                    "expire_le": maintenant.isoformat(),
-                }
-                p.save(update_fields=["statut", "charge_utile", "modifie_le"])
-                nb_expires += 1
+            seuil_expiration = None
+            if timeout_heures is not None:
+                seuil_expiration = maintenant - timedelta(hours=timeout_heures)
+                anciennes = PaiementAbonnement.objects.filter(
+                    statut__in=[
+                        PaiementAbonnement.Statut.INITIE,
+                        PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+                    ],
+                    cree_le__lt=seuil_expiration,
+                )
+                for p in anciennes:
+                    p.statut = PaiementAbonnement.Statut.EXPIRE
+                    motif = f"Délai d'attente dépassé ({timeout_heures}h sans confirmation opérateur)."
+                    charge = dict(p.charge_utile or {})
+                    charge.update(
+                        {
+                            "motif_expiration": motif,
+                            "expire_le": maintenant.isoformat(),
+                        }
+                    )
+                    p.charge_utile = charge
+                    p.save(update_fields=["statut", "charge_utile", "modifie_le"])
+                    nb_expires += 1
 
             # 2. Vérifier les transactions éligibles à la réconciliation
-            candidats = list(
-                PaiementAbonnement.objects.filter(
-                    statut=PaiementAbonnement.Statut.INITIE,
-                    cree_le__lte=seuil_reconciliation,
-                    cree_le__gte=seuil_expiration,
-                ).order_by("cree_le")
+            query = PaiementAbonnement.objects.filter(
+                statut__in=[
+                    PaiementAbonnement.Statut.INITIE,
+                    PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+                ],
+                cree_le__lte=seuil_reconciliation,
             )
+            if seuil_expiration is not None:
+                query = query.filter(cree_le__gte=seuil_expiration)
+            if delai_max_minutes is not None:
+                seuil_max = maintenant - timedelta(minutes=delai_max_minutes)
+                query = query.filter(cree_le__gte=seuil_max)
+
+            candidats = list(query.order_by("cree_le"))
 
             nb_confirmes = 0
             nb_echoues = 0
@@ -451,17 +689,17 @@ class PaiementAbonnementService:
                     st = res.get("statut")
                     if st in ["CONFIRME", "DEJA_CONFIRME"]:
                         nb_confirmes += 1
-                    elif st == "ECHOUE":
+                    elif st in ["ECHOUE", "EXPIRE"]:
                         nb_echoues += 1
-                    elif st == "EN_ATTENTE":
+                    elif st in ["EN_ATTENTE", "EN_ATTENTE_OPERATEUR"]:
                         nb_en_attente += 1
                 except Exception as e:
                     logger.error(f"Erreur lors de la vérification automatique de {tx_id} : {e}")
 
             logger.info(
                 f"Réconciliation CinetPay terminée : {len(candidats)} examinés, "
-                f"{nb_confirmes} confirmés, {nb_echoues} échoués, "
-                f"{nb_en_attente} toujours en attente, {nb_expires} expirés."
+                f"{nb_confirmes} confirmés, {nb_echoues} échoués/expirés, "
+                f"{nb_en_attente} en attente, {nb_expires} expirés."
             )
 
             return {

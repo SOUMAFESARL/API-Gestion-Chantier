@@ -124,22 +124,54 @@ def _clore_essai(abonnement) -> None:
 
 
 @shared_task
-def verifier_paiements_en_attente() -> dict:
-    """Vérification automatique et réconciliation des transactions CinetPay en attente.
+def reconcilier_paiements_recents() -> dict:
+    """Réconciliation rapide des paiements Mobile Money récents (entre 2 et 30 min).
 
-    Tourne dans le schéma `public` (tables billing) sur un intervalle régulier (ex: 10 min).
-    Interroge l'API CinetPay pour valider les règlements dont la notification n'est pas parvenue
-    ou a été retardée.
+    Tourne à haute fréquence (toutes les 2 minutes) pour débloquer sans délai les utilisateurs
+    dont le push USSD/Mobile Money a tardé (> 3 min) ou dont l'IPN CinetPay a été retardé.
     """
     from apps.billing.services.paiement import PaiementAbonnementService
 
-    logger.info("Démarrage de la tâche Celery de réconciliation des paiements CinetPay...")
+    logger.info("Démarrage réconciliation CinetPay (transactions récentes 2-30 min)...")
+    return PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=2,
+        delai_max_minutes=30,
+        timeout_heures=None,
+    )
+
+
+@shared_task
+def reconcilier_paiements_anciens() -> dict:
+    """Réconciliation périodique des paiements en attente plus anciens (entre 30 min et 24h).
+
+    Tourne toutes les 15 minutes. Marque également comme `EXPIRE` les transactions
+    qui ont dépassé le délai de 24h sans confirmation opérateur.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage réconciliation CinetPay (transactions anciennes 30 min - 24h)...")
+    return PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=30,
+        delai_max_minutes=1440,
+        timeout_heures=24,
+    )
+
+
+@shared_task
+def verifier_paiements_en_attente() -> dict:
+    """Tâche générique de réconciliation de l'ensemble des paiements CinetPay en attente.
+
+    Tourne dans le schéma `public` (tables billing) sur un intervalle régulier.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage de la tâche Celery globale de réconciliation des paiements CinetPay...")
     resultat = PaiementAbonnementService.verifier_paiements_en_attente(
-        delai_min_minutes=5,
-        timeout_heures=48,
+        delai_min_minutes=2,
+        timeout_heures=24,
     )
     logger.info(
         f"Fin de la réconciliation CinetPay : {resultat.get('confirmes')} confirmés, "
-        f"{resultat.get('echoues')} échoués, {resultat.get('en_attente')} en attente."
+        f"{resultat.get('echoues')} échoués/expirés, {resultat.get('en_attente')} en attente."
     )
     return resultat

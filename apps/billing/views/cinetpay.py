@@ -13,17 +13,20 @@ from rest_framework.views import APIView
 
 from apps.billing.models import Abonnement, PaiementAbonnement, Plan
 from apps.billing.serializers import (
+    AnnulerPaiementRequestSerializer,
+    AnnulerPaiementResponseSerializer,
     InitierPaiementRequestSerializer,
     InitierPaiementResponseSerializer,
     PlanCatalogueSerializer,
     StatutPaiementResponseSerializer,
 )
 from apps.billing.services.cinetpay import CinetPayClient
-from apps.billing.services.paiement import PaiementAbonnementService
+from apps.billing.services.paiement import PaiementAbonnementService, PaiementEnCoursError
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "AnnulerPaiementView",
     "CinetPayWebhookView",
     "InitierPaiementView",
     "PlansCatalogueView",
@@ -93,6 +96,18 @@ class InitierPaiementView(APIView):
                     user_name=f"{request.user.prenom} {request.user.nom}".strip(),
                     return_url=return_url,
                 )
+            except PaiementEnCoursError as e:
+                logger.warning(
+                    f"Tentative de réinitiation alors qu'un paiement est en cours : {e}"
+                )
+                return Response(
+                    {
+                        "detail": str(e),
+                        "code": "PAIEMENT_EN_COURS",
+                        "transaction_en_cours": e.transaction_en_cours,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
             except Exception as e:
                 logger.error(f"Erreur lors de l'initiation du paiement CinetPay : {e}")
                 return Response(
@@ -101,6 +116,60 @@ class InitierPaiementView(APIView):
                 )
 
         resp_serializer = InitierPaiementResponseSerializer(resultat)
+        return Response(resp_serializer.data, status=status.HTTP_200_OK)
+
+
+class AnnulerPaiementView(APIView):
+    """`POST /api/v1/billing/cinetpay/annuler/` — Abandon explicite d'une tentative en cours (Option A2)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Annuler explicitement une session de paiement CinetPay en cours",
+        request=AnnulerPaiementRequestSerializer,
+        responses={
+            200: AnnulerPaiementResponseSerializer,
+            400: dict,
+            404: dict,
+        },
+    )
+    def post(self, request):
+        serializer = AnnulerPaiementRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        transaction_id = serializer.validated_data["transaction_id"]
+        motif = serializer.validated_data.get("motif", "Annulation demandée par l'utilisateur")
+
+        tenant = getattr(connection, "tenant", None)
+        if tenant is None:
+            tenant = getattr(request.user, "entreprise", None)
+
+        if tenant is None:
+            return Response(
+                {"detail": "Aucune entreprise active identifiée pour cette requête."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with schema_context(get_public_schema_name()):
+            try:
+                resultat = PaiementAbonnementService.annuler_paiement_en_cours(
+                    entreprise=tenant,
+                    transaction_id=transaction_id,
+                    motif=motif,
+                )
+            except ValueError as e:
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except Exception as e:
+                logger.error(f"Erreur lors de l'annulation du paiement {transaction_id} : {e}")
+                return Response(
+                    {"detail": f"Erreur lors de l'annulation : {e}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        resp_serializer = AnnulerPaiementResponseSerializer(resultat)
         return Response(resp_serializer.data, status=status.HTTP_200_OK)
 
 
@@ -196,9 +265,12 @@ class StatutPaiementView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            # Si le statut est encore INITIE, tenter une vérification instantanée auprès de CinetPay
+            # Si le statut est encore INITIE ou EN_ATTENTE_OPERATEUR, tenter une vérification instantanée auprès de CinetPay
             # afin d'offrir une réactivité immédiate à l'utilisateur qui vient d'être redirigé
-            if paiement.statut == PaiementAbonnement.Statut.INITIE:
+            if paiement.statut in [
+                PaiementAbonnement.Statut.INITIE,
+                PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+            ]:
                 PaiementAbonnementService.traiter_notification_webhook(transaction_id)
                 paiement.refresh_from_db()
 

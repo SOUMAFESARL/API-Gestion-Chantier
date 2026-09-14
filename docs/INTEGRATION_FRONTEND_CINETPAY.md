@@ -85,12 +85,12 @@ Permet d'afficher la grille tarifaire (mensuelle ou annuelle) sur votre page de 
 
 ---
 
-### Endpoint 2 : Initier une session de paiement
+### Endpoint 2 : Initier une session de paiement (Protection Anti-Double Débit)
 Appelé lorsque l'utilisateur sélectionne un forfait et clique sur **"Procéder au paiement"**.
 
 * **Méthode** : `POST`
 * **Route** : `/api/v1/cinetpay/initier/`
-* **Authentification** : `Bearer <token_jwt>` (L'utilisateur doit être connecté avec un compte Administrateur d'entreprise).
+* **Authentification** : `Bearer <token_jwt>` (Administrateur d'entreprise).
 * **Corps de la requête (`JSON`)** :
 ```json
 {
@@ -100,55 +100,128 @@ Appelé lorsque l'utilisateur sélectionne un forfait et clique sur **"Procéder
 ```
 > Valeurs acceptées pour `cycle` : `"MENSUEL"` ou `"ANNUEL"`.
 
-* **Exemple de Réponse (`201 Created`)** :
+* **Cas nominal (`200 OK`)** :
 ```json
 {
   "payment_url": "https://api-checkout.cinetpay.com/v2/payment/...",
   "payment_token": "a1b2c3d4...",
   "transaction_id": "TX202609111416559E094A",
-  "reference_facture": "FAC-2026-09-0001",
+  "numero_facture": "FAC-2026-09-0001",
   "montant_fcfa": 49000,
-  "plan_nom": "Maître d'Œuvre",
-  "cycle": "MENSUEL"
+  "forfait": "Maître d'Œuvre",
+  "cycle": "MENSUEL",
+  "mode_simulation": false
 }
 ```
 
-* **Action requise côté Frontend** :
-Rediriger immédiatement l'utilisateur vers `payment_url` :
-```javascript
-window.location.href = data.payment_url;
+* **Cas de verrouillage actif (`409 Conflict`)** :
+Si une session a déjà été initiée il y a moins de 10 minutes pour cette entreprise, l'API protège contre le double débit et renvoie :
+```json
+{
+  "detail": "Un paiement de 49 000 FCFA est déjà en cours pour cette entreprise...",
+  "code": "PAIEMENT_EN_COURS",
+  "transaction_en_cours": {
+    "transaction_id": "TX202609111416559E094A",
+    "reference_facture": "FAC-2026-09-0001",
+    "montant_fcfa": 49000,
+    "forfait": "Maître d'Œuvre",
+    "statut": "INITIE",
+    "secondes_restantes": 480,
+    "cree_le": "2026-09-14T18:00:00Z"
+  }
+}
 ```
+> **Action UI recommandée en 409** : Afficher un dialogue avec compte à rebours : *"Un paiement est déjà en cours. Veuillez confirmer sur votre téléphone ou annuler pour recommencer."*, avec un bouton **"Annuler la tentative"** branché sur l'Endpoint 3.
 
 ---
 
-### Endpoint 3 : Vérifier le statut du paiement
-Utilisé sur votre page de retour frontend (`/abonnements/statut`) après que CinetPay a redirigé le client.
+### Endpoint 3 : Annuler une tentative en cours (Abandon Explicite)
+Permet à l'utilisateur d'annuler sa session en attente pour débloquer immédiatement une nouvelle tentative (ou changer d'opérateur).
+
+* **Méthode** : `POST`
+* **Route** : `/api/v1/cinetpay/annuler/`
+* **Authentification** : `Bearer <token_jwt>`
+* **Corps de la requête (`JSON`)** :
+```json
+{
+  "transaction_id": "TX202609111416559E094A",
+  "motif": "Changement de moyen de paiement"
+}
+```
+* **Réponse (`200 OK`)** :
+```json
+{
+  "statut": "ANNULE",
+  "transaction_id": "TX202609111416559E094A",
+  "message": "La tentative de paiement a été annulée avec succès."
+}
+```
+> **Filet de sécurité (Règle C1)** : Si le compte Mobile Money du client a quand même été débité par l'opérateur après l'annulation, notre backend réactivera automatiquement la transaction en `CONFIRME` dès notification et prolongera son abonnement sans perte.
+
+---
+
+### Endpoint 4 : Vérifier le statut du paiement
+Utilisé sur votre page de retour frontend (`/abonnements/statut`) ou pour vérifier une transaction en cours.
 
 * **Méthode** : `GET`
 * **Route** : `/api/v1/cinetpay/statut/:transaction_id/`  
-  *(Exemple : `/api/v1/cinetpay/statut/TX202609111416559E094A/`)*
 * **Authentification** : `Bearer <token_jwt>`
 * **Exemple de Réponse (`200 OK`)** :
 ```json
 {
   "transaction_id": "TX202609111416559E094A",
-  "statut": "VALIDE",
-  "moyen_paiement": "WAVE",
+  "statut": "CONFIRME",
+  "statut_affichage": "Confirmé",
+  "mode_paiement": "Wave",
+  "moyen_paiement": "Wave",
   "montant_fcfa": 49000,
+  "numero_facture": "FAC-2026-09-0001",
   "reference_facture": "FAC-2026-09-0001",
+  "paye_le": "2026-09-14T18:02:15Z",
+  "abonnement_actif": true,
+  "est_valide": true,
+  "date_fin": "2026-10-14",
+  "abonnement_expire_le": "2026-10-14T18:00:00Z",
   "entreprise": "Cabinet Architecture & BTP",
-  "plan": "Maître d'Œuvre",
-  "abonnement_expire_le": "2026-10-23T14:16:56Z",
-  "est_valide": true
+  "plan": "Maître d'Œuvre"
 }
 ```
 
 #### Les valeurs possibles pour `statut` :
 | Statut | Signification | Action UI recommandée |
 | :--- | :--- | :--- |
-| **`VALIDE`** | Paiement confirmé, abonnement activé. | Afficher le badge vert de succès, le numéro de facture et un bouton *"Aller sur le tableau de bord"*. |
-| **`EN_ATTENTE`** | En cours de traitement par l'opérateur Mobile Money. | Afficher un loader / spinner et réinterroger l'endpoint après 3 secondes (polling temporaire). |
-| **`ECHOUE`** | Paiement refusé ou annulé par le client. | Afficher un message d'erreur avec un bouton *"Réessayer"*. |
+| **`CONFIRME`** | Paiement certifié, abonnement activé. | Badge vert de succès, facture OHADA et bouton *"Accéder à mon espace"*. |
+| **`EN_ATTENTE_OPERATEUR`** / **`INITIE`** | Demande envoyée à l'opérateur (push USSD/OTP en attente). | Afficher message pédagogique, spinner et compte à rebours. Polling toutes les 3s (1 min) puis 10s. |
+| **`ANNULE`** | Annulation explicite demandée par le client. | Message d'information avec possibilité de relancer un paiement. |
+| **`EXPIRE`** | Délai de confirmation dépassé (> 24h). | Inviter le client à initier une nouvelle session. |
+| **`ECHOUE`** | Rejet opérateur (solde insuffisant, code PIN erroné). | Afficher le motif d'échec et proposer un nouvel essai. |
+
+---
+
+### Endpoint 5 : Consultation de l'abonnement & Paiement en cours
+Permet de savoir dès le chargement du Dashboard ou de la page Tarifs si un paiement Mobile Money est en attente.
+
+* **Méthode** : `GET`
+* **Route** : `/api/v1/abonnement/`
+* **Authentification** : `Bearer <token_jwt>`
+* **Champ enrichi `paiement_en_cours`** :
+```json
+{
+  "id": "...",
+  "statut": "ESSAI",
+  "plan": { "code": "MAITRE_OEUVRE", "libelle": "Maître d'Œuvre" },
+  "paiement_en_cours": {
+    "transaction_id": "TX202609111416559E094A",
+    "reference_facture": "FAC-2026-09-0001",
+    "montant_fcfa": 49000,
+    "forfait": "Maître d'Œuvre",
+    "statut": "INITIE",
+    "secondes_restantes": 510,
+    "cree_le": "2026-09-14T18:00:00Z"
+  }
+}
+```
+> Si aucun paiement n'est en attente, `"paiement_en_cours": null`.
 
 ---
 

@@ -12,8 +12,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core import enums
+from apps.referentiels.serializers import (
+    EnumerationsResponseSerializer,
+    ReglesMotDePasseResponseSerializer,
+)
 
-__all__ = ["EnumerationsView"]
+__all__ = ["EnumerationsView", "ReglesMotDePasseView"]
 
 
 def _libelles() -> dict[str, list[dict[str, str]]]:
@@ -45,11 +49,12 @@ class EnumerationsView(APIView):
     """
 
     permission_classes = [AllowAny]
+    serializer_class = EnumerationsResponseSerializer
 
     @extend_schema(
         summary="Libellés des énumérations",
-        description="Codes et libellés de toutes les énumérations du produit.",
-        responses={200: dict},
+        description="Codes et libellés français de toutes les énumérations produit (statuts de chantiers, rôles, types de tiers, devises, etc.).",
+        responses={200: EnumerationsResponseSerializer},
     )
     def get(self, request):
         return Response(_libelles())
@@ -80,11 +85,12 @@ class ReglesMotDePasseView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    serializer_class = ReglesMotDePasseResponseSerializer
 
     @extend_schema(
         summary="Règles de complexité du mot de passe",
-        description="Un seul endroit à modifier le jour où la politique change.",
-        responses={200: None},
+        description="Liste des contraintes de sécurité et expressions régulières ECMAScript associées pour affichage des coches en direct.",
+        responses={200: ReglesMotDePasseResponseSerializer},
     )
     def get(self, request):
         return Response(

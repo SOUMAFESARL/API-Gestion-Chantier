@@ -15,6 +15,8 @@ from apps.billing.models import Abonnement, PaiementAbonnement, Plan
 from apps.billing.serializers import (
     AnnulerPaiementRequestSerializer,
     AnnulerPaiementResponseSerializer,
+    CinetPayWebhookRequestSerializer,
+    CinetPayWebhookResponseSerializer,
     InitierPaiementRequestSerializer,
     InitierPaiementResponseSerializer,
     PlanCatalogueSerializer,
@@ -97,9 +99,7 @@ class InitierPaiementView(APIView):
                     return_url=return_url,
                 )
             except PaiementEnCoursError as e:
-                logger.warning(
-                    f"Tentative de réinitiation alors qu'un paiement est en cours : {e}"
-                )
+                logger.warning(f"Tentative de réinitiation alors qu'un paiement est en cours : {e}")
                 return Response(
                     {
                         "detail": str(e),
@@ -182,10 +182,17 @@ class CinetPayWebhookView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    serializer_class = CinetPayWebhookRequestSerializer
 
     @extend_schema(
         summary="Webhook IPN CinetPay (notification de paiement)",
-        responses={200: dict},
+        description="Notification asynchrone Instant Payment Notification (IPN) émise par CinetPay lors du changement de statut d'un paiement.",
+        request=CinetPayWebhookRequestSerializer,
+        responses={
+            200: CinetPayWebhookResponseSerializer,
+            400: CinetPayWebhookResponseSerializer,
+            403: CinetPayWebhookResponseSerializer,
+        },
     )
     def post(self, request):
         # 1. Vérification de l'authenticité de la notification via X-Token (HMAC SHA-256)
@@ -302,3 +309,45 @@ class StatutPaiementView(APIView):
 
             serializer = StatutPaiementResponseSerializer(data)
             return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AnnulerPaiementView(APIView):
+    """`POST /api/v1/cinetpay/annuler/`
+
+    Permet à l'utilisateur d'abandonner explicitement une transaction en cours
+    de confirmation (par exemple si l'opérateur Mobile Money tarde ou si l'utilisateur
+    souhaite changer de forfait ou de moyen de paiement).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AnnulerPaiementRequestSerializer
+
+    @extend_schema(
+        summary="Annuler un paiement d'abonnement en cours",
+        description="Abandonne une transaction de paiement en attente de validation opérateur pour débloquer la session.",
+        request=AnnulerPaiementRequestSerializer,
+        responses={
+            200: AnnulerPaiementResponseSerializer,
+            400: dict,
+            404: dict,
+        },
+    )
+    def post(self, request):
+        serializer = AnnulerPaiementRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        entreprise = getattr(request, "tenant", None)
+        if not entreprise or not hasattr(entreprise, "pk"):
+            entreprise = getattr(request.user, "entreprise", None)
+
+        try:
+            resultat = PaiementAbonnementService.annuler_paiement_en_cours(
+                entreprise=entreprise,
+                transaction_id=serializer.validated_data["transaction_id"],
+                motif=serializer.validated_data.get(
+                    "motif", "Annulation demandée par l'utilisateur"
+                ),
+            )
+            return Response(resultat, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

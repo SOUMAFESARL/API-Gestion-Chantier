@@ -10,6 +10,10 @@ from rest_framework.views import APIView
 
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.referentiels.villes import lister_villes, nom_agglomeration
+from apps.projets.serializers import (
+    MeteoResponseSerializer,
+    ReferentielVillesResponseSerializer,
+)
 from apps.projets.services.meteo import (
     PORTEE_CHANTIER,
     PORTEE_ENTREPRISE,
@@ -93,9 +97,14 @@ class MeteoProjetView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = MeteoResponseSerializer
 
     @extend_schema(
         summary="Météo à afficher dans la barre d'application",
+        description=(
+            "Renvoie les conditions météorologiques en temps réel (température, intempéries, praticabilité "
+            "du chantier) pour la barre d'état. Détermine la ville selon le rôle de l'utilisateur ou le projet sélectionné."
+        ),
         parameters=[
             OpenApiParameter(
                 name="projet_id",
@@ -115,6 +124,7 @@ class MeteoProjetView(APIView):
                 description="Localité explicite — prioritaire sur la règle de rôle.",
             ),
         ],
+        responses={200: MeteoResponseSerializer},
     )
     def get(self, request):
         tenant = getattr(request, "tenant", None)
@@ -143,9 +153,11 @@ class ReferentielVillesView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = ReferentielVillesResponseSerializer
 
     @extend_schema(
         summary="Référentiel des localités d'un pays",
+        description="Renvoie la liste officielle des communes ou localités pour les formulaires de chantiers.",
         parameters=[
             OpenApiParameter(
                 name="pays",
@@ -155,7 +167,7 @@ class ReferentielVillesView(APIView):
                 description="Code pays ISO à deux lettres. À défaut, le pays de l'entreprise.",
             )
         ],
-        responses={200: None},
+        responses={200: ReferentielVillesResponseSerializer},
     )
     def get(self, request):
         tenant = getattr(request, "tenant", None)

@@ -21,6 +21,7 @@ from apps.chantier.models import RapportJournalier
 from apps.core.enums import StatutBonPaiement, StatutRapport
 from apps.finance.models import BonPaiement
 from apps.projets.models import Projet
+from apps.projets.serializers import TableauDeBordResponseSerializer
 from apps.projets.services.meteo import (
     PORTEE_CHANTIER,
     PORTEE_ENTREPRISE,
@@ -36,10 +37,16 @@ class TableauDeBordView(APIView):
     """`GET /api/v1/tableau-de-bord/` — Données consolidées de pilotage BTP 100% réelles."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = TableauDeBordResponseSerializer
 
     @extend_schema(
         summary="Données réelles du tableau de bord de pilotage BTP",
-        responses={200: dict},
+        description=(
+            "Agrège l'ensemble des indicateurs de performance clés (KPIs) en temps réel : "
+            "santé globale du portefeuille, budgets engagés vs initiaux, alertes intempéries, "
+            "bons de paiement en attente de signature, réceptions récentes et effectifs sur site."
+        ),
+        responses={200: TableauDeBordResponseSerializer},
     )
     def get(self, request):
         tenant = getattr(request, "tenant", None)

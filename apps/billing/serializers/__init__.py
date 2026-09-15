@@ -4,6 +4,8 @@ from apps.billing.serializers.abonnement import AbonnementSerializer, PlanResume
 from apps.billing.serializers.cinetpay import (
     AnnulerPaiementRequestSerializer,
     AnnulerPaiementResponseSerializer,
+    CinetPayWebhookRequestSerializer,
+    CinetPayWebhookResponseSerializer,
     InitierPaiementRequestSerializer,
     InitierPaiementResponseSerializer,
     PaiementEnCoursSerializer,
@@ -15,6 +17,8 @@ __all__ = [
     "AbonnementSerializer",
     "AnnulerPaiementRequestSerializer",
     "AnnulerPaiementResponseSerializer",
+    "CinetPayWebhookRequestSerializer",
+    "CinetPayWebhookResponseSerializer",
     "InitierPaiementRequestSerializer",
     "InitierPaiementResponseSerializer",
     "PaiementEnCoursSerializer",

@@ -15,11 +15,20 @@ from apps.projets.services.references import generer_reference_projet
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
 
+from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
+from apps.projets.serializers.meteo import (
+    MeteoResponseSerializer,
+    ReferentielVillesResponseSerializer,
+)
+
 __all__ = [
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
+    "MeteoResponseSerializer",
     "ProjetCreationSerializer",
     "ProjetSerializer",
+    "ReferentielVillesResponseSerializer",
+    "TableauDeBordResponseSerializer",
 ]
 
 

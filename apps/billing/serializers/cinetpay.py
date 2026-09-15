@@ -7,6 +7,8 @@ from apps.billing.models import Plan
 __all__ = [
     "AnnulerPaiementRequestSerializer",
     "AnnulerPaiementResponseSerializer",
+    "CinetPayWebhookRequestSerializer",
+    "CinetPayWebhookResponseSerializer",
     "InitierPaiementRequestSerializer",
     "InitierPaiementResponseSerializer",
     "PaiementEnCoursSerializer",
@@ -128,3 +130,32 @@ class PaiementEnCoursSerializer(serializers.Serializer):
     statut = serializers.CharField()
     secondes_restantes = serializers.IntegerField()
     cree_le = serializers.CharField(required=False, allow_null=True)
+
+
+class CinetPayWebhookRequestSerializer(serializers.Serializer):
+    """Charge utile envoyée par CinetPay lors de la notification IPN."""
+
+    cpm_trans_id = serializers.CharField(
+        required=False, help_text="Identifiant de transaction CinetPay"
+    )
+    transaction_id = serializers.CharField(
+        required=False, help_text="Identifiant alternatif de transaction"
+    )
+    cpm_site_id = serializers.CharField(required=False, help_text="Identifiant du site marchand")
+    cpm_amount = serializers.CharField(required=False, help_text="Montant encaissé")
+    cpm_trans_status = serializers.CharField(
+        required=False, help_text="Code statut CinetPay (00 = succès)"
+    )
+    cpm_custom = serializers.CharField(
+        required=False, help_text="Données personnalisées / référence commande"
+    )
+
+
+class CinetPayWebhookResponseSerializer(serializers.Serializer):
+    """Accusé de réception retourné à CinetPay."""
+
+    status = serializers.CharField(help_text="ACCEPTED, REJECTED, ou IGNORED")
+    message = serializers.CharField(help_text="Message descriptif du traitement")
+    transaction_id = serializers.CharField(
+        required=False, help_text="Identifiant de transaction traitée"
+    )

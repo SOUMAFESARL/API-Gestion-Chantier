@@ -22,13 +22,41 @@ __all__ = ["ProjetPermissionsRolesView"]
 
 
 class OverrideInputSerializer(serializers.Serializer):
-    role_id = serializers.UUIDField()
-    module = serializers.CharField()
-    niveau = serializers.IntegerField(min_value=0, max_value=3, required=False, allow_null=True)
+    role_id = serializers.UUIDField(help_text="Identifiant unique du rôle")
+    module = serializers.CharField(help_text="Code du module BTP (ex: CHANTIER, FINANCE, ACHATS)")
+    niveau = serializers.IntegerField(
+        min_value=0,
+        max_value=3,
+        required=False,
+        allow_null=True,
+        help_text="Niveau d'accès (0: AUCUN, 1: LECTURE, 2: ECRITURE, 3: ADMIN, null: réinitialiser au défaut)",
+    )
 
 
 class SurchargeMatriceInputSerializer(serializers.Serializer):
     surcharges = OverrideInputSerializer(many=True, required=False, default=list)
+
+
+class ModuleDroitSerializer(serializers.Serializer):
+    niveau = serializers.IntegerField(
+        help_text="Niveau d'accès (0: AUCUN, 1: LECTURE, 2: ECRITURE, 3: ADMIN)"
+    )
+    est_surcharge = serializers.BooleanField(
+        help_text="True si le droit découle d'une surcharge propre au chantier"
+    )
+
+
+class MatricePermissionProjetRoleSerializer(serializers.Serializer):
+    """Ligne de la matrice des habilitations par rôle pour ce chantier."""
+
+    role_id = serializers.UUIDField(help_text="Identifiant du rôle")
+    code = serializers.CharField(help_text="Code abrégé du rôle")
+    libelle = serializers.CharField(help_text="Libellé complet du rôle")
+    est_systeme = serializers.BooleanField(help_text="Rôle système ou personnalisé")
+    modules = serializers.DictField(
+        child=ModuleDroitSerializer(),
+        help_text="Dictionnaire des permissions effectives indexé par code module",
+    )
 
 
 class ProjetPermissionsRolesView(APIView):
@@ -36,10 +64,12 @@ class ProjetPermissionsRolesView(APIView):
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
+    serializer_class = SurchargeMatriceInputSerializer
 
     @extend_schema(
         summary="Matrice des rôles et habilitations effectives sur ce chantier",
-        responses={200: list},
+        description="Renvoie la matrice complète de tous les rôles actifs et de leurs droits effectifs sur ce projet spécifique.",
+        responses={200: MatricePermissionProjetRoleSerializer(many=True)},
     )
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
@@ -48,8 +78,9 @@ class ProjetPermissionsRolesView(APIView):
 
     @extend_schema(
         summary="Appliquer des surcharges de droits sur ce chantier",
+        description="Définit ou réinitialise des surcharges de permissions par rôle et par module sur ce chantier.",
         request=SurchargeMatriceInputSerializer,
-        responses={200: list},
+        responses={200: MatricePermissionProjetRoleSerializer(many=True)},
     )
     def put(self, request, pk):
         # Seul l'administrateur ou le chef de projet assigné peut modifier les droits du chantier

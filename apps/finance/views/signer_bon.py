@@ -11,6 +11,10 @@ from rest_framework.views import APIView
 from apps.audit.services import journaliser
 from apps.core.enums import ActionAudit, RoleGlobal, StatutBonPaiement
 from apps.finance.models import BonPaiement, SignatureBon
+from apps.finance.serializers import (
+    SignerBonPaiementRequestSerializer,
+    SignerBonPaiementResponseSerializer,
+)
 
 __all__ = ["SignerBonPaiementView"]
 
@@ -23,11 +27,17 @@ class SignerBonPaiementView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = SignerBonPaiementRequestSerializer
 
     @extend_schema(
         summary="Signer et valider un bon de paiement",
+        description=(
+            "Appose la signature électronique de l'utilisateur habilité (Directeur Général, "
+            "Directeur Financier ou Conducteur de Travaux) et passe le bon de paiement à l'état SIGNE."
+        ),
+        request=SignerBonPaiementRequestSerializer,
         responses={
-            200: dict,
+            200: SignerBonPaiementResponseSerializer,
             400: dict,
             403: dict,
             404: dict,

@@ -23,9 +23,14 @@ from rest_framework.views import APIView
 
 from apps.tenants.models import DUREE_LIEN_ACTIVATION, DemandeInscription
 from apps.tenants.serializers import (
+    AccuseActivationSerializer,
+    AccuseInscriptionSerializer,
     ActivationSerializer,
+    ContenuJetonInscriptionSerializer,
     DepotInscriptionSerializer,
     EntrepriseSerializer,
+    EtatProvisionnementResponseSerializer,
+    RenvoiActivationResponseSerializer,
     RenvoiSerializer,
     VerificationJetonInscriptionSerializer,
 )
@@ -60,8 +65,14 @@ class DepotInscriptionView(APIView):
     parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "inscription"
+    serializer_class = DepotInscriptionSerializer
 
-    @extend_schema(summary="Déposer une demande d'inscription", request=DepotInscriptionSerializer)
+    @extend_schema(
+        summary="Déposer une demande d'inscription",
+        description="Enregistre la demande d'inscription d'une nouvelle entreprise et déclenche l'envoi d'un email contenant le lien d'activation.",
+        request=DepotInscriptionSerializer,
+        responses={202: AccuseInscriptionSerializer, 400: dict},
+    )
     def post(self, request):
         serializer = DepotInscriptionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -97,8 +108,14 @@ class RenvoiActivationView(APIView):
     parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "inscription_renvoi"
+    serializer_class = RenvoiSerializer
 
-    @extend_schema(summary="Renvoyer l'email d'activation", request=RenvoiSerializer)
+    @extend_schema(
+        summary="Renvoyer l'email d'activation",
+        description="Génère un nouveau jeton d'activation et réexpédie l'email tout en invalidant le précédent.",
+        request=RenvoiSerializer,
+        responses={202: RenvoiActivationResponseSerializer, 400: dict},
+    )
     def post(self, request):
         serializer = RenvoiSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -115,10 +132,13 @@ class VerificationJetonInscriptionView(APIView):
     parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "inscription_verifier"
+    serializer_class = VerificationJetonInscriptionSerializer
 
     @extend_schema(
         summary="Lire le contenu d'un jeton d'activation",
+        description="Vérifie la validité d'un jeton reçu par email et renvoie les informations pré-remplies sans le consommer.",
         request=VerificationJetonInscriptionSerializer,
+        responses={200: ContenuJetonInscriptionSerializer, 400: dict, 410: dict},
     )
     def post(self, request):
         serializer = VerificationJetonInscriptionSerializer(data=request.data)
@@ -143,8 +163,14 @@ class ActivationView(APIView):
     parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "inscription_activer"
+    serializer_class = ActivationSerializer
 
-    @extend_schema(summary="Activer un espace", request=ActivationSerializer)
+    @extend_schema(
+        summary="Activer un espace",
+        description="Valide le mot de passe de l'administrateur, consomme définitivement le jeton d'activation et enclenche la création asynchrone du schéma tenant et du compte.",
+        request=ActivationSerializer,
+        responses={202: AccuseActivationSerializer, 400: dict},
+    )
     def post(self, request):
         serializer = ActivationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -189,8 +215,13 @@ class EtatProvisionnementView(APIView):
     authentication_classes = []
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "inscription_etat"
+    serializer_class = EtatProvisionnementResponseSerializer
 
-    @extend_schema(summary="Suivre le provisionnement")
+    @extend_schema(
+        summary="Suivre le provisionnement",
+        description="Sonde de vérification de l'état d'avancement du déploiement du schéma tenant de l'entreprise.",
+        responses={200: EtatProvisionnementResponseSerializer, 404: dict},
+    )
     def get(self, request, suivi):
         demande = DemandeInscription.objects.filter(pk=suivi).first()
         if demande is None:

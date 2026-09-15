@@ -12,6 +12,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
+from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
@@ -27,6 +28,7 @@ def sante(request):
 
 
 urlpatterns = [
+    path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-tenant"),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

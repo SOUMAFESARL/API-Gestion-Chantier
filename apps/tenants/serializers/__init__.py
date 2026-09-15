@@ -4,6 +4,11 @@ from django.core.files.storage import default_storage
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from apps.tenants.serializers.responses import (
+    EtatProvisionnementResponseSerializer,
+    RenvoiActivationResponseSerializer,
+)
+
 __all__ = [
     "AccuseActivationSerializer",
     "AccuseInscriptionSerializer",
@@ -11,6 +16,8 @@ __all__ = [
     "ContenuJetonInscriptionSerializer",
     "DepotInscriptionSerializer",
     "EntrepriseSerializer",
+    "EtatProvisionnementResponseSerializer",
+    "RenvoiActivationResponseSerializer",
     "RenvoiSerializer",
     "VerificationJetonInscriptionSerializer",
 ]

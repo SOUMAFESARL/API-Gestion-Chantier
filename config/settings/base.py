@@ -260,7 +260,9 @@ EMAIL_HOST_PASSWORD = config(
 
 DEFAULT_FROM_EMAIL = config(
     "DEFAULT_FROM_EMAIL",
-    default=f"CCD Digital <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "ne-pas-repondre@ccd-digital.ci",
+    default=f"CCD Digital <{EMAIL_HOST_USER}>"
+    if EMAIL_HOST_USER
+    else "ne-pas-repondre@ccd-digital.ci",
 )
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
@@ -349,9 +351,50 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "CCD Digital — API Gestion de Chantier BTP",
+    "DESCRIPTION": (
+        "# Guide d'intégration Frontend — API CCD Digital\n\n"
+        "Bienvenue sur la documentation interactive de l'API de gestion "
+        "de chantiers BTP **CCD Digital**.\n\n"
+        "### 1. Architecture Multi-Tenancy (Isolation des données)\n"
+        "- **Schéma Public (`urls_public.py`)** : Domaine principal de la plateforme "
+        "(ex: `api.ccd-digital.ci`). Utilisé pour l'inscription d'une nouvelle entreprise "
+        "(`/api/v1/inscription/`), l'activation d'espace, la consultation des forfaits "
+        "(`/api/v1/plans/`) et les webhooks de paiement CinetPay.\n"
+        "- **Schéma Tenant (`urls_tenant.py`)** : Sous-domaine spécifique de chaque entreprise "
+        "(ex: `mon-entreprise.ccd-digital.ci` ou `mon-entreprise.localhost:8000` en local). "
+        "Toutes les requêtes de gestion de chantier, finances, tiers, utilisateurs et rôles "
+        "doivent obligatoirement être adressées sur le sous-domaine de l'entreprise.\n\n"
+        "### 2. Authentification JWT\n"
+        "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
+        "`Authorization: Bearer <access_token>`.\n"
+        "- Durée de validité du jeton d'accès : **15 minutes**.\n"
+        "- Le rafraîchissement s'effectue via `POST /api/v1/auth/token/refresh/` avec le "
+        "jeton de renouvellement (valide 8 heures).\n"
+        "- La déconnexion `POST /api/v1/auth/deconnexion/` révoque instantanément les jetons "
+        "côté serveur dans le cache Redis.\n\n"
+        "### 3. Conventions de Réponses et Gestion des Erreurs\n"
+        "- Toutes les ressources renvoient du JSON strict (`Content-Type: application/json`).\n"
+        "- Format standard des erreurs (4xx / 5xx) :\n"
+        "```json\n"
+        "{\n"
+        '  "code": "permission_refusee",\n'
+        '  "message": "Explication claire en français",\n'
+        '  "details": {}\n'
+        "}\n"
+        "```\n"
+        "- **Pagination** : Les endpoints de listing paginés renvoient un objet avec "
+        "`{ count, next, previous, results }` (20 éléments par page).\n"
+        "- **Devise** : Les montants monétaires stockés en base sont exprimés en centimes FCFA. "
+        "Les serializers fournissent les méthodes de conversion `*_fcfa` en unités FCFA entières.\n"
+    ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",
+    "ENUM_NAME_OVERRIDES": {
+        "PlanCodeEnum": "apps.billing.models.Plan.Code",
+        "RoleGlobalEnum": "apps.core.enums.RoleGlobal",
+        "RoleTiersChoixEnum": "apps.core.enums.RoleTiersChoix",
+    },
 }
 
 # Socle Commun §2.2 — 15 min pour l'accès, 8 h pour le renouvellement web.
@@ -446,7 +489,9 @@ CINETPAY_API_KEY = config("CINETPAY_API_KEY", default="")
 CINETPAY_SITE_ID = config("CINETPAY_SITE_ID", default="")
 CINETPAY_SECRET_KEY = config("CINETPAY_SECRET_KEY", default="")
 CINETPAY_NOTIFY_URL = config("CINETPAY_NOTIFY_URL", default="")
-CINETPAY_CHECKOUT_URL = config("CINETPAY_CHECKOUT_URL", default="https://api-checkout.cinetpay.com/v2/payment")
-CINETPAY_CHECK_URL = config("CINETPAY_CHECK_URL", default="https://api-checkout.cinetpay.com/v2/payment/check")
-
-
+CINETPAY_CHECKOUT_URL = config(
+    "CINETPAY_CHECKOUT_URL", default="https://api-checkout.cinetpay.com/v2/payment"
+)
+CINETPAY_CHECK_URL = config(
+    "CINETPAY_CHECK_URL", default="https://api-checkout.cinetpay.com/v2/payment/check"
+)

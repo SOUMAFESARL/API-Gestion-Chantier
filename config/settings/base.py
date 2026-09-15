@@ -134,7 +134,7 @@ DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 # schéma avant que la moindre requête ne touche la base.
 # --------------------------------------------------------------------------
 MIDDLEWARE = [
-    "django_tenants.middleware.main.TenantMainMiddleware",
+    "apps.core.middleware_tenant.TenantResolutionMiddleware",
     "apps.core.middleware.IdentifiantRequeteMiddleware",
     # Après le middleware de tenant, qui pose `request.tenant`, et avant
     # tout le reste : une porte se ferme au plus tôt.

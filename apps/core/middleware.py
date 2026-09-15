@@ -81,20 +81,51 @@ class RestrictionIPPlateformeMiddleware:
             and not request.path.startswith("/api/v1/auth/mot-de-passe/")
             and self._sur_la_plateforme(request, get_public_schema_name())
         ):
-            autorisees = getattr(settings, "SUPER_ADMIN_IPS", [])
-            ouverte = bool(autorisees) is False and settings.DEBUG
+            est_compte_plateforme = True
+            if request.path == "/api/v1/auth/token/" and request.method == "POST":
+                try:
+                    import json
 
-            if not ouverte and request.META.get("REMOTE_ADDR") not in autorisees:
-                return JsonResponse(
-                    {
-                        "erreur": {
-                            "code": "acces_refuse",
-                            "message": "Cet accès est restreint.",
-                            "details": {},
-                        }
-                    },
-                    status=403,
-                )
+                    body = json.loads(request.body.decode("utf-8"))
+                    email = (body.get("email") or "").strip().lower()
+                    if email:
+                        from apps.accounts.models import Utilisateur
+
+                        est_compte_plateforme = Utilisateur.objects.filter(
+                            email__iexact=email
+                        ).exists()
+                except Exception:
+                    pass
+            elif request.path in ("/api/v1/auth/token/refresh/", "/api/v1/auth/token/verifier/") and request.method == "POST":
+                try:
+                    import json
+                    import jwt
+
+                    body = json.loads(request.body.decode("utf-8"))
+                    token_str = (body.get("refresh") or body.get("token") or "").strip()
+                    if token_str:
+                        payload = jwt.decode(token_str, options={"verify_signature": False})
+                        schema = payload.get("schema")
+                        if schema and schema != get_public_schema_name():
+                            est_compte_plateforme = False
+                except Exception:
+                    pass
+
+            if est_compte_plateforme:
+                autorisees = getattr(settings, "SUPER_ADMIN_IPS", [])
+                ouverte = bool(autorisees) is False and settings.DEBUG
+
+                if not ouverte and request.META.get("REMOTE_ADDR") not in autorisees:
+                    return JsonResponse(
+                        {
+                            "erreur": {
+                                "code": "acces_refuse",
+                                "message": "Cet accès est restreint.",
+                                "details": {},
+                            }
+                        },
+                        status=403,
+                    )
 
         return self.get_response(request)
 

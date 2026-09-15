@@ -247,32 +247,41 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
         )
         return
 
+    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+    if not base_url:
+        domaine = entreprise.domains.filter(is_primary=True).first()
+        nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
+        protocole = "http" if settings.DEBUG else "https"
+        port = ":3000" if settings.DEBUG else ""
+        base_url = f"{protocole}://{nom_domaine}{port}"
+
     envoyer(
         "espace_existant",
         "Vous avez déjà un espace CCD Digital",
         destinataire,
         {
             "raison_sociale": entreprise.raison_sociale,
-            "lien_connexion": f"https://{nom_domaine}/connexion",
-            "lien_reinitialisation": f"https://{nom_domaine}/mot-de-passe/oublie",
+            "lien_connexion": f"{base_url}/connexion",
+            "lien_reinitialisation": f"{base_url}/mot-de-passe/oublie",
         },
     )
 
 
 def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) -> None:
-    """Branche 6 — « l'adresse du sous-domaine, les identifiants, les 14 jours ».
+    """Branche 6 — « l'adresse de l'espace, les identifiants, les 14 jours ».
 
     Aucun mot de passe n'y figure : il a été choisi par la personne elle-même à
     l'activation, et nous ne le connaissons pas.
     """
-    domaine = entreprise.domains.filter(is_primary=True).first()
-    nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
-    protocole = "http" if settings.DEBUG else "https"
-    port = ":3000" if settings.DEBUG else ""
-    # **L'adresse est donnée entière**, du protocole au domaine : c'est celle
-    # qu'on recopie dans une barre d'adresse ou qu'on dicte au téléphone. Un
-    # nom d'hôte seul se colle mal — le navigateur en fait une recherche.
-    adresse_espace = f"{protocole}://{nom_domaine}{port}"
+    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+    if not base_url:
+        domaine = entreprise.domains.filter(is_primary=True).first()
+        nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
+        protocole = "http" if settings.DEBUG else "https"
+        port = ":3000" if settings.DEBUG else ""
+        base_url = f"{protocole}://{nom_domaine}{port}"
+
+    adresse_espace = base_url
     envoyer(
         "espace_pret",
         f"Votre espace {entreprise.raison_sociale} est prêt",

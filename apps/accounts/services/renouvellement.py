@@ -29,7 +29,9 @@ authentifiée (§6.5).
 
 import time
 
+from django.db import connection
 from django.utils.translation import gettext_lazy as _
+from django_tenants.utils import get_public_schema_name
 from rest_framework import status
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -37,6 +39,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import Utilisateur
 from apps.accounts.services import liste_noire
 from apps.core.exceptions import ErreurMetier
+from apps.tenants.models import Entreprise
 
 __all__ = ["FENETRE_GRACE", "JetonInvalide", "JetonRevoque", "renouveler"]
 
@@ -112,6 +115,12 @@ def renouveler(jeton_brut: str) -> dict[str, str]:
         # réécrire la ferait glisser indéfiniment.
 
     # --- Le compte est-il toujours en état de se connecter ? ---------------
+    schema = ancien.get("schema")
+    if schema and schema != get_public_schema_name():
+        entreprise = Entreprise.objects.filter(schema_name=schema).first()
+        if entreprise:
+            connection.set_tenant(entreprise)
+
     utilisateur = Utilisateur.objects.filter(pk=identifiant, is_active=True).first()
     if utilisateur is None:
         raise JetonRevoque()

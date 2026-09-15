@@ -25,10 +25,10 @@ from django.core.management.base import BaseCommand, CommandError
 
 from apps.projets.referentiels.villes import AGGLOMERATION_PRINCIPALE, LOCALITES
 
-# Depuis `backend/apps/projets/management/commands/`, la racine du dépôt est
-# six niveaux au-dessus.
 RACINE = Path(__file__).resolve().parents[5]
-CIBLE = RACINE / "frontend" / "src" / "features" / "referentiels" / "villes.ts"
+CIBLE_FRONTEND = RACINE / "frontend" / "src" / "features" / "referentiels" / "villes.ts"
+CIBLE_APP = RACINE / "Application-Gestion-Chantier" / "src" / "features" / "referentiels" / "villes.ts"
+CIBLE = CIBLE_APP if CIBLE_APP.exists() else CIBLE_FRONTEND
 
 ENTETE = """/**
  * Référentiel des villes des neuf pays où une entreprise peut s'inscrire.

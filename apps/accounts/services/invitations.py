@@ -73,12 +73,15 @@ def creer_invitation(
     invitation.jeton_clair = jeton
 
     # Construction du lien d'activation (avec fragment #jeton=... selon contrats R-30 / R-41)
-    base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
-    if hote:
-        protocole = "http" if "localhost" in hote else "https"
-        hote_sans_port = hote.split(":")[0]
-        port = ":3000" if "localhost" in hote_sans_port else ""
-        base_url = f"{protocole}://{hote_sans_port}{port}"
+    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+    if not base_url:
+        if hote:
+            protocole = "http" if "localhost" in hote else "https"
+            hote_sans_port = hote.split(":")[0]
+            port = ":3000" if "localhost" in hote_sans_port else ""
+            base_url = f"{protocole}://{hote_sans_port}{port}"
+        else:
+            base_url = "http://localhost:3000"
 
     if projet_id:
         lien = (
@@ -131,11 +134,28 @@ def accepter_invitation(
     Supporte l'appel unitaire simple (avec seulement l'instance `Invitation`)
     et l'appel complet d'activation (avec `mot_de_passe` et données d'identité).
     """
+    schema_courant = getattr(connection, "schema_name", "public")
+    from django_tenants.utils import get_public_schema_name, schema_context
+    public_schema = get_public_schema_name()
+
     if isinstance(cible, Invitation):
         invitation = cible
     else:
         empreinte = Invitation.empreinte_de(cible)
         invitation = Invitation.objects.select_for_update().filter(empreinte=empreinte).first()
+        if invitation is None and schema_courant == public_schema:
+            from apps.tenants.models import Entreprise
+
+            for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
+                connection.set_tenant(entreprise)
+                candidat = (
+                    Invitation.objects.select_for_update().filter(empreinte=empreinte).first()
+                )
+                if candidat is not None:
+                    invitation = candidat
+                    break
+            else:
+                connection.set_schema_to_public()
 
     if invitation is None or not invitation.est_utilisable:
         if invitation and invitation.est_expiree:
@@ -240,4 +260,20 @@ def accepter_invitation(
 def obtenir_invitation_par_jeton(jeton: str | uuid.UUID) -> Invitation | None:
     """Recherche une invitation via l'empreinte de son jeton en clair."""
     empreinte = Invitation.empreinte_de(jeton)
-    return Invitation.objects.filter(empreinte=empreinte).first()
+    schema_courant = getattr(connection, "schema_name", "public")
+    from django_tenants.utils import get_public_schema_name, schema_context
+
+    public_schema = get_public_schema_name()
+
+    invitation = Invitation.objects.filter(empreinte=empreinte).first()
+    if invitation is None and schema_courant == public_schema:
+        from apps.tenants.models import Entreprise
+
+        for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
+            connection.set_tenant(entreprise)
+            candidat = Invitation.objects.filter(empreinte=empreinte).first()
+            if candidat is not None:
+                candidat._schema_name = entreprise.schema_name
+                return candidat
+        connection.set_schema_to_public()
+    return invitation

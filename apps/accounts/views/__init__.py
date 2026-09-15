@@ -351,6 +351,10 @@ class VerificationJetonView(APIView):
                     port = ":3000" if settings.DEBUG else ""
                     url_connexion = f"{protocole}://{dom.domain}{port}/connexion"
 
+        base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+        if not url_connexion and base_url:
+            url_connexion = f"{base_url}/connexion"
+
         return Response(
             {
                 "email": jeton.utilisateur.email,

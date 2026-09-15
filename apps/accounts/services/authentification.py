@@ -24,15 +24,17 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_tenants.utils import get_public_schema_name, schema_context
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Utilisateur
-from apps.core.enums import StatutUtilisateur
+from apps.core.enums import StatutEntreprise, StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
+from apps.tenants.models import Entreprise
 
 __all__ = [
     "IdentifiantsInvalides",
@@ -91,6 +93,26 @@ def authentifier(email: str, mot_de_passe: str) -> Utilisateur:
     email = email.strip().lower()
     echec: ErreurMetier | None = None
     utilisateur = None
+
+    schema_courant = getattr(connection, "schema_name", "public")
+    public_schema = get_public_schema_name()
+
+    # Si la requête arrive sur le schéma public, vérifier d'abord dans public (personnel éditeur),
+    # puis parcourir les entreprises clientes actives si absent.
+    if schema_courant == public_schema:
+        candidat_public = Utilisateur.objects.filter(email__iexact=email).first()
+        if candidat_public is None:
+            entreprise_trouvee = None
+            entreprises = Entreprise.objects.exclude(schema_name=public_schema).filter(
+                models.Q(statut=StatutEntreprise.ACTIF) | models.Q(statut=StatutEntreprise.ESSAI)
+            )
+            for entreprise in entreprises:
+                with schema_context(entreprise.schema_name):
+                    if Utilisateur.objects.filter(email__iexact=email).exists():
+                        entreprise_trouvee = entreprise
+                        break
+            if entreprise_trouvee is not None:
+                connection.set_tenant(entreprise_trouvee)
 
     with transaction.atomic():
         utilisateur = Utilisateur.objects.select_for_update().filter(email__iexact=email).first()
@@ -175,6 +197,10 @@ def emettre_jetons(
     refresh = RefreshToken.for_user(utilisateur)
     refresh.set_exp(lifetime=DUREE_RENOUVELLEMENT.get(origine, DUREE_RENOUVELLEMENT["WEB"]))
 
+    schema_name = getattr(connection, "schema_name", "public")
+    refresh["schema"] = schema_name
+    refresh.access_token["schema"] = schema_name
+
     refresh["role_global"] = utilisateur.role_global
     refresh["origine"] = origine
     refresh["sid"] = sid or str(uuid.uuid4())
@@ -197,7 +223,8 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
     > `role_global` sert à l'affichage, **jamais** à l'autorisation. Le serveur
     > relit toujours le rôle en base pour décider d'un droit.
     """
-    return {
+    schema_name = getattr(connection, "schema_name", "public")
+    profil = {
         "id": str(utilisateur.pk),
         "email": utilisateur.email,
         "nom": utilisateur.nom,
@@ -214,7 +241,18 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
         "is_owner": utilisateur.is_owner,
         "langue": utilisateur.langue,
         "doit_changer_mot_de_passe": utilisateur.doit_changer_mot_de_passe,
+        "schema": schema_name,
     }
+    tenant = getattr(connection, "tenant", None)
+    if tenant and getattr(tenant, "schema_name", "") != get_public_schema_name():
+        entreprise = tenant if hasattr(tenant, "pk") else Entreprise.objects.filter(schema_name=tenant.schema_name).first()
+        if entreprise:
+            profil["entreprise"] = {
+                "id": str(entreprise.pk),
+                "raison_sociale": getattr(entreprise, "raison_sociale", ""),
+                "schema_name": entreprise.schema_name,
+            }
+    return profil
 
 
 def duree_acces_en_secondes() -> int:

@@ -249,10 +249,9 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
 
     base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
     if not base_url:
-        domaine = entreprise.domains.filter(is_primary=True).first()
-        nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
         protocole = "http" if settings.DEBUG else "https"
         port = ":3000" if settings.DEBUG else ""
+        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
         base_url = f"{protocole}://{nom_domaine}{port}"
 
     envoyer(
@@ -275,10 +274,9 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
     """
     base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
     if not base_url:
-        domaine = entreprise.domains.filter(is_primary=True).first()
-        nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
         protocole = "http" if settings.DEBUG else "https"
         port = ":3000" if settings.DEBUG else ""
+        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
         base_url = f"{protocole}://{nom_domaine}{port}"
 
     adresse_espace = base_url

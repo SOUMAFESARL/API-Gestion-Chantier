@@ -76,6 +76,11 @@ class RestrictionIPPlateformeMiddleware:
         from django.http import JsonResponse
         from django_tenants.utils import get_public_schema_name
 
+        # Prévol CORS (OPTIONS) : les requêtes preflight du navigateur ne transportent
+        # ni corps ni authentification et ne doivent jamais être bloquées par restriction IP.
+        if request.method == "OPTIONS":
+            return self.get_response(request)
+
         if (
             request.path.startswith(self.PREFIXE_PROTEGE)
             and not request.path.startswith("/api/v1/auth/mot-de-passe/")
@@ -96,7 +101,15 @@ class RestrictionIPPlateformeMiddleware:
                         ).exists()
                 except Exception:
                     pass
-            elif request.path in ("/api/v1/auth/token/refresh/", "/api/v1/auth/token/verifier/") and request.method == "POST":
+            elif (
+                request.path
+                in (
+                    "/api/v1/auth/token/refresh/",
+                    "/api/v1/auth/token/verifier/",
+                    "/api/v1/auth/deconnexion/",
+                )
+                and request.method == "POST"
+            ):
                 try:
                     import json
                     import jwt

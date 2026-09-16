@@ -152,3 +152,21 @@ def test_la_restriction_ne_touche_pas_les_clients(personnel):
         )
 
     assert reponse.status_code == 200
+
+
+@pytest.mark.django_db
+def test_prevol_options_autorise_meme_hors_liste_blanche():
+    """Les requêtes OPTIONS (CORS preflight) ne doivent jamais être bloquées par restriction IP."""
+    client = APIClient(headers={"host": "localhost"})
+
+    with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
+        reponse = client.options(
+            TOKEN,
+            HTTP_ORIGIN="https://app-chantier.soumafe.com",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type",
+        )
+
+    assert reponse.status_code == 200
+    assert reponse.headers.get("Access-Control-Allow-Origin") == "https://app-chantier.soumafe.com"
+

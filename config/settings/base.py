@@ -134,12 +134,12 @@ DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 # schéma avant que la moindre requête ne touche la base.
 # --------------------------------------------------------------------------
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "apps.core.middleware_tenant.TenantResolutionMiddleware",
     "apps.core.middleware.IdentifiantRequeteMiddleware",
     # Après le middleware de tenant, qui pose `request.tenant`, et avant
     # tout le reste : une porte se ferme au plus tôt.
     "apps.core.middleware.RestrictionIPPlateformeMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -419,8 +419,33 @@ SIMPLE_JWT = {
 
 # À n'activer que si l'API doit volontairement être consommable depuis toute
 # origine web. Les permissions applicatives restent contrôlées par le JWT.
+from corsheaders.defaults import default_headers
+
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=_liste)
+
+for _origine in [
+    FRONTEND_URL.rstrip("/"),
+    "https://app-chantier.soumafe.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]:
+    if _origine and _origine not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_origine)
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.soumafe\.com$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-request-id",
+    "x-tenant",
+]
+CORS_EXPOSE_HEADERS = [
+    "x-request-id",
+]
 
 # --------------------------------------------------------------------------
 # Internationalisation — décision D6 : on stocke en UTC, sans exception.

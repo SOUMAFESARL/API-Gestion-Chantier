@@ -466,6 +466,8 @@ CELERY_TIMEZONE = FUSEAU_AFFICHAGE  # l'alerte de 17 h 30 est une heure locale
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
 
 # --------------------------------------------------------------------------
 # Journalisation

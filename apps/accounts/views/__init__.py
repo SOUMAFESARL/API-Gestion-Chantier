@@ -58,6 +58,7 @@ from .role import (
     RoleListCreateView,
     RoleSupprimerReassignerView,
 )
+from .super_admin import VerifierAccesSuperAdminView
 
 __all__ = [
     "ConnexionView",
@@ -73,6 +74,7 @@ __all__ = [
     "RoleSupprimerReassignerView",
     "UtilisateurMoiView",
     "VerificationJetonView",
+    "VerifierAccesSuperAdminView",
 ]
 
 

@@ -22,6 +22,7 @@ def sante(_request):
 
 urlpatterns = [
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
+    path("admin/dashboard/", RedirectView.as_view(url="/admin/", permanent=False), name="admin-dashboard"),
     path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-publique"),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

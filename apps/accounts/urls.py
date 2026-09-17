@@ -14,11 +14,13 @@ from apps.accounts.views import (
     RoleSupprimerReassignerView,
     UtilisateurMoiView,
     VerificationJetonView,
+    VerifierAccesSuperAdminView,
 )
 
 app_name = "accounts"
 
 urlpatterns = [
+    path("super-admin/verifier-acces/", VerifierAccesSuperAdminView.as_view(), name="super-admin-verifier-acces"),
     path("auth/token/", ConnexionView.as_view(), name="connexion"),
     path("auth/token/refresh/", RenouvellementView.as_view(), name="jeton-renouveler"),
     path("auth/deconnexion/", DeconnexionView.as_view(), name="deconnexion"),

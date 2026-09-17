@@ -1,4 +1,13 @@
-"""Serializers du module « platform_admin ».
+from .impersonation import (
+    DemandeAssistanceSerializer,
+    JournalPlateformeSerializer,
+    ReponseAssistanceSerializer,
+    UtilisateurCibleSerializer,
+)
 
-Super Admin CCD Digital : métriques plateforme, impersonification.
-"""
+__all__ = [
+    "DemandeAssistanceSerializer",
+    "JournalPlateformeSerializer",
+    "ReponseAssistanceSerializer",
+    "UtilisateurCibleSerializer",
+]

@@ -147,6 +147,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Verrou absolu R-128 : refuse toute mutation sous jeton d'assistance Super Admin
+    "apps.platform_admin.middleware.LectureSeuleAssistanceMiddleware",
     # En dernier : il a besoin de `request.tenant`, et il ne doit refuser
     # l'écriture qu'après que tout le reste a laissé passer la requête.
     "apps.billing.middleware.LectureSeuleAbonnementMiddleware",

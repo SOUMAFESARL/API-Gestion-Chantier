@@ -7,7 +7,6 @@ Module CDC   : —
 Entités MCD  : JournalPlateforme
 """
 
-# Les modèles concrets sont définis dans des fichiers séparés puis
-# réexportés ici. Voir 04_Conception/architecture_base_donnees/MLD_CCD_Digital.md
+from .journal import JournalPlateforme
 
-__all__: list[str] = []
+__all__ = ["JournalPlateforme"]

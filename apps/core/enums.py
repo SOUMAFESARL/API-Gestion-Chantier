@@ -157,6 +157,7 @@ class ActionAudit(models.TextChoices):
     EXPORT = "EXPORT", "Export"
     VALIDATION = "VALIDATION", "Validation"
     SIGNATURE = "SIGNATURE", "Signature"
+    ASSISTANCE = "ASSISTANCE", "Assistance Super Admin"
 
 
 class TypeTiers(models.TextChoices):

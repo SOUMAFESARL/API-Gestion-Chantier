@@ -1,4 +1,13 @@
-"""Views du module « platform_admin ».
+from .impersonation import (
+    DeconnexionAssistanceView,
+    DemarrerAssistanceView,
+    JournalPlateformeListView,
+    ListerUtilisateursEntrepriseView,
+)
 
-Super Admin CCD Digital : métriques plateforme, impersonification.
-"""
+__all__ = [
+    "DeconnexionAssistanceView",
+    "DemarrerAssistanceView",
+    "JournalPlateformeListView",
+    "ListerUtilisateursEntrepriseView",
+]

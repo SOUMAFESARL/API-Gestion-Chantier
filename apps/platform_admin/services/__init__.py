@@ -1,4 +1,15 @@
-"""Services du module « platform_admin ».
+from .impersonation import (
+    ActionInterditeAssistance,
+    clore_session_assistance,
+    demarrer_session_assistance,
+    lister_utilisateurs_entreprise,
+    verifier_super_admin,
+)
 
-Super Admin CCD Digital : métriques plateforme, impersonification.
-"""
+__all__ = [
+    "ActionInterditeAssistance",
+    "clore_session_assistance",
+    "demarrer_session_assistance",
+    "lister_utilisateurs_entreprise",
+    "verifier_super_admin",
+]

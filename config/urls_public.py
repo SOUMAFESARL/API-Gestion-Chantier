@@ -48,6 +48,8 @@ urlpatterns = [
     path("api/v1/", include("apps.referentiels.urls")),
     # Plans, abonnements, factures et webhooks de paiement CinetPay
     path("api/v1/", include("apps.billing.urls")),
+    # Administration plateforme et assistance Super Admin (impersonification)
+    path("api/v1/", include("apps.platform_admin.urls")),
 ]
 
 # --- Outils de développement, s'ils sont présents ---------------------------

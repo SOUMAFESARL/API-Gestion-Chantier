@@ -110,6 +110,37 @@ class RapportJournalier(ModeleBase):
             models.Index(fields=["projet", "date_rapport"], name="idx_rapport_proj_date"),
             models.Index(fields=["statut"], name="idx_rapport_statut"),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lot", "date_rapport"],
+                condition=models.Q(lot__isnull=False),
+                name="uq_rapport_lot_date",
+            ),
+            models.UniqueConstraint(
+                fields=["projet", "date_rapport"],
+                condition=models.Q(lot__isnull=True),
+                name="uq_rapport_projet_date",
+            ),
+        ]
+
+    def delete(self, using=None, keep_parents=False, utilisateur=None):
+        """Un rapport de chantier ne se supprime jamais (MLD §6.7, Socle Commun §3.1)."""
+        from apps.core.exceptions import ErreurMetier
+        raise ErreurMetier(
+            "Un rapport de chantier ne peut pas être supprimé, même logiquement.",
+            details={"code": "suppression_interdite"},
+        )
+
+    def clean(self):
+        super().clean()
+        if self.statut == StatutRapport.REJETE:
+            if not self.commentaire_validation or len(self.commentaire_validation.strip()) < 20:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    "commentaire_validation": _(
+                        "Le commentaire de rejet doit comporter au moins 20 caractères."
+                    )
+                })
 
     def save(self, *args, **kwargs):
         if not self.effectif_present:
@@ -117,6 +148,5 @@ class RapportJournalier(ModeleBase):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return (
-            f"Rapport {self.projet.reference} du {self.date_rapport} ({self.get_statut_display()})"
-        )
+        ref = self.projet.reference if self.projet_id else "?"
+        return f"Rapport {ref} du {self.date_rapport} ({self.get_statut_display()})"

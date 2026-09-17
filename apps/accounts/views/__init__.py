@@ -335,34 +335,23 @@ class VerificationJetonView(APIView):
         jeton = verifier(serializer.validated_data["jeton"])
         reste = int((jeton.expire_le - timezone.now()).total_seconds())
 
-        domaine_tenant = None
-        url_connexion = None
         from django.conf import settings
-        from django.db import connection
-        from django_tenants.utils import get_public_schema_name
-        from apps.tenants.models import Entreprise
-
-        schema_nom = getattr(jeton, "_schema_name", getattr(connection, "schema_name", "public"))
-        if schema_nom and schema_nom != get_public_schema_name():
-            entreprise = Entreprise.objects.filter(schema_name=schema_nom).first()
-            if entreprise:
-                dom = entreprise.domains.filter(is_primary=True).first()
-                if dom:
-                    domaine_tenant = dom.domain
-                    protocole = "https" if not settings.DEBUG else "http"
-                    port = ":3000" if settings.DEBUG else ""
-                    url_connexion = f"{protocole}://{dom.domain}{port}/connexion"
 
         base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-        if not url_connexion and base_url:
-            url_connexion = f"{base_url}/connexion"
+        if not base_url:
+            protocole = "https" if not settings.DEBUG else "http"
+            port = ":3000" if settings.DEBUG else ""
+            domaine_principal = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
+            base_url = f"{protocole}://{domaine_principal}{port}"
+
+        url_connexion = f"{base_url}/connexion"
 
         return Response(
             {
                 "email": jeton.utilisateur.email,
                 "motif": jeton.motif,
                 "expire_dans": max(0, reste),
-                "domaine": domaine_tenant,
+                "domaine": None,
                 "url_connexion": url_connexion,
             }
         )

@@ -517,17 +517,16 @@ def test_demande_depuis_schema_public_trouve_utilisateur_tenant(
 
     assert reponse.status_code == 202
     assert len(mail.outbox) == 1
-    # Le lien dans l'email pointe vers le sous-domaine du tenant (demo.localhost)
-    assert HOTE in mail.outbox[-1].body
+    # Le lien dans l'email pointe vers le domaine unique (FRONTEND_URL)
+    assert "/mot-de-passe/definir#jeton=" in mail.outbox[-1].body
 
     jeton = _jeton_du_dernier_email()
 
-    # Vérification depuis le domaine public : doit fonctionner et renvoyer le domaine du tenant
+    # Vérification depuis le domaine unique : doit fonctionner et renvoyer l'url de connexion
     reponse_verif = client_public.post(VERIFIER, {"jeton": jeton}, format="json")
     assert reponse_verif.status_code == 200
     assert reponse_verif.data["email"] == utilisateur.email
-    assert reponse_verif.data["domaine"] == HOTE
-    assert HOTE in reponse_verif.data["url_connexion"]
+    assert "/connexion" in reponse_verif.data["url_connexion"]
 
     # Réinitialisation depuis le domaine public : doit mettre à jour le mot de passe dans le tenant
     reponse_reinit = client_public.post(

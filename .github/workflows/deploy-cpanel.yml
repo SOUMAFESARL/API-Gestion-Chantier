@@ -83,7 +83,7 @@ jobs:
     name: Déploiement production sur cPanel
     needs: tests
 
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    if: ${{ github.ref == 'refs/heads/develop' && github.event_name == 'push' }}
 
     runs-on: ubuntu-latest
     timeout-minutes: 20

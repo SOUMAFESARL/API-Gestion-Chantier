@@ -102,11 +102,14 @@ def _sujet(seuil: int, raison_sociale: str) -> str:
 def _lien_abonnement(entreprise) -> str:
     from django.conf import settings
 
-    domaine = entreprise.domains.filter(is_primary=True).first()
-    hote = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
-    protocole = "http" if settings.DEBUG else "https"
-    port = ":3000" if settings.DEBUG else ""
-    return f"{protocole}://{hote}{port}/parametres/abonnement"
+    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+    if not base_url:
+        protocole = "http" if settings.DEBUG else "https"
+        port = ":3000" if settings.DEBUG else ""
+        domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
+        base_url = f"{protocole}://{domaine}{port}"
+
+    return f"{base_url}/parametres/abonnement"
 
 
 def _clore_essai(abonnement) -> None:

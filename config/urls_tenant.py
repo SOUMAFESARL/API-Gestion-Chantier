@@ -1,8 +1,9 @@
 """Routage des schémas de tenant — tout le métier BTP.
 
-Le middleware `TenantMainMiddleware` a déjà déterminé le schéma à partir du
-sous-domaine avant que ces vues soient atteintes. Une route déclarée ici ne
-peut voir que les données de l'entreprise appelante.
+Le middleware `TenantResolutionMiddleware` a déjà déterminé le schéma du tenant
+(via le claim `schema` du token JWT Bearer, ou l'en-tête `X-Tenant`) avant que
+ces vues soient atteintes. Une route déclarée ici ne peut voir que les données
+de l'entreprise appelante.
 
 Convention d'API : tout est préfixé `/api/v1/` (tâche T-005).
 """

@@ -235,10 +235,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # déploiement §6 interdit — décision J5 du contrat de réinitialisation.
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
-# Domaine sous lequel vivent les sous-domaines clients : `<slug>.<domaine>`.
-# En développement, `.localhost` est résolu vers 127.0.0.1 par les navigateurs
-# modernes — c'est ce qui permet d'atteindre un tenant sans toucher au fichier
-# hosts. En production, le domaine de l'éditeur.
+# Domaine principal de la plateforme (Architecture Domaine Unique - Option A).
+# L'API et le frontend partagent un point d'accès unifié sans sous-domaines clients.
 DOMAINE_PRINCIPAL = config("DOMAINE_PRINCIPAL", default="localhost")
 
 # --------------------------------------------------------------------------
@@ -357,15 +355,15 @@ SPECTACULAR_SETTINGS = {
         "# Guide d'intégration Frontend — API CCD Digital\n\n"
         "Bienvenue sur la documentation interactive de l'API de gestion "
         "de chantiers BTP **CCD Digital**.\n\n"
-        "### 1. Architecture Multi-Tenancy (Isolation des données)\n"
-        "- **Schéma Public (`urls_public.py`)** : Domaine principal de la plateforme "
-        "(ex: `api.ccd-digital.ci`). Utilisé pour l'inscription d'une nouvelle entreprise "
-        "(`/api/v1/inscription/`), l'activation d'espace, la consultation des forfaits "
-        "(`/api/v1/plans/`) et les webhooks de paiement CinetPay.\n"
-        "- **Schéma Tenant (`urls_tenant.py`)** : Sous-domaine spécifique de chaque entreprise "
-        "(ex: `mon-entreprise.ccd-digital.ci` ou `mon-entreprise.localhost:8000` en local). "
-        "Toutes les requêtes de gestion de chantier, finances, tiers, utilisateurs et rôles "
-        "doivent obligatoirement être adressées sur le sous-domaine de l'entreprise.\n\n"
+        "### 1. Architecture Multi-Tenancy à Domaine Unique (Option A)\n"
+        "- **Point d'accès unifié** : Toutes les requêtes (publiques et tenant) "
+        "sont adressées au même domaine d'API (ex: `https://api.ccd-digital.ci` ou `http://localhost:8000`).\n"
+        "- **Résolution automatique par JWT** : Pour les routes protégées des tenants "
+        "(chantiers, finances, tiers, utilisateurs, etc.), le middleware résout automatiquement le schéma PostgreSQL "
+        "de l'entreprise à partir du claim `schema` dans le jeton JWT Bearer, ou via l'en-tête `X-Tenant`.\n"
+        "- **Routes Publiques** : L'inscription (`/api/v1/inscription/`), l'authentification "
+        "(`/api/v1/auth/token/`), la santé (`/api/health/`) et les forfaits (`/api/v1/plans/`) "
+        "s'exécutent sur le schéma public sans sous-domaine.\n\n"
         "### 2. Authentification JWT\n"
         "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
         "`Authorization: Bearer <access_token>`.\n"

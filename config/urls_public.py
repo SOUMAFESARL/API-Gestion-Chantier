@@ -32,8 +32,7 @@ urlpatterns = [
         name="docs",
     ),
     # L'inscription d'une entreprise — cinq endpoints, contrat T-021. Ils
-    # vivent ici et **pas** dans `urls_tenant.py` : au moment de l'inscription,
-    # le client n'a pas encore de sous-domaine.
+    # vivent ici dans le schéma `public` avant la création du schéma tenant dédié.
     path("api/v1/", include("apps.tenants.urls")),
     # L'authentification du **personnel de l'éditeur**. La même vue que celle
     # des clients, et c'est le propre de l'écart E1 : `utilisateur` existe dans

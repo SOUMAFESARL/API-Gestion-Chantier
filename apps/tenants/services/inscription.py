@@ -218,9 +218,6 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
     la date, le contact commercial »* — n'avait jamais eu de code : les deux
     branches partageaient un seul email. Le statut les sépare désormais.
     """
-    domaine = entreprise.domains.filter(is_primary=True).first()
-    nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
-
     if entreprise.statut in (StatutEntreprise.SUSPENDU, StatutEntreprise.RESILIE):
         # **La date vient de l'abonnement, pas de l'entreprise.**
         #

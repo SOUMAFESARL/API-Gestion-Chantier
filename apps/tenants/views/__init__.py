@@ -231,15 +231,7 @@ class EtatProvisionnementView(APIView):
             )
 
         if demande.statut == DemandeInscription.Statut.ACTIVEE and demande.entreprise_id:
-            from django.conf import settings
-
-            base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-            if not base_url:
-                protocole = "https" if not settings.DEBUG else "http"
-                port = ":3000" if settings.DEBUG else ""
-                domaine_principal = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-                base_url = f"{protocole}://{domaine_principal}{port}"
-
+            base_url = "http://localhost:3000"
             url_connexion = f"{base_url}/connexion"
 
             return Response(

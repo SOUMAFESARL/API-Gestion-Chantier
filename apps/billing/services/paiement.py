@@ -220,7 +220,7 @@ class PaiementAbonnementService:
             c_return_url = (
                 return_url
                 or getattr(settings, "CINETPAY_RETURN_URL", None)
-                or f"{getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')}/abonnements/statut"
+                or "http://localhost:3000/abonnements/statut"
             )
             c_notify_url = (
                 notify_url

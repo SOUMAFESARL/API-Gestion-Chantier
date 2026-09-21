@@ -146,13 +146,7 @@ def _envoyer_lien(
     il n'atteint ni les journaux Nginx, ni l'en-tête `Referer` d'une page
     ouverte depuis le lien.
     """
-    base_frontend = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_frontend:
-        protocole = "http" if settings.DEBUG else "https"
-        port = ":3000" if settings.DEBUG else ""
-        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-        base_frontend = f"{protocole}://{nom_domaine}{port}"
-
+    base_frontend = "http://localhost:3000"
     lien = f"{base_frontend}/mot-de-passe/definir#jeton={jeton}"
     bloque = motif == JetonReinitialisation.Motif.BLOCAGE
 

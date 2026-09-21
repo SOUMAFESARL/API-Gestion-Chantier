@@ -100,15 +100,7 @@ def _sujet(seuil: int, raison_sociale: str) -> str:
 
 
 def _lien_abonnement(entreprise) -> str:
-    from django.conf import settings
-
-    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_url:
-        protocole = "http" if settings.DEBUG else "https"
-        port = ":3000" if settings.DEBUG else ""
-        domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-        base_url = f"{protocole}://{domaine}{port}"
-
+    base_url = "http://localhost:3000"
     return f"{base_url}/parametres/abonnement"
 
 

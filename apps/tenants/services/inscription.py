@@ -244,12 +244,7 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
         )
         return
 
-    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_url:
-        protocole = "http" if settings.DEBUG else "https"
-        port = ":3000" if settings.DEBUG else ""
-        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-        base_url = f"{protocole}://{nom_domaine}{port}"
+    base_url = "http://localhost:3000"
 
     envoyer(
         "espace_existant",
@@ -269,14 +264,7 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
     Aucun mot de passe n'y figure : il a été choisi par la personne elle-même à
     l'activation, et nous ne le connaissons pas.
     """
-    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_url:
-        protocole = "http" if settings.DEBUG else "https"
-        port = ":3000" if settings.DEBUG else ""
-        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-        base_url = f"{protocole}://{nom_domaine}{port}"
-
-    adresse_espace = base_url
+    adresse_espace = "http://localhost:3000"
     envoyer(
         "espace_pret",
         f"Votre espace {entreprise.raison_sociale} est prêt",
@@ -303,7 +291,7 @@ def _envoyer_activation(demande: DemandeInscription, jeton, regenere: bool = Fal
         demande.email,
         {
             "raison_sociale": demande.raison_sociale,
-            "lien": f"{settings.FRONTEND_URL}/activation#jeton={jeton}",
+            "lien": f"http://localhost:3000/activation#jeton={jeton}",
             "regenere": regenere,
         },
     )

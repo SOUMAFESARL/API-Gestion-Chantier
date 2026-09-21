@@ -6,10 +6,14 @@ from rest_framework import serializers
 from apps.platform_admin.models import JournalPlateforme
 
 __all__ = [
+    "DeconnexionAssistanceRequestSerializer",
+    "DeconnexionAssistanceResponseSerializer",
     "DemandeAssistanceSerializer",
+    "ErreurPlateformeResponseSerializer",
     "JournalPlateformeSerializer",
     "ReponseAssistanceSerializer",
     "UtilisateurCibleSerializer",
+    "VerifierAccesSuperAdminResponseSerializer",
 ]
 
 
@@ -101,3 +105,53 @@ class JournalPlateformeSerializer(serializers.ModelSerializer):
             or detail.get("entreprise_schema")
             or str(obj.entreprise_id or "")
         )
+
+
+class VerifierAccesSuperAdminResponseSerializer(serializers.Serializer):
+    """Réponse du contrôle d'accès IP à la console Super Admin."""
+
+    statut = serializers.CharField(
+        help_text=_("Statut d'autorisation (ex: 'autorise').")
+    )
+    ip = serializers.CharField(
+        help_text=_("Adresse IP du client appelant telle qu'évaluée par l'infrastructure.")
+    )
+    message = serializers.CharField(
+        help_text=_("Message descriptif de l'autorisation d'accès.")
+    )
+
+
+class DeconnexionAssistanceRequestSerializer(serializers.Serializer):
+    """Paramètres optionnels lors de la clôture d'une session d'assistance."""
+
+    entreprise_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text=_("Identifiant de l'entreprise cliente concernée (pour double journalisation)."),
+    )
+
+
+class DeconnexionAssistanceResponseSerializer(serializers.Serializer):
+    """Confirmation de clôture de la session d'assistance."""
+
+    statut = serializers.CharField(
+        help_text=_("Statut de la session (ex: 'deconnecte').")
+    )
+    message = serializers.CharField(
+        help_text=_("Message confirmant la clôture et la fin de l'assistance.")
+    )
+
+
+class ErreurPlateformeDetailSerializer(serializers.Serializer):
+    """Format de l'objet d'erreur interne."""
+
+    code = serializers.CharField(help_text=_("Code machine de l'erreur (ex: 'acces_refuse', 'ecriture_interdite_assistance')."))
+    message = serializers.CharField(help_text=_("Message explicatif de l'erreur en français."))
+    trace_id = serializers.CharField(required=False, help_text=_("Identifiant unique de traçabilité de la requête."))
+    details = serializers.DictField(required=False, help_text=_("Détails additionnels éventuels sur l'erreur."))
+
+
+class ErreurPlateformeResponseSerializer(serializers.Serializer):
+    """Enveloppe standard des réponses d'erreur (4xx / 5xx)."""
+
+    erreur = ErreurPlateformeDetailSerializer(help_text=_("Détails structurés de l'erreur."))

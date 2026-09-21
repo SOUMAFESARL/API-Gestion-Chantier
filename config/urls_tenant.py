@@ -28,11 +28,7 @@ def sante(request):
     )
 
 
-from config.urls_public import reinitialiser_bd_vue
-
-
 urlpatterns = [
-    path("api/v1/maintenance/reinitialiser-bd/", reinitialiser_bd_vue, name="maintenance-reset-bd-tenant"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-tenant"),

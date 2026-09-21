@@ -177,6 +177,23 @@ class EntrepriseSerializer(serializers.Serializer):
     telephone_contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
     statut = serializers.CharField(read_only=True)
 
+    def validate_email_contact(self, valeur: str) -> str:
+        if not valeur:
+            return valeur
+        valeur = valeur.strip().lower()
+        from apps.tenants.models import Entreprise
+
+        requete = self.context.get("request")
+        tenant = getattr(requete, "tenant", None) if requete else None
+        query = Entreprise.objects.filter(email_contact__iexact=valeur)
+        if tenant and tenant.pk:
+            query = query.exclude(pk=tenant.pk)
+        if query.exists():
+            raise serializers.ValidationError(
+                _("Cette adresse email est déjà associée à une autre entreprise.")
+            )
+        return valeur
+
     def _url(self, cle: str) -> str:
         """Clé de stockage -> URL absolue.
 

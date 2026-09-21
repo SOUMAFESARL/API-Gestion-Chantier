@@ -261,8 +261,8 @@ def test_tolerance_casse_et_espaces_nom_et_email(client):
 
 
 @pytest.mark.django_db
-def test_contrainte_bdd_entreprise_nom_email_rejette_doublon(db):
-    """La contrainte PostgreSQL uq_entreprise_nom_email empêche tout doublon en base."""
+def test_contrainte_bdd_entreprise_email_rejette_doublon(db):
+    """La contrainte PostgreSQL uq_entreprise_email_contact empêche tout doublon d'email en base."""
     e1 = Entreprise(
         schema_name="cie_alpha",
         raison_sociale="Alpha Construction",
@@ -271,9 +271,10 @@ def test_contrainte_bdd_entreprise_nom_email_rejette_doublon(db):
     e1.auto_create_schema = False
     e1.save()
 
+    # Même email avec une raison sociale différente
     e2 = Entreprise(
-        schema_name="cie_alpha_2",
-        raison_sociale="alpha  construction",
+        schema_name="cie_beta",
+        raison_sociale="Beta BTP",
         email_contact="Contact@Alpha.ci",
     )
     e2.auto_create_schema = False
@@ -282,8 +283,8 @@ def test_contrainte_bdd_entreprise_nom_email_rejette_doublon(db):
 
 
 @pytest.mark.django_db
-def test_contrainte_bdd_demande_nom_email_attente_rejette_doublon(db):
-    """La contrainte PostgreSQL uq_demande_nom_email_attente empêche deux demandes EN_ATTENTE identiques."""
+def test_contrainte_bdd_demande_email_attente_rejette_doublon(db):
+    """La contrainte PostgreSQL uq_demande_email_attente empêche deux demandes EN_ATTENTE avec le même email."""
     maintenant = timezone.now()
     DemandeInscription.objects.create(
         id=uuid.uuid4(),
@@ -298,19 +299,47 @@ def test_contrainte_bdd_demande_nom_email_attente_rejette_doublon(db):
         cgu_acceptees_le=maintenant,
     )
 
+    # Même email avec un nom différent
     with pytest.raises(IntegrityError):
         DemandeInscription.objects.create(
             id=uuid.uuid4(),
-            raison_sociale="beta btp",
+            raison_sociale="Autre Entreprise",
             pays="CI",
             email="Beta@btp.ci",
-            slug_reserve="beta_btp_2",
+            slug_reserve="autre_entreprise",
             empreinte="empreinte2",
             expire_le=maintenant + timezone.timedelta(hours=48),
             statut=DemandeInscription.Statut.EN_ATTENTE,
             cgu_version="1.0",
             cgu_acceptees_le=maintenant,
         )
+
+
+@pytest.mark.django_db
+def test_inscription_meme_email_nom_different_renvoie_espace_existant(
+    client, django_capture_on_commit_callbacks
+):
+    """Même si le nom d'entreprise est différent, un email déjà utilisé ne peut pas être réinscrit."""
+    entreprise = Entreprise(
+        schema_name="soumafe_btp",
+        raison_sociale="SOUMAFE BTP",
+        email_contact="contact@soumafe.ci",
+    )
+    entreprise.auto_create_schema = False
+    entreprise.save()
+
+    mail.outbox.clear()
+    charge = _payload(
+        raison_sociale="AUTRE ENTREPRISE NOUVELLE",
+        email="Contact@Soumafe.ci",
+    )
+    with django_capture_on_commit_callbacks(execute=True):
+        reponse = client.post(DEPOT, charge, format="json")
+
+    assert reponse.status_code == 202
+    assert DemandeInscription.objects.filter(email="contact@soumafe.ci").count() == 0
+    assert len(mail.outbox) == 1
+    assert "Vous avez déjà un espace CCD Digital" in mail.outbox[0].subject
 
 
 # ---------------------------------------------------------------------------

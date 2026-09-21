@@ -102,9 +102,8 @@ class Entreprise(TenantMixin):
         ordering = ["raison_sociale"]
         constraints = [
             models.UniqueConstraint(
-                models.functions.Lower("raison_sociale"),
                 models.functions.Lower("email_contact"),
-                name="uq_entreprise_nom_email",
+                name="uq_entreprise_email_contact",
             )
         ]
 
@@ -224,13 +223,12 @@ class DemandeInscription(ModeleBase):
                 condition=models.Q(statut="EN_ATTENTE"),
                 name="uq_demande_slug",
             ),
-            # Deux demandes avec le même nom et le même email ne peuvent
+            # Deux demandes avec le même email ne peuvent
             # pas être simultanément en attente d'activation.
             models.UniqueConstraint(
-                models.functions.Lower("raison_sociale"),
                 models.functions.Lower("email"),
                 condition=models.Q(statut="EN_ATTENTE"),
-                name="uq_demande_nom_email_attente",
+                name="uq_demande_email_attente",
             ),
         ]
 

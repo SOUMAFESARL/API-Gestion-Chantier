@@ -133,17 +133,15 @@ def deposer(
 
     slug_base = deriver_slug(nom_propre)
 
-    # Cas 2 — Entreprise déjà existante avec ce nom et cet email (T-021 §2.4)
+    # Cas 2 — Entreprise déjà existante avec cet email (T-021 §2.4 - règle : une entreprise = un email unique)
     entreprise_existante = Entreprise.objects.filter(
-        models.Q(raison_sociale__iexact=nom_propre) | models.Q(schema_name=slug_base),
         email_contact__iexact=adresse,
     ).first()
     if entreprise_existante is not None:
         transaction.on_commit(lambda: _envoyer_espace_existant(entreprise_existante, adresse))
         derniere_demande = (
             DemandeInscription.objects.filter(
-                models.Q(entreprise=entreprise_existante)
-                | (models.Q(raison_sociale__iexact=nom_propre) & models.Q(email__iexact=adresse))
+                models.Q(entreprise=entreprise_existante) | models.Q(email__iexact=adresse)
             )
             .order_by("-cree_le")
             .first()
@@ -159,9 +157,8 @@ def deposer(
 
         return _DemandeNeutre()  # type: ignore
 
-    # Cas 3 — Demande déjà en attente d'activation pour ce nom et cet email
+    # Cas 3 — Demande déjà en attente d'activation pour cet email
     demande_en_attente = DemandeInscription.objects.filter(
-        models.Q(raison_sociale__iexact=nom_propre) | models.Q(slug_reserve=slug_base),
         email__iexact=adresse,
         statut=DemandeInscription.Statut.EN_ATTENTE,
     ).first()
@@ -181,9 +178,8 @@ def deposer(
             demande_en_attente.statut = DemandeInscription.Statut.ABANDONNEE
             demande_en_attente.save(update_fields=["statut", "modifie_le"])
 
-    # Cas 4 — Demande en cours de provisionnement
+    # Cas 4 — Demande en cours de provisionnement pour cet email
     demande_prov = DemandeInscription.objects.filter(
-        models.Q(raison_sociale__iexact=nom_propre) | models.Q(slug_reserve=slug_base),
         email__iexact=adresse,
         statut=DemandeInscription.Statut.PROVISIONNEMENT,
     ).first()

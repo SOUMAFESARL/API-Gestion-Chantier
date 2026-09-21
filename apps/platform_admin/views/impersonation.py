@@ -1,7 +1,8 @@
 """Vues pour l'assistance Super Admin et la consultation du journal plateforme."""
 
 import logging
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -10,7 +11,10 @@ from rest_framework.views import APIView
 from apps.core.ip_restriction import extraire_ip_client
 from apps.platform_admin.models import JournalPlateforme
 from apps.platform_admin.serializers.impersonation import (
+    DeconnexionAssistanceRequestSerializer,
+    DeconnexionAssistanceResponseSerializer,
     DemandeAssistanceSerializer,
+    ErreurPlateformeResponseSerializer,
     JournalPlateformeSerializer,
     ReponseAssistanceSerializer,
     UtilisateurCibleSerializer,
@@ -38,13 +42,28 @@ class DemarrerAssistanceView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Super Admin / Plateforme"],
         summary="Démarrer une session d'assistance Super Admin",
         description=(
             "Permet à un Super Administrateur d'accéder au compte d'une entreprise "
-            "cliente en direct pour l'assister en lecture seule (durée 1h, double traçabilité)."
+            "cliente en direct pour l'assister en lecture seule (durée 1h stricte, double traçabilité d'audit). "
+            "Règle R-128 : Toute tentative de modification ultérieure sera rejetée par le middleware."
         ),
+        parameters=[
+            OpenApiParameter(
+                name="entreprise_id",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.PATH,
+                description="Identifiant UUID de l'entreprise cliente à assister.",
+            )
+        ],
         request=DemandeAssistanceSerializer,
-        responses={200: ReponseAssistanceSerializer},
+        responses={
+            200: ReponseAssistanceSerializer,
+            400: ErreurPlateformeResponseSerializer,
+            403: ErreurPlateformeResponseSerializer,
+            404: ErreurPlateformeResponseSerializer,
+        },
     )
     def post(self, request, entreprise_id):
         serializer = DemandeAssistanceSerializer(data=request.data)
@@ -73,9 +92,14 @@ class DeconnexionAssistanceView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Super Admin / Plateforme"],
         summary="Clôturer une session d'assistance Super Admin",
-        description="Termine la session d'assistance et consigne la déconnexion dans les journaux d'audit.",
-        responses={200: dict},
+        description="Termine la session d'assistance Super Admin et consigne la déconnexion dans les journaux d'audit.",
+        request=DeconnexionAssistanceRequestSerializer,
+        responses={
+            200: DeconnexionAssistanceResponseSerializer,
+            403: ErreurPlateformeResponseSerializer,
+        },
     )
     def post(self, request):
         ip = extraire_ip_client(request)
@@ -110,8 +134,22 @@ class ListerUtilisateursEntrepriseView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Super Admin / Plateforme"],
         summary="Lister les utilisateurs d'une entreprise pour assistance",
-        responses={200: UtilisateurCibleSerializer(many=True)},
+        description="Liste l'ensemble des collaborateurs d'une entreprise cliente afin de permettre au Super Admin de cibler un profil spécifique pour la session d'assistance.",
+        parameters=[
+            OpenApiParameter(
+                name="entreprise_id",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.PATH,
+                description="Identifiant UUID de l'entreprise cliente.",
+            )
+        ],
+        responses={
+            200: UtilisateurCibleSerializer(many=True),
+            403: ErreurPlateformeResponseSerializer,
+            404: ErreurPlateformeResponseSerializer,
+        },
     )
     def get(self, request, entreprise_id):
         verifier_super_admin(request.user)
@@ -126,8 +164,29 @@ class JournalPlateformeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Super Admin / Plateforme"],
         summary="Consulter le journal d'audit plateforme",
-        responses={200: JournalPlateformeSerializer(many=True)},
+        description="Consulte les 200 derniers événements immuables de support et d'administration enregistrés sur la plateforme (MLD §4.6).",
+        parameters=[
+            OpenApiParameter(
+                name="entreprise_id",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description="Filtrer les événements par identifiant de l'entreprise cliente.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="action",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Filtrer par code d'action (ex: CONNEXION_ASSISTANCE, DECONNEXION_ASSISTANCE, TENTATIVE_ECRITURE_BLOQUEE).",
+                required=False,
+            ),
+        ],
+        responses={
+            200: JournalPlateformeSerializer(many=True),
+            403: ErreurPlateformeResponseSerializer,
+        },
     )
     def get(self, request):
         verifier_super_admin(request.user)

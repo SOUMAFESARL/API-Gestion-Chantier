@@ -7,6 +7,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.ip_restriction import extraire_ip_client
+from apps.platform_admin.serializers.impersonation import (
+    ErreurPlateformeResponseSerializer,
+    VerifierAccesSuperAdminResponseSerializer,
+)
 
 
 class VerifierAccesSuperAdminView(APIView):
@@ -19,9 +23,17 @@ class VerifierAccesSuperAdminView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Super Admin / Plateforme"],
         summary="Vérifier l'accès IP au panneau Super Admin",
-        description="Renvoie le statut d'autorisation de l'adresse IP appelante.",
-        responses={200: dict},
+        description=(
+            "Vérifie si l'adresse IP du client appelant figure dans la liste blanche "
+            "d'infrastructure `SUPER_ADMIN_IPS`. En cas de succès, renvoie le statut 'autorise'. "
+            "Si l'IP n'est pas autorisée, la requête est rejetée en amont avec un code HTTP 403."
+        ),
+        responses={
+            200: VerifierAccesSuperAdminResponseSerializer,
+            403: ErreurPlateformeResponseSerializer,
+        },
     )
     def get(self, request):
         ip = extraire_ip_client(request)

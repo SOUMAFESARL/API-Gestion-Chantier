@@ -73,15 +73,15 @@ def creer_invitation(
     invitation.jeton_clair = jeton
 
     # Construction du lien d'activation (avec fragment #jeton=... selon contrats R-30 / R-41)
-    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_url:
-        if hote:
-            protocole = "http" if "localhost" in hote else "https"
-            hote_sans_port = hote.split(":")[0]
-            port = ":3000" if "localhost" in hote_sans_port else ""
-            base_url = f"{protocole}://{hote_sans_port}{port}"
-        else:
-            base_url = "http://localhost:3000"
+    # base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
+    # if not base_url:
+    #     if hote:
+    #         protocole = "http" if "localhost" in hote else "https"
+    #         hote_sans_port = hote.split(":")[0]
+    #         port = ":3000" if "localhost" in hote_sans_port else ""
+    #         base_url = f"{protocole}://{hote_sans_port}{port}"
+    #     else:
+    base_url = "http://localhost:3000"
 
     if projet_id:
         lien = (

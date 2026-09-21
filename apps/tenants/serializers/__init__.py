@@ -213,6 +213,8 @@ class EntrepriseSerializer(serializers.Serializer):
 
         requete = self.context.get("request")
         tenant = getattr(requete, "tenant", None) if requete else None
+        if not tenant and getattr(self, "instance", None):
+            tenant = self.instance
         query = Entreprise.objects.filter(email_contact__iexact=valeur)
         if tenant and tenant.pk:
             query = query.exclude(pk=tenant.pk)

@@ -277,7 +277,12 @@ class EntrepriseView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = EntrepriseSerializer(data=request.data, partial=True)
+        serializer = EntrepriseSerializer(
+            instance=tenant,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
 
         donnees = dict(serializer.validated_data)

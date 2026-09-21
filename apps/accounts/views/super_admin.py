@@ -23,13 +23,14 @@ class VerifierAccesSuperAdminView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["Super Admin / Plateforme"],
+        tags=["super-admin"],
         summary="Vérifier l'accès IP au panneau Super Admin",
         description=(
             "Vérifie si l'adresse IP du client appelant figure dans la liste blanche "
             "d'infrastructure `SUPER_ADMIN_IPS`. En cas de succès, renvoie le statut 'autorise'. "
             "Si l'IP n'est pas autorisée, la requête est rejetée en amont avec un code HTTP 403."
         ),
+        auth=[],
         responses={
             200: VerifierAccesSuperAdminResponseSerializer,
             403: ErreurPlateformeResponseSerializer,

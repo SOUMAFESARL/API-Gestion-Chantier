@@ -61,7 +61,35 @@ class DepotInscriptionSerializer(serializers.Serializer):
         return code
 
     def validate_email(self, valeur: str) -> str:
-        return valeur.strip().lower()
+        adresse = valeur.strip().lower()
+        from django.utils import timezone
+        from apps.tenants.models import DemandeInscription, Entreprise
+
+        # Si c'est un rejeu exact du même identifiant client (idempotence double-clic), autoriser
+        identifiant = self.initial_data.get("id") if hasattr(self, "initial_data") else None
+        if identifiant and DemandeInscription.objects.filter(pk=identifiant).exists():
+            return adresse
+
+        # 1. Vérifier si une entreprise existe déjà avec cette adresse email
+        if Entreprise.objects.filter(email_contact__iexact=adresse).exists():
+            raise serializers.ValidationError(
+                _("Cette adresse email est déjà associée à un compte. Veuillez vous connecter.")
+            )
+
+        # 2. Vérifier si une demande d'inscription est déjà en attente d'activation
+        if DemandeInscription.objects.filter(
+            email__iexact=adresse,
+            statut=DemandeInscription.Statut.EN_ATTENTE,
+            expire_le__gt=timezone.now(),
+        ).exists():
+            raise serializers.ValidationError(
+                _(
+                    "Une inscription est déjà en cours avec cette adresse email. "
+                    "Veuillez consulter votre boîte de réception pour l'activer."
+                )
+            )
+
+        return adresse
 
     def validate_cgu_acceptees(self, valeur: bool) -> bool:
         # Le refus est explicite : l'acceptation est un engagement, et une case

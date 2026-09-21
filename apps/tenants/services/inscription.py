@@ -62,6 +62,25 @@ class InscriptionDejaActivee(ErreurMetier):
     default_detail = _("Cet espace est déjà actif. Connectez-vous.")
 
 
+class EmailDejaUtilise(ErreurMetier):
+    """L'email est déjà associé à une entreprise existante — 409 CONFLICT."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code_metier = "email_deja_utilise"
+    default_detail = _("Cette adresse email est déjà associée à un compte. Veuillez vous connecter.")
+
+
+class InscriptionEnCours(ErreurMetier):
+    """Une inscription est déjà en attente d'activation pour cet email — 409 CONFLICT."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code_metier = "inscription_en_cours"
+    default_detail = _(
+        "Une inscription est déjà en cours avec cette adresse email. "
+        "Veuillez consulter votre boîte de réception pour l'activer."
+    )
+
+
 class SlugIndisponible(ErreurMetier):
     """Dix suffixes essayés sans succès — T-020 §2.3.
 
@@ -133,29 +152,12 @@ def deposer(
 
     slug_base = deriver_slug(nom_propre)
 
-    # Cas 2 — Entreprise déjà existante avec cet email (T-021 §2.4 - règle : une entreprise = un email unique)
+    # Cas 2 — Entreprise déjà existante avec cet email (règle : une entreprise = un email unique)
     entreprise_existante = Entreprise.objects.filter(
         email_contact__iexact=adresse,
     ).first()
     if entreprise_existante is not None:
-        transaction.on_commit(lambda: _envoyer_espace_existant(entreprise_existante, adresse))
-        derniere_demande = (
-            DemandeInscription.objects.filter(
-                models.Q(entreprise=entreprise_existante) | models.Q(email__iexact=adresse)
-            )
-            .order_by("-cree_le")
-            .first()
-        )
-        if derniere_demande is not None:
-            return derniere_demande
-
-        class _DemandeNeutre:
-            pk = identifiant
-            email = adresse
-            statut = DemandeInscription.Statut.EN_ATTENTE
-            expire_le = maintenant + DUREE_LIEN_ACTIVATION
-
-        return _DemandeNeutre()  # type: ignore
+        raise EmailDejaUtilise()
 
     # Cas 3 — Demande déjà en attente d'activation pour cet email
     demande_en_attente = DemandeInscription.objects.filter(
@@ -164,15 +166,7 @@ def deposer(
     ).first()
     if demande_en_attente is not None:
         if demande_en_attente.expire_le > maintenant:
-            # Demande toujours en cours : renouveler le jeton sans créer de doublon
-            jeton = uuid.uuid4()
-            demande_en_attente.empreinte = DemandeInscription.empreinte_de(jeton)
-            demande_en_attente.expire_le = maintenant + DUREE_LIEN_ACTIVATION
-            demande_en_attente.save(update_fields=["empreinte", "expire_le", "modifie_le"])
-            transaction.on_commit(
-                lambda: _envoyer_activation(demande_en_attente, jeton, regenere=True)
-            )
-            return demande_en_attente
+            raise InscriptionEnCours()
         else:
             # Expirée : libérer la place
             demande_en_attente.statut = DemandeInscription.Statut.ABANDONNEE
@@ -184,7 +178,7 @@ def deposer(
         statut=DemandeInscription.Statut.PROVISIONNEMENT,
     ).first()
     if demande_prov is not None:
-        return demande_prov
+        raise InscriptionDejaActivee()
 
     slug = _slug_libre(slug_base)
     jeton = uuid.uuid4()

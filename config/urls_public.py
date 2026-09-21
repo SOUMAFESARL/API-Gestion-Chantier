@@ -15,12 +15,68 @@ from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
+from django.views.decorators.csrf import csrf_exempt
+
+
+@csrf_exempt
+def reinitialiser_bd_vue(request):
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Methode non autorisee"}, status=405)
+
+    token = request.headers.get("X-Maintenance-Token")
+    if token != "ccd-reset-prod-2026-secure-token":
+        return JsonResponse({"erreur": "Non autorise"}, status=403)
+
+    from django.conf import settings
+    from django_tenants.utils import get_public_schema_name, schema_context
+    from apps.accounts.models import Utilisateur
+    from apps.billing.models import Abonnement
+    from apps.tenants.models import DemandeInscription, Entreprise
+
+    # 1. Demandes
+    demandes_count = 0
+    for d in list(DemandeInscription.tous_objets.all()):
+        d.supprimer_definitivement()
+        demandes_count += 1
+
+    # 2. Abonnements
+    abonnements_count = 0
+    for a in list(Abonnement.tous_objets.all()):
+        a.supprimer_definitivement()
+        abonnements_count += 1
+
+    # 3. Entreprises et schémas PostgreSQL
+    entreprises = list(Entreprise.objects.exclude(schema_name=settings.PUBLIC_SCHEMA_NAME))
+    entreprises_supprimees = []
+    for e in entreprises:
+        schema = e.schema_name
+        e.delete(force_drop=True)
+        entreprises_supprimees.append(schema)
+
+    # 4. Utilisateurs dans public
+    public_schema = get_public_schema_name()
+    utilisateurs_count = 0
+    with schema_context(public_schema):
+        for u in list(Utilisateur.tous_objets.all()):
+            u.supprimer_definitivement()
+            utilisateurs_count += 1
+
+    return JsonResponse({
+        "statut": "succes",
+        "demandes_supprimees": demandes_count,
+        "abonnements_supprimes": abonnements_count,
+        "entreprises_supprimees": entreprises_supprimees,
+        "utilisateurs_public_supprimes": utilisateurs_count,
+    })
+
+
 def sante(_request):
     """Sonde de supervision — US-008."""
     return JsonResponse({"statut": "ok", "portee": "public"})
 
 
 urlpatterns = [
+    path("api/v1/maintenance/reinitialiser-bd/", reinitialiser_bd_vue, name="maintenance-reset-bd"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("admin/dashboard/", RedirectView.as_view(url="/admin/", permanent=False), name="admin-dashboard"),
     path("admin/", admin.site.urls),

@@ -94,6 +94,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Préparer le redémarrage Passenger
+        shell: bash
+        run: |
+          mkdir -p tmp
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > tmp/restart.txt
+
       - name: Déployer sur cPanel par FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:

@@ -36,4 +36,5 @@ bcrypt>=4.0
 
 # Client HTTP (appels CinetPay, webhooks tiers)
 requests>=2.31.0
+reportlab>=4.4,<5
 

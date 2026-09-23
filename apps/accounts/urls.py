@@ -20,6 +20,7 @@ from apps.accounts.views import (
 app_name = "accounts"
 
 urlpatterns = [
+    path("admins/verifier-acces/", VerifierAccesSuperAdminView.as_view(), name="admins-verifier-acces"),
     path("super-admin/verifier-acces/", VerifierAccesSuperAdminView.as_view(), name="super-admin-verifier-acces"),
     path("auth/token/", ConnexionView.as_view(), name="connexion"),
     path("auth/token/refresh/", RenouvellementView.as_view(), name="jeton-renouveler"),

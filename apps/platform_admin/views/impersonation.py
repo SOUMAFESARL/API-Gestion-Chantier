@@ -42,7 +42,7 @@ class DemarrerAssistanceView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["super-admin"],
+        tags=["admins"],
         summary="Démarrer une session d'assistance Super Admin",
         description=(
             "Permet à un Super Administrateur d'accéder au compte d'une entreprise "
@@ -92,7 +92,7 @@ class DeconnexionAssistanceView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["super-admin"],
+        tags=["admins"],
         summary="Clôturer une session d'assistance Super Admin",
         description="Termine la session d'assistance Super Admin et consigne la déconnexion dans les journaux d'audit.",
         request=DeconnexionAssistanceRequestSerializer,
@@ -134,7 +134,7 @@ class ListerUtilisateursEntrepriseView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["super-admin"],
+        tags=["admins"],
         summary="Lister les utilisateurs d'une entreprise pour assistance",
         description="Liste l'ensemble des collaborateurs d'une entreprise cliente afin de permettre au Super Admin de cibler un profil spécifique pour la session d'assistance.",
         parameters=[
@@ -164,7 +164,7 @@ class JournalPlateformeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["super-admin"],
+        tags=["admins"],
         summary="Consulter le journal d'audit plateforme",
         description="Consulte les 200 derniers événements immuables de support et d'administration enregistrés sur la plateforme (MLD §4.6).",
         parameters=[

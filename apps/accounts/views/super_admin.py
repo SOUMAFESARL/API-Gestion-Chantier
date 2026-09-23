@@ -23,7 +23,7 @@ class VerifierAccesSuperAdminView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["super-admin"],
+        tags=["admins"],
         summary="Vérifier l'accès IP au panneau Super Admin",
         description=(
             "Vérifie si l'adresse IP du client appelant figure dans la liste blanche "

@@ -41,14 +41,24 @@ class ActivationResponseSerializer(serializers.Serializer):
     suivi = serializers.UUIDField(
         help_text="Identifiant de suivi de la tâche asynchrone de provisionnement."
     )
-    statut = serializers.CharField(help_text="Statut du provisionnement (PROVISIONNEMENT).")
+    statut = serializers.CharField(
+        help_text="A_VALIDER : email verifie, validation super admin requise."
+    )
 
 
 class EtatProvisionnementResponseSerializer(serializers.Serializer):
     """Réponse 200 renvoyant l'avancement du déploiement de l'espace d'entreprise."""
 
     statut = serializers.ChoiceField(
-        choices=["PROVISIONNEMENT", "PRET", "ECHEC"],
+        choices=[
+            "EN_ATTENTE",
+            "A_VALIDER",
+            "REFUSEE",
+            "ABANDONNEE",
+            "PROVISIONNEMENT",
+            "PRET",
+            "ECHEC",
+        ],
         help_text="État du provisionnement du schéma tenant et de l'espace client.",
     )
     url_connexion = serializers.CharField(
@@ -56,3 +66,4 @@ class EtatProvisionnementResponseSerializer(serializers.Serializer):
         allow_null=True,
         help_text="URL absolue de première connexion (disponible uniquement lorsque statut = PRET).",
     )
+    motif_refus = serializers.CharField(required=False)

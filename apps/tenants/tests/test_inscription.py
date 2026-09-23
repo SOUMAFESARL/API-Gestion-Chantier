@@ -404,7 +404,7 @@ def test_un_mot_de_passe_faible_ne_consomme_pas_le_jeton(client, deposer, faible
 
 
 @pytest.mark.django_db
-def test_activer_consomme_le_jeton_et_lance_le_provisionnement(client, deposer):
+def test_activer_consomme_le_jeton_et_attend_la_validation(client, deposer):
     _, jeton = deposer()
 
     reponse = client.post(
@@ -414,11 +414,11 @@ def test_activer_consomme_le_jeton_et_lance_le_provisionnement(client, deposer):
     )
 
     assert reponse.status_code == 202
-    assert reponse.data["statut"] == "PROVISIONNEMENT"
+    assert reponse.data["statut"] == "A_VALIDER"
 
     demande = DemandeInscription.objects.get(pk=reponse.data["suivi"])
     assert demande.utilise_le is not None
-    assert demande.statut == DemandeInscription.Statut.PROVISIONNEMENT
+    assert demande.statut == DemandeInscription.Statut.A_VALIDER
     # Haché, jamais en clair — MLD §4.8.
     assert demande.mot_de_passe_transitoire
     assert MOT_DE_PASSE not in demande.mot_de_passe_transitoire
@@ -470,5 +470,5 @@ def test_la_sonde_ne_livre_le_slug_qu_une_fois_l_espace_pret(client, deposer):
 
     reponse = client.get(f"/api/v1/inscription/etat/{activation.data['suivi']}/")
 
-    assert reponse.data["statut"] == "PROVISIONNEMENT"
+    assert reponse.data["statut"] == "A_VALIDER"
     assert "url_connexion" not in reponse.data

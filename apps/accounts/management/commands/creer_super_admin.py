@@ -1,20 +1,11 @@
-"""Crée un compte du personnel CCD Digital, dans le schéma `public`.
+"""Crée ou met à jour un compte Super Admin dans le schéma `public`.
 
-    python manage.py creer_super_admin --email support@ccd-digital.ci
+    python manage.py creer_super_admin --email support@ccd-digital.ci --motdepasse MonMotDePasseFort123!
 
-**Le Super Admin n'est pas un rôle, c'est un territoire.** Il vit dans
-`public.utilisateur` — la même table que les collaborateurs d'un client, mais
-dans un autre schéma (écart E1). Il n'apparaît dans aucune liste de
-collaborateurs, ne consomme aucun siège de quota, et n'a aucune affectation de
-projet — matrice des rôles §1.1.
-
-**`create_user`, jamais `create_superuser`** — règle R-64. `is_superuser=True`
-court-circuite *toute* vérification de permission Django : la matrice RBAC
-deviendrait décorative, et un compte de support aurait accès aux tables de tous
-les clients par l'admin Django. L'accès à l'admin Django en développement passe
-par un compte technique séparé.
-
-Idempotente.
+Configure le compte avec `is_superuser=True`, `is_staff=True`, `is_active=True`
+dans le schéma `public` de la plateforme.
+Idempotente : si le compte existe déjà, son mot de passe est mis à jour
+et ses privilèges superuser sont activés.
 """
 
 from django.core.management.base import BaseCommand, CommandError
@@ -25,45 +16,58 @@ from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 
 class Command(BaseCommand):
-    help = "Crée un compte du personnel de l'éditeur dans le schéma public."
+    help = "Crée ou met à jour un compte Super Admin de la plateforme dans le schéma public."
 
     def add_arguments(self, parser):
-        parser.add_argument("--email", required=True)
-        parser.add_argument("--motdepasse", required=True)
-        parser.add_argument("--nom", default="Support")
-        parser.add_argument("--prenom", default="CCD")
+        parser.add_argument("--email", required=True, help="Adresse email du Super Admin.")
+        parser.add_argument("--motdepasse", required=True, help="Mot de passe du Super Admin.")
+        parser.add_argument("--nom", default="Support", help="Nom de famille.")
+        parser.add_argument("--prenom", default="CCD", help="Prénom.")
 
     def handle(self, *args, **options):
         from django.contrib.auth.password_validation import validate_password
         from django.core.exceptions import ValidationError
 
+        email = options["email"].strip().lower()
+        motdepasse = options["motdepasse"]
+
         try:
-            validate_password(options["motdepasse"])
+            validate_password(motdepasse)
         except ValidationError as erreur:
-            # Le personnel de l'éditeur n'échappe pas à la politique du
-            # Socle §2.1 : c'est lui qui a le plus à protéger.
             raise CommandError(" ".join(erreur.messages)) from erreur
 
         with schema_context(get_public_schema_name()):
-            existant = Utilisateur.objects.filter(email__iexact=options["email"]).first()
+            existant = Utilisateur.objects.filter(email__iexact=email).first()
             if existant is not None:
-                self.stdout.write(f"Compte déjà présent : {existant.email}")
+                existant.is_superuser = True
+                existant.is_staff = True
+                existant.is_active = True
+                existant.statut = StatutUtilisateur.ACTIF
+                existant.role_global = RoleGlobal.ADMIN
+                if options.get("nom"):
+                    existant.nom = options["nom"]
+                if options.get("prenom"):
+                    existant.prenom = options["prenom"]
+                existant.set_password(motdepasse)
+                existant.save()
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"Compte Super Admin existant mis à niveau avec succès : {existant.email} (is_superuser=True)"
+                    )
+                )
                 return
 
-            utilisateur = Utilisateur.objects.create_user(
-                email=options["email"],
-                password=options["motdepasse"],
+            utilisateur = Utilisateur.objects.create_superuser(
+                email=email,
+                password=motdepasse,
                 nom=options["nom"],
                 prenom=options["prenom"],
                 role_global=RoleGlobal.ADMIN,
                 statut=StatutUtilisateur.ACTIF,
             )
 
-        self.stdout.write(self.style.SUCCESS(f"Compte plateforme créé : {utilisateur.email}"))
-        self.stdout.write("")
         self.stdout.write(
-            self.style.WARNING(
-                "Cette porte est restreinte par adresse IP. Hors développement, "
-                "`SUPER_ADMIN_IPS` doit être renseigné — vide, elle interdit tout."
+            self.style.SUCCESS(
+                f"Nouveau compte Super Admin créé avec succès : {utilisateur.email} (is_superuser=True)"
             )
         )

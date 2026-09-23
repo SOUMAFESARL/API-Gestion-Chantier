@@ -156,7 +156,7 @@ class VerificationJetonInscriptionView(APIView):
 
 
 class ActivationView(APIView):
-    """`POST /api/v1/inscription/activer/` — consomme le jeton, lance le provisioning."""
+    """Verifie l'email avant la decision du super admin."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -166,8 +166,11 @@ class ActivationView(APIView):
     serializer_class = ActivationSerializer
 
     @extend_schema(
-        summary="Activer un espace",
-        description="Valide le mot de passe de l'administrateur, consomme définitivement le jeton d'activation et enclenche la création asynchrone du schéma tenant et du compte.",
+        summary="Verifier l'email et soumettre l'inscription a validation",
+        description=(
+            "Consomme le jeton et conserve le mot de passe hache. Renvoie A_VALIDER ; "
+            "aucun espace n'est cree avant approbation du super admin."
+        ),
         request=ActivationSerializer,
         responses={202: AccuseActivationSerializer, 400: dict},
     )
@@ -191,7 +194,7 @@ class ActivationView(APIView):
         )
 
         return Response(
-            {"suivi": str(demande.pk), "statut": DemandeInscription.Statut.PROVISIONNEMENT},
+            {"suivi": str(demande.pk), "statut": demande.statut},
             status=status.HTTP_202_ACCEPTED,
         )
 
@@ -240,6 +243,15 @@ class EtatProvisionnementView(APIView):
 
         if demande.statut == DemandeInscription.Statut.ECHEC:
             return Response({"statut": "ECHEC"})
+
+        if demande.statut == DemandeInscription.Statut.REFUSEE:
+            return Response({"statut": "REFUSEE", "motif_refus": demande.motif_refus})
+        if demande.statut in {
+            DemandeInscription.Statut.EN_ATTENTE,
+            DemandeInscription.Statut.A_VALIDER,
+            DemandeInscription.Statut.ABANDONNEE,
+        }:
+            return Response({"statut": demande.statut})
 
         return Response({"statut": "PROVISIONNEMENT"})
 

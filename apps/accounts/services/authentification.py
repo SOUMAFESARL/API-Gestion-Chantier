@@ -90,6 +90,10 @@ def authentifier(email: str, mot_de_passe: str) -> Utilisateur:
     compte : sans lui, cinq requêtes simultanées incrémenteraient le compteur
     depuis la même valeur lue, et le blocage n'arriverait jamais non plus.
     """
+    from apps.platform_admin.services.provisioning import auto_provisionner_super_admin
+
+    auto_provisionner_super_admin()
+
     email = email.strip().lower()
     echec: ErreurMetier | None = None
     utilisateur = None

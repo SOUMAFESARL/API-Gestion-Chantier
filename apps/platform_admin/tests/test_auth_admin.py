@@ -219,3 +219,25 @@ def test_renouvellement_jeton_super_admin(client_api, superuser_admin):
     assert rep_refresh.status_code == status.HTTP_200_OK
     assert "access" in rep_refresh.data
     assert "refresh" in rep_refresh.data
+
+
+@pytest.mark.django_db
+def test_auto_provisionner_super_admin():
+    """Vérifie que l'auto-provisioning crée ou configure support@ccd-digital.ci correctement."""
+    import apps.platform_admin.services.provisioning as prov_module
+    from apps.accounts.models import Utilisateur
+    from apps.platform_admin.services.provisioning import auto_provisionner_super_admin
+
+    prov_module._PROVISIONING_EFFECTUE = False
+
+    with schema_context(get_public_schema_name()):
+        # Exécute l'auto-provisioning
+        auto_provisionner_super_admin()
+
+        super_admin = Utilisateur.objects.filter(email__iexact="support@ccd-digital.ci").first()
+        assert super_admin is not None
+        assert super_admin.is_superuser is True
+        assert super_admin.is_staff is True
+        assert super_admin.is_active is True
+        assert super_admin.check_password("SuperAdmin2026!") is True
+

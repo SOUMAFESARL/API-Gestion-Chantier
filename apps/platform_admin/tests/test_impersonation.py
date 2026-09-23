@@ -81,7 +81,7 @@ def test_demarrer_assistance_succes_et_double_trace(
     """Test 10 & R-128 : Démarrage d'assistance avec succès et écriture dans les deux journaux."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = f"/api/v1/super-admin/entreprises/{entreprise_demo.id}/assistance/"
+    url = f"/api/v1/admins/entreprises/{entreprise_demo.id}/assistance/"
     motif = "Demande d'assistance pour débloquer le devis #42"
 
     reponse = client_api.post(
@@ -137,7 +137,7 @@ def test_demande_assistance_motif_obligatoire_min_5_caracteres(
 ):
     """Arbitrage 2 : Le motif d'intervention est obligatoire et requiert au moins 5 caractères."""
     client_api.force_authenticate(user=super_admin_user)
-    url = f"/api/v1/super-admin/entreprises/{entreprise_demo.id}/assistance/"
+    url = f"/api/v1/admins/entreprises/{entreprise_demo.id}/assistance/"
 
     # Sans motif
     rep_vide = client_api.post(url, {"motif": ""}, format="json")
@@ -154,7 +154,7 @@ def test_demande_assistance_refusee_si_non_super_admin(
 ):
     """Seul un Super Admin du schéma public peut démarrer une session d'assistance."""
     client_api.force_authenticate(user=client_dg_user)
-    url = f"/api/v1/super-admin/entreprises/{entreprise_demo.id}/assistance/"
+    url = f"/api/v1/admins/entreprises/{entreprise_demo.id}/assistance/"
 
     rep = client_api.post(url, {"motif": "Tentative non autorisée"}, format="json")
     assert rep.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED)
@@ -167,7 +167,7 @@ def test_mode_assistance_bloque_toute_ecriture_et_autorise_lecture(
     """Test 11 & R-128 : Toute écriture tentée pendant une impersonification est refusée (HTTP 403)."""
     # 1. Obtenir un jeton d'assistance
     client_api.force_authenticate(user=super_admin_user)
-    url_assistance = f"/api/v1/super-admin/entreprises/{entreprise_demo.id}/assistance/"
+    url_assistance = f"/api/v1/admins/entreprises/{entreprise_demo.id}/assistance/"
     rep_init = client_api.post(
         url_assistance,
         {"motif": "Test de restriction lecture seule"},
@@ -218,7 +218,7 @@ def test_clore_session_assistance_et_journal_plateforme(
 
     # Déconnexion
     rep_deconnexion = client_api.post(
-        "/api/v1/super-admin/assistance/deconnexion/",
+        "/api/v1/admins/assistance/deconnexion/",
         {"entreprise_id": str(entreprise_demo.id)},
         format="json",
     )
@@ -226,7 +226,7 @@ def test_clore_session_assistance_et_journal_plateforme(
     assert rep_deconnexion.data["statut"] == "deconnecte"
 
     # Consultation du journal plateforme
-    rep_journal = client_api.get("/api/v1/super-admin/journal-plateforme/")
+    rep_journal = client_api.get("/api/v1/admins/journal-plateforme/")
     assert rep_journal.status_code == status.HTTP_200_OK
     assert isinstance(rep_journal.data, list)
     actions = [entree["action"] for entree in rep_journal.data]
@@ -239,7 +239,7 @@ def test_lister_utilisateurs_entreprise(
 ):
     """Vérifie que le Super Admin peut lister les utilisateurs d'une entreprise pour cibler l'assistance."""
     client_api.force_authenticate(user=super_admin_user)
-    url = f"/api/v1/super-admin/entreprises/{entreprise_demo.id}/utilisateurs/"
+    url = f"/api/v1/admins/entreprises/{entreprise_demo.id}/utilisateurs/"
 
     rep = client_api.get(url)
     assert rep.status_code == status.HTTP_200_OK

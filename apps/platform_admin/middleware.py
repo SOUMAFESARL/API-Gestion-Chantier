@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 METHODES_MUTATION = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 CHEMINS_EXCLUS_DECONNEXION = (
+    "/api/v1/admins/assistance/deconnexion/",
+    "/api/v1/admins/deconnexion/",
     "/api/v1/super-admin/assistance/deconnexion/",
     "/api/v1/auth/deconnexion/",
 )

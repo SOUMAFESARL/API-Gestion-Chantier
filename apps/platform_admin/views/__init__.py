@@ -1,3 +1,8 @@
+from .auth import (
+    ConnexionAdminView,
+    DeconnexionAdminView,
+    RenouvellementAdminView,
+)
 from .impersonation import (
     DeconnexionAssistanceView,
     DemarrerAssistanceView,
@@ -6,8 +11,11 @@ from .impersonation import (
 )
 
 __all__ = [
+    "ConnexionAdminView",
+    "DeconnexionAdminView",
     "DeconnexionAssistanceView",
     "DemarrerAssistanceView",
     "JournalPlateformeListView",
     "ListerUtilisateursEntrepriseView",
+    "RenouvellementAdminView",
 ]

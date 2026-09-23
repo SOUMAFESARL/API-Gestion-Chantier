@@ -15,6 +15,13 @@ SEUILS = (7, 3, 1, 0)
 
 
 @shared_task
+def relancer_abonnements():
+    from apps.billing.services.expiration import envoyer_rappels_expiration
+
+    return envoyer_rappels_expiration()
+
+
+@shared_task
 def relancer_essais() -> int:
     """Les quatre relances de l'essai — parcours §2, US-016.
 

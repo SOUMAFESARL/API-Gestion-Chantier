@@ -132,6 +132,7 @@ class RapportSoumettreView(APIView):
 
     @extend_schema(
         summary="Soumettre un rapport journalier",
+        request=None,
         description="Passe le rapport au statut SOUMIS pour revue par le Conducteur de Travaux.",
         responses={200: RapportJournalierDetailSerializer},
     )

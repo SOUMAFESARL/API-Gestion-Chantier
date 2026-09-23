@@ -120,3 +120,67 @@ def test_facture_historique_sans_contexte(facture_api):
     assert pdf.status_code == 200
     texte = " ".join(page.extract_text() for page in PdfReader(BytesIO(pdf.content)).pages)
     assert "coordonnees non archivees" in texte
+
+
+def test_pdf_accept_swagger_et_erreur_json(facture_api):
+    client, paiement, _ = facture_api
+    response = client.get(paiement["facture_pdf_url"], HTTP_ACCEPT="application/pdf")
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert PdfReader(BytesIO(response.content)).pages
+    client.force_authenticate(user=None)
+    response = client.get(paiement["facture_pdf_url"], HTTP_ACCEPT="application/pdf")
+    assert response.status_code == 401
+    assert response["Content-Type"] == "application/json"
+    assert "erreur" in response.json()
+
+
+@pytest.mark.parametrize("role", [RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.DIRECTEUR_FINANCIER])
+def test_directions_autorisees(facture_api, role):
+    client, paiement, contexte = facture_api
+    contexte["admin"].role_global = role
+    assert client.get(paiement["facture_url"]).status_code == 200
+
+
+def test_pagination_factures(facture_api):
+    client, paiement, _ = facture_api
+    with schema_context("public"):
+        facture = Facture.objects.get(pk=paiement["facture_id"])
+        facture.pk = None
+        facture.numero = "FAC-TEST-PAGINATION"
+        facture.save()
+    response = client.get("/api/v1/factures/?taille_page=1")
+    data = response.json()
+    assert data["total"] == 2
+    assert data["nombre_pages"] == 2
+    assert len(data["resultats"]) == 1
+    suivant = client.get("/api/v1/factures/?taille_page=1&page=2").json()
+    assert suivant["resultats"][0]["id"] != data["resultats"][0]["id"]
+    assert client.get("/api/v1/factures/?page=999").status_code == 404
+
+
+def test_swagger_factures():
+    from drf_spectacular.generators import SchemaGenerator
+    from drf_spectacular.validation import validate_schema
+
+    schema = SchemaGenerator().get_schema(request=None, public=True)
+    validate_schema(schema)
+    liste = schema["paths"]["/api/v1/factures/"]["get"]
+    parametres = {p["name"] for p in liste["parameters"]}
+    assert parametres == {"page", "taille_page", "statut"}
+    assert liste["security"] == [{"jwtAuth": []}]
+    ref = liste["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    pagination = schema["components"]["schemas"][ref.rsplit("/", 1)[-1]]
+    assert set(pagination["properties"]) == {
+        "total",
+        "page",
+        "nombre_pages",
+        "suivant",
+        "precedent",
+        "resultats",
+    }
+    pdf = schema["paths"]["/api/v1/factures/{id}/pdf/"]["get"]
+    assert pdf["responses"]["200"]["content"]["application/pdf"]["schema"]["format"] == "binary"
+    assert {"401", "403", "404"} <= pdf["responses"].keys()
+    paiement = schema["components"]["schemas"]["InitierPaiementResponse"]["properties"]
+    assert {"facture_id", "facture_url", "facture_pdf_url"} <= paiement.keys()

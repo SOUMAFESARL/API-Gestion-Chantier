@@ -11,6 +11,20 @@ class PaginationStandard(PageNumberPagination):
     page_size_query_param = "taille_page"
     max_page_size = 100
 
+    def get_paginated_response_schema(self, schema):
+        return {
+            "type": "object",
+            "required": ["total", "page", "nombre_pages", "suivant", "precedent", "resultats"],
+            "properties": {
+                "total": {"type": "integer", "minimum": 0},
+                "page": {"type": "integer", "minimum": 1},
+                "nombre_pages": {"type": "integer", "minimum": 1},
+                "suivant": {"type": "string", "format": "uri", "nullable": True},
+                "precedent": {"type": "string", "format": "uri", "nullable": True},
+                "resultats": schema,
+            },
+        }
+
     def get_paginated_response(self, data):
         return Response(
             OrderedDict(

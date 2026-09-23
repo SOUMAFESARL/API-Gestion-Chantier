@@ -11,6 +11,8 @@ La reponse d'initiation fournit `facture_id`, `facture_url`, `facture_pdf_url`.
 - `GET /api/v1/factures/<uuid>/pdf/` : telechargement PDF authentifie.
 
 Utiliser le jeton JWT de l'entreprise. Roles autorises : AD, DG, DF.
+Swagger : `/api/v1/docs/`, section `Factures d'abonnement`. Le telechargement
+accepte `Accept: application/pdf` ; les erreurs restent au format JSON.
 Une facture d'une autre entreprise retourne 404. Le schema public ne permet pas
 la consultation des factures clientes. Aucune creation ou modification manuelle
 n'est exposee. Les montants JSON sont des entiers en centimes XOF ; le PDF les

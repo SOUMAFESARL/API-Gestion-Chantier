@@ -399,6 +399,7 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",
     "ENUM_NAME_OVERRIDES": {
+        "StatutRapportEnum": "apps.core.enums.StatutRapport",
         "PlanCodeEnum": "apps.billing.models.Plan.Code",
         "RoleGlobalEnum": "apps.core.enums.RoleGlobal",
         "RoleTiersChoixEnum": "apps.core.enums.RoleTiersChoix",

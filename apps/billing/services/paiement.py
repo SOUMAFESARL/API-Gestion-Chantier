@@ -14,6 +14,7 @@ from django_tenants.utils import get_public_schema_name, schema_context
 from apps.audit.services import journaliser
 from apps.billing.models import Abonnement, Facture, PaiementAbonnement, Plan
 from apps.billing.services.cinetpay import CinetPayClient, CinetPayError
+from apps.billing.services.facture import contexte_facturation
 from apps.core.emails import envoyer
 from apps.core.enums import ActionAudit, StatutEntreprise
 
@@ -156,6 +157,12 @@ class PaiementAbonnementService:
                     if (
                         facture_existante.montant_ttc == montant_ttc
                         and facture_existante.abonnement == abonnement
+                        and facture_existante.contexte_facturation.get("prestation", {}).get(
+                            "reference"
+                        ) == plan.code
+                        and facture_existante.contexte_facturation.get("prestation", {}).get(
+                            "cycle"
+                        ) == cycle
                     ):
                         # Réutilisation de la facture existante (même forfait et cycle)
                         facture = facture_existante
@@ -200,6 +207,10 @@ class PaiementAbonnementService:
                         date_emission=aujourdhui,
                         date_echeance=periode_debut + timedelta(days=7),
                     )
+
+                if not facture.contexte_facturation:
+                    facture.contexte_facturation = contexte_facturation(entreprise, plan, cycle)
+                    facture.save(update_fields=["contexte_facturation", "modifie_le"])
 
                 # 5. Création de la transaction de paiement initiée
                 # Référence unique CinetPay (<= 100 caractères, alphanumérique)
@@ -264,6 +275,9 @@ class PaiementAbonnementService:
                 "payment_url": payment_url,
                 "payment_token": payment_token,
                 "numero_facture": facture.numero,
+                "facture_id": str(facture.pk),
+                "facture_url": f"/api/v1/factures/{facture.pk}/",
+                "facture_pdf_url": f"/api/v1/factures/{facture.pk}/pdf/",
                 "montant_fcfa": paiement.montant_fcfa,
                 "forfait": plan.libelle,
                 "cycle": cycle,

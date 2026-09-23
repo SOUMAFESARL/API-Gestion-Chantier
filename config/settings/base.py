@@ -31,6 +31,14 @@ else:
 
 config = Config(RepositoryEnv(_fichier_env)) if _fichier_env.exists() else env_config
 
+FACTURATION_EMETTEUR = {
+    champ: config(f"FACTURATION_{champ.upper()}", default="")
+    for champ in (
+        "raison_sociale", "forme_juridique", "capital", "adresse", "ville", "pays",
+        "rccm", "nif", "centre_fiscal", "email", "telephone", "banque", "iban", "bic",
+    )
+}
+
 # --------------------------------------------------------------------------
 # Sécurité
 # --------------------------------------------------------------------------

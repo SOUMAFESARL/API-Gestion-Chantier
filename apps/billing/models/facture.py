@@ -74,6 +74,7 @@ class Facture(ModeleBase):
     date_emission = models.DateField(_("date d'émission"), default=timezone.localdate)
     date_echeance = models.DateField(_("date d'échéance"))
     fichier_pdf = models.CharField(_("fichier PDF"), max_length=500, blank=True)
+    contexte_facturation = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "facture"

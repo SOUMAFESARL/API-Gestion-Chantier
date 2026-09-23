@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="fr">
+<body>
+  <h1>Votre abonnement</h1>
+  <p>Bonjour,</p>
+  <p><strong>{{ raison_sociale }}</strong> : {{ message }}</p>
+  <p>Date d'expiration : {{ date_expiration|date:"d/m/Y" }}.</p>
+  <p><a href="{{ lien_renouvellement }}">Consulter et renouveler mon abonnement</a></p>
+  <p>{{ lien_renouvellement }}</p>
+</body>
+</html>

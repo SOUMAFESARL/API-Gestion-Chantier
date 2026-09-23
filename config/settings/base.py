@@ -241,7 +241,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # voyage en **fragment** (`#jeton=…`), jamais en paramètre de requête : un
 # paramètre finirait dans les journaux du serveur, ce que la stratégie de
 # déploiement §6 interdit — décision J5 du contrat de réinitialisation.
-FRONTEND_URL = "http://localhost:3000"
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
 # Domaine principal de la plateforme (Architecture Domaine Unique - Option A).
 # L'API et le frontend partagent un point d'accès unifié sans sous-domaines clients.

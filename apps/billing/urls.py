@@ -8,11 +8,17 @@ from apps.billing.views import (
     PlansCatalogueView,
     StatutPaiementView,
 )
+from apps.billing.views.expiration import NotificationsExpirationView
 from apps.billing.views.facture import FactureDetailView, FactureListeView, FacturePDFView
 
 app_name = "billing"
 
 urlpatterns = [
+    path(
+        "abonnement/notifications/",
+        NotificationsExpirationView.as_view(),
+        name="notifications-expiration",
+    ),
     path("factures/", FactureListeView.as_view(), name="factures"),
     path("factures/<uuid:pk>/", FactureDetailView.as_view(), name="facture-detail"),
     path("factures/<uuid:pk>/pdf/", FacturePDFView.as_view(), name="facture-pdf"),

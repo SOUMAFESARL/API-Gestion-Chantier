@@ -1,0 +1,7 @@
+Bonjour,
+
+{{ raison_sociale }} : {{ message }}
+Date d'expiration : {{ date_expiration|date:"d/m/Y" }}.
+
+Consulter et renouveler votre abonnement :
+{{ lien_renouvellement }}

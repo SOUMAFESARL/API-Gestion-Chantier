@@ -177,6 +177,19 @@ def deconnecter_super_admin(
         if utilisateur and getattr(utilisateur, "is_authenticated", False):
             user_id = getattr(utilisateur, "id", None)
             user_email = getattr(utilisateur, "email", None)
+        elif refresh_token:
+            try:
+                import jwt
+                payload = jwt.decode(refresh_token, options={"verify_signature": False})
+                token_uid = payload.get("user_id")
+                if token_uid:
+                    with schema_context(public_schema):
+                        u = Utilisateur.objects.filter(pk=token_uid).first()
+                        if u:
+                            user_id = u.id
+                            user_email = u.email
+            except Exception:
+                pass
 
         with schema_context(public_schema):
             JournalPlateforme.objects.create(

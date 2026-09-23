@@ -52,10 +52,6 @@ def authentifier_super_admin(
     Vérifie impérativement que l'utilisateur appartient au schéma `public`
     et possède l'attribut `is_superuser=True`.
     """
-    from apps.platform_admin.services.provisioning import auto_provisionner_super_admin
-
-    auto_provisionner_super_admin()
-
     email_nettoye = email.strip().lower()
     public_schema = get_public_schema_name()
     echec: ErreurMetier | None = None

@@ -406,10 +406,9 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-# Socle Commun §2.2 — 15 min pour l'accès, 8 h pour le renouvellement web.
-# Le cas mobile (24 h) est traité par une vue dédiée, pas par ce réglage global.
+# Durée du jeton d'accès portée à 24 h.
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
     "REFRESH_TOKEN_LIFETIME": timedelta(hours=8),
     # Ces deux réglages sont volontairement à False : la rotation n'est plus
     # faite par SimpleJWT mais par `apps.accounts.services.renouvellement`,

@@ -76,18 +76,42 @@ class DepotInscriptionSerializer(serializers.Serializer):
                 _("Cette adresse email est déjà associée à un compte. Veuillez vous connecter.")
             )
 
-        # 2. Vérifier si une demande d'inscription est déjà en attente d'activation
-        if DemandeInscription.objects.filter(
+        # 2. Vérifier si une demande d'inscription est déjà en attente d'activation, de validation ou de provisionnement
+        demande_en_cours = DemandeInscription.objects.filter(
             email__iexact=adresse,
-            statut=DemandeInscription.Statut.EN_ATTENTE,
-            expire_le__gt=timezone.now(),
-        ).exists():
-            raise serializers.ValidationError(
-                _(
-                    "Une inscription est déjà en cours avec cette adresse email. "
-                    "Veuillez consulter votre boîte de réception pour l'activer."
+            statut__in=[
+                DemandeInscription.Statut.EN_ATTENTE,
+                DemandeInscription.Statut.A_VALIDER,
+                DemandeInscription.Statut.PROVISIONNEMENT,
+            ],
+        ).first()
+        if demande_en_cours is not None:
+            if (
+                demande_en_cours.statut == DemandeInscription.Statut.EN_ATTENTE
+                and demande_en_cours.expire_le <= timezone.now()
+            ):
+                # Expirée : autoriser (le service la marquera ABANDONNEE)
+                pass
+            elif demande_en_cours.statut == DemandeInscription.Statut.A_VALIDER:
+                raise serializers.ValidationError(
+                    _(
+                        "Une inscription est déjà en cours avec cette adresse email. "
+                        "Votre demande est en cours de validation par un administrateur."
+                    )
                 )
-            )
+            elif demande_en_cours.statut == DemandeInscription.Statut.PROVISIONNEMENT:
+                raise serializers.ValidationError(
+                    _(
+                        "Cet espace est en cours de création. Veuillez patienter un instant."
+                    )
+                )
+            else:
+                raise serializers.ValidationError(
+                    _(
+                        "Une inscription est déjà en cours avec cette adresse email. "
+                        "Veuillez consulter votre boîte de réception pour l'activer."
+                    )
+                )
 
         return adresse
 

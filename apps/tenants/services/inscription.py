@@ -237,7 +237,7 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
         )
         return
 
-    base_url = "http://localhost:3000"
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
     envoyer(
         "espace_existant",
@@ -245,8 +245,8 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
         destinataire,
         {
             "raison_sociale": entreprise.raison_sociale,
-            "lien_connexion": f"{base_url}/connexion",
-            "lien_reinitialisation": f"{base_url}/mot-de-passe/oublie",
+            "lien_connexion": f"{frontend_url}/connexion",
+            "lien_reinitialisation": f"{frontend_url}/mot-de-passe/oublie",
         },
     )
 
@@ -257,7 +257,12 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
     Aucun mot de passe n'y figure : il a été choisi par la personne elle-même à
     l'activation, et nous ne le connaissons pas.
     """
-    adresse_espace = "http://localhost:3000"
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    adresse_espace = (
+        f"https://{entreprise.schema_name.replace('_', '-')}.{settings.DOMAINE_PRINCIPAL}"
+        if not settings.DEBUG
+        else f"http://{entreprise.schema_name.replace('_', '-')}.localhost:3000"
+    )
     envoyer(
         "espace_pret",
         f"Votre espace {entreprise.raison_sociale} est prêt",
@@ -278,13 +283,14 @@ def _envoyer_activation(demande: DemandeInscription, jeton, regenere: bool = Fal
     jeton vient d'être remplacé, et **l'ancien lien ne marche plus**. Le dire
     évite qu'on s'acharne sur le premier message reçu.
     """
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     envoyer(
         "activation",
         "Activez votre espace CCD Digital",
         demande.email,
         {
             "raison_sociale": demande.raison_sociale,
-            "lien": f"http://localhost:3000/activation#jeton={jeton}",
+            "lien": f"{frontend_url}/activation#jeton={jeton}",
             "regenere": regenere,
         },
     )

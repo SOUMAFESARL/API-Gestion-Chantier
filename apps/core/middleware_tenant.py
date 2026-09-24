@@ -31,6 +31,19 @@ class TenantResolutionMiddleware(TenantMainMiddleware):
         tenant_model = get_tenant_model()
         public_schema_name = get_public_schema_name()
 
+        # 0. Routes strictement publiques de la plateforme (inscription, santé, documentation).
+        # Elles doivent TOUJOURS s'exécuter sur le schéma public et charger PUBLIC_SCHEMA_URLCONF,
+        # même si l'appelant a un jeton Bearer ou un sous-domaine de tenant résiduel.
+        if request.path.startswith(("/api/v1/inscription", "/api/health", "/api/v1/docs", "/api/v1/schema")):
+            try:
+                public_tenant = tenant_model.objects.get(schema_name=public_schema_name)
+                request.tenant = public_tenant
+                connection.set_tenant(public_tenant)
+                self.setup_url_routing(request, force_public=True)
+                return
+            except tenant_model.DoesNotExist:
+                raise self.TENANT_NOT_FOUND_EXCEPTION("Impossible de trouver le tenant public.")
+
         # 1. Résolution via Jeton JWT (en-tête Authorization: Bearer <token>)
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header.startswith("Bearer "):

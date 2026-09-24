@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.referentiels.urls")),
     path("api/v1/", include("apps.onboarding.urls")),
+    path("api/v1/", include("apps.tenants.urls")),
     path("api/v1/", include("apps.tenants.urls_tenant")),
     path("api/v1/", include("apps.tiers.urls")),
     path("api/v1/", include("apps.projets.urls")),

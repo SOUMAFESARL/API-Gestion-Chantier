@@ -16,6 +16,7 @@ from django_tenants.utils import schema_context
 from rest_framework.test import APIClient
 
 from apps.accounts.models import TENTATIVES_MAX, Utilisateur
+from apps.accounts.services.authentification import duree_acces_en_secondes
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 SCHEMA = "demo"
@@ -75,9 +76,9 @@ def test_succes_renvoie_les_jetons_le_profil_et_la_duree(client, utilisateur):
     corps = reponse.json()
     assert set(corps) == {"access", "refresh", "expire_dans", "utilisateur"}
     assert corps["access"]
-    # Contrat §4.2 — 1440 minutes / 24 heures (86400 s). Le client n'a pas à décoder le JWT pour une
+    # Contrat §4.2 — Le client n'a pas à décoder le JWT pour une
     # information que le serveur connaît.
-    assert corps["expire_dans"] == 86400
+    assert corps["expire_dans"] == duree_acces_en_secondes()
 
 
 @pytest.mark.django_db

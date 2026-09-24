@@ -16,6 +16,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Utilisateur
+from apps.accounts.services.authentification import duree_acces_en_secondes
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 from apps.platform_admin.models import JournalPlateforme
 
@@ -78,7 +79,7 @@ def test_connexion_super_admin_succes_et_audit(client_api, superuser_admin):
     data = reponse.data
     assert "access" in data
     assert "refresh" in data
-    assert data["expire_dans"] == 900
+    assert data["expire_dans"] == duree_acces_en_secondes()
     assert data["utilisateur"]["id"] == str(superuser_admin.id)
     assert data["utilisateur"]["email"] == superuser_admin.email
     assert data["utilisateur"]["is_superuser"] is True

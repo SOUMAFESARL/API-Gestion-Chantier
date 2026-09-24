@@ -75,9 +75,9 @@ def test_succes_renvoie_les_jetons_le_profil_et_la_duree(client, utilisateur):
     corps = reponse.json()
     assert set(corps) == {"access", "refresh", "expire_dans", "utilisateur"}
     assert corps["access"]
-    # Contrat §4.2 — 15 minutes. Le client n'a pas à décoder le JWT pour une
+    # Contrat §4.2 — 1440 minutes / 24 heures (86400 s). Le client n'a pas à décoder le JWT pour une
     # information que le serveur connaît.
-    assert corps["expire_dans"] == 900
+    assert corps["expire_dans"] == 86400
 
 
 @pytest.mark.django_db

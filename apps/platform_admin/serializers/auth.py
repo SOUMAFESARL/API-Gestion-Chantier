@@ -5,10 +5,16 @@ from rest_framework import serializers
 
 __all__ = [
     "ConnexionAdminSerializer",
+    "ContenuJetonAdminSerializer",
     "DeconnexionAdminResponseSerializer",
     "DeconnexionAdminSerializer",
+    "DemandeReinitialisationAdminSerializer",
     "ProfilAdminSerializer",
+    "ReinitialisationAdminSerializer",
     "ReponseConnexionAdminSerializer",
+    "ReponseDemandeReinitialisationAdminSerializer",
+    "ReponseReinitialisationAdminSerializer",
+    "VerificationJetonAdminSerializer",
 ]
 
 LONGUEUR_MAX_MOT_DE_PASSE = 128
@@ -83,5 +89,78 @@ class DeconnexionAdminSerializer(serializers.Serializer):
 
 class DeconnexionAdminResponseSerializer(serializers.Serializer):
     """Réponse de déconnexion Super Admin."""
+
+    message = serializers.CharField(read_only=True)
+
+
+class DemandeReinitialisationAdminSerializer(serializers.Serializer):
+    """Validation de l'email pour demande de réinitialisation Super Admin."""
+
+    email = serializers.EmailField(
+        required=True,
+        error_messages={
+            "required": _("L'adresse email est obligatoire."),
+            "invalid": _("Adresse email invalide."),
+        },
+    )
+
+    def validate_email(self, valeur: str) -> str:
+        return valeur.strip().lower()
+
+
+class ReponseDemandeReinitialisationAdminSerializer(serializers.Serializer):
+    """Réponse 202 Accepted pour la demande Super Admin."""
+
+    message = serializers.CharField(read_only=True)
+    expire_dans = serializers.IntegerField(read_only=True)
+
+
+class VerificationJetonAdminSerializer(serializers.Serializer):
+    """Validation du jeton de réinitialisation Super Admin."""
+
+    jeton = serializers.CharField(
+        required=True,
+        max_length=64,
+        error_messages={
+            "required": _("Le jeton de réinitialisation est obligatoire."),
+        },
+    )
+
+
+class ContenuJetonAdminSerializer(serializers.Serializer):
+    """Contenu vérifié d'un jeton Super Admin (non consommé)."""
+
+    email = serializers.EmailField(read_only=True)
+    motif = serializers.CharField(read_only=True)
+    expire_dans = serializers.IntegerField(read_only=True)
+    url_connexion = serializers.CharField(read_only=True)
+
+
+class ReinitialisationAdminSerializer(serializers.Serializer):
+    """Validation du jeton et du nouveau mot de passe Super Admin."""
+
+    jeton = serializers.CharField(
+        required=True,
+        max_length=64,
+        error_messages={
+            "required": _("Le jeton de réinitialisation est obligatoire."),
+        },
+    )
+    mot_de_passe = serializers.CharField(
+        required=True,
+        write_only=True,
+        max_length=LONGUEUR_MAX_MOT_DE_PASSE,
+        trim_whitespace=False,
+        style={"input_type": "password"},
+        error_messages={
+            "required": _("Le nouveau mot de passe est obligatoire."),
+            "max_length": _("Ce champ ne peut dépasser %(max)d caractères.")
+            % {"max": LONGUEUR_MAX_MOT_DE_PASSE},
+        },
+    )
+
+
+class ReponseReinitialisationAdminSerializer(serializers.Serializer):
+    """Réponse de réinitialisation réussie."""
 
     message = serializers.CharField(read_only=True)

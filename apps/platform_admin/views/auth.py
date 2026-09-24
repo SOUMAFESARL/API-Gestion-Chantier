@@ -1,6 +1,7 @@
 """Vues d'authentification Super Admin — Plateforme CCD Digital."""
 
 import logging
+
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
@@ -152,9 +153,7 @@ class DeconnexionAdminView(APIView):
             appareil=appareil,
         )
 
-        reponse = Response(
-            {"message": _("Déconnexion réussie.")}, status=status.HTTP_200_OK
-        )
+        reponse = Response({"message": _("Déconnexion réussie.")}, status=status.HTTP_200_OK)
         reponse["Cache-Control"] = "no-store"
         return reponse
 

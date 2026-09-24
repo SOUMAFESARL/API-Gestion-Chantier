@@ -1,0 +1,875 @@
+==============================================================================
+GUIDE COMPLET ETAPE PAR ETAPE : CREATION D'UNE API BACKEND
+Projet : CCD Digital - Plateforme de Gestion de Chantier (SOUMAFE SARL)
+Stack  : Python 3.12+ | Django 5 | Django REST Framework (DRF) | PostgreSQL Multi-tenant
+Pattern: Clean Architecture (Separation Selectors / Services / Serializers / Views)
+==============================================================================
+
+Ce guide detaille avec precision chaque etape, chaque fichier a creer ou modifier,
+et fournit un exemple complet et fonctionnel de bout en bout base sur les conventions
+strictes du projet CCD Digital.
+
+------------------------------------------------------------------------------
+SOMMAIRE
+------------------------------------------------------------------------------
+1. VUE D'ENSEMBLE DE L'ARCHITECTURE BACKEND
+2. CARTOGRAPHIE DES DOSSIERS ET FICHIERS RENCONTRES
+3. SCENARIO FIL CONDUCTEUR DE L'EXEMPLE : GESTION DES INCIDENTS DE CHANTIER
+4. ETAPE 1 : DEFINIR LE MODELE DE DONNEES (models/)
+5. ETAPE 2 : GENERER ET APPLIQUER LA MIGRATION
+6. ETAPE 3 : CREER LES SELECTEURS DE DONNEES (selectors/ - Lecture seule)
+7. ETAPE 4 : CREER LES SERVICES METIER (services/ - Ecriture / Transactions)
+8. ETAPE 5 : CONFIGURER LES PERMISSIONS (permissions.py)
+9. ETAPE 6 : DEFINIR LES FILTRES DE RECHERCHE (filters.py)
+10. ETAPE 7 : CREER LES SERIALISEURS (serializers/ - Validation & DTO)
+11. ETAPE 8 : CODER LES VUES API (views/ - Endpoints REST & OpenAPI/Swagger)
+12. ETAPE 9 : DECLARER LES ROUTES D'URL (urls.py & config/urls_tenant.py)
+13. ETAPE 10 : ENREGISTRER DANS DJANGO ADMIN (admin.py)
+14. ETAPE 11 : REDIGER LES TESTS AUTOMATISES (tests/)
+15. CHECKLIST DE CONFORMITE (Definition of Done)
+
+
+==============================================================================
+1. VUE D'ENSEMBLE DE L'ARCHITECTURE BACKEND
+==============================================================================
+
+Dans ce backend, nous n'ecrivons PAS la logique metier dans les Vues ni dans les
+Modeles (eviter les "Fat Models" et "Fat Views").
+Nous appliquons le pattern "Services & Selectors" (Clean Architecture Django) :
+
+[Requete HTTP Entrante]
+        |
+        v
+[URL Routing]                 -> Associe le chemin /api/v1/... a une Vue
+        |
+        v
+[Permissions DRF]             -> Verifie le RoleGlobal (Niveau 1) et l'acces au Projet (Niveau 2)
+        |
+        +---> Si LECTURE (GET) :
+        |       |
+        |       v
+        |     [Filters]       -> Filtre la recherche selon query_params
+        |       |
+        |       v
+        |     [Selectors]     -> Requetes SQL optimisees (.select_related, .prefetch_related)
+        |       |
+        |       v
+        |     [Serializers]   -> Serialisation en JSON (ListSerializer, DetailSerializer)
+        |       |
+        |       v
+        |     [Reponse 200 OK]
+        |
+        +---> Si ECRITURE (POST, PUT, PATCH, DELETE) :
+                |
+                v
+              [Serializers]   -> Validation syntaxique des donnees entrantes (Create/UpdateSerializer)
+                |
+                v
+              [Services]      -> Logique metier, regles de gestion, @transaction.atomic, audit
+                |
+                v
+              [Models]        -> ModeleBase (UUID, Soft-delete supprime_le, Horodatage UTC)
+                |
+                v
+              [Reponse 201 CREATED / 200 OK / 204 NO CONTENT]
+
+
+Règles architecturales obligatoires du projet :
+- Multitenance : Les endpoints metier BTP sont isoles par schema PostgreSQL (urls_tenant.py).
+- Heritage ModeleBase : Tout modele metier DOIT heriter de ModeleBase (apps.core.models.ModeleBase)
+  qui fournit l'ID UUID, cree_le, modifie_le, cree_par, et le soft delete (supprime_le/supprime_par).
+- Pas de suppression physique en base : appel a .delete() effectue un soft-delete.
+- Documentation automatique : Chaque vue doit etre documentee avec @extend_schema (drf-spectacular).
+
+
+==============================================================================
+2. CARTOGRAPHIE DES DOSSIERS ET FICHIERS RENCONTRES
+==============================================================================
+
+Lorsque vous travaillez sur une application (ex: `apps/chantier/`), vous rencontrez
+l'arborescence suivante :
+
+apps/chantier/
+|-- models/
+|   |-- __init__.py           <- Expose les modeles (__all__)
+|   `-- incident.py           <- Definition du modele Django (colonnes, contraintes, relations)
+|-- migrations/
+|   `-- 00xx_incident.py      <- Migrations generees automatiquement par Django
+|-- selectors/
+|   |-- __init__.py           <- Expose les selecteurs
+|   `-- incident.py           <- Fonctions de lecture pure (QuerySets optimises)
+|-- services/
+|   |-- __init__.py           <- Expose les services
+|   `-- incident.py           <- Fonctions d'ecriture, regles metier, transactions atomiques
+|-- serializers/
+|   |-- __init__.py           <- Expose les serialiseurs
+|   `-- incident.py           <- Validation entrante & formatage JSON sortant
+|-- views/
+|   |-- __init__.py           <- Expose les vues
+|   `-- incident.py           <- Classes APIView / GenericAPIView reliant le tout
+|-- permissions.py            <- Classes de permission specifiques (BasePermission)
+|-- filters.py                <- Filtres de recherche django-filter
+|-- urls.py                   <- Enregistrement des endpoints de l'application
+|-- admin.py                  <- Configuration de l'interface Django Admin
+`-- tests/
+    |-- __init__.py
+    `-- test_incidents.py     <- Tests pytest pour valider l'API et le metier
+
+Fichier global a rencontrer :
+- `config/urls_tenant.py`      <- Inclut les urls de l'app sous `/api/v1/`
+
+
+==============================================================================
+3. SCENARIO FIL CONDUCTEUR DE L'EXEMPLE
+==============================================================================
+
+Pour illustrer chaque etape, nous allons creer une API complete de gestion des :
+"Incidents de Chantier" (ex: probleme de securite, panne machine, intemperie, retard materiel).
+
+Fonctionnalites de l'API :
+1. Lister les incidents filtrables par projet, gravite, statut et date (GET /api/v1/incidents/)
+2. Declarer un incident avec validation metier (POST /api/v1/incidents/)
+3. Consulter le detail d'un incident (GET /api/v1/incidents/<id>/)
+4. Modifier / Resoudre un incident (PATCH /api/v1/incidents/<id>/)
+5. Supprimer un incident [soft-delete] (DELETE /api/v1/incidents/<id>/)
+
+
+==============================================================================
+4. ETAPE 1 : DEFINIR LE MODELE DE DONNEES
+==============================================================================
+
+Fichier a creer : `apps/chantier/models/incident.py`
+Fichier a modifier : `apps/chantier/models/__init__.py`
+
+Règles :
+- Heriter de `apps.core.models.ModeleBase`.
+- Utiliser `models.RESTRICT` pour les cles etrangeres vitales (eviter les suppressions en cascade).
+- Utiliser des TextChoices pour les enums (ex: Gravite, StatutIncident).
+
+--- Contenu de apps/chantier/models/incident.py ---
+```python
+import uuid
+from django.db import models
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+
+from apps.core.models import ModeleBase
+
+
+class GraviteIncident(models.TextChoices):
+    FAIBLE = "FAIBLE", _("Faible - Sans impact immediat")
+    MOYENNE = "MOYENNE", _("Moyenne - Ralentissement")
+    CRITIQUE = "CRITIQUE", _("Critique - Arret des travaux / Danger")
+
+
+class StatutIncident(models.TextChoices):
+    DECLARE = "DECLARE", _("Declare")
+    EN_TRAITEMENT = "EN_TRAITEMENT", _("En cours de traitement")
+    RESOLU = "RESOLU", _("Resolu")
+    CLOTURE = "CLOTURE", _("Cloture")
+
+
+class IncidentChantier(ModeleBase):
+    """Incident ou alea survenu sur un chantier."""
+
+    projet = models.ForeignKey(
+        "projets.Projet",
+        on_delete=models.RESTRICT,
+        related_name="incidents",
+        verbose_name=_("projet / chantier"),
+    )
+    lot = models.ForeignKey(
+        "projets.Lot",
+        on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
+        related_name="incidents",
+        verbose_name=_("lot concerne"),
+    )
+    titre = models.CharField(
+        _("titre de l'incident"),
+        max_length=200,
+    )
+    description = models.TextField(
+        _("description detaillee"),
+    )
+    gravite = models.CharField(
+        _("niveau de gravite"),
+        max_length=20,
+        choices=GraviteIncident.choices,
+        default=GraviteIncident.MOYENNE,
+        db_index=True,
+    )
+    statut = models.CharField(
+        _("statut"),
+        max_length=20,
+        choices=StatutIncident.choices,
+        default=StatutIncident.DECLARE,
+        db_index=True,
+    )
+    date_survenance = models.DateTimeField(
+        _("date et heure de l'incident"),
+        default=timezone.now,
+    )
+    declare_par = models.ForeignKey(
+        "accounts.Utilisateur",
+        on_delete=models.RESTRICT,
+        related_name="incidents_declares",
+        verbose_name=_("declare par"),
+    )
+    resolu_le = models.DateTimeField(
+        _("resolu le"),
+        null=True,
+        blank=True,
+    )
+    action_corrective = models.TextField(
+        _("action corrective appliquee"),
+        blank=True,
+        default="",
+    )
+
+    class Meta:
+        verbose_name = _("incident de chantier")
+        verbose_name_plural = _("incidents de chantier")
+        ordering = ["-date_survenance", "-cree_le"]
+        indexes = [
+            models.Index(fields=["projet", "statut"]),
+            models.Index(fields=["gravite", "date_survenance"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.gravite}] {self.titre} ({self.projet.nom})"
+```
+
+N'oubliez pas d'exposer ce modele dans `apps/chantier/models/__init__.py` :
+```python
+from apps.chantier.models.incident import IncidentChantier, GraviteIncident, StatutIncident
+
+__all__ = [
+    ...,
+    "IncidentChantier",
+    "GraviteIncident",
+    "StatutIncident",
+]
+```
+
+
+==============================================================================
+5. ETAPE 2 : GENERER ET APPLIQUER LA MIGRATION
+==============================================================================
+
+Dans le terminal PowerShell / Bash a la racine du backend :
+
+1. Creer le fichier de migration :
+   python manage.py makemigrations chantier
+
+2. Appliquer la migration :
+   - En environnement standard :
+     python manage.py migrate
+   - En architecture multi-tenant schema :
+     python manage.py migrate_schemas --tenant
+
+
+==============================================================================
+6. ETAPE 3 : CREER LES SELECTEURS DE DONNEES (selectors/ - Lecture Seule)
+==============================================================================
+
+Le dossier `selectors/` heberge les requetes de lecture complexes.
+Il ne modifie JAMAIS la base de donnees.
+Il optimise les jointures pour eviter le probleme du N+1 queries.
+
+Fichier a creer : `apps/chantier/selectors/incident.py`
+
+--- Contenu de apps/chantier/selectors/incident.py ---
+```python
+from uuid import UUID
+from django.db.models import QuerySet
+from apps.chantier.models.incident import IncidentChantier
+
+
+def incidents_liste(
+    *,
+    projet_id: UUID | str | None = None,
+    statut: str | None = None,
+    gravite: str | None = None,
+    date_debut=None,
+    date_fin=None,
+) -> QuerySet[IncidentChantier]:
+    """Retourne la liste des incidents avec relations prechargees."""
+    qs = IncidentChantier.objects.select_related(
+        "projet",
+        "lot",
+        "declare_par",
+    ).all()
+
+    if projet_id:
+        qs = qs.filter(projet_id=projet_id)
+    if statut:
+        qs = qs.filter(statut=statut)
+    if gravite:
+        qs = qs.filter(gravite=gravite)
+    if date_debut:
+        qs = qs.filter(date_survenance__gte=date_debut)
+    if date_fin:
+        qs = qs.filter(date_survenance__lte=date_fin)
+
+    return qs.order_by("-date_survenance")
+
+
+def incident_par_id(incident_id: UUID | str) -> IncidentChantier | None:
+    """Retourne un incident par son identifiant unique UUID ou None."""
+    try:
+        return (
+            IncidentChantier.objects.select_related(
+                "projet",
+                "lot",
+                "declare_par",
+            ).get(id=incident_id)
+        )
+    except (IncidentChantier.DoesNotExist, ValueError):
+        return None
+```
+
+
+==============================================================================
+7. ETAPE 4 : CREER LES SERVICES METIER (services/ - Ecriture / Transactions)
+==============================================================================
+
+Le dossier `services/` contient TOUTE la logique d'ecriture et les regles metier.
+Toute ecriture multi-tables ou critique est encapsulee dans `@transaction.atomic`.
+
+Fichier a creer : `apps/chantier/services/incident.py`
+
+--- Contenu de apps/chantier/services/incident.py ---
+```python
+from datetime import datetime
+from uuid import UUID
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils import timezone
+
+from apps.accounts.models import Utilisateur
+from apps.chantier.models.incident import IncidentChantier, GraviteIncident, StatutIncident
+from apps.projets.models import Lot, Projet
+
+
+@transaction.atomic
+def creer_incident(
+    *,
+    projet: Projet,
+    titre: str,
+    description: str,
+    declare_par: Utilisateur,
+    gravite: str = GraviteIncident.MOYENNE,
+    lot: Lot | None = None,
+    date_survenance: datetime | None = None,
+) -> IncidentChantier:
+    """Cree un nouvel incident de chantier en verifiant les regles metier."""
+    # Regle : Si un lot est precise, il doit obligatoirement appartenir au projet
+    if lot is not None and lot.projet_id != projet.id:
+        raise ValidationError(
+            {"lot": "Le lot selectionne n'appartient pas au projet indique."}
+        )
+
+    incident = IncidentChantier(
+        projet=projet,
+        lot=lot,
+        titre=titre.strip(),
+        description=description.strip(),
+        gravite=gravite,
+        statut=StatutIncident.DECLARE,
+        date_survenance=date_survenance or timezone.now(),
+        declare_par=declare_par,
+        cree_par=declare_par,
+    )
+    incident.full_clean()
+    incident.save()
+    return incident
+
+
+@transaction.atomic
+def resoudre_incident(
+    *,
+    incident: IncidentChantier,
+    action_corrective: str,
+    utilisateur: Utilisateur,
+) -> IncidentChantier:
+    """Marque un incident comme resolu avec saisie de l'action corrective."""
+    if not action_corrective.strip():
+        raise ValidationError(
+            {"action_corrective": "Une action corrective est obligatoire pour resoudre l'incident."}
+        )
+
+    incident.statut = StatutIncident.RESOLU
+    incident.action_corrective = action_corrective.strip()
+    incident.resolu_le = timezone.now()
+    incident.save(update_fields=["statut", "action_corrective", "resolu_le", "modifie_le"])
+    return incident
+
+
+@transaction.atomic
+def supprimer_incident(
+    *,
+    incident: IncidentChantier,
+    utilisateur: Utilisateur,
+) -> None:
+    """Suppression logique (soft delete) de l'incident."""
+    incident.delete(utilisateur=utilisateur)
+```
+
+
+==============================================================================
+8. ETAPE 5 : CONFIGURER LES PERMISSIONS (permissions.py)
+==============================================================================
+
+Controle d'acces a 2 niveaux (Socle Commun §2.3) :
+- Niveau 1 : RoleGlobal (ce que l'utilisateur peut faire, ex: Conducteur de travaux, Chef de chantier)
+- Niveau 2 : MembreDuProjet (l'utilisateur doit etre assigne au chantier concerne)
+
+Fichier : `apps/chantier/permissions.py` (ajouter ou completer)
+
+--- Extrait a ajouter dans apps/chantier/permissions.py ---
+```python
+from rest_framework import permissions
+from apps.core.enums import RoleGlobal
+from apps.core.permissions import RoleRequis, MembreDuProjet
+
+
+class PeutConsulterIncidents(permissions.BasePermission):
+    """Lecture ouverte aux intervenants autorises du projet."""
+    def has_object_permission(self, request, view, obj) -> bool:
+        # Verifie que l'utilisateur appartient au projet de l'incident
+        return MembreDuProjet().has_object_permission(request, view, obj.projet)
+
+
+class PeutGererIncidents(permissions.BasePermission):
+    """Creation / modification reservee a l'encadrement technique du chantier."""
+    ROLES_GESTION = (
+        RoleGlobal.DIRECTEUR_PROJET,
+        RoleGlobal.CHEF_PROJET,
+        RoleGlobal.CONDUCTEUR_TRAVAUX,
+        RoleGlobal.CHEF_CHANTIER,
+        RoleGlobal.ADMIN,
+    )
+
+    def has_permission(self, request, view) -> bool:
+        return RoleRequis.pour(*self.ROLES_GESTION)().has_permission(request, view)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        return MembreDuProjet().has_object_permission(request, view, obj.projet)
+```
+
+
+==============================================================================
+9. ETAPE 6 : DEFINIR LES FILTRES DE RECHERCHE (filters.py)
+==============================================================================
+
+Fichier : `apps/chantier/filters.py`
+
+--- Extrait a ajouter dans apps/chantier/filters.py ---
+```python
+import django_filters
+from apps.chantier.models.incident import IncidentChantier, GraviteIncident, StatutIncident
+
+
+class IncidentChantierFilter(django_filters.FilterSet):
+    """Filtres pour l'API des incidents de chantier."""
+    projet = django_filters.UUIDFilter(field_name="projet_id")
+    lot = django_filters.UUIDFilter(field_name="lot_id")
+    gravite = django_filters.ChoiceFilter(choices=GraviteIncident.choices)
+    statut = django_filters.ChoiceFilter(choices=StatutIncident.choices)
+    date_debut = django_filters.DateTimeFilter(field_name="date_survenance", lookup_expr="gte")
+    date_fin = django_filters.DateTimeFilter(field_name="date_survenance", lookup_expr="lte")
+
+    class Meta:
+        model = IncidentChantier
+        fields = ["projet", "lot", "gravite", "statut", "date_debut", "date_fin"]
+```
+
+
+==============================================================================
+10. ETAPE 7 : CREER LES SERIALISEURS (serializers/ - Validation & DTO)
+==============================================================================
+
+On cree des serialiseurs distincts pour chaque usage :
+1. `IncidentListSerializer` : affichage compact en tableau.
+2. `IncidentDetailSerializer` : affichage complet d'une fiche incident.
+3. `IncidentCreateSerializer` : validation des donnees envoyees lors de la creation.
+4. `IncidentResoudreSerializer` : validation des donnees pour l'action de resolution.
+
+Fichier a creer : `apps/chantier/serializers/incident.py`
+
+--- Contenu de apps/chantier/serializers/incident.py ---
+```python
+from rest_framework import serializers
+from apps.chantier.models.incident import IncidentChantier, GraviteIncident, StatutIncident
+from apps.chantier.serializers.rapport_journalier import (
+    AuteurSimpleSerializer,
+    LotSimpleSerializer,
+    ProjetSimpleSerializer,
+)
+from apps.projets.models import Lot, Projet
+
+
+class IncidentListSerializer(serializers.ModelSerializer):
+    """Serialiseur pour la liste paginee des incidents."""
+    projet = ProjetSimpleSerializer(read_only=True)
+    lot = LotSimpleSerializer(read_only=True)
+    declare_par = AuteurSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = IncidentChantier
+        fields = [
+            "id",
+            "titre",
+            "gravite",
+            "statut",
+            "date_survenance",
+            "projet",
+            "lot",
+            "declare_par",
+            "resolu_le",
+        ]
+
+
+class IncidentDetailSerializer(serializers.ModelSerializer):
+    """Serialiseur complet pour la consultation detaillee d'un incident."""
+    projet = ProjetSimpleSerializer(read_only=True)
+    lot = LotSimpleSerializer(read_only=True)
+    declare_par = AuteurSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = IncidentChantier
+        fields = [
+            "id",
+            "titre",
+            "description",
+            "gravite",
+            "statut",
+            "date_survenance",
+            "projet",
+            "lot",
+            "declare_par",
+            "action_corrective",
+            "resolu_le",
+            "cree_le",
+            "modifie_le",
+        ]
+
+
+class IncidentCreateSerializer(serializers.Serializer):
+    """Validation de la requete de creation d'incident."""
+    projet_id = serializers.PrimaryKeyRelatedField(
+        queryset=Projet.objects.all(),
+        source="projet",
+    )
+    lot_id = serializers.PrimaryKeyRelatedField(
+        queryset=Lot.objects.all(),
+        source="lot",
+        required=False,
+        allow_null=True,
+    )
+    titre = serializers.CharField(max_length=200)
+    description = serializers.CharField()
+    gravite = serializers.ChoiceFilter(choices=GraviteIncident.choices, default=GraviteIncident.MOYENNE)
+    date_survenance = serializers.DateTimeField(required=False)
+
+    def validate(self, attrs):
+        projet = attrs.get("projet")
+        lot = attrs.get("lot")
+        if lot and lot.projet_id != projet.id:
+            raise serializers.ValidationError({"lot_id": "Ce lot n'appartient pas au projet indique."})
+        return attrs
+
+
+class IncidentResoudreSerializer(serializers.Serializer):
+    """Validation de la saisie d'action corrective."""
+    action_corrective = serializers.CharField(min_length=5)
+```
+
+
+==============================================================================
+11. ETAPE 8 : CODER LES VUES API (views/ - Endpoints REST & Swagger)
+==============================================================================
+
+On cree deux vues APIView :
+- `IncidentListCreateView` : GET (liste paginee) & POST (declaration)
+- `IncidentDetailView`     : GET (detail), PATCH (resolution) & DELETE (suppression)
+
+Fichier a creer : `apps/chantier/views/incident.py`
+
+--- Contenu de apps/chantier/views/incident.py ---
+```python
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.parsers import JSONParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.chantier.filters import IncidentChantierFilter
+from apps.chantier.models.incident import IncidentChantier
+from apps.chantier.permissions import PeutConsulterIncidents, PeutGererIncidents
+from apps.chantier.selectors.incident import incident_par_id, incidents_liste
+from apps.chantier.serializers.incident import (
+    IncidentCreateSerializer,
+    IncidentDetailSerializer,
+    IncidentListSerializer,
+    IncidentResoudreSerializer,
+)
+from apps.chantier.services.incident import (
+    creer_incident,
+    resoudre_incident,
+    supprimer_incident,
+)
+from apps.core.pagination import PaginationStandard
+
+
+class IncidentListCreateView(APIView):
+    """Endpoints :
+    - GET  /api/v1/incidents/ (Lister les incidents de chantier)
+    - POST /api/v1/incidents/ (Declarer un nouvel incident)
+    """
+    parser_classes = [JSONParser]
+    pagination_class = PaginationStandard
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), PeutGererIncidents()]
+        return [IsAuthenticated(), PeutConsulterIncidents()]
+
+    @extend_schema(
+        summary="Lister les incidents de chantier",
+        description="Renvoie la liste paginee et filtrable des incidents de chantier.",
+        responses={200: IncidentListSerializer(many=True)},
+    )
+    def get(self, request):
+        qs = incidents_liste()
+        filtre = IncidentChantierFilter(request.GET, queryset=qs)
+        
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(filtre.qs, request)
+        serializer = IncidentListSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        summary="Declarer un incident de chantier",
+        request=IncidentCreateSerializer,
+        responses={201: IncidentDetailSerializer},
+    )
+    def post(self, request):
+        serializer = IncidentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        incident = creer_incident(
+            projet=serializer.validated_data["projet"],
+            lot=serializer.validated_data.get("lot"),
+            titre=serializer.validated_data["titre"],
+            description=serializer.validated_data["description"],
+            gravite=serializer.validated_data.get("gravite"),
+            date_survenance=serializer.validated_data.get("date_survenance"),
+            declare_par=request.user,
+        )
+
+        return Response(
+            IncidentDetailSerializer(incident).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class IncidentDetailView(APIView):
+    """Endpoints :
+    - GET    /api/v1/incidents/<id>/ (Consulter un incident)
+    - PATCH  /api/v1/incidents/<id>/ (Resoudre un incident)
+    - DELETE /api/v1/incidents/<id>/ (Supprimer un incident)
+    """
+    parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in ("PATCH", "DELETE"):
+            return [IsAuthenticated(), PeutGererIncidents()]
+        return [IsAuthenticated(), PeutConsulterIncidents()]
+
+    @extend_schema(
+        summary="Consulter le detail d'un incident",
+        responses={200: IncidentDetailSerializer},
+    )
+    def get(self, request, pk):
+        incident = incident_par_id(pk)
+        if incident is None:
+            return Response({"detail": "Incident introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, incident)
+        return Response(IncidentDetailSerializer(incident).data)
+
+    @extend_schema(
+        summary="Resoudre un incident de chantier",
+        request=IncidentResoudreSerializer,
+        responses={200: IncidentDetailSerializer},
+    )
+    def patch(self, request, pk):
+        incident = incident_par_id(pk)
+        if incident is None:
+            return Response({"detail": "Incident introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, incident)
+
+        serializer = IncidentResoudreSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        incident_resolu = resoudre_incident(
+            incident=incident,
+            action_corrective=serializer.validated_data["action_corrective"],
+            utilisateur=request.user,
+        )
+        return Response(IncidentDetailSerializer(incident_resolu).data)
+
+    @extend_schema(
+        summary="Supprimer logiquement un incident",
+        responses={204: None},
+    )
+    def delete(self, request, pk):
+        incident = incident_par_id(pk)
+        if incident is None:
+            return Response({"detail": "Incident introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, incident)
+
+        supprimer_incident(incident=incident, utilisateur=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+```
+
+N'oubliez pas d'exposer ces vues dans `apps/chantier/views/__init__.py` :
+```python
+from apps.chantier.views.incident import IncidentDetailView, IncidentListCreateView
+
+__all__ = [
+    ...,
+    "IncidentDetailView",
+    "IncidentListCreateView",
+]
+```
+
+
+==============================================================================
+12. ETAPE 9 : DECLARER LES ROUTES D'URL (urls.py)
+==============================================================================
+
+1. Dans l'application locale : `apps/chantier/urls.py` :
+
+```python
+from django.urls import path
+from apps.chantier.views import IncidentDetailView, IncidentListCreateView
+
+app_name = "chantier"
+
+urlpatterns = [
+    ...,
+    path("incidents/", IncidentListCreateView.as_view(), name="incident-liste-creer"),
+    path("incidents/<uuid:pk>/", IncidentDetailView.as_view(), name="incident-detail"),
+]
+```
+
+2. Dans le routeur central : `config/urls_tenant.py` :
+L'application `apps.chantier.urls` y est deja incluse :
+```python
+urlpatterns = [
+    ...,
+    path("api/v1/", include("apps.chantier.urls")),
+    ...,
+]
+```
+Vos URLs seront donc automatiquement accessibles sous :
+- `GET/POST /api/v1/incidents/`
+- `GET/PATCH/DELETE /api/v1/incidents/<uuid>/`
+Et documentees automatiquement sur `http://localhost:8000/api/v1/docs/` (Swagger).
+
+
+==============================================================================
+13. ETAPE 10 : ENREGISTRER DANS DJANGO ADMIN (admin.py)
+==============================================================================
+
+Pour administrer la ressource en interface d'administration interne :
+Fichier : `apps/chantier/admin.py`
+
+```python
+from django.contrib import admin
+from apps.chantier.models.incident import IncidentChantier
+
+
+@admin.register(IncidentChantier)
+class IncidentChantierAdmin(admin.ModelAdmin):
+    list_display = ("titre", "projet", "gravite", "statut", "date_survenance", "declare_par", "resolu_le")
+    list_filter = ("gravite", "statut", "date_survenance")
+    search_fields = ("titre", "description", "projet__nom")
+    readonly_fields = ("id", "cree_le", "modifie_le", "cree_par", "supprime_le", "supprime_par")
+```
+
+
+==============================================================================
+14. ETAPE 11 : REDIGER LES TESTS AUTOMATISES (tests/)
+==============================================================================
+
+Les tests valident la robustesse et la securite de l'API.
+Fichier : `apps/chantier/tests/test_api_incidents.py`
+
+```python
+import pytest
+from rest_framework import status
+from apps.chantier.models.incident import IncidentChantier, GraviteIncident, StatutIncident
+
+
+@pytest.mark.django_db
+class TestIncidentAPI:
+    def test_creer_incident_succes(self, client_authentifie, projet_test, conducteur_travaux):
+        client_authentifie.force_authenticate(user=conducteur_travaux)
+        url = "/api/v1/incidents/"
+        payload = {
+            "projet_id": str(projet_test.id),
+            "titre": "Panne de la Grue Principale",
+            "description": "Coupure de courant sur le moteur de levage.",
+            "gravite": GraviteIncident.CRITIQUE,
+        }
+
+        response = client_authentifie.post(url, payload, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["titre"] == "Panne de la Grue Principale"
+        assert response.data["statut"] == StatutIncident.DECLARE
+        assert IncidentChantier.objects.filter(id=response.data["id"]).exists()
+
+    def test_acces_refuse_si_non_membre_projet(self, client_authentifie, projet_autre_entreprise, conducteur_travaux):
+        client_authentifie.force_authenticate(user=conducteur_travaux)
+        url = "/api/v1/incidents/"
+        payload = {
+            "projet_id": str(projet_autre_entreprise.id),
+            "titre": "Tentative acces",
+            "description": "Test de securite multi-tenant.",
+        }
+
+        response = client_authentifie.post(url, payload, format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+```
+
+Lancer les tests avec :
+`pytest apps/chantier/tests/test_api_incidents.py`
+
+
+==============================================================================
+15. CHECKLIST DE CONFORMITE (DEFINITION OF DONE)
+==============================================================================
+
+Avant de soumettre votre travail ou ouvrir une Pull Request :
+
+[ ] 1. Le modele herite bien de `ModeleBase` (UUID, soft delete, audit horodate).
+[ ] 2. La migration a ete generee (`makemigrations`) et appliquee sans erreur.
+[ ] 3. Les requetes de lecture sont dans `selectors/` avec `select_related`/`prefetch_related`.
+[ ] 4. Les modifications en base sont dans `services/` sous `@transaction.atomic`.
+[ ] 5. Aucune suppression physique n'est effectuee (utiliser le soft-delete `delete(utilisateur=...)`).
+[ ] 6. Les permissions a double niveau (RoleGlobal + MembreDuProjet) sont appliquees sur la vue.
+[ ] 7. La documentation OpenAPI (@extend_schema) est presente sur chaque methode HTTP.
+[ ] 8. Les URLs sont branchees sous `/api/v1/...` dans le schema tenant.
+[ ] 9. Le format de code respecte Ruff / PEP8 (lancer `ruff check .` et `ruff format .`).
+[ ] 10. Les tests pytest passent tous au vert (`pytest`).
+
+==============================================================================
+FIN DU GUIDE
+==============================================================================

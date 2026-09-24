@@ -10,15 +10,10 @@ Règles de gestion :
 from __future__ import annotations
 
 import logging
-import uuid
-from datetime import timedelta
 
-from django.conf import settings
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import get_public_schema_name, schema_context
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Utilisateur
 from apps.accounts.services.authentification import (
@@ -57,36 +52,31 @@ def authentifier_super_admin(
     echec: ErreurMetier | None = None
     super_admin: Utilisateur | None = None
 
-    with schema_context(public_schema):
-        with transaction.atomic():
-            candidat = (
-                Utilisateur.objects.select_for_update()
-                .filter(email__iexact=email_nettoye)
-                .first()
+    with schema_context(public_schema), transaction.atomic():
+        candidat = (
+            Utilisateur.objects.select_for_update().filter(email__iexact=email_nettoye).first()
+        )
+
+        if candidat is None:
+            # Égalité temporelle : hachage défensif contre l'énumération
+            Utilisateur().set_password(mot_de_passe)
+            echec = IdentifiantsInvalides()
+        else:
+            mot_de_passe_valide = candidat.check_password(mot_de_passe)
+            est_valide = (
+                mot_de_passe_valide
+                and candidat.is_superuser
+                and candidat.is_active
+                and not candidat.est_bloque
             )
 
-            if candidat is None:
-                # Égalité temporelle : hachage défensif contre l'énumération
-                Utilisateur().set_password(mot_de_passe)
+            if not est_valide:
+                candidat.enregistrer_echec_connexion()
                 echec = IdentifiantsInvalides()
             else:
-                mot_de_passe_valide = candidat.check_password(mot_de_passe)
-                est_valide = (
-                    mot_de_passe_valide
-                    and candidat.is_superuser
-                    and candidat.is_active
-                    and not candidat.est_bloque
-                )
-
-                if not est_valide:
-                    candidat.enregistrer_echec_connexion()
-                    echec = IdentifiantsInvalides()
-                else:
-                    candidat.reinitialiser_echecs()
-                    Utilisateur.objects.filter(pk=candidat.pk).update(
-                        last_login=timezone.now()
-                    )
-                    super_admin = candidat
+                candidat.reinitialiser_echecs()
+                Utilisateur.objects.filter(pk=candidat.pk).update(last_login=timezone.now())
+                super_admin = candidat
 
     # En cas d'échec d'authentification
     if echec is not None or super_admin is None:
@@ -103,7 +93,9 @@ def authentifier_super_admin(
                     appareil=appareil[:255] if appareil else "",
                 )
         except Exception:
-            logger.exception("Échec de journalisation d'audit pour tentative de connexion Super Admin.")
+            logger.exception(
+                "Échec de journalisation d'audit pour tentative de connexion Super Admin."
+            )
         raise echec or IdentifiantsInvalides()
 
     # Émission des jetons JWT standard SimpleJWT
@@ -140,7 +132,9 @@ def authentifier_super_admin(
                 appareil=appareil[:255] if appareil else "",
             )
     except Exception:
-        logger.exception("Échec d'enregistrement de la connexion Super Admin dans JournalPlateforme.")
+        logger.exception(
+            "Échec d'enregistrement de la connexion Super Admin dans JournalPlateforme."
+        )
 
     return {
         "access": jetons["access"],
@@ -180,6 +174,7 @@ def deconnecter_super_admin(
         elif refresh_token:
             try:
                 import jwt
+
                 payload = jwt.decode(refresh_token, options={"verify_signature": False})
                 token_uid = payload.get("user_id")
                 if token_uid:
@@ -203,7 +198,9 @@ def deconnecter_super_admin(
                 appareil=appareil[:255] if appareil else "",
             )
     except Exception:
-        logger.exception("Échec d'enregistrement de la déconnexion Super Admin dans JournalPlateforme.")
+        logger.exception(
+            "Échec d'enregistrement de la déconnexion Super Admin dans JournalPlateforme."
+        )
 
 
 def renouveler_super_admin(refresh_token: str) -> dict[str, str]:

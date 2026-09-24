@@ -80,6 +80,21 @@ urlpatterns = [
     ),
     # Tableau de bord d'administration & Indicateurs
     path(
+        "admins/indicateurs/",
+        IndicateursPlateformeView.as_view(),
+        name="admins-indicateurs-plateforme",
+    ),
+    path(
+        "admins/indicateurs/tendances/",
+        TendancesIndicateursView.as_view(),
+        name="admins-indicateurs-tendances",
+    ),
+    path(
+        "admins/indicateurs/evolution/",
+        EvolutionAbonnementsView.as_view(),
+        name="admins-indicateurs-evolution",
+    ),
+    path(
         "indicateurs/",
         IndicateursPlateformeView.as_view(),
         name="indicateurs-plateforme",
@@ -95,6 +110,32 @@ urlpatterns = [
         name="indicateurs-evolution",
     ),
     # Gestion Clients & Actions Super Admin
+    path(
+        "admins/clients/",
+        ClientsPlateformeListView.as_view(),
+        name="admins-clients-plateforme-liste",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/",
+        FicheClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-fiche",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/suspendre/",
+        SuspendreClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-suspendre",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/reactiver/",
+        ReactiverClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-reactiver",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/abonnement/",
+        ChangerPlanClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-abonnement",
+    ),
+    # Alias de compatibilité
     path(
         "clients/",
         ClientsPlateformeListView.as_view(),

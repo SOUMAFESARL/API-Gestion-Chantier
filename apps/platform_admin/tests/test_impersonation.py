@@ -149,9 +149,7 @@ def test_demande_assistance_motif_obligatoire_min_5_caracteres(
 
 
 @pytest.mark.django_db
-def test_demande_assistance_refusee_si_non_super_admin(
-    client_api, client_dg_user, entreprise_demo
-):
+def test_demande_assistance_refusee_si_non_super_admin(client_api, client_dg_user, entreprise_demo):
     """Seul un Super Admin du schéma public peut démarrer une session d'assistance."""
     client_api.force_authenticate(user=client_dg_user)
     url = f"/api/v1/admins/entreprises/{entreprise_demo.id}/assistance/"

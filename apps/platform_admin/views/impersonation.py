@@ -1,6 +1,7 @@
 """Vues pour l'assistance Super Admin et la consultation du journal plateforme."""
 
 import logging
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status

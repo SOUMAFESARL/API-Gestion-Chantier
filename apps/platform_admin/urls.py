@@ -1,13 +1,24 @@
 from django.urls import path
 
 from apps.platform_admin.views import (
+    ChangerPlanClientPlateformeView,
+    ClientsPlateformeListView,
     ConnexionAdminView,
     DeconnexionAdminView,
     DeconnexionAssistanceView,
+    DemandeReinitialisationAdminView,
     DemarrerAssistanceView,
+    EvolutionAbonnementsView,
+    FicheClientPlateformeView,
+    IndicateursPlateformeView,
     JournalPlateformeListView,
     ListerUtilisateursEntrepriseView,
+    ReactiverClientPlateformeView,
+    ReinitialisationAdminView,
     RenouvellementAdminView,
+    SuspendreClientPlateformeView,
+    TendancesIndicateursView,
+    VerificationJetonAdminView,
 )
 
 app_name = "platform_admin"
@@ -28,6 +39,22 @@ urlpatterns = [
         "admins/token/refresh/",
         RenouvellementAdminView.as_view(),
         name="admins-token-refresh",
+    ),
+    # Réinitialisation Mot de passe Super Admin
+    path(
+        "admins/mot-de-passe/demande/",
+        DemandeReinitialisationAdminView.as_view(),
+        name="admins-mot-de-passe-demande",
+    ),
+    path(
+        "admins/mot-de-passe/verifier/",
+        VerificationJetonAdminView.as_view(),
+        name="admins-mot-de-passe-verifier",
+    ),
+    path(
+        "admins/mot-de-passe/reinitialiser/",
+        ReinitialisationAdminView.as_view(),
+        name="admins-mot-de-passe-reinitialiser",
     ),
     # Assistance Super Admin & Impersonation (R-128)
     path(
@@ -50,5 +77,47 @@ urlpatterns = [
         "admins/journal-plateforme/",
         JournalPlateformeListView.as_view(),
         name="journal-plateforme-liste",
+    ),
+    # Tableau de bord d'administration & Indicateurs
+    path(
+        "indicateurs/",
+        IndicateursPlateformeView.as_view(),
+        name="indicateurs-plateforme",
+    ),
+    path(
+        "indicateurs/tendances/",
+        TendancesIndicateursView.as_view(),
+        name="indicateurs-tendances",
+    ),
+    path(
+        "indicateurs/evolution/",
+        EvolutionAbonnementsView.as_view(),
+        name="indicateurs-evolution",
+    ),
+    # Gestion Clients & Actions Super Admin
+    path(
+        "clients/",
+        ClientsPlateformeListView.as_view(),
+        name="clients-plateforme-liste",
+    ),
+    path(
+        "clients/<uuid:client_id>/",
+        FicheClientPlateformeView.as_view(),
+        name="clients-plateforme-fiche",
+    ),
+    path(
+        "clients/<uuid:client_id>/suspendre/",
+        SuspendreClientPlateformeView.as_view(),
+        name="clients-plateforme-suspendre",
+    ),
+    path(
+        "clients/<uuid:client_id>/reactiver/",
+        ReactiverClientPlateformeView.as_view(),
+        name="clients-plateforme-reactiver",
+    ),
+    path(
+        "clients/<uuid:client_id>/abonnement/",
+        ChangerPlanClientPlateformeView.as_view(),
+        name="clients-plateforme-abonnement",
     ),
 ]

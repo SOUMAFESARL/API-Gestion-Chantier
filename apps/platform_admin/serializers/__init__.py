@@ -1,9 +1,21 @@
 from .auth import (
     ConnexionAdminSerializer,
+    ContenuJetonAdminSerializer,
     DeconnexionAdminResponseSerializer,
     DeconnexionAdminSerializer,
+    DemandeReinitialisationAdminSerializer,
     ProfilAdminSerializer,
+    ReinitialisationAdminSerializer,
     ReponseConnexionAdminSerializer,
+    ReponseDemandeReinitialisationAdminSerializer,
+    ReponseReinitialisationAdminSerializer,
+    VerificationJetonAdminSerializer,
+)
+from .clients import (
+    AbonnementClientSerializer,
+    ChangerPlanClientRequestSerializer,
+    ClientPlateformeSerializer,
+    SuspendreClientRequestSerializer,
 )
 from .impersonation import (
     DeconnexionAssistanceRequestSerializer,
@@ -17,17 +29,27 @@ from .impersonation import (
 )
 
 __all__ = [
+    "AbonnementClientSerializer",
+    "ChangerPlanClientRequestSerializer",
+    "ClientPlateformeSerializer",
     "ConnexionAdminSerializer",
+    "ContenuJetonAdminSerializer",
     "DeconnexionAdminResponseSerializer",
     "DeconnexionAdminSerializer",
     "DeconnexionAssistanceRequestSerializer",
     "DeconnexionAssistanceResponseSerializer",
     "DemandeAssistanceSerializer",
+    "DemandeReinitialisationAdminSerializer",
     "ErreurPlateformeResponseSerializer",
     "JournalPlateformeSerializer",
     "ProfilAdminSerializer",
+    "ReinitialisationAdminSerializer",
     "ReponseAssistanceSerializer",
     "ReponseConnexionAdminSerializer",
+    "ReponseDemandeReinitialisationAdminSerializer",
+    "ReponseReinitialisationAdminSerializer",
+    "SuspendreClientRequestSerializer",
     "UtilisateurCibleSerializer",
+    "VerificationJetonAdminSerializer",
     "VerifierAccesSuperAdminResponseSerializer",
 ]

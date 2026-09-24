@@ -9,13 +9,12 @@ Règles de sécurité appliquées :
 - Garde-fou d'écriture : Interception et rejet de toute mutation en mode assistance.
 """
 
-from datetime import timedelta
 import logging
 import uuid
+from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied
-from django.db import connection, transaction
-from django.utils import timezone
+from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import get_public_schema_name, schema_context
 from rest_framework_simplejwt.tokens import AccessToken
@@ -53,16 +52,17 @@ def verifier_super_admin(utilisateur: Utilisateur) -> None:
     public_schema = get_public_schema_name()
 
     est_super_admin = (
-        (schema_courant == public_schema or getattr(utilisateur, "is_staff", False))
-        and (
-            utilisateur.role_global == RoleGlobal.ADMIN
-            or getattr(utilisateur, "is_superuser", False)
-            or getattr(utilisateur, "is_staff", False)
-        )
+        schema_courant == public_schema or getattr(utilisateur, "is_staff", False)
+    ) and (
+        utilisateur.role_global == RoleGlobal.ADMIN
+        or getattr(utilisateur, "is_superuser", False)
+        or getattr(utilisateur, "is_staff", False)
     )
 
     if not est_super_admin:
-        raise PermissionDenied(_("Seul un Super Administrateur peut démarrer une session d'assistance."))
+        raise PermissionDenied(
+            _("Seul un Super Administrateur peut démarrer une session d'assistance.")
+        )
 
 
 def lister_utilisateurs_entreprise(entreprise_id: uuid.UUID | str) -> list[dict]:

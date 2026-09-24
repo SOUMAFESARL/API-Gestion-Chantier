@@ -219,4 +219,3 @@ def test_renouvellement_jeton_super_admin(client_api, superuser_admin):
     assert rep_refresh.status_code == status.HTTP_200_OK
     assert "access" in rep_refresh.data
     assert "refresh" in rep_refresh.data
-

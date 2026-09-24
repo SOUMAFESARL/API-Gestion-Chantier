@@ -5,6 +5,12 @@ Utilisateurs, rôles, invitations, appareils.
 
 from .appareil import AppareilSerializer
 from .authentification import InscriptionSerializer
+from .collaborateur import (
+    CollaborateurCreateSerializer,
+    CollaborateurResponseSerializer,
+    ProjetAssocieCollaborateurSerializer,
+    RolePersonnaliseCollaborateurSerializer,
+)
 from .connexion import (
     ConnexionSerializer,
     DeconnexionSerializer,
@@ -38,6 +44,8 @@ from .utilisateur import UtilisateurSerializer
 __all__ = [
     "AccepterInvitationSerializer",
     "AppareilSerializer",
+    "CollaborateurCreateSerializer",
+    "CollaborateurResponseSerializer",
     "ConnexionSerializer",
     "ContenuInvitationSerializer",
     "ContenuJetonSerializer",
@@ -47,6 +55,7 @@ __all__ = [
     "InvitationSerializer",
     "JetonsSerializer",
     "ProfilConnexionSerializer",
+    "ProjetAssocieCollaborateurSerializer",
     "ReinitialisationSerializer",
     "RenouvellementSerializer",
     "ReponseAccepterInvitationSerializer",
@@ -54,6 +63,7 @@ __all__ = [
     "RoleDetailSerializer",
     "RoleModificationSerializer",
     "RoleModulePermissionSerializer",
+    "RolePersonnaliseCollaborateurSerializer",
     "RoleSerializer",
     "RoleSuppressionSerializer",
     "UtilisateurSerializer",

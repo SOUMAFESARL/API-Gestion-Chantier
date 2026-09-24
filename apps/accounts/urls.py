@@ -7,6 +7,7 @@ from apps.accounts.views import (
     InvitationAccepterView,
     InvitationListCreateView,
     InvitationVerifierView,
+    ParametresCollaborateurListCreateView,
     ParametresRoleDetailUpdateView,
     ParametresRoleListCreateView,
     ParametresRoleSupprimerReassignerView,
@@ -32,6 +33,12 @@ urlpatterns = [
     path("invitations/", InvitationListCreateView.as_view(), name="invitations-liste-creer"),
     path("invitations/verifier/", InvitationVerifierView.as_view(), name="invitation-verifier"),
     path("invitations/accepter/", InvitationAccepterView.as_view(), name="invitation-accepter"),
+    # Collaborateurs — Paramètres (/api/v1/parametres/collaborateurs/)
+    path(
+        "parametres/collaborateurs/",
+        ParametresCollaborateurListCreateView.as_view(),
+        name="parametres-collaborateurs-liste-creer",
+    ),
     # Rôles et habilitations par module — Paramètres (/api/v1/parametres/roles/)
     path("parametres/roles/", ParametresRoleListCreateView.as_view(), name="parametres-roles-liste-creer"),
     path("parametres/roles/<uuid:pk>/", ParametresRoleDetailUpdateView.as_view(), name="parametres-role-detail-modifier"),

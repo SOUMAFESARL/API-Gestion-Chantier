@@ -139,7 +139,7 @@ def test_lister_clients_succes(client_api, super_admin_user, entreprise_test):
     """Vérifie que le Super Admin peut lister les entreprises avec leur abonnement et métriques."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = "/api/v1/clients/"
+    url = "/api/v1/admins/clients/"
     reponse = client_api.get(url)
 
     assert reponse.status_code == status.HTTP_200_OK
@@ -166,13 +166,13 @@ def test_lister_clients_recherche_succes(client_api, super_admin_user, entrepris
     client_api.force_authenticate(user=super_admin_user)
 
     # Recherche fructueuse
-    reponse = client_api.get("/api/v1/clients/?recherche=Construction")
+    reponse = client_api.get("/api/v1/admins/clients/?recherche=Construction")
     assert reponse.status_code == status.HTTP_200_OK
     donnees = reponse.json()
     assert any(c["id"] == str(entreprise_test.id) for c in donnees)
 
     # Recherche infructueuse
-    reponse_vide = client_api.get("/api/v1/clients/?recherche=Introuvable999XYZ")
+    reponse_vide = client_api.get("/api/v1/admins/clients/?recherche=Introuvable999XYZ")
     assert reponse_vide.status_code == status.HTTP_200_OK
     donnees_vides = reponse_vide.json()
     assert len(donnees_vides) == 0
@@ -182,7 +182,7 @@ def test_lister_clients_recherche_succes(client_api, super_admin_user, entrepris
 def test_lister_clients_refus_si_non_super_admin(client_api, utilisateur_standard):
     """Vérifie qu'un utilisateur non-staff ne peut pas lister les clients de la plateforme."""
     client_api.force_authenticate(user=utilisateur_standard)
-    reponse = client_api.get("/api/v1/clients/")
+    reponse = client_api.get("/api/v1/admins/clients/")
     assert reponse.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -191,7 +191,7 @@ def test_fiche_client_succes(client_api, super_admin_user, entreprise_test):
     """Vérifie que la fiche détail retourne toutes les données requises par le frontend."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = f"/api/v1/clients/{entreprise_test.id}/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/"
     reponse = client_api.get(url)
 
     assert reponse.status_code == status.HTTP_200_OK
@@ -223,7 +223,7 @@ def test_fiche_client_introuvable_404(client_api, super_admin_user):
     client_api.force_authenticate(user=super_admin_user)
 
     fake_id = uuid.uuid4()
-    reponse = client_api.get(f"/api/v1/clients/{fake_id}/")
+    reponse = client_api.get(f"/api/v1/admins/clients/{fake_id}/")
 
     assert reponse.status_code == status.HTTP_404_NOT_FOUND
 
@@ -238,7 +238,7 @@ def test_suspendre_client_succes_et_audit(client_api, super_admin_user, entrepri
     """Vérifie la suspension complète du client avec motif et trace d'audit."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = f"/api/v1/clients/{entreprise_test.id}/suspendre/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/suspendre/"
     payload = {"motif": "Facture impayée depuis plus de 30 jours."}
 
     reponse = client_api.post(url, data=payload, format="json")
@@ -275,7 +275,7 @@ def test_suspendre_client_deja_suspendu_409(client_api, super_admin_user, entrep
         entreprise_test.save()
 
     client_api.force_authenticate(user=super_admin_user)
-    url = f"/api/v1/clients/{entreprise_test.id}/suspendre/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/suspendre/"
     reponse = client_api.post(url, data={"motif": "Nouveau motif"}, format="json")
 
     assert reponse.status_code == status.HTTP_409_CONFLICT
@@ -285,7 +285,7 @@ def test_suspendre_client_deja_suspendu_409(client_api, super_admin_user, entrep
 def test_suspendre_client_motif_obligatoire_400(client_api, super_admin_user, entreprise_test):
     """Vérifie que l'absence de motif est refusée avec 400 Bad Request."""
     client_api.force_authenticate(user=super_admin_user)
-    url = f"/api/v1/clients/{entreprise_test.id}/suspendre/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/suspendre/"
 
     # Payload vide
     reponse = client_api.post(url, data={}, format="json")
@@ -307,7 +307,7 @@ def test_reactiver_client_succes_et_audit(client_api, super_admin_user, entrepri
         abo.save()
 
     client_api.force_authenticate(user=super_admin_user)
-    url = f"/api/v1/clients/{entreprise_test.id}/reactiver/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/reactiver/"
     reponse = client_api.post(url, data={}, format="json")
 
     assert reponse.status_code == status.HTTP_200_OK
@@ -332,7 +332,7 @@ def test_reactiver_client_succes_et_audit(client_api, super_admin_user, entrepri
 def test_reactiver_client_non_suspendu_409(client_api, super_admin_user, entreprise_test):
     """Vérifie qu'un client déjà ACTIF ne peut pas être réactivé (409 Conflit)."""
     client_api.force_authenticate(user=super_admin_user)
-    url = f"/api/v1/clients/{entreprise_test.id}/reactiver/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/reactiver/"
     reponse = client_api.post(url, data={}, format="json")
 
     assert reponse.status_code == status.HTTP_409_CONFLICT
@@ -343,7 +343,7 @@ def test_changer_plan_client_succes_et_audit(client_api, super_admin_user, entre
     """Vérifie le changement de plan d'un client avec mise à jour du tarif et traçabilité."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = f"/api/v1/clients/{entreprise_test.id}/abonnement/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/abonnement/"
     payload = {"plan_code": "PROMOTEUR"}
 
     reponse = client_api.patch(url, data=payload, format="json")
@@ -371,7 +371,7 @@ def test_changer_plan_client_alias_mock_succes(client_api, super_admin_user, ent
     """Vérifie que l'alias 'PRO' du frontend mock est correctement résolu vers 'MAITRE_OEUVRE'."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = f"/api/v1/clients/{entreprise_test.id}/abonnement/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/abonnement/"
     payload = {"plan_code": "PRO"}
 
     reponse = client_api.patch(url, data=payload, format="json")
@@ -387,7 +387,7 @@ def test_changer_plan_inconnu_400(client_api, super_admin_user, entreprise_test)
     """Vérifie qu'un plan inexistant renvoie une erreur de validation 400."""
     client_api.force_authenticate(user=super_admin_user)
 
-    url = f"/api/v1/clients/{entreprise_test.id}/abonnement/"
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/abonnement/"
     payload = {"plan_code": "PLAN_INEXISTANT"}
 
     reponse = client_api.patch(url, data=payload, format="json")

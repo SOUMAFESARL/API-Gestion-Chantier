@@ -116,21 +116,6 @@ urlpatterns = [
         EvolutionAbonnementsView.as_view(),
         name="admins-indicateurs-evolution",
     ),
-    path(
-        "indicateurs/",
-        IndicateursPlateformeView.as_view(),
-        name="indicateurs-plateforme",
-    ),
-    path(
-        "indicateurs/tendances/",
-        TendancesIndicateursView.as_view(),
-        name="indicateurs-tendances",
-    ),
-    path(
-        "indicateurs/evolution/",
-        EvolutionAbonnementsView.as_view(),
-        name="indicateurs-evolution",
-    ),
     # Gestion Clients & Actions Super Admin
     path(
         "admins/clients/",
@@ -156,31 +141,5 @@ urlpatterns = [
         "admins/clients/<uuid:client_id>/abonnement/",
         ChangerPlanClientPlateformeView.as_view(),
         name="admins-clients-plateforme-abonnement",
-    ),
-    # Alias de compatibilité
-    path(
-        "clients/",
-        ClientsPlateformeListView.as_view(),
-        name="clients-plateforme-liste",
-    ),
-    path(
-        "clients/<uuid:client_id>/",
-        FicheClientPlateformeView.as_view(),
-        name="clients-plateforme-fiche",
-    ),
-    path(
-        "clients/<uuid:client_id>/suspendre/",
-        SuspendreClientPlateformeView.as_view(),
-        name="clients-plateforme-suspendre",
-    ),
-    path(
-        "clients/<uuid:client_id>/reactiver/",
-        ReactiverClientPlateformeView.as_view(),
-        name="clients-plateforme-reactiver",
-    ),
-    path(
-        "clients/<uuid:client_id>/abonnement/",
-        ChangerPlanClientPlateformeView.as_view(),
-        name="clients-plateforme-abonnement",
     ),
 ]

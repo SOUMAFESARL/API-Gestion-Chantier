@@ -135,7 +135,7 @@ def donnees_entreprises(db):
 @pytest.mark.django_db
 def test_acces_refuse_anonyme(client_api):
     """Un utilisateur non authentifié reçoit 401."""
-    res = client_api.get("/api/v1/indicateurs/")
+    res = client_api.get("/api/v1/admins/indicateurs/")
     assert res.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -143,7 +143,7 @@ def test_acces_refuse_anonyme(client_api):
 def test_acces_refuse_utilisateur_standard(client_api, user_standard):
     """Un utilisateur sans prérogatives Super Admin reçoit 403."""
     client_api.force_authenticate(user=user_standard)
-    res = client_api.get("/api/v1/indicateurs/")
+    res = client_api.get("/api/v1/admins/indicateurs/")
     assert res.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -151,7 +151,7 @@ def test_acces_refuse_utilisateur_standard(client_api, user_standard):
 def test_indicateurs_plateforme(client_api, superuser_admin, donnees_entreprises):
     """Le Super Admin reçoit les KPIs consolidés corrects."""
     client_api.force_authenticate(user=superuser_admin)
-    res = client_api.get("/api/v1/indicateurs/")
+    res = client_api.get("/api/v1/admins/indicateurs/")
 
     assert res.status_code == status.HTTP_200_OK
     data = res.json()
@@ -166,7 +166,7 @@ def test_indicateurs_plateforme(client_api, superuser_admin, donnees_entreprises
 def test_tendances_indicateurs(client_api, superuser_admin, donnees_entreprises):
     """L'endpoint des tendances renvoie les séries sparklines pour les 5 indicateurs."""
     client_api.force_authenticate(user=superuser_admin)
-    res = client_api.get("/api/v1/indicateurs/tendances/")
+    res = client_api.get("/api/v1/admins/indicateurs/tendances/")
 
     assert res.status_code == status.HTTP_200_OK
     data = res.json()
@@ -191,7 +191,7 @@ def test_tendances_indicateurs(client_api, superuser_admin, donnees_entreprises)
 def test_evolution_abonnements(client_api, superuser_admin, donnees_entreprises):
     """L'endpoint de l'évolution renvoie 90 points journaliers."""
     client_api.force_authenticate(user=superuser_admin)
-    res = client_api.get("/api/v1/indicateurs/evolution/")
+    res = client_api.get("/api/v1/admins/indicateurs/evolution/")
 
     assert res.status_code == status.HTTP_200_OK
     data = res.json()

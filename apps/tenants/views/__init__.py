@@ -21,6 +21,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.core.enums import RoleGlobal
+from apps.core.permissions import RoleRequis
 from apps.tenants.models import DUREE_LIEN_ACTIVATION, DemandeInscription
 from apps.tenants.serializers import (
     AccuseActivationSerializer,
@@ -38,6 +40,7 @@ from apps.tenants.services.inscription import activer, deposer, renvoyer, verifi
 
 __all__ = [
     "ActivationView",
+    "ConfigurationEntrepriseView",
     "DepotInscriptionView",
     "EntrepriseView",
     "EtatProvisionnementView",
@@ -256,8 +259,68 @@ class EtatProvisionnementView(APIView):
         return Response({"statut": "PROVISIONNEMENT"})
 
 
+def _sauvegarder_entreprise(tenant, request) -> Response:
+    if tenant is None or tenant.schema_name == "public":
+        return Response(
+            {"detail": _("Aucun tenant résolu.")},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    serializer = EntrepriseSerializer(
+        instance=tenant,
+        data=request.data,
+        partial=True,
+        context={"request": request},
+    )
+    serializer.is_valid(raise_exception=True)
+
+    donnees = dict(serializer.validated_data)
+    fichier_logo = donnees.pop("fichier_logo", None)
+    retirer_logo = donnees.pop("retirer_logo", False)
+    fond_retire = None
+
+    if fichier_logo:
+        from apps.tenants.services.images import traiter_logo_entreprise
+
+        resultat_logo = traiter_logo_entreprise(
+            fichier_ou_flux=fichier_logo,
+            tenant_schema=tenant.schema_name,
+            nom_origine=fichier_logo.name,
+        )
+        # Les trois variantes sont conservées. Le 24 px et le 48 px sont
+        # taillés pour les deux densités d'écran de la barre ; l'original
+        # recadré sert aux documents. Le service les produisait déjà tous
+        # les trois — seul le 48 était retenu.
+        tenant.logo = resultat_logo["cle_2x"]
+        tenant.logo_1x = resultat_logo["cle_1x"]
+        tenant.logo_original = resultat_logo["cle_original"]
+        fond_retire = resultat_logo["fond_retire"]
+        if not donnees.get("couleur_primaire"):
+            tenant.couleur_primaire = resultat_logo["dominant_color"]
+
+    elif retirer_logo:
+        tenant.logo = ""
+        tenant.logo_1x = ""
+        tenant.logo_original = ""
+
+    for champ, valeur in donnees.items():
+        setattr(tenant, champ, valeur)
+
+    tenant.save()
+
+    retour = EntrepriseSerializer(tenant, context={"request": request})
+    corps = dict(retour.data)
+    if fond_retire is not None:
+        # Transitoire, jamais stocké : l'information n'a de sens qu'au
+        # retour de l'envoi. Elle permet à l'écran de dire « le fond de
+        # votre logo n'a pas pu être détouré » au lieu de laisser
+        # découvrir un rectangle blanc dans la barre, trois écrans plus loin.
+        corps["fond_retire"] = fond_retire
+    return Response(corps, status=status.HTTP_200_OK)
+
+
 class EntrepriseView(APIView):
-    """`GET` et `PATCH /api/v1/entreprise/` — Étape 1 du Wizard & Paramètres."""
+    """`GET`, `PATCH` et `POST /api/v1/entreprise/` — Étape 1 du Wizard & Paramètres."""
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
@@ -277,66 +340,62 @@ class EntrepriseView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        summary="Modifier les informations de l'entreprise cliente",
+        summary="Modifier les informations de l'entreprise cliente (PATCH)",
         request=EntrepriseSerializer,
         responses={200: EntrepriseSerializer},
     )
     def patch(self, request):
+        tenant = getattr(request, "tenant", None)
+        return _sauvegarder_entreprise(tenant, request)
+
+    @extend_schema(
+        summary="Modifier les informations de l'entreprise cliente (POST)",
+        request=EntrepriseSerializer,
+        responses={200: EntrepriseSerializer},
+    )
+    def post(self, request):
+        tenant = getattr(request, "tenant", None)
+        return _sauvegarder_entreprise(tenant, request)
+
+
+class ConfigurationEntrepriseView(APIView):
+    """`GET` et `POST /api/v1/parametres/configuration/` — Configuration d'entreprise dans les paramètres."""
+
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PATCH", "PUT"):
+            return [RoleRequis.pour(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)()]
+        return [IsAuthenticated()]
+
+    @extend_schema(
+        summary="Lire la configuration de l'entreprise (Paramètres)",
+        responses={200: EntrepriseSerializer},
+    )
+    def get(self, request):
         tenant = getattr(request, "tenant", None)
         if tenant is None or tenant.schema_name == "public":
             return Response(
                 {"detail": _("Aucun tenant résolu.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        serializer = EntrepriseSerializer(tenant, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
-        serializer = EntrepriseSerializer(
-            instance=tenant,
-            data=request.data,
-            partial=True,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
+    @extend_schema(
+        summary="Enregistrer la configuration de l'entreprise (Paramètres)",
+        request=EntrepriseSerializer,
+        responses={200: EntrepriseSerializer},
+    )
+    def post(self, request):
+        tenant = getattr(request, "tenant", None)
+        return _sauvegarder_entreprise(tenant, request)
 
-        donnees = dict(serializer.validated_data)
-        fichier_logo = donnees.pop("fichier_logo", None)
-        retirer_logo = donnees.pop("retirer_logo", False)
-        fond_retire = None
-
-        if fichier_logo:
-            from apps.tenants.services.images import traiter_logo_entreprise
-
-            resultat_logo = traiter_logo_entreprise(
-                fichier_ou_flux=fichier_logo,
-                tenant_schema=tenant.schema_name,
-                nom_origine=fichier_logo.name,
-            )
-            # Les trois variantes sont conservées. Le 24 px et le 48 px sont
-            # taillés pour les deux densités d'écran de la barre ; l'original
-            # recadré sert aux documents. Le service les produisait déjà tous
-            # les trois — seul le 48 était retenu.
-            tenant.logo = resultat_logo["cle_2x"]
-            tenant.logo_1x = resultat_logo["cle_1x"]
-            tenant.logo_original = resultat_logo["cle_original"]
-            fond_retire = resultat_logo["fond_retire"]
-            if not donnees.get("couleur_primaire"):
-                tenant.couleur_primaire = resultat_logo["dominant_color"]
-
-        elif retirer_logo:
-            tenant.logo = ""
-            tenant.logo_1x = ""
-            tenant.logo_original = ""
-
-        for champ, valeur in donnees.items():
-            setattr(tenant, champ, valeur)
-
-        tenant.save()
-
-        retour = EntrepriseSerializer(tenant, context={"request": request})
-        corps = dict(retour.data)
-        if fond_retire is not None:
-            # Transitoire, jamais stocké : l'information n'a de sens qu'au
-            # retour de l'envoi. Elle permet à l'écran de dire « le fond de
-            # votre logo n'a pas pu être détouré » au lieu de laisser
-            # découvrir un rectangle blanc dans la barre, trois écrans plus loin.
-            corps["fond_retire"] = fond_retire
-        return Response(corps, status=status.HTTP_200_OK)
+    @extend_schema(
+        summary="Modifier la configuration de l'entreprise (Paramètres - PATCH)",
+        request=EntrepriseSerializer,
+        responses={200: EntrepriseSerializer},
+    )
+    def patch(self, request):
+        tenant = getattr(request, "tenant", None)
+        return _sauvegarder_entreprise(tenant, request)

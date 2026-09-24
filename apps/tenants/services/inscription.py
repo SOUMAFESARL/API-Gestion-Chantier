@@ -108,7 +108,8 @@ def _slug_libre(base: str) -> str:
         pris = (
             Entreprise.objects.filter(schema_name=candidat).exists()
             or DemandeInscription.objects.filter(
-                slug_reserve=candidat, statut=DemandeInscription.Statut.EN_ATTENTE
+                slug_reserve=candidat,
+                statut__in=["EN_ATTENTE", "A_VALIDER", "PROVISIONNEMENT"],
             ).exists()
         )
         if not pris:
@@ -160,6 +161,8 @@ def deposer(
         raise EmailDejaUtilise()
 
     # Cas 3 — Demande déjà en attente d'activation pour cet email
+    if DemandeInscription.objects.filter(email__iexact=adresse, statut="A_VALIDER").exists():
+        raise InscriptionEnCours()
     demande_en_attente = DemandeInscription.objects.filter(
         email__iexact=adresse,
         statut=DemandeInscription.Statut.EN_ATTENTE,
@@ -332,17 +335,10 @@ def verifier(jeton_clair: str) -> DemandeInscription:
 # ---------------------------------------------------------------------------
 # §5 — activer
 # ---------------------------------------------------------------------------
+@transaction.atomic
 def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> DemandeInscription:
-    """Consomme le jeton et lance le provisionnement — les effets 1 à 4.
-
-    **T1 est une transaction courte, dans `public` seulement.** Elle marque le
-    jeton consommé, pose le nom et le mot de passe **haché** sur la demande, et
-    passe le statut à `PROVISIONNEMENT`. Le reste — schéma, migrations,
-    administrateur, domaine — se fait après, et hors transaction : la promesse
-    « une seule transaction » du MLD §7.5 n'était pas tenable, `migrate_schemas`
-    validant et fermant la connexion.
-    """
-    demande = DemandeInscription.objects.filter(
+    """Verifie l'email et attend la decision du super admin, sans creer d'espace."""
+    demande = DemandeInscription.objects.select_for_update().filter(
         empreinte=DemandeInscription.empreinte_de(jeton_clair)
     ).first()
 
@@ -350,6 +346,7 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
         raise JetonInscriptionExpire()
 
     if demande.statut in {
+        DemandeInscription.Statut.A_VALIDER,
         DemandeInscription.Statut.PROVISIONNEMENT,
         DemandeInscription.Statut.ACTIVEE,
     }:
@@ -366,7 +363,7 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
         # Haché avant de toucher la base : la colonne vit dans `public`, et le
         # compte qui portera ce mot de passe n'existe pas encore — MLD §4.8.
         demande.mot_de_passe_transitoire = make_password(mot_de_passe)
-        demande.statut = DemandeInscription.Statut.PROVISIONNEMENT
+        demande.statut = DemandeInscription.Statut.A_VALIDER
         demande.save(
             update_fields=[
                 "utilise_le",
@@ -378,13 +375,6 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
             ]
         )
 
-    # **Après le `commit`, jamais dedans.** Une tâche mise en file à l'intérieur
-    # peut être consommée avant la validation : le worker lit alors une demande
-    # qui n'existe pas encore et échoue sur un `DoesNotExist` incompréhensible,
-    # une fois sur cinquante, sur une machine chargée.
-    from apps.tenants.tasks import provisionner_entreprise
-
-    transaction.on_commit(lambda: provisionner_entreprise.delay(str(demande.pk)))
     return demande
 
 

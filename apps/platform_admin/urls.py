@@ -20,10 +20,32 @@ from apps.platform_admin.views import (
     TendancesIndicateursView,
     VerificationJetonAdminView,
 )
+from apps.platform_admin.views.inscriptions import (
+    ApprouverInscriptionView,
+    DemandeInscriptionDetailView,
+    DemandesInscriptionView,
+    RefuserInscriptionView,
+)
 
 app_name = "platform_admin"
 
 urlpatterns = [
+    path("admins/inscriptions/", DemandesInscriptionView.as_view(), name="inscriptions-liste"),
+    path(
+        "admins/inscriptions/<uuid:pk>/",
+        DemandeInscriptionDetailView.as_view(),
+        name="inscriptions-detail",
+    ),
+    path(
+        "admins/inscriptions/<uuid:pk>/approuver/",
+        ApprouverInscriptionView.as_view(),
+        name="inscriptions-approuver",
+    ),
+    path(
+        "admins/inscriptions/<uuid:pk>/refuser/",
+        RefuserInscriptionView.as_view(),
+        name="inscriptions-refuser",
+    ),
     # Authentification Super Admin (Control Plane)
     path(
         "admins/connexion/",

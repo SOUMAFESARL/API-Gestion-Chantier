@@ -7,6 +7,9 @@ from apps.accounts.views import (
     InvitationAccepterView,
     InvitationListCreateView,
     InvitationVerifierView,
+    ParametresRoleDetailUpdateView,
+    ParametresRoleListCreateView,
+    ParametresRoleSupprimerReassignerView,
     ReinitialisationView,
     RenouvellementView,
     RoleDetailUpdateView,
@@ -29,7 +32,15 @@ urlpatterns = [
     path("invitations/", InvitationListCreateView.as_view(), name="invitations-liste-creer"),
     path("invitations/verifier/", InvitationVerifierView.as_view(), name="invitation-verifier"),
     path("invitations/accepter/", InvitationAccepterView.as_view(), name="invitation-accepter"),
-    # Rôles et habilitations par module
+    # Rôles et habilitations par module — Paramètres (/api/v1/parametres/roles/)
+    path("parametres/roles/", ParametresRoleListCreateView.as_view(), name="parametres-roles-liste-creer"),
+    path("parametres/roles/<uuid:pk>/", ParametresRoleDetailUpdateView.as_view(), name="parametres-role-detail-modifier"),
+    path(
+        "parametres/roles/<uuid:pk>/supprimer/",
+        ParametresRoleSupprimerReassignerView.as_view(),
+        name="parametres-role-supprimer-reassigner",
+    ),
+    # Rôles — Routes directes (rétrocompatibilité)
     path("roles/", RoleListCreateView.as_view(), name="roles-liste-creer"),
     path("roles/<uuid:pk>/", RoleDetailUpdateView.as_view(), name="role-detail-modifier"),
     path(

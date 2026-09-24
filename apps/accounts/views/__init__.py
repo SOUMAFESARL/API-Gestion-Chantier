@@ -54,6 +54,9 @@ from apps.core.enums import RoleGlobal
 from apps.core.exceptions import ActionInterditeDelegue
 
 from .role import (
+    ParametresRoleDetailUpdateView,
+    ParametresRoleListCreateView,
+    ParametresRoleSupprimerReassignerView,
     RoleDetailUpdateView,
     RoleListCreateView,
     RoleSupprimerReassignerView,
@@ -67,6 +70,9 @@ __all__ = [
     "InvitationAccepterView",
     "InvitationListCreateView",
     "InvitationVerifierView",
+    "ParametresRoleDetailUpdateView",
+    "ParametresRoleListCreateView",
+    "ParametresRoleSupprimerReassignerView",
     "ReinitialisationView",
     "RenouvellementView",
     "RoleDetailUpdateView",

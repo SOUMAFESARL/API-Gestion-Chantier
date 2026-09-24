@@ -25,13 +25,31 @@ from apps.accounts.services.roles import (
     modifier_role,
     supprimer_role,
 )
+from apps.core.enums import RoleGlobal
 from apps.core.exceptions import ActionReserveeDg, RoleSubstitutionObligatoire
 
 __all__ = [
+    "ParametresRoleDetailUpdateView",
+    "ParametresRoleListCreateView",
+    "ParametresRoleSupprimerReassignerView",
     "RoleDetailUpdateView",
     "RoleListCreateView",
     "RoleSupprimerReassignerView",
 ]
+
+
+def _autoriser_parametres_roles(user):
+    """Autorise AD, DG, Owner et Superuser pour les routes parametres/roles."""
+    if not user or not user.is_authenticated:
+        raise ActionReserveeDg()
+    est_autorise = (
+        getattr(user, "is_dg", False)
+        or getattr(user, "is_owner", False)
+        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        or getattr(user, "is_superuser", False)
+    )
+    if not est_autorise:
+        raise ActionReserveeDg()
 
 
 class RoleListCreateView(APIView):
@@ -45,7 +63,6 @@ class RoleListCreateView(APIView):
         responses={200: RoleSerializer(many=True)},
     )
     def get(self, request):
-        # Initialise les rôles par défaut s'ils n'existent pas encore
         if not Role.objects.filter(supprime_le__isnull=True).exists():
             initialiser_roles_par_defaut()
 
@@ -83,7 +100,7 @@ class RoleListCreateView(APIView):
 
 
 class RoleDetailUpdateView(APIView):
-    """`GET` et `PATCH /api/v1/roles/{id}/` — Détail et modification d'un rôle."""
+    """`GET`, `PATCH` et `POST /api/v1/roles/{id}/` — Détail et modification d'un rôle."""
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
@@ -103,7 +120,6 @@ class RoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def patch(self, request, pk):
-        # Règle R-DEMO-08 : Seul le DG / Propriétaire a autorité sur les rôles
         if not (getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)):
             raise ActionReserveeDg()
 
@@ -126,6 +142,14 @@ class RoleDetailUpdateView(APIView):
         retour = RoleDetailSerializer(role_modifie)
         return Response(retour.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Modifier un rôle et sa matrice de permissions (POST)",
+        request=RoleModificationSerializer,
+        responses={200: RoleDetailSerializer},
+    )
+    def post(self, request, pk):
+        return self.patch(request, pk)
+
 
 class RoleSupprimerReassignerView(APIView):
     """`POST /api/v1/roles/{id}/supprimer/` — Suppression d'un rôle avec réassignation."""
@@ -139,13 +163,158 @@ class RoleSupprimerReassignerView(APIView):
         responses={200: dict},
     )
     def post(self, request, pk):
-        # Règle R-DEMO-08 : Seul le DG / Propriétaire a autorité sur les rôles
         if not (getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)):
             raise ActionReserveeDg()
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
-        # Substitution obligatoire (REC-S1-10-B)
+        substitution_id = request.data.get("role_substitution_id") or request.data.get(
+            "reassigner_vers_role_id"
+        )
+        if not substitution_id:
+            raise RoleSubstitutionObligatoire()
+
+        serializer = RoleSuppressionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        reassigner_vers_role = get_object_or_404(Role, pk=substitution_id, supprime_le__isnull=True)
+
+        try:
+            resultat = supprimer_role(
+                role=role,
+                reassigner_vers_role=reassigner_vers_role,
+                supprime_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise ValidationError({"detail": msg}) from exc
+
+        return Response(
+            {
+                "message": _("Rôle supprimé avec succès."),
+                **resultat,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# ============================================================================
+# Vues dédiées pour /api/v1/parametres/roles/ (AD + DG autorisés)
+# ============================================================================
+
+
+class ParametresRoleListCreateView(APIView):
+    """`GET` et `POST /api/v1/parametres/roles/` — Consultation et création des rôles dans les paramètres."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Lister les rôles et permissions par module (Paramètres)",
+        responses={200: RoleSerializer(many=True)},
+    )
+    def get(self, request):
+        if not Role.objects.filter(supprime_le__isnull=True).exists():
+            initialiser_roles_par_defaut()
+
+        roles = Role.objects.filter(supprime_le__isnull=True).order_by("code")
+        serializer = RoleSerializer(roles, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Créer un rôle personnalisé avec sa matrice de permissions (Paramètres)",
+        request=RoleCreationSerializer,
+        responses={201: RoleDetailSerializer},
+    )
+    def post(self, request):
+        _autoriser_parametres_roles(request.user)
+
+        serializer = RoleCreationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            role = creer_role(
+                code=serializer.validated_data["code"],
+                libelle=serializer.validated_data["libelle"],
+                description=serializer.validated_data.get("description", ""),
+                permissions_modules=serializer.validated_data.get("permissions_modules", {}),
+                cree_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise ValidationError({"detail": msg}) from exc
+
+        retour = RoleDetailSerializer(role)
+        return Response(retour.data, status=status.HTTP_201_CREATED)
+
+
+class ParametresRoleDetailUpdateView(APIView):
+    """`GET`, `POST` et `PATCH /api/v1/parametres/roles/{id}/` — Détail et modification d'un rôle dans les paramètres."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Détail d'un rôle et permissions par module (Paramètres)",
+        responses={200: RoleDetailSerializer},
+    )
+    def get(self, request, pk):
+        role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+        serializer = RoleDetailSerializer(role)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Modifier un rôle et sa matrice de permissions (Paramètres - PATCH)",
+        request=RoleModificationSerializer,
+        responses={200: RoleDetailSerializer},
+    )
+    def patch(self, request, pk):
+        _autoriser_parametres_roles(request.user)
+
+        role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+        serializer = RoleModificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            role_modifie = modifier_role(
+                role=role,
+                libelle=serializer.validated_data.get("libelle"),
+                description=serializer.validated_data.get("description"),
+                permissions_modules=serializer.validated_data.get("permissions_modules"),
+                modifie_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise ValidationError({"detail": msg}) from exc
+
+        retour = RoleDetailSerializer(role_modifie)
+        return Response(retour.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Modifier un rôle et sa matrice de permissions (Paramètres - POST)",
+        request=RoleModificationSerializer,
+        responses={200: RoleDetailSerializer},
+    )
+    def post(self, request, pk):
+        return self.patch(request, pk)
+
+
+class ParametresRoleSupprimerReassignerView(APIView):
+    """`POST /api/v1/parametres/roles/{id}/supprimer/` — Suppression d'un rôle avec réassignation obligatoire (Paramètres)."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Supprimer un rôle personnalisé avec réassignation (Paramètres)",
+        request=RoleSuppressionSerializer,
+        responses={200: dict},
+    )
+    def post(self, request, pk):
+        _autoriser_parametres_roles(request.user)
+
+        role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+
         substitution_id = request.data.get("role_substitution_id") or request.data.get(
             "reassigner_vers_role_id"
         )

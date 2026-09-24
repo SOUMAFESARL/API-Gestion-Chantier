@@ -13,18 +13,26 @@ from apps.tenants.models import Entreprise
 HOTE_PLATEFORME = "localhost"
 
 
+@pytest.fixture(autouse=True)
+def autoriser_ip_locale(settings):
+    """Autorise l'adresse IP de test dans RestrictionIPPlateformeMiddleware."""
+    settings.SUPER_ADMIN_IPS = ["127.0.0.1"]
+
+
 @pytest.fixture
 def superuser_admin(db):
     """Crée un Super Admin dans le schéma public."""
     with schema_context(get_public_schema_name()):
         Utilisateur.tous_objets.filter(email="superadmin.dash@ccd-digital.ci").delete()
-        return Utilisateur.objects.create_superuser(
+        return Utilisateur.objects.create_user(
             email="superadmin.dash@ccd-digital.ci",
             password="SuperPassword123!",
             nom="Admin",
             prenom="Plateforme",
             role_global=RoleGlobal.ADMIN,
             statut=StatutUtilisateur.ACTIF,
+            is_staff=True,
+            is_superuser=True,
         )
 
 
@@ -46,7 +54,7 @@ def user_standard(db):
 
 
 @pytest.fixture
-def client_api(db):
+def client_api():
     return APIClient(headers={"host": HOTE_PLATEFORME})
 
 

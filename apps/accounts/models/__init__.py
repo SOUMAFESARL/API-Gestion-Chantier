@@ -95,6 +95,13 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
     nom = models.CharField(_("nom"), max_length=100)
     prenom = models.CharField(_("prénom"), max_length=100, blank=True)
     telephone = models.CharField(_("téléphone"), max_length=20, blank=True)
+    avatar = models.ImageField(
+        _("avatar"),
+        upload_to="avatars/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text=_("Photo de profil de l'utilisateur (format image, max 2 Mo)."),
+    )
 
     role_global = models.CharField(
         _("rôle global"),
@@ -171,6 +178,18 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
     @property
     def nom_complet(self) -> str:
         return f"{self.prenom} {self.nom}".strip()
+
+    @property
+    def initiales(self) -> str:
+        p = self.prenom[0].upper() if self.prenom else ""
+        n = self.nom[0].upper() if self.nom else ""
+        return f"{p}{n}" or (self.email[0].upper() if self.email else "?")
+
+    @property
+    def avatar_url(self) -> str | None:
+        if self.avatar and hasattr(self.avatar, "url"):
+            return self.avatar.url
+        return None
 
     @property
     def is_dg(self) -> bool:

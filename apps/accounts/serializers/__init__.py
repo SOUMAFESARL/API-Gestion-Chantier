@@ -31,6 +31,14 @@ from .reinitialisation import (
     ReinitialisationSerializer,
     VerificationJetonSerializer,
 )
+from .profil import (
+    AvatarReponseSerializer,
+    AvatarUploadSerializer,
+    ChangerMotDePasseReponseSerializer,
+    ChangerMotDePasseSerializer,
+    ProfilDetailResponseSerializer,
+    ProfilUpdateSerializer,
+)
 from .role import (
     RoleCreationSerializer,
     RoleDetailSerializer,
@@ -44,6 +52,10 @@ from .utilisateur import UtilisateurSerializer
 __all__ = [
     "AccepterInvitationSerializer",
     "AppareilSerializer",
+    "AvatarReponseSerializer",
+    "AvatarUploadSerializer",
+    "ChangerMotDePasseReponseSerializer",
+    "ChangerMotDePasseSerializer",
     "CollaborateurCreateSerializer",
     "CollaborateurResponseSerializer",
     "ConnexionSerializer",
@@ -55,6 +67,8 @@ __all__ = [
     "InvitationSerializer",
     "JetonsSerializer",
     "ProfilConnexionSerializer",
+    "ProfilDetailResponseSerializer",
+    "ProfilUpdateSerializer",
     "ProjetAssocieCollaborateurSerializer",
     "ReinitialisationSerializer",
     "RenouvellementSerializer",

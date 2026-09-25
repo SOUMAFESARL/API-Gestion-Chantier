@@ -83,7 +83,7 @@ def test_appel_api_authentifie_sans_sous_domaine(client_public, utilisateur_tena
     # 2. Appel d'une route tenant protégée avec le token (sur domaine public)
     client_auth = APIClient(HTTP_HOST=DOMAINE_PUBLIC)
     client_auth.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
-    reponse_moi = client_auth.get("/api/v1/utilisateurs/moi/")
+    reponse_moi = client_auth.get("/api/v1/auth/profil/")
 
     assert reponse_moi.status_code == 200
     profil = reponse_moi.json()

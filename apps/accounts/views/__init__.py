@@ -23,7 +23,6 @@ from apps.accounts.serializers import (
     DemandeReinitialisationSerializer,
     InvitationSerializer,
     JetonsSerializer,
-    ProfilConnexionSerializer,
     ReinitialisationSerializer,
     RenouvellementSerializer,
     ReponseAccepterInvitationSerializer,
@@ -54,6 +53,7 @@ from apps.core.enums import RoleGlobal
 from apps.core.exceptions import ActionInterditeDelegue
 
 from .collaborateur import ParametresCollaborateurListCreateView
+from .profil import AvatarProfilView, ChangerMotDePasseView, ProfilView
 from .role import (
     ParametresRoleDetailUpdateView,
     ParametresRoleListCreateView,
@@ -65,6 +65,8 @@ from .role import (
 from .super_admin import VerifierAccesSuperAdminView
 
 __all__ = [
+    "AvatarProfilView",
+    "ChangerMotDePasseView",
     "ConnexionView",
     "DeconnexionView",
     "DemandeReinitialisationView",
@@ -75,12 +77,12 @@ __all__ = [
     "ParametresRoleDetailUpdateView",
     "ParametresRoleListCreateView",
     "ParametresRoleSupprimerReassignerView",
+    "ProfilView",
     "ReinitialisationView",
     "RenouvellementView",
     "RoleDetailUpdateView",
     "RoleListCreateView",
     "RoleSupprimerReassignerView",
-    "UtilisateurMoiView",
     "VerificationJetonView",
     "VerifierAccesSuperAdminView",
 ]
@@ -549,18 +551,3 @@ class InvitationAccepterView(APIView):
         )
         reponse["Cache-Control"] = "no-store"
         return reponse
-
-
-class UtilisateurMoiView(APIView):
-    """Profil de l'utilisateur connecté — contrat d'API §1.1."""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        summary="Profil de l'utilisateur connecté",
-        responses={200: ProfilConnexionSerializer},
-    )
-    def get(self, request):
-        utilisateur = request.user
-        profil = profil_de_connexion(utilisateur)
-        return Response(profil, status=status.HTTP_200_OK)

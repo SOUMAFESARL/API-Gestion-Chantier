@@ -42,6 +42,8 @@ class ProfilDetailResponseSerializer(serializers.Serializer):
     role_personnalise = ProfilRolePersonnaliseSerializer(read_only=True, allow_null=True)
     is_dg = serializers.BooleanField(read_only=True)
     is_owner = serializers.BooleanField(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
+    is_staff = serializers.BooleanField(read_only=True)
     statut = serializers.CharField(read_only=True)
     double_authentification_active = serializers.BooleanField(read_only=True)
     doit_changer_mot_de_passe = serializers.BooleanField(read_only=True)

@@ -251,3 +251,34 @@ def test_upload_avatar_fichier_invalide(client, utilisateur):
         format="multipart",
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_profil_super_admin_dans_schema_public(settings):
+    """GET /api/v1/auth/profil/ pour un Super Admin dans le schéma public."""
+    settings.SUPER_ADMIN_IPS = ["127.0.0.1"]
+    from rest_framework.test import APIClient
+
+    with schema_context("public"):
+        super_admin = Utilisateur.objects.create_superuser(
+            email="superadmin.test@ccd-digital.ci",
+            password="SuperPassword123!",
+            nom="Admin",
+            prenom="Super",
+        )
+
+    client_admin = APIClient(headers={"host": "localhost"})
+    client_admin.force_authenticate(user=super_admin)
+    response = client_admin.get("/api/v1/auth/profil/", REMOTE_ADDR="127.0.0.1")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["email"] == "superadmin.test@ccd-digital.ci"
+    assert response.data["schema"] == "public"
+    assert response.data["entreprise"] is None
+    assert response.data["is_superuser"] is True
+    assert response.data["is_staff"] is True
+    assert response.data["is_dg"] is False
+    assert response.data["is_owner"] is False
+    # Toutes les habilitations sont au niveau 3 (Validation plein droit)
+    for _mod, hab in response.data["habilitations"].items():
+        assert hab["niveau"] == 3

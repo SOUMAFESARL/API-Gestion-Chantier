@@ -124,8 +124,12 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
                 "niveau": perm.niveau,
             }
 
-    # Accès de secours pour DG / Admin ou modules non configurés
-    est_plein_droit = utilisateur.is_dg or utilisateur.role_global == RoleGlobal.ADMIN
+    # Accès de secours pour DG / Admin / Super Admin ou modules non configurés
+    est_plein_droit = (
+        utilisateur.is_dg
+        or utilisateur.role_global == RoleGlobal.ADMIN
+        or bool(getattr(utilisateur, "is_superuser", False))
+    )
     for mod_code, _mod_label in ModuleChoix.choices:
         if mod_code not in habilitations:
             habilitations[mod_code] = {
@@ -156,6 +160,8 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "role_personnalise": role_perso_info,
         "is_dg": utilisateur.is_dg,
         "is_owner": utilisateur.is_owner,
+        "is_superuser": bool(getattr(utilisateur, "is_superuser", False)),
+        "is_staff": bool(getattr(utilisateur, "is_staff", False)),
         "statut": utilisateur.statut,
         "double_authentification_active": utilisateur.double_authentification,
         "doit_changer_mot_de_passe": utilisateur.doit_changer_mot_de_passe,

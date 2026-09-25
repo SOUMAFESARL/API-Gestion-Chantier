@@ -39,7 +39,7 @@ __all__ = [
     "supprimer_avatar",
 ]
 
-TAILLE_MAX_AVATAR = 2 * 1024 * 1024  # 2 Mo
+TAILLE_MAX_AVATAR = 10 * 1024 * 1024  # 10 Mo (autorise les photos HD et logos, compressés en 256x256 WebP)
 DIMENSION_AVATAR = (256, 256)
 FORMATS_ACCEPTES = {"JPEG", "JPG", "PNG", "WEBP"}
 
@@ -59,7 +59,7 @@ class NouveauMotDePasseIdentique(ErreurMetier):
 class FichierTropVolumineux(ErreurMetier):
     status_code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
     code_metier = "fichier_trop_volumineux"
-    default_detail = _("Le fichier dépasse la taille maximale autorisée de 2 Mo.")
+    default_detail = _("Le fichier dépasse la taille maximale autorisée de 10 Mo.")
 
 
 class FormatFichierInvalide(ErreurMetier):

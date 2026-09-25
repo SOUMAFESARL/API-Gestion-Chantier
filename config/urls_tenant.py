@@ -51,11 +51,15 @@ urlpatterns = [
     path("api/v1/", include("apps.platform_admin.urls")),
 ]
 
-# En développement, Django sert lui-même les fichiers envoyés — les logos
-# d'entreprise. En production, c'est le stockage objet qui les sert, et ce bloc
-# ne s'exécute pas.
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# En développement ou sur cPanel sans bucket S3 (FileSystemStorage), servir les fichiers médias
+_stockage_defaut = settings.STORAGES.get("default", {}).get("BACKEND", "")
+if settings.DEBUG or _stockage_defaut == "django.core.files.storage.FileSystemStorage":
+    from django.urls import re_path
+    from django.views.static import serve
+
+    urlpatterns += [
+        re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    ]
 
 # Conventions d API §5 : une URL non routée sous /api/ doit répondre en JSON,
 # pas en HTML. Voir apps/core/views.py.

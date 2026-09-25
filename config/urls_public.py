@@ -27,68 +27,13 @@ from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
 def migrer_bd_vue(request):
-    """Exécute les migrations ou diagnostics sans passer par cPanel SSH."""
+    """Exécute les migrations sans passer par cPanel SSH."""
     if request.method != "POST":
         return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
 
     token = request.headers.get("X-Maintenance-Token")
     if token != "ccd-migration-prod-2026-secure-token":
         return JsonResponse({"erreur": "Non autorisé"}, status=403)
-
-    action = request.GET.get("action", "migration")
-
-    if action == "diag":
-        import traceback
-        diag = {}
-        # Test Pillow WebP
-        try:
-            from PIL import Image, features
-            diag["pillow_version"] = Image.__version__
-            diag["webp_supported"] = features.check("webp")
-            tampon = io.BytesIO()
-            Image.new("RGB", (10, 10)).save(tampon, format="WEBP")
-            diag["webp_save_ok"] = True
-        except Exception as e:
-            diag["webp_error"] = str(e)
-            diag["webp_tb"] = traceback.format_exc()
-
-        # Test Storage
-        try:
-            from django.core.files.storage import default_storage
-            from django.core.files.base import ContentFile
-            diag["storage_class"] = f"{default_storage.__class__.__module__}.{default_storage.__class__.__name__}"
-            cle = default_storage.save("diag_test.txt", ContentFile(b"ok"))
-            diag["storage_save_ok"] = cle
-            default_storage.delete(cle)
-        except Exception as e:
-            diag["storage_error"] = str(e)
-            diag["storage_tb"] = traceback.format_exc()
-
-        # Test Utilisateur avatar save
-        try:
-            from apps.accounts.models import Utilisateur
-            from django_tenants.utils import schema_context
-            with schema_context("e_3at_btp"):
-                u = Utilisateur.objects.filter(email="angekouame5141@gmail.com").first()
-                if u:
-                    diag["user_trouve"] = str(u.id)
-                    from apps.accounts.services.profil import enregistrer_avatar
-                    from django.core.files.uploadedfile import SimpleUploadedFile
-                    f = SimpleUploadedFile("test.png", tampon.getvalue(), content_type="image/webp")
-                    # On teste avec un faux fichier image PNG
-                    img_png = io.BytesIO()
-                    Image.new("RGB", (20, 20), color="blue").save(img_png, format="PNG")
-                    img_png.seek(0)
-                    uf = SimpleUploadedFile("test.png", img_png.getvalue(), content_type="image/png")
-                    url = enregistrer_avatar(u, uf)
-                    diag["avatar_save_ok"] = url
-                else:
-                    diag["user_trouve"] = False
-        except Exception as e:
-            diag["avatar_save_error"] = str(e)
-            diag["avatar_save_tb"] = traceback.format_exc()
-
-        return JsonResponse(diag)
 
     out = StringIO()
     try:
@@ -138,13 +83,20 @@ urlpatterns = [
 # Le garde `DEBUG` est la seconde barrière : même si le fichier arrivait par
 # mégarde en production, il ne serait pas monté.
 if settings.DEBUG:
-    from django.conf.urls.static import static
-
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     with contextlib.suppress(ImportError):
         from config.urls_dev import urlpatterns as routes_dev
 
         urlpatterns += routes_dev
+
+# Servir les fichiers médias si FileSystemStorage est actif (ex: cPanel sans S3 configuré)
+_stockage_defaut = settings.STORAGES.get("default", {}).get("BACKEND", "")
+if settings.DEBUG or _stockage_defaut == "django.core.files.storage.FileSystemStorage":
+    from django.urls import re_path
+    from django.views.static import serve
+
+    urlpatterns += [
+        re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    ]
 
 # Conventions d API §5 : une URL non routée sous /api/ doit répondre en JSON,
 # pas en HTML. Voir apps/core/views.py.

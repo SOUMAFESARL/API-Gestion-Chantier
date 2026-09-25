@@ -70,4 +70,5 @@ Suivre scrupuleusement ces 5 étapes séquentielles pour chaque tâche de dével
    ```bash
    git branch -d feature/<nom-court-de-la-tache>
    ```
-4. Rédiger ou mettre à jour le bilan de réalisation dans l'artefact `walkthrough.md`.
+4. **Attention frontend :** Sur le frontend (`Application-Gestion-Chantier`), l'exécution de `git push` est **strictement interdite** (se référer au skill `prevent-frontend-push`).
+5. Rédiger ou mettre à jour le bilan de réalisation dans l'artefact `walkthrough.md`.

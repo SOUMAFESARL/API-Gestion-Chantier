@@ -28,7 +28,11 @@ def sante(request):
     )
 
 
+from config.urls_public import migrer_bd_vue
+
+
 urlpatterns = [
+    path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd-tenant"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-tenant"),

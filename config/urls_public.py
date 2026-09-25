@@ -20,7 +20,31 @@ def sante(_request):
     return JsonResponse({"statut": "ok", "portee": "public"})
 
 
+from io import StringIO
+from django.core.management import call_command
+from django.views.decorators.csrf import csrf_exempt
+
+
+@csrf_exempt
+def migrer_bd_vue(request):
+    """Exécute les migrations sans passer par cPanel SSH."""
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    token = request.headers.get("X-Maintenance-Token")
+    if token != "ccd-migration-prod-2026-secure-token":
+        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+
+    out = StringIO()
+    try:
+        call_command("migrate_schemas", interactive=False, stdout=out)
+        return JsonResponse({"statut": "succes", "output": out.getvalue()})
+    except Exception as exc:
+        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+
+
 urlpatterns = [
+    path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("admin/dashboard/", RedirectView.as_view(url="/admin/", permanent=False), name="admin-dashboard"),
     path("admin/", admin.site.urls),

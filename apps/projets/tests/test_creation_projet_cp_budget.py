@@ -232,7 +232,7 @@ def test_rec_s1_05_c_et_08_a_invitation_cp_et_mail_contextuel(client_tenant, dg_
         user_cp = Utilisateur.objects.get(email="m.soro@btp-ci.com")
         assert user_cp.statut == StatutUtilisateur.INVITE
         assert AffectationProjet.objects.filter(
-            projet_id=projet_id, utilisateur=user_cp, role_projet=RoleProjet.CONDUCTEUR_TRAVAUX
+            projet_id=projet_id, utilisateur=user_cp, role_projet=RoleProjet.CHEF_PROJET
         ).exists()
 
         invitation = Invitation.objects.get(email="m.soro@btp-ci.com")

@@ -6,7 +6,7 @@ Schéma : tenant.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import ModeExecution
+from apps.core.enums import ModeExecution, TypeBordereau
 from apps.core.models import ModeleBase
 
 from .projet import Projet
@@ -31,6 +31,12 @@ class Lot(ModeleBase):
         max_length=30,
         choices=ModeExecution.choices,
         default=ModeExecution.REGIE,
+    )
+    type_bordereau = models.CharField(
+        _("type de bordereau"),
+        max_length=20,
+        choices=TypeBordereau.choices,
+        default=TypeBordereau.FORFAIT,
     )
     premier_rapport_soumis = models.BooleanField(
         _("premier rapport soumis"),

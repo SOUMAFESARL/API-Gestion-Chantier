@@ -35,6 +35,7 @@ class RoleProjet(models.TextChoices):
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
     INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
+    DIRECTEUR_FINANCIER = "DF", "Directeur Financier"
     MAGASINIER = "MAG", "Magasinier"
     SOUS_TRAITANT = "ST", "Sous-traitant"
     FOURNISSEUR = "FRN", "Fournisseur"
@@ -63,6 +64,15 @@ class StatutProjet(models.TextChoices):
     SUSPENDU = "SUSPENDU", "Suspendu"
     TERMINE = "TERMINE", "Terminé"
     ARCHIVE = "ARCHIVE", "Archivé"
+
+
+class TypeProjet(models.TextChoices):
+    BATIMENT_RESIDENTIEL = "BATIMENT_RESIDENTIEL", "Bâtiment — Résidentiel"
+    BATIMENT_COMMERCIAL = "BATIMENT_COMMERCIAL", "Bâtiment — Commercial"
+    TP_ROUTE = "TP_ROUTE", "TP — Route"
+    TP_GENIE_CIVIL = "TP_GENIE_CIVIL", "TP — Génie civil"
+    VRD = "VRD", "VRD"
+    INFRASTRUCTURE_INDUSTRIELLE = "INFRASTRUCTURE_INDUSTRIELLE", "Infrastructure industrielle"
 
 
 class ModeExecution(models.TextChoices):

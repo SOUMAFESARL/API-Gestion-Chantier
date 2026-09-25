@@ -7,7 +7,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import RoleProjet, StatutProjet
+from apps.core.enums import RoleProjet, StatutProjet, TypeProjet
 from apps.core.models import ModeleBase
 
 __all__ = ["AffectationProjet", "Projet"]
@@ -18,6 +18,12 @@ class Projet(ModeleBase):
 
     reference = models.CharField(_("référence"), max_length=30)
     nom = models.CharField(_("nom"), max_length=200)
+    type_projet = models.CharField(
+        _("type de projet"),
+        max_length=40,
+        choices=TypeProjet.choices,
+        default=TypeProjet.BATIMENT_RESIDENTIEL,
+    )
     description = models.TextField(_("description"), blank=True)
 
     client = models.ForeignKey(
@@ -25,6 +31,12 @@ class Projet(ModeleBase):
         on_delete=models.RESTRICT,
         related_name="projets",
         verbose_name=_("client / maître d'ouvrage"),
+    )
+    maitre_oeuvre = models.CharField(
+        _("maître d'œuvre"),
+        max_length=200,
+        blank=True,
+        help_text=_("Cabinet ou bureau d'études (optionnel)."),
     )
 
     ville = models.CharField(_("ville"), max_length=100)
@@ -49,6 +61,14 @@ class Projet(ModeleBase):
         on_delete=models.RESTRICT,
         related_name="projets_geres",
         verbose_name=_("chef de projet"),
+    )
+    conducteur_travaux = models.ForeignKey(
+        "accounts.Utilisateur",
+        on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
+        related_name="projets_chantiers",
+        verbose_name=_("conducteur de travaux"),
     )
 
     statut = models.CharField(
@@ -78,11 +98,34 @@ class Projet(ModeleBase):
     )
     indice_sante_calcule_le = models.DateTimeField(null=True, blank=True)
 
+    @property
+    def duree_jours_ouvres(self) -> int | None:
+        """Calcule la durée estimée en jours ouvrés (lundi au vendredi)."""
+        if not self.date_debut_prevue or not self.date_fin_prevue:
+            return None
+        if self.date_fin_prevue < self.date_debut_prevue:
+            return 0
+        from datetime import timedelta
+
+        total_jours = (self.date_fin_prevue - self.date_debut_prevue).days + 1
+        return sum(
+            1
+            for i in range(total_jours)
+            if (self.date_debut_prevue + timedelta(days=i)).weekday() < 5
+        )
+
     class Meta:
         db_table = "projet"
         verbose_name = _("projet")
         verbose_name_plural = _("projets")
         ordering = ["-cree_le"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reference"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_projet_reference_tenant",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.reference} — {self.nom}"

@@ -33,7 +33,11 @@ class ProjetListCreateView(APIView):
         responses={200: ProjetSerializer(many=True)},
     )
     def get(self, request):
-        qs = Projet.objects.all().select_related("client", "chef_projet")
+        qs = (
+            Projet.objects.all()
+            .select_related("client", "chef_projet", "conducteur_travaux")
+            .prefetch_related("lots")
+        )
         serializer = ProjetSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -46,7 +50,12 @@ class ProjetListCreateView(APIView):
         serializer = ProjetCreationSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
-        retour = ProjetSerializer(projet)
+        projet_charge = (
+            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux")
+            .prefetch_related("lots")
+            .get(pk=projet.pk)
+        )
+        retour = ProjetSerializer(projet_charge)
         return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
@@ -61,7 +70,10 @@ class ProjetDetailView(APIView):
         responses={200: ProjetSerializer},
     )
     def get(self, request, pk):
-        projet = get_object_or_404(Projet.objects.select_related("client", "chef_projet"), pk=pk)
+        projet = get_object_or_404(
+            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux").prefetch_related("lots"),
+            pk=pk,
+        )
         return Response(ProjetSerializer(projet).data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -76,5 +88,10 @@ class ProjetDetailView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
-        retour = ProjetSerializer(projet)
+        projet_charge = (
+            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux")
+            .prefetch_related("lots")
+            .get(pk=projet.pk)
+        )
+        retour = ProjetSerializer(projet_charge)
         return Response(retour.data, status=status.HTTP_200_OK)

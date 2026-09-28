@@ -26,9 +26,16 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.projets.referentiels.villes import AGGLOMERATION_PRINCIPALE, LOCALITES
 
 RACINE = Path(__file__).resolve().parents[5]
-CIBLE_FRONTEND = RACINE / "frontend" / "src" / "features" / "referentiels" / "villes.ts"
+CIBLE_APP_NO_SRC = RACINE / "Application-Gestion-Chantier" / "features" / "referentiels" / "villes.ts"
 CIBLE_APP = RACINE / "Application-Gestion-Chantier" / "src" / "features" / "referentiels" / "villes.ts"
-CIBLE = CIBLE_APP if CIBLE_APP.exists() else CIBLE_FRONTEND
+CIBLE_FRONTEND = RACINE / "frontend" / "src" / "features" / "referentiels" / "villes.ts"
+
+if CIBLE_APP_NO_SRC.exists():
+    CIBLE = CIBLE_APP_NO_SRC
+elif CIBLE_APP.exists():
+    CIBLE = CIBLE_APP
+else:
+    CIBLE = CIBLE_FRONTEND
 
 ENTETE = """/**
  * Référentiel des villes des neuf pays où une entreprise peut s'inscrire.

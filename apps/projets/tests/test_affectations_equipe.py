@@ -69,7 +69,7 @@ def collaborateur_user(db):
             defaults={
                 "nom": "Diallo",
                 "prenom": "Moussa",
-                "role_global": RoleGlobal.INGENIEUR_TECHNICIEN,
+                "role_global": RoleGlobal.CHEF_CHANTIER,
                 "statut": StatutUtilisateur.ACTIF,
             },
         )

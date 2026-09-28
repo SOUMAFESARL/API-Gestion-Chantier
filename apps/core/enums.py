@@ -11,21 +11,34 @@ from django.db import models
 
 
 class RoleGlobal(models.TextChoices):
+    # Les 7 rôles clés du projet BTP
     ADMIN = "AD", "Administrateur"
     DIRECTEUR_GENERAL = "DG", "Directeur Général / PDG"
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
     MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
-    VISITEUR = "VI", "Visiteur"
+    MAITRE_OEUVRE = "MOE", "Maître d'Œuvre"
+    VISITEUR = "VI", "Consultant lecture"
+
+
+# Alias sémantique conforme US-04
+RoleGlobal.CONSULTANT_LECTURE = RoleGlobal.VISITEUR
 
 
 class RoleProjet(models.TextChoices):
+    # Les 7 rôles clés du chantier BTP
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
     MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
-    VISITEUR = "VI", "Visiteur"
+    MAITRE_OEUVRE = "MOE", "Maître d'Œuvre"
+    VISITEUR = "VI", "Consultant lecture"
+
+
+# Alias sémantique conforme US-04
+RoleProjet.CONSULTANT_LECTURE = RoleProjet.VISITEUR
+
 
 
 class StatutUtilisateur(models.TextChoices):

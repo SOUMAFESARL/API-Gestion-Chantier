@@ -22,17 +22,18 @@ Suivre scrupuleusement ces 5 étapes séquentielles pour chaque tâche de dével
    - **Règle d'or :** Aucun fichier de code n'est modifié durant cette étape.
 
 ## Étape 2 : Rédaction et Génération du « Manuel PDF d'Apprentissage par la Pratique »
-1. **Interdiction formelle d'écrire le code métier par l'agent** :
-   - L'agent ne modifie aucun fichier de code backend pour la tâche.
-2. **Génération du Manuel PDF de Tâche** :
+1. **Mode d'Implémentation :**
+   - Par défaut, le développeur implémente manuellement pour développer ses automatismes moteurs.
+   - Sur demande explicite du développeur (e.g. contraintes temporelles, refactoring lourd), l'agent est habilité à implémenter directement le code backend et ses tests.
+2. **Génération du Manuel PDF de Tâche :**
    - L'agent génère un guide complet au format PDF via `reportlab` dans :
      `Manuels_Apprentissage/MANUEL_SPRINT_<N>_TACHE_<ID>_<NOM>.pdf`
    - Ce manuel structure l'apprentissage actif :
      * *Section 1 : Film Mental & Objectif Sacré* (Visualisation subconsciente).
      * *Section 2 : Architecture & Invariants (Pólya / Dehaene)* (Modèles de données, contrats d'API).
-     * *Section 3 : Guide d'Implémentation Pas-à-Pas pour vos Mains* (Code commenté, explications profondes).
+     * *Section 3 : Guide d'Implémentation Pas-à-Pas* (Code commenté, explications profondes).
      * *Section 4 : Signal d'Erreur Bayésien & Pre-Mortem (Dehaene P3 / Kahneman)* (Cas limites, pièges classiques).
-     * *Section 5 : Checklist de Tests & Validation manuelle*.
+     * *Section 5 : Checklist de Tests & Validation*.
      * *Section 6 : Défi Homo Docens* (Transmettre et enseigner la notion à un pair).
 
 ## Étape 3 : Isolation Git sur Branche Feature
@@ -46,9 +47,9 @@ Suivre scrupuleusement ces 5 étapes séquentielles pour chaque tâche de dével
    git checkout -b feature/<nom-court-de-la-tache>
    ```
 
-## Étape 4 : Implémentation Manuelle par le Développeur & Tests
-1. **Le développeur tape le code manuellement** en suivant le manuel PDF généré.
-2. L'agent reste en posture de mentor socratique et de soutien subconscient :
+## Étape 4 : Implémentation du Code Métier & Tests
+1. **Implémentation :** Réalisée manuellement par le développeur ou directement par l'agent sur demande expresse.
+2. L'agent assure la validation continue et le soutien subconscient :
    - Réfutation bienveillante des erreurs de compilation ou de test (Predictive Coding).
    - Application de la Loi de l'Effort Inversé si blocage (respirer, décharger).
 3. Exécuter les commandes de validation :

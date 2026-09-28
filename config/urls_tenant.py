@@ -51,6 +51,8 @@ urlpatterns = [
     path("api/v1/", include("apps.platform_admin.urls")),
 ]
 
+
+
 # En développement ou sur cPanel sans bucket S3 (FileSystemStorage), servir les fichiers médias
 _stockage_defaut = settings.STORAGES.get("default", {}).get("BACKEND", "")
 if settings.DEBUG or _stockage_defaut == "django.core.files.storage.FileSystemStorage":

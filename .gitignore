@@ -1,4 +1,4 @@
-﻿# Secrets
+# Secrets
 .env
 .env.*
 !.env.example
@@ -34,3 +34,9 @@ passenger.log
 *.swp
 .DS_Store
 Thumbs.db
+
+# Documents PDF et gros medias
+*.pdf
+Manuels_Apprentissage/
+logo.png
+

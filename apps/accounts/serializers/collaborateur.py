@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.accounts.models import Role, Utilisateur
 from apps.core.enums import RoleGlobal
+from django.utils.translation import gettext_lazy as _
 
 
 class ProjetAssocieCollaborateurSerializer(serializers.Serializer):
@@ -53,3 +54,54 @@ class CollaborateurCreateSerializer(serializers.Serializer):
     telephone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
     role_global = serializers.ChoiceField(choices=RoleGlobal.choices, required=True)
     role_personnalise_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+class CollaborateurRattacherRoleSerializer(serializers.Serializer):
+    """Sérialiseur pour la mise à jour ou le rattachement de rôle d'un collaborateur existant."""
+
+    role_global = serializers.ChoiceField(
+        choices=RoleGlobal.choices,
+        required=False,
+    )
+    role_personnalise_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, attrs):
+        role_global = attrs.get("role_global")
+        role_id = attrs.get("role_personnalise_id")
+
+        if role_global is None and role_id is None:
+            raise serializers.ValidationError(
+                _(
+                    "Au moins un rôle global ou un identifiant de rôle personnalisé doit être spécifié."
+                )
+            )
+
+        if role_global == RoleGlobal.DIRECTEUR_GENERAL:
+            raise serializers.ValidationError(
+                {
+                    "role_global": _(
+                        "Le rôle de Directeur Général ne peut pas être attribué."
+                    )
+                }
+            )
+
+        if role_id is not None:
+            role = Role.objects.filter(
+                id=role_id,
+                supprime_le__isnull=True,
+            ).first()
+
+            if not role:
+                raise serializers.ValidationError(
+                    {
+                        "role_personnalise_id": _(
+                            "Rôle personnalisé introuvable ou inactif."
+                        )
+                    }
+                )
+
+            attrs["role_instance"] = role
+
+        return attrs

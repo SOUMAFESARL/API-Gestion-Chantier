@@ -10,6 +10,7 @@ from .collaborateur import (
     CollaborateurResponseSerializer,
     ProjetAssocieCollaborateurSerializer,
     RolePersonnaliseCollaborateurSerializer,
+    CollaborateurRattacherRoleSerializer,
 )
 from .connexion import (
     ConnexionSerializer,
@@ -83,4 +84,5 @@ __all__ = [
     "UtilisateurSerializer",
     "VerificationInvitationSerializer",
     "VerificationJetonSerializer",
+    "CollaborateurRattacherRoleSerializer",
 ]

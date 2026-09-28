@@ -8,6 +8,7 @@ from apps.accounts.views import (
     InvitationListCreateView,
     InvitationVerifierView,
     ParametresCollaborateurListCreateView,
+    ParametresCollaborateurDetailView,
     ParametresRoleDetailUpdateView,
     ParametresRoleListCreateView,
     ParametresRoleSupprimerReassignerView,
@@ -75,5 +76,10 @@ urlpatterns = [
         "auth/mot-de-passe/reinitialiser/",
         ReinitialisationView.as_view(),
         name="mot-de-passe-reinitialiser",
+    ),
+    path(
+        "parametres/collaborateurs/<uuid:pk>/", 
+        ParametresCollaborateurDetailView.as_view(),
+        name="parametres-collaborateur-detail-modifier",
     ),
 ]

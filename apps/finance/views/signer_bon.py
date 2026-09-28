@@ -52,7 +52,6 @@ class SignerBonPaiementView(APIView):
             RoleGlobal.DIRECTEUR_GENERAL,
             RoleGlobal.ADMIN,
             RoleGlobal.CONDUCTEUR_TRAVAUX,
-            RoleGlobal.DIRECTEUR_FINANCIER,
         ]
 
         if role_utilisateur not in roles_autorises:

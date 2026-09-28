@@ -135,7 +135,7 @@ def test_pdf_accept_swagger_et_erreur_json(facture_api):
     assert "erreur" in response.json()
 
 
-@pytest.mark.parametrize("role", [RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.DIRECTEUR_FINANCIER])
+@pytest.mark.parametrize("role", [RoleGlobal.DIRECTEUR_GENERAL])
 def test_directions_autorisees(facture_api, role):
     client, paiement, contexte = facture_api
     contexte["admin"].role_global = role

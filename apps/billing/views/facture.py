@@ -48,7 +48,6 @@ class FactureBaseView(GenericAPIView):
         RoleRequis.pour(
             RoleGlobal.ADMIN,
             RoleGlobal.DIRECTEUR_GENERAL,
-            RoleGlobal.DIRECTEUR_FINANCIER,
         ),
     ]
 

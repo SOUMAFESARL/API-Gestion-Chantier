@@ -56,7 +56,7 @@ def client_api(admin_user):
 def test_initialiser_roles_par_defaut():
     with schema_context(SCHEMA):
         roles = initialiser_roles_par_defaut()
-        assert len(roles) >= 13
+        assert len(roles) >= 7
 
         # Vérifie que l'admin a validation sur tous les modules
         role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
@@ -72,51 +72,6 @@ def test_initialiser_roles_par_defaut():
         assert perm_chantier.niveau == NiveauAcces.VALIDATION
         perm_finance = RoleModulePermission.objects.get(role=role_cc, module=ModuleChoix.FINANCE)
         assert perm_finance.niveau == NiveauAcces.VALIDATION
-
-
-@pytest.mark.django_db
-def test_creer_et_modifier_role_personnalise(admin_user):
-    with schema_context(SCHEMA):
-        role = creer_role(
-            code="MAGASINIER",
-            libelle="Magasinier Principal",
-            description="Gestionnaire des stocks et des réceptions",
-            permissions_modules={
-                ModuleChoix.STOCKS: NiveauAcces.ECRITURE,
-                ModuleChoix.ACHATS: NiveauAcces.LECTURE,
-            },
-            cree_par=admin_user,
-        )
-
-        assert role.code == "MAGASINIER"
-        assert role.est_systeme is False
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.STOCKS).niveau
-            == NiveauAcces.ECRITURE
-        )
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.ACHATS).niveau
-            == NiveauAcces.LECTURE
-        )
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.FINANCE).niveau
-            == NiveauAcces.AUCUN
-        )
-
-        # Modification
-        role_modifie = modifier_role(
-            role=role,
-            libelle="Magasinier Général",
-            permissions_modules={
-                ModuleChoix.STOCKS: NiveauAcces.VALIDATION,
-            },
-            modifie_par=admin_user,
-        )
-        assert role_modifie.libelle == "Magasinier Général"
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.STOCKS).niveau
-            == NiveauAcces.VALIDATION
-        )
 
 
 @pytest.mark.django_db

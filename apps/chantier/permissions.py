@@ -24,7 +24,6 @@ ROLES_DIRECTION = (
 ROLES_GESTION_CHANTIER = (
     RoleGlobal.ADMIN,
     RoleGlobal.DIRECTEUR_GENERAL,
-    RoleGlobal.DIRECTEUR_PROJET,
     RoleGlobal.CHEF_PROJET,
     RoleGlobal.CONDUCTEUR_TRAVAUX,
     RoleGlobal.CHEF_CHANTIER,
@@ -33,7 +32,6 @@ ROLES_GESTION_CHANTIER = (
 ROLES_VALIDATION_CHANTIER = (
     RoleGlobal.ADMIN,
     RoleGlobal.DIRECTEUR_GENERAL,
-    RoleGlobal.DIRECTEUR_PROJET,
     RoleGlobal.CHEF_PROJET,
     RoleGlobal.CONDUCTEUR_TRAVAUX,
 )
@@ -165,7 +163,6 @@ class PeutValiderRapports(permissions.BasePermission):
                 in (
                     RoleProjet.CONDUCTEUR_TRAVAUX,
                     RoleProjet.CHEF_PROJET,
-                    RoleProjet.DIRECTEUR_PROJET,
                 )
                 or user.role_global in ROLES_VALIDATION_CHANTIER
             ):

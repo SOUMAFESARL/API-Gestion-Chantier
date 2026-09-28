@@ -445,7 +445,6 @@ class PeutConsulterIncidents(permissions.BasePermission):
 class PeutGererIncidents(permissions.BasePermission):
     """Creation / modification reservee a l'encadrement technique du chantier."""
     ROLES_GESTION = (
-        RoleGlobal.DIRECTEUR_PROJET,
         RoleGlobal.CHEF_PROJET,
         RoleGlobal.CONDUCTEUR_TRAVAUX,
         RoleGlobal.CHEF_CHANTIER,

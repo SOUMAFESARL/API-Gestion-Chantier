@@ -5,6 +5,7 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -18,12 +19,16 @@ from apps.accounts.models import Invitation, Role, Utilisateur
 from apps.accounts.serializers.collaborateur import (
     CollaborateurCreateSerializer,
     CollaborateurResponseSerializer,
+    CollaborateurRattacherRoleSerializer,
 )
 from apps.accounts.services.invitations import creer_invitation
+from apps.accounts.services import rattacher_collaborateur_a_role
 from apps.billing.services.quota import verifier_quota_avant_invitation
 from apps.core.enums import RoleGlobal, RoleProjet, StatutUtilisateur
 from apps.core.exceptions import ActionInterditeDelegue, ActionReserveeDg
 from apps.projets.models import AffectationProjet, Projet
+
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -309,3 +314,84 @@ class ParametresCollaborateurListCreateView(APIView):
 
         serializer_rep = CollaborateurResponseSerializer(reponse_data)
         return Response(serializer_rep.data, status=status.HTTP_201_CREATED)
+
+class ParametresCollaborateurDetailView(APIView):
+    """`GET`, `PATCH` et `POST /api/v1/parametres/collaborateurs/{id}/`.
+
+    Permet de consulter le détail d'un collaborateur et de mettre à jour son rôle.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Rattacher un rôle à un collaborateur ou modifier ses informations",
+        request=CollaborateurRattacherRoleSerializer,
+        responses={200: CollaborateurResponseSerializer},
+    )
+    def patch(self, request, pk):
+        _autoriser_parametres_collaborateurs(request.user)
+
+        collaborateur = get_object_or_404(
+            Utilisateur,
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+
+        serializer = CollaborateurRattacherRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        role_instance = serializer.validated_data.get("role_instance")
+        role_global = serializer.validated_data.get("role_global")
+
+        # Règle R-DEMO-01 : Seul le DG ou Propriétaire peut attribuer le rôle ADMIN
+        if role_global == RoleGlobal.ADMIN and not (
+            getattr(request.user, "is_dg", False)
+            or getattr(request.user, "is_owner", False)
+        ):
+            raise ActionInterditeDelegue()
+
+        try:
+            collaborateur = rattacher_collaborateur_a_role(
+                collaborateur=collaborateur,
+                role=role_instance,
+                role_global=role_global,
+                modifie_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise ValidationError({"detail": msg}) from exc
+
+        # Recharger les données complètes pour la réponse
+        rp_data = None
+        if collaborateur.role_personnalise:
+            rp_data = {
+                "id": collaborateur.role_personnalise.id,
+                "code": collaborateur.role_personnalise.code,
+                "libelle": collaborateur.role_personnalise.libelle,
+            }
+
+        reponse_data = {
+            "id": collaborateur.id,
+            "email": collaborateur.email,
+            "nom": collaborateur.nom,
+            "prenom": collaborateur.prenom,
+            "nom_complet": collaborateur.nom_complet,
+            "telephone": collaborateur.telephone,
+            "role_global": collaborateur.role_global,
+            "role_global_libelle": collaborateur.get_role_global_display(),
+            "role_personnalise": rp_data,
+            "statut": collaborateur.statut,
+            "is_owner": collaborateur.is_owner,
+            "cree_le": collaborateur.cree_le,
+            "projets": [],
+            "lien_activation": None,
+        }
+
+        return Response(
+            CollaborateurResponseSerializer(reponse_data).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request, pk):
+        return self.patch(request, pk)

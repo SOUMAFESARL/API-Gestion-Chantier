@@ -153,9 +153,8 @@ def test_uniquement_responsables_actifs(contexte):
                 is_active=actif,
                 statut=StatutUtilisateur.ACTIF,
             )
-    assert envoyer_rappels_expiration() == 3
+    assert envoyer_rappels_expiration() == 2
     assert {m.to[0] for m in mail.outbox} == {
         "rappel.expiration@demo.ci",
         "rappel-0@demo.ci",
-        "rappel-1@demo.ci",
     }

@@ -140,7 +140,6 @@ def test_uniquement_responsables_actifs(contexte):
         for i, (role, actif) in enumerate(
             [
                 (RoleGlobal.DIRECTEUR_GENERAL, True),
-                (RoleGlobal.DIRECTEUR_FINANCIER, True),
                 (RoleGlobal.CHEF_PROJET, True),
                 (RoleGlobal.ADMIN, False),
             ]

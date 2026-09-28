@@ -13,32 +13,17 @@ from django.db import models
 class RoleGlobal(models.TextChoices):
     ADMIN = "AD", "Administrateur"
     DIRECTEUR_GENERAL = "DG", "Directeur Général / PDG"
-    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
-    INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
-    RESPONSABLE_FINANCIER = "RF", "Responsable Financier"
-    DIRECTEUR_FINANCIER = "DF", "Directeur Financier"
-    RESPONSABLE_ACHATS = "RA", "Responsable Achats"
-    MAGASINIER = "MAG", "Magasinier"
-    RESPONSABLE_RH = "RH", "Responsable RH"
-    SOUS_TRAITANT = "ST", "Sous-traitant"
-    FOURNISSEUR = "FRN", "Fournisseur"
     MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
     VISITEUR = "VI", "Visiteur"
 
 
 class RoleProjet(models.TextChoices):
-    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
-    INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
-    DIRECTEUR_FINANCIER = "DF", "Directeur Financier"
-    MAGASINIER = "MAG", "Magasinier"
-    SOUS_TRAITANT = "ST", "Sous-traitant"
-    FOURNISSEUR = "FRN", "Fournisseur"
     MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
     VISITEUR = "VI", "Visiteur"
 

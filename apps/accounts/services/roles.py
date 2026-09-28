@@ -30,7 +30,7 @@ ROLES_SYSTEME_INFOS = {
         "Administrateur",
         "Paramétrage de l'organisation, administration technique et gestion des utilisateurs",
     ),
-    RoleGlobal.DIRECTEUR_PROJET: (
+    RoleGlobal.CHEF_PROJET: (
         "Directeur de Projet",
         "Pilotage opérationnel des projets qui lui sont confiés et accès complet à ses chantiers",
     ),
@@ -41,38 +41,6 @@ ROLES_SYSTEME_INFOS = {
     RoleGlobal.CHEF_CHANTIER: (
         "Chef de Chantier",
         "Saisie terrain : avancement, incidents, photos, pointage (interface mobile simplifiée)",
-    ),
-    RoleGlobal.INGENIEUR_TECHNICIEN: (
-        "Ingénieur / Technicien",
-        "Contrôle qualité, suivi des non-conformités et vérification des documents techniques",
-    ),
-    RoleGlobal.RESPONSABLE_FINANCIER: (
-        "Responsable Financier",
-        "Suivi des budgets, dépenses, situations de paiement et rentabilité",
-    ),
-    RoleGlobal.DIRECTEUR_FINANCIER: (
-        "Directeur Financier",
-        "Gestion et validation financière et achats (alias rétrocompatible)",
-    ),
-    RoleGlobal.RESPONSABLE_ACHATS: (
-        "Responsable Achats",
-        "Gestion des demandes d'achat, commandes, fournisseurs et livraisons",
-    ),
-    RoleGlobal.MAGASINIER: (
-        "Magasinier",
-        "Gestion physique des stocks sur chantier, entrées, sorties et inventaires",
-    ),
-    RoleGlobal.RESPONSABLE_RH: (
-        "Responsable RH",
-        "Gestion du personnel, présences, pointages ouvriers, habilitations et incidents",
-    ),
-    RoleGlobal.SOUS_TRAITANT: (
-        "Sous-traitant",
-        "Consultation de ses tâches assignées et déclaration d'avancement des travaux",
-    ),
-    RoleGlobal.FOURNISSEUR: (
-        "Fournisseur",
-        "Consultation des bons de commande et confirmation des livraisons de matériaux",
     ),
     RoleGlobal.MAITRE_OUVRAGE: (
         "Maître d'Ouvrage (Client)",
@@ -273,3 +241,61 @@ def supprimer_role(
         "utilisateurs_reassignes": utilisateurs_reassignes,
         "affectations_reassignees": affectations_reassignees,
     }
+
+def rattacher_collaborateur_a_role(
+    *,
+    collaborateur: Utilisateur,
+    role: Role | None = None,
+    role_global: str | None = None,
+    modifie_par: Utilisateur | None = None,
+) -> Utilisateur:
+    """Rattache un collaborateur à un rôle personnalisé ou met à jour son rôle global.
+
+    Règles d'intégrité et de sécurité :
+    - Le Propriétaire/Fondateur (is_owner=True) a un rôle immuable : interdiction de modification.
+    - Le rôle de Directeur Général ne peut pas être attribué à un collaborateur standard.
+    - Si un 'role' personnalisé est fourni, il doit être actif et non supprimé.
+    - Seul le DG ou un Admin peut conférer le rôle ADMIN.
+    """
+    from django.core.exceptions import ValidationError
+    from apps.core.enums import RoleGlobal, StatutUtilisateur
+
+    # Règle 1 : Immutabilité du compte Propriétaire
+    if collaborateur.is_owner:
+        raise ValidationError(
+            _("Le rôle et le statut du Propriétaire / Fondateur sont immuables.")
+        )
+
+    # Règle 2 : Interdiction d'attribuer le rôle DG
+    if role_global == RoleGlobal.DIRECTEUR_GENERAL:
+        raise ValidationError(
+            _("Le rôle de Directeur Général est unique et ne peut pas être attribué.")
+        )
+
+    # Règle 3 : Validation de l'existence et de l'état du rôle personnalisé
+    if role is not None:
+        if role.supprime_le is not None or not role.est_actif:
+            raise ValidationError(
+                _("Le rôle spécifié est inactif ou a été supprimé.")
+            )
+
+    with transaction.atomic():
+        champs_a_mettre_a_jour = ["modifie_le"]
+
+        if role is not None:
+            collaborateur.role_personnalise = role
+            champs_a_mettre_a_jour.append("role_personnalise")
+
+            # Si le code du rôle personnalisé correspond à un rôle global connu, synchroniser
+            if role.code in RoleGlobal.values:
+                collaborateur.role_global = role.code
+                champs_a_mettre_a_jour.append("role_global")
+
+        if role_global is not None and role_global in RoleGlobal.values:
+            collaborateur.role_global = role_global
+            if "role_global" not in champs_a_mettre_a_jour:
+                champs_a_mettre_a_jour.append("role_global")
+
+        collaborateur.save(update_fields=champs_a_mettre_a_jour)
+
+    return collaborateur

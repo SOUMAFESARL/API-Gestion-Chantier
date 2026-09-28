@@ -167,7 +167,6 @@ class EquipeCreationSerializer(serializers.Serializer):
     chefs_chantier_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
     )
-    directeur_financier_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     visiteurs_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
     )
@@ -211,7 +210,6 @@ class ProjetCreationSerializer(serializers.Serializer):
     chefs_chantier_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
     )
-    directeur_financier_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     visiteurs_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
     )
@@ -249,7 +247,6 @@ class ProjetCreationSerializer(serializers.Serializer):
                 "conducteur_travaux_id",
                 "conducteur_travaux_invite",
                 "chefs_chantier_ids",
-                "directeur_financier_id",
                 "visiteurs_ids",
             ]:
                 if equipe.get(cle) is not None and not attrs.get(cle):
@@ -404,7 +401,6 @@ class ProjetCreationSerializer(serializers.Serializer):
         validated_data.pop("equipe", None)
         lots_data = validated_data.pop("lots", [])
         chefs_chantier_ids = validated_data.pop("chefs_chantier_ids", [])
-        directeur_financier_id = validated_data.pop("directeur_financier_id", None)
         visiteurs_ids = validated_data.pop("visiteurs_ids", [])
 
         conducteur_travaux_id = validated_data.pop("conducteur_travaux_id", None)
@@ -520,18 +516,6 @@ class ProjetCreationSerializer(serializers.Serializer):
                 except Utilisateur.DoesNotExist:
                     pass
 
-            # Affectation du Directeur Financier
-            if directeur_financier_id:
-                try:
-                    df_user = Utilisateur.objects.get(id=directeur_financier_id)
-                    AffectationProjet.objects.get_or_create(
-                        utilisateur=df_user,
-                        projet=projet,
-                        defaults={"role_projet": RoleProjet.DIRECTEUR_FINANCIER, "est_actif": True},
-                    )
-                except Utilisateur.DoesNotExist:
-                    pass
-
             # Affectation des Visiteurs
             for vis_id in visiteurs_ids:
                 try:
@@ -566,7 +550,6 @@ class ProjetCreationSerializer(serializers.Serializer):
         validated_data.pop("equipe", None)
         validated_data.pop("lots", None)
         validated_data.pop("chefs_chantier_ids", None)
-        validated_data.pop("directeur_financier_id", None)
         validated_data.pop("visiteurs_ids", None)
         validated_data.pop("conducteur_travaux_invite", None)
         validated_data.pop("chef_projet_invite", None)

@@ -284,3 +284,52 @@ def test_post_parametres_collaborateurs_refuse_aux_non_admins(client_tenant, col
     }
     rep = client.post("/api/v1/parametres/collaborateurs/", payload, format="json")
     assert rep.status_code == status.HTTP_403_FORBIDDEN
+
+@pytest.mark.django_db
+def test_rattacher_collaborateur_a_role_personnalise(
+    client_tenant, admin_user, collaborateur_user
+):
+    """Vérifie qu'un administrateur peut rattacher un collaborateur à un rôle personnalisé."""
+    with schema_context(SCHEMA):
+        role_maitre = Role.objects.create(
+            code="CHEF_EQUIPE_COFFRAGE",
+            libelle="Chef d'Équipe Coffrage",
+            est_systeme=False,
+            est_actif=True,
+        )
+
+    client = _auth(client_tenant, admin_user)
+    payload = {"role_personnalise_id": str(role_maitre.id)}
+
+    rep = client.patch(
+        f"/api/v1/parametres/collaborateurs/{collaborateur_user.id}/",
+        payload,
+        format="json",
+    )
+
+    assert rep.status_code == status.HTTP_200_OK
+
+    data = rep.json()
+    assert data["role_personnalise"]["code"] == "CHEF_EQUIPE_COFFRAGE"
+
+    with schema_context(SCHEMA):
+        collaborateur_user.refresh_from_db()
+        assert collaborateur_user.role_personnalise_id == role_maitre.id
+
+
+@pytest.mark.django_db
+def test_interdiction_modifier_role_proprietaire(
+    client_tenant, admin_user, dg_user
+):
+    """Rejette toute tentative de modification du rôle du Propriétaire / DG."""
+    client = _auth(client_tenant, admin_user)
+    payload = {"role_global": RoleGlobal.CHEF_CHANTIER}
+
+    rep = client.patch(
+        f"/api/v1/parametres/collaborateurs/{dg_user.id}/",
+        payload,
+        format="json",
+    )
+
+    assert rep.status_code == status.HTTP_400_BAD_REQUEST
+    assert "immuable" in str(rep.json()).lower()

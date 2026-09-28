@@ -176,7 +176,6 @@ class PermissionModule(permissions.BasePermission):
 
         est_direction = utilisateur.role_global in (
             RoleGlobal.DIRECTEUR_GENERAL,
-            RoleGlobal.DIRECTEUR_FINANCIER,
         )
         affectation = AffectationProjet.objects.filter(
             utilisateur=utilisateur, projet_id=projet_id, est_actif=True

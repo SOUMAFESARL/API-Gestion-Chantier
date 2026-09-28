@@ -13,11 +13,11 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='invitation',
             name='role_propose',
-            field=models.CharField(choices=[('AD', 'Administrateur'), ('DG', 'Directeur Général / PDG'), ('DP', 'Directeur de Projet'), ('CP', 'Chef de Projet'), ('CT', 'Conducteur de Travaux'), ('CC', 'Chef de Chantier'), ('IT', 'Ingénieur / Technicien'), ('RF', 'Responsable Financier'), ('DF', 'Directeur Financier'), ('RA', 'Responsable Achats'), ('MAG', 'Magasinier'), ('RH', 'Responsable RH'), ('ST', 'Sous-traitant'), ('FRN', 'Fournisseur'), ('MOA', "Maître d'Ouvrage (Client)"), ('VI', 'Visiteur')], max_length=5, verbose_name='rôle proposé'),
+            field=models.CharField(choices=[('AD', 'Administrateur'), ('DG', 'Directeur Général / PDG'), ('CP', 'Chef de Projet'), ('CT', 'Conducteur de Travaux'), ('CC', 'Chef de Chantier'), ('MOA', "Maître d'Ouvrage (Client)"), ('VI', 'Visiteur')], max_length=5, verbose_name='rôle proposé'),
         ),
         migrations.AlterField(
             model_name='utilisateur',
             name='role_global',
-            field=models.CharField(choices=[('AD', 'Administrateur'), ('DG', 'Directeur Général / PDG'), ('DP', 'Directeur de Projet'), ('CP', 'Chef de Projet'), ('CT', 'Conducteur de Travaux'), ('CC', 'Chef de Chantier'), ('IT', 'Ingénieur / Technicien'), ('RF', 'Responsable Financier'), ('DF', 'Directeur Financier'), ('RA', 'Responsable Achats'), ('MAG', 'Magasinier'), ('RH', 'Responsable RH'), ('ST', 'Sous-traitant'), ('FRN', 'Fournisseur'), ('MOA', "Maître d'Ouvrage (Client)"), ('VI', 'Visiteur')], db_index=True, default='VI', max_length=5, verbose_name='rôle global'),
+            field=models.CharField(choices=[('AD', 'Administrateur'), ('DG', 'Directeur Général / PDG'), ('CP', 'Chef de Projet'), ('CT', 'Conducteur de Travaux'), ('CC', 'Chef de Chantier'), ('MOA', "Maître d'Ouvrage (Client)"), ('VI', 'Visiteur')], db_index=True, default='VI', max_length=5, verbose_name='rôle global'),
         ),
     ]

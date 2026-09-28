@@ -11,12 +11,17 @@ from django.db import models
 
 
 class RoleGlobal(models.TextChoices):
+    # Les 7 rôles clés du projet BTP
     ADMIN = "AD", "Administrateur"
     DIRECTEUR_GENERAL = "DG", "Directeur Général / PDG"
-    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
+    MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
+    MAITRE_OEUVRE = "MOE", "Maître d'Œuvre"
+    VISITEUR = "VI", "Consultant lecture"
+    # Rôles complémentaires / rétrocompatibilité
+    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
     INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
     RESPONSABLE_FINANCIER = "RF", "Responsable Financier"
     DIRECTEUR_FINANCIER = "DF", "Directeur Financier"
@@ -25,22 +30,32 @@ class RoleGlobal(models.TextChoices):
     RESPONSABLE_RH = "RH", "Responsable RH"
     SOUS_TRAITANT = "ST", "Sous-traitant"
     FOURNISSEUR = "FRN", "Fournisseur"
-    MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
-    VISITEUR = "VI", "Visiteur"
+
+
+# Alias sémantique conforme US-04
+RoleGlobal.CONSULTANT_LECTURE = RoleGlobal.VISITEUR
 
 
 class RoleProjet(models.TextChoices):
-    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
+    # Les 7 rôles clés du chantier BTP
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
+    MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
+    MAITRE_OEUVRE = "MOE", "Maître d'Œuvre"
+    VISITEUR = "VI", "Consultant lecture"
+    # Rôles complémentaires / rétrocompatibilité
+    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
     INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
     DIRECTEUR_FINANCIER = "DF", "Directeur Financier"
     MAGASINIER = "MAG", "Magasinier"
     SOUS_TRAITANT = "ST", "Sous-traitant"
     FOURNISSEUR = "FRN", "Fournisseur"
-    MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
-    VISITEUR = "VI", "Visiteur"
+
+
+# Alias sémantique conforme US-04
+RoleProjet.CONSULTANT_LECTURE = RoleProjet.VISITEUR
+
 
 
 class StatutUtilisateur(models.TextChoices):

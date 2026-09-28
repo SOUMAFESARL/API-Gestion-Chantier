@@ -1,4 +1,4 @@
-﻿# Secrets
+# Secrets
 .env
 .env.*
 !.env.example
@@ -34,3 +34,7 @@ passenger.log
 *.swp
 .DS_Store
 Thumbs.db
+
+# Documents racine & assets temporaires
+/*.pdf
+/logo.png

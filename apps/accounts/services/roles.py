@@ -78,11 +78,16 @@ ROLES_SYSTEME_INFOS = {
         "Maître d'Ouvrage (Client)",
         "Suivi de l'avancement global du chantier et consultation des rapports d'activité",
     ),
+    RoleGlobal.MAITRE_OEUVRE: (
+        "Maître d'Œuvre",
+        "Supervision technique, coordination architecturale et validation des avancements",
+    ),
     RoleGlobal.VISITEUR: (
-        "Visiteur",
-        "Consultation ponctuelle des chantiers en lecture seule",
+        "Consultant lecture",
+        "Consultation de l'avancement et des données du chantier en lecture seule",
     ),
 }
+
 
 
 def initialiser_roles_par_defaut() -> list[Role]:

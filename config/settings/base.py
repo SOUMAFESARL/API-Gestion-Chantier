@@ -98,21 +98,17 @@ TENANT_APPS = [
     "apps.notifications",
     "apps.tiers",
     "apps.onboarding",
-    # modules métier — niveau B
-    "apps.projets",  # module 1
-    "apps.chantier",  # module 2
-    "apps.finance",  # module 3
-    # modules métier — niveau A, squelettes en attente de leur MLD
-    "apps.achats",  # module 4
-    "apps.stocks",  # module 5
-    "apps.rh",  # module 6
-    "apps.equipements",  # module 7
-    "apps.qhse",  # module 8
-    "apps.contrats",  # module 9
-    "apps.parties_prenantes",  # module 10
-    "apps.ged",  # module 11
-    "apps.pilotage",  # module 12
+    # modules métier actifs
+    "apps.projets",  # module 1 : projets et affectations
+    "apps.chantier",  # module 2 : suivi technique et rapports
+    "apps.finance",  # module 3 : finance et paiements
+    "apps.achats",  # module 4 : approvisionnements et réceptions
+    "apps.parties_prenantes",  # module parties prenantes
+    "apps.ged",  # module gestion documentaire
+    "apps.pilotage",  # module pilotage
 ]
+
+
 
 TIERCES_APPS = [
     "rest_framework",

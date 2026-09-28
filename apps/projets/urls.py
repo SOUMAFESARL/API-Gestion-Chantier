@@ -11,6 +11,11 @@ from apps.projets.views import (
     TableauDeBordView,
 )
 
+from apps.projets.views.affectation import (
+    ProjetAffectationDetailView,
+    ProjetAffectationListCreateView,
+)
+
 app_name = "projets"
 
 urlpatterns = [
@@ -23,5 +28,16 @@ urlpatterns = [
         ProjetPermissionsRolesView.as_view(),
         name="projet-permissions-roles",
     ),
+    path(
+        "projets/<uuid:projet_id>/affectations/",
+        ProjetAffectationListCreateView.as_view(),
+        name="projet-affectations-liste",
+    ),
+    path(
+        "projets/<uuid:projet_id>/affectations/<uuid:pk>/",
+        ProjetAffectationDetailView.as_view(),
+        name="projet-affectation-detail",
+    ),
     path("tableau-de-bord/", TableauDeBordView.as_view(), name="tableau-de-bord"),
 ]
+

@@ -20,13 +20,20 @@ Suivre scrupuleusement ces 5 étapes séquentielles pour chaque tâche de dével
    - Poser les questions d'arbitrage indispensables.
    - **Règle d'or :** Aucun fichier de code n'est modifié durant cette étape. Attendre les réponses et orientations de l'utilisateur.
 
-## Étape 2 : Plan d'Implémentation & Validation formelle
-1. Rédiger le document technique détaillé dans l'artefact `implementation_plan.md`.
-2. Définir précisément :
-   - Les composants impactés et les nouveaux fichiers à créer (`[NEW]`, `[MODIFY]`).
-   - Les arbitrages validés lors du brainstorming.
-   - Le plan de vérification automatisé et manuel.
-3. **Attendre le feu vert explicite** de l'utilisateur avant d'écrire la moindre ligne de code.
+## Étape 2 : Rédaction et Génération du « Manuel PDF d'Apprentissage par la Pratique »
+1. **Mode d'Implémentation :**
+   - Par défaut, le développeur implémente manuellement pour développer ses automatismes moteurs.
+   - Sur demande explicite du développeur (e.g. contraintes temporelles, refactoring lourd), l'agent est habilité à implémenter directement le code backend et ses tests.
+2. **Génération du Manuel PDF de Tâche :**
+   - L'agent génère un guide complet au format PDF via `reportlab` dans :
+     `Manuels_Apprentissage/MANUEL_SPRINT_<N>_TACHE_<ID>_<NOM>.pdf`
+   - Ce manuel structure l'apprentissage actif :
+     * *Section 1 : Film Mental & Objectif Sacré* (Visualisation subconsciente).
+     * *Section 2 : Architecture & Invariants (Pólya / Dehaene)* (Modèles de données, contrats d'API).
+     * *Section 3 : Guide d'Implémentation Pas-à-Pas* (Code commenté, explications profondes).
+     * *Section 4 : Signal d'Erreur Bayésien & Pre-Mortem (Dehaene P3 / Kahneman)* (Cas limites, pièges classiques).
+     * *Section 5 : Checklist de Tests & Validation*.
+     * *Section 6 : Défi Homo Docens* (Transmettre et enseigner la notion à un pair).
 
 ## Étape 3 : Isolation Git sur Branche Feature éphémère
 1. Se repositionner sur la branche principale d'intégration et récupérer les dernières modifications :
@@ -39,11 +46,12 @@ Suivre scrupuleusement ces 5 étapes séquentielles pour chaque tâche de dével
    git checkout -b feature/<nom-court-de-la-tache>
    ```
 
-## Étape 4 : Implémentation, Tests & Vérification automatique
-1. Développer la solution en respectant les conventions du projet :
-   - Backend Django : architecture selectors/services, modèles conformes MLD, typage Python.
-   - Frontend Next.js : composants accessibles, tokens CSS de la charte, internationalisation, typage strict.
-2. Exécuter les commandes de validation :
+## Étape 4 : Implémentation du Code Métier & Tests
+1. **Implémentation :** Réalisée manuellement par le développeur ou directement par l'agent sur demande expresse.
+2. L'agent assure la validation continue et le soutien subconscient :
+   - Réfutation bienveillante des erreurs de compilation ou de test (Predictive Coding).
+   - Application de la Loi de l'Effort Inversé si blocage (respirer, décharger).
+3. Exécuter les commandes de validation :
    - **Backend :**
      ```bash
      pytest apps/<module>/tests/ -v

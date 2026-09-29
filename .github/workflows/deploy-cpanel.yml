@@ -131,6 +131,46 @@ jobs:
             **/staticfiles/**
             **/*.sqlite3
 
+      - name: Appliquer les migrations Django (SSH)
+        if: ${{ secrets.CPANEL_SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.CPANEL_SSH_HOST }}
+          username: ${{ secrets.CPANEL_SSH_USERNAME }}
+          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
+          port: ${{ secrets.CPANEL_SSH_PORT }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+
+            # ── Chemins configurés via les variables GitHub ──
+            PROJECT_DIR="${{ vars.CPANEL_PROJECT_DIR }}"
+            VENV_PYTHON="${{ vars.CPANEL_VENV_PYTHON }}"
+
+            cd "$PROJECT_DIR"
+
+            echo "=== Migrations en attente AVANT migrate ==="
+            "$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || echo "(aucune migration en attente)"
+
+            echo ""
+            echo "=== Exécution de migrate --noinput ==="
+            "$VENV_PYTHON" manage.py migrate --noinput 2>&1
+
+            echo ""
+            echo "=== Vérification APRÈS migrate ==="
+            PENDING=$("$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || true)
+            if [ -n "$PENDING" ]; then
+              echo "⚠️  ATTENTION : migrations encore en attente :"
+              echo "$PENDING"
+              exit 1
+            fi
+            echo "✅ Toutes les migrations sont appliquées."
+
+            echo ""
+            echo "=== Redémarrage Passenger ==="
+            mkdir -p tmp
+            touch tmp/restart.txt
+
       - name: Vérifier la disponibilité de l’API
         if: ${{ vars.CPANEL_HEALTH_URL != '' }}
         shell: bash

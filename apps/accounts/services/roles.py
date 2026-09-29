@@ -55,9 +55,19 @@ ROLES_SYSTEME_INFOS = {
 }
 
 
+# Seuls le Directeur Général et l'Administrateur sont des rôles système
+# immuables (non supprimables). Les autres rôles par défaut (CP, CT, CC,
+# MOA, MOE, VI) sont pré-configurés mais restent supprimables par le DG.
+CODES_ROLES_SYSTEME = frozenset({RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.ADMIN})
+
+
 
 def initialiser_roles_par_defaut() -> list[Role]:
-    """Initialise les rôles système avec leurs permissions par défaut dans le schéma courant."""
+    """Initialise les rôles par défaut avec leurs permissions dans le schéma courant.
+
+    Seuls DG et AD reçoivent ``est_systeme=True`` (non supprimables).
+    Les autres rôles sont pré-configurés mais modifiables et supprimables.
+    """
     roles_crees = []
     with transaction.atomic():
         for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
@@ -66,7 +76,7 @@ def initialiser_roles_par_defaut() -> list[Role]:
                 defaults={
                     "libelle": libelle,
                     "description": description,
-                    "est_systeme": True,
+                    "est_systeme": code in CODES_ROLES_SYSTEME,
                     "est_actif": True,
                 },
             )

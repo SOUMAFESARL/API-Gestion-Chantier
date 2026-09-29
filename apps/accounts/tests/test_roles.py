@@ -78,11 +78,36 @@ def test_initialiser_roles_par_defaut():
 def test_interdiction_supprimer_role_systeme():
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
-        role_ct = Role.objects.get(code=RoleGlobal.CONDUCTEUR_TRAVAUX)
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
 
         with pytest.raises(ValidationError) as exc:
-            supprimer_role(role_ct)
+            supprimer_role(role_dg)
         assert "Les rôles système ne peuvent pas être supprimés." in str(exc.value)
+
+
+@pytest.mark.django_db
+def test_seuls_dg_et_admin_sont_roles_systeme():
+    """Vérifie que seuls DG et AD possèdent est_systeme=True après initialisation."""
+    with schema_context(SCHEMA):
+        initialiser_roles_par_defaut()
+
+        # DG et AD doivent être système
+        for code in (RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.ADMIN):
+            role = Role.objects.get(code=code)
+            assert role.est_systeme is True, f"{code} devrait être est_systeme=True"
+
+        # Tous les autres rôles ne doivent PAS être système
+        codes_non_systeme = (
+            RoleGlobal.CHEF_PROJET,
+            RoleGlobal.CONDUCTEUR_TRAVAUX,
+            RoleGlobal.CHEF_CHANTIER,
+            RoleGlobal.MAITRE_OUVRAGE,
+            RoleGlobal.MAITRE_OEUVRE,
+            RoleGlobal.VISITEUR,
+        )
+        for code in codes_non_systeme:
+            role = Role.objects.get(code=code)
+            assert role.est_systeme is False, f"{code} ne devrait PAS être est_systeme=True"
 
 
 @pytest.mark.django_db

@@ -132,7 +132,7 @@ jobs:
             **/*.sqlite3
 
       - name: Appliquer les migrations Django (SSH)
-        if: ${{ secrets.CPANEL_SSH_HOST != '' }}
+        if: ${{ vars.CPANEL_PROJECT_DIR != '' }}
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.CPANEL_SSH_HOST }}

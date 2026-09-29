@@ -1,6 +1,6 @@
 """Préparation du formulaire à partir de l'identité authentifiée."""
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -29,8 +29,31 @@ class ContexteCreationProjetView(APIView):
     ]
 
     @extend_schema(
-        summary="Préparer la création d'un projet pour l'entreprise connectée",
-        responses={200: ContexteCreationProjetSerializer},
+        summary="Charger les choix du formulaire Nouveau projet",
+        tags=["projets"],
+        description=(
+            "À appeler à l'ouverture du formulaire **Nouveau projet**. "
+            "Cet appel **ne crée aucun projet** et ne prend aucun corps JSON.\n\n"
+            "La réponse contient :\n"
+            "- `utilisateur` : profil de la personne connectée.\n"
+            "- `entreprise` : entreprise identifiée depuis son jeton.\n"
+            "- `collaborateurs` : membres actifs ou invités de cette entreprise. "
+            "`assignable_responsable` indique ceux sélectionnables comme CP ou CT.\n"
+            "- `clients` : tiers actifs à sélectionner comme maître d'ouvrage.\n"
+            "- `types_projet`, `modes_execution`, `types_bordereau`, `roles_projet` : "
+            "choix avec `valeur` à envoyer et `libelle` à afficher.\n\n"
+            "Conserver les UUID sélectionnés pour `POST /api/v1/projets/`. "
+            "Le droit d'écriture sur le module projets est requis. "
+            "Pour afficher seulement le profil connecté, utiliser plutôt "
+            "`GET /api/v1/auth/profil/`."
+        ),
+        responses={
+            200: ContexteCreationProjetSerializer,
+            401: OpenApiResponse(description="Jeton absent, invalide ou expiré."),
+            403: OpenApiResponse(
+                description="Entreprise requise ou droit de création insuffisant."
+            ),
+        },
     )
     def get(self, request):
         profil = obtenir_donnees_profil(request.user, request=request)

@@ -6,6 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.core.permissions import PermissionModule
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersCreationSerializer, TiersSerializer
 
@@ -15,8 +17,18 @@ __all__ = ["TiersDetailView", "TiersListCreateView"]
 class TiersListCreateView(APIView):
     """`GET` et `POST /api/v1/tiers/`."""
 
-    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [
+                IsAuthenticated(),
+                PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.ECRITURE)(),
+            ]
+        return [
+            IsAuthenticated(),
+            PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.LECTURE)(),
+        ]
 
     @extend_schema(
         summary="Lister les tiers",
@@ -43,8 +55,18 @@ class TiersListCreateView(APIView):
 class TiersDetailView(APIView):
     """`GET` et `PATCH /api/v1/tiers/<uuid:pk>/`."""
 
-    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [
+                IsAuthenticated(),
+                PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.ECRITURE)(),
+            ]
+        return [
+            IsAuthenticated(),
+            PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.LECTURE)(),
+        ]
 
     @extend_schema(
         summary="Détail d'un tiers",

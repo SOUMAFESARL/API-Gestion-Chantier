@@ -98,14 +98,11 @@ TENANT_APPS = [
     "apps.notifications",
     "apps.tiers",
     "apps.onboarding",
-    # modules métier actifs
+    # modules métier souverains (5 modules cibles)
     "apps.projets",  # module 1 : projets et affectations
     "apps.chantier",  # module 2 : suivi technique et rapports
-    "apps.finance",  # module 3 : finance et paiements
-    "apps.achats",  # module 4 : approvisionnements et réceptions
-    "apps.parties_prenantes",  # module parties prenantes
-    "apps.ged",  # module gestion documentaire
-    "apps.pilotage",  # module pilotage
+    "apps.ged",  # module 3 : gestion documentaire
+    "apps.pilotage",  # module 4 : tableaux de bord et pilotage
 ]
 
 

@@ -15,8 +15,6 @@ from django.utils.translation import gettext_lazy as _
 from apps.accounts.models import Role, RoleModulePermission, Utilisateur
 from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal
 
-# À ce stade de cadrage, tous les rôles disposent temporairement d'un accès complet
-# (NiveauAcces.VALIDATION = 3) sur l'intégralité des 12 modules CCD Digital.
 MATRICE_DEFAUT = {
     code: dict.fromkeys(ModuleChoix.values, NiveauAcces.VALIDATION) for code in RoleGlobal.values
 }
@@ -81,6 +79,9 @@ def initialiser_roles_par_defaut() -> list[Role]:
                     module=module,
                     defaults={"niveau": niveau},
                 )
+            RoleModulePermission.objects.filter(role=role).exclude(
+                module__in=ModuleChoix.values
+            ).delete()
             roles_crees.append(role)
     return roles_crees
 

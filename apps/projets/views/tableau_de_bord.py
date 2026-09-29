@@ -3,8 +3,6 @@
 Alimentée à 100% par les modèles réels du schéma tenant :
 - Projets & Chantiers (apps.projets)
 - Rapports journaliers & Effectifs réels (apps.chantier)
-- Bons de paiement & Engagements réels (apps.finance)
-- Réceptions de matériaux & Approvisionnements (apps.achats)
 - Météo en direct & Alertes intempéries (Open-Meteo)
 """
 
@@ -16,10 +14,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.achats.models import ReceptionMateriau
 from apps.chantier.models import RapportJournalier
-from apps.core.enums import StatutBonPaiement, StatutRapport
-from apps.finance.models import BonPaiement
+from apps.core.enums import ModuleChoix, NiveauAcces, StatutRapport
+from apps.core.permissions import PermissionModule, filtrer_queryset_par_affectations
 from apps.projets.models import Projet
 from apps.projets.serializers import TableauDeBordResponseSerializer
 from apps.projets.services.meteo import (
@@ -36,15 +33,18 @@ __all__ = ["TableauDeBordView"]
 class TableauDeBordView(APIView):
     """`GET /api/v1/tableau-de-bord/` — Données consolidées de pilotage BTP 100% réelles."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated,
+        PermissionModule.pour(ModuleChoix.PILOTAGE, NiveauAcces.LECTURE),
+    ]
     serializer_class = TableauDeBordResponseSerializer
 
     @extend_schema(
         summary="Données réelles du tableau de bord de pilotage BTP",
         description=(
             "Agrège l'ensemble des indicateurs de performance clés (KPIs) en temps réel : "
-            "santé globale du portefeuille, budgets engagés vs initiaux, alertes intempéries, "
-            "bons de paiement en attente de signature, réceptions récentes et effectifs sur site."
+            "santé globale du portefeuille, avancement des chantiers, alertes intempéries, "
+            "et effectifs sur site."
         ),
         responses={200: TableauDeBordResponseSerializer},
     )
@@ -52,44 +52,25 @@ class TableauDeBordView(APIView):
         tenant = getattr(request, "tenant", None)
         pays = getattr(tenant, "pays", "CI") if tenant else "CI"
 
-        projets_qs = (
+        projets_base = (
             Projet.objects.filter(supprime_le__isnull=True)
             .select_related("client", "chef_projet")
             .order_by("-cree_le")
+        )
+        projets_qs = filtrer_queryset_par_affectations(
+            projets_base, request.user, champ_projet="id", request=request
         )
         projets_count = projets_qs.count()
 
         # Somme des budgets initiaux
         somme_budgets = projets_qs.aggregate(total=Sum("budget_initial_montant"))["total"] or 0
 
-        # Récupération des bons de paiement réels
-        bons_qs = BonPaiement.objects.filter(supprime_le__isnull=True)
-        bons_a_valider_qs = (
-            bons_qs.filter(statut=StatutBonPaiement.A_SIGNER)
-            .select_related("beneficiaire", "projet", "lot")
-            .order_by("-cree_le")
-        )
-        bons_a_valider_count = bons_a_valider_qs.count()
-        bons_a_valider_montant = bons_a_valider_qs.aggregate(total=Sum("montant_net"))["total"] or 0
-
-        # Budget engagé réel (bons signés, payés ou en attente de signature)
-        budget_engage_reel = (
-            bons_qs.filter(
-                statut__in=[
-                    StatutBonPaiement.A_SIGNER,
-                    StatutBonPaiement.SIGNE,
-                    StatutBonPaiement.PAYE,
-                ]
-            ).aggregate(total=Sum("montant_net"))["total"]
-            or 0
-        )
-
-        # Récupération des réceptions de matériaux réelles
-        receptions_qs = (
-            ReceptionMateriau.objects.filter(supprime_le__isnull=True)
-            .select_related("projet", "fournisseur")
-            .order_by("-date_reception", "-cree_le")[:5]
-        )
+        # Données financières et achats retirées du périmètre (conservées neutres pour compatibilité sérialiseur)
+        bons_a_valider_qs = []
+        bons_a_valider_count = 0
+        bons_a_valider_montant = 0
+        budget_engage_reel = 0
+        receptions_qs = []
 
         # Détermination de la date cible pour les effectifs et rapports journaliers
         # Prend la date du jour ou la date la plus récente ayant un rapport
@@ -105,6 +86,9 @@ class TableauDeBordView(APIView):
             supprime_le__isnull=True,
             date_rapport=date_cible_rapports,
         ).select_related("projet")
+        rapports_recents_qs = filtrer_queryset_par_affectations(
+            rapports_recents_qs, request.user, champ_projet="projet_id", request=request
+        )
 
         total_regie = rapports_recents_qs.aggregate(total=Sum("effectif_regie"))["total"] or 0
         total_tacherons = (
@@ -167,13 +151,8 @@ class TableauDeBordView(APIView):
         scores_securite = []
         projets_data = []
 
-        # Pré-agrégation des dépenses réelles par projet
-        consommation_par_projet = dict(
-            bons_qs.filter(statut__in=[StatutBonPaiement.SIGNE, StatutBonPaiement.PAYE])
-            .values("projet_id")
-            .annotate(total=Sum("montant_net"))
-            .values_list("projet_id", "total")
-        )
+        # Pré-agrégation des dépenses réelles par projet (finance hors périmètre)
+        consommation_par_projet = {}
 
         # Pré-agrégation des blocages critiques par projet
         blocages_par_projet = dict(

@@ -30,6 +30,7 @@ from apps.chantier.services.rapport_journalier import (
     valider_rapport_journalier,
 )
 from apps.core.pagination import PaginationStandard
+from apps.core.permissions import filtrer_queryset_par_affectations
 
 __all__ = [
     "RapportDetailView",
@@ -57,6 +58,9 @@ class RapportListCreateView(APIView):
     )
     def get(self, request):
         qs = rapports_liste()
+        qs = filtrer_queryset_par_affectations(
+            qs, request.user, champ_projet="projet_id", request=request
+        )
         filtre = RapportJournalierFilter(request.GET, queryset=qs)
         paginatrice = PaginationStandard()
         page = paginatrice.paginate_queryset(filtre.qs, request, view=self)

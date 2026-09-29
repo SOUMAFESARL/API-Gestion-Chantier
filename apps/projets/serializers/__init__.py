@@ -4,9 +4,11 @@ import re
 
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import Utilisateur
+from apps.accounts.serializers.profil import ProfilEntrepriseSerializer
 from apps.accounts.services.invitations import creer_invitation
 from apps.core.enums import (
     ModeExecution,
@@ -18,15 +20,14 @@ from apps.core.enums import (
 )
 from apps.core.exceptions import ChefProjetRequis, DgNonAssignableCommeCp
 from apps.projets.models import AffectationProjet, Lot, Projet
-from apps.projets.services.references import generer_reference_projet
-from apps.tiers.models import Tiers
-from apps.tiers.serializers import TiersSerializer
-
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
 from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
     ReferentielVillesResponseSerializer,
 )
+from apps.projets.services.references import generer_reference_projet
+from apps.tiers.models import Tiers
+from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
     "ChefProjetEnrichiSerializer",
@@ -93,6 +94,8 @@ class LotSimpleSerializer(serializers.ModelSerializer):
 
 
 class ProjetSerializer(serializers.ModelSerializer):
+    cree_par = ChefProjetEnrichiSerializer(read_only=True)
+    entreprise = serializers.SerializerMethodField()
     client = TiersSerializer(read_only=True)
     chef_projet = ChefProjetEnrichiSerializer(read_only=True)
     conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True)
@@ -104,6 +107,8 @@ class ProjetSerializer(serializers.ModelSerializer):
         model = Projet
         fields = [
             "id",
+            "cree_par",
+            "entreprise",
             "reference",
             "nom",
             "type_projet",
@@ -127,6 +132,20 @@ class ProjetSerializer(serializers.ModelSerializer):
             "indice_sante",
             "lots",
         ]
+
+    @extend_schema_field(ProfilEntrepriseSerializer(allow_null=True))
+    def get_entreprise(self, obj):
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None)
+        if tenant is None or tenant.schema_name == "public":
+            return None
+        logo_url = request.build_absolute_uri(tenant.logo.url) if tenant.logo else None
+        return {
+            "id": str(tenant.pk),
+            "raison_sociale": tenant.raison_sociale,
+            "schema_name": tenant.schema_name,
+            "logo_url": logo_url,
+        }
 
     def get_budget_consomme_montant(self, obj: Projet) -> int:
         if not obj.budget_initial_montant:
@@ -152,7 +171,11 @@ class LotCreationProjetSerializer(serializers.Serializer):
         fin = attrs.get("date_fin_prevue")
         if debut and fin and fin < debut:
             raise serializers.ValidationError(
-                {"date_fin_prevue": _("La date de fin du lot ne peut pas précéder sa date de début.")}
+                {
+                    "date_fin_prevue": _(
+                        "La date de fin du lot ne peut pas précéder sa date de début."
+                    )
+                }
             )
         return attrs
 
@@ -392,8 +415,42 @@ class ProjetCreationSerializer(serializers.Serializer):
                 if target_ct.is_dg or getattr(target_ct, "is_owner", False):
                     raise DgNonAssignableCommeCp()
 
+        if self.instance is None:
+            # Tous les UUID sont résolus dans le schéma de l'entreprise courante.
+            membres = {
+                "chef_projet_id": [attrs["chef_projet_id"]] if attrs.get("chef_projet_id") else [],
+                "conducteur_travaux_id": (
+                    [attrs["conducteur_travaux_id"]] if attrs.get("conducteur_travaux_id") else []
+                ),
+                "chefs_chantier_ids": attrs.get("chefs_chantier_ids", []),
+                "visiteurs_ids": attrs.get("visiteurs_ids", []),
+            }
+            ids = {pk for valeurs in membres.values() for pk in valeurs}
+            disponibles = set(
+                Utilisateur.objects.filter(
+                    pk__in=ids,
+                    is_active=True,
+                    statut__in=[StatutUtilisateur.ACTIF, StatutUtilisateur.INVITE],
+                ).values_list("pk", flat=True)
+            )
+            erreurs = {
+                champ: _("Un membre est introuvable ou inactif dans cette entreprise.")
+                for champ, valeurs in membres.items()
+                if set(valeurs) - disponibles
+            }
+            if erreurs:
+                raise serializers.ValidationError(erreurs)
+            vus = set()
+            for champ, valeurs in membres.items():
+                if vus.intersection(valeurs):
+                    raise serializers.ValidationError(
+                        {champ: _("Un utilisateur ne peut occuper qu'un rôle par projet.")}
+                    )
+                vus.update(valeurs)
+
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
         request = self.context.get("request")
         user_connecte = getattr(request, "user", None)
@@ -455,6 +512,7 @@ class ProjetCreationSerializer(serializers.Serializer):
         with transaction.atomic():
             projet = Projet.objects.create(
                 reference=reference,
+                cree_par=user_connecte,
                 chef_projet=chef_projet,
                 conducteur_travaux=conducteur_travaux,
                 **validated_data,
@@ -478,7 +536,11 @@ class ProjetCreationSerializer(serializers.Serializer):
             AffectationProjet.objects.get_or_create(
                 utilisateur=chef_projet,
                 projet=projet,
-                defaults={"role_projet": RoleProjet.CHEF_PROJET, "est_actif": True},
+                defaults={
+                    "role_projet": RoleProjet.CHEF_PROJET,
+                    "est_actif": True,
+                    "cree_par": user_connecte,
+                },
             )
 
             # Affectation et invitation éventuelle du Conducteur de Travaux
@@ -501,7 +563,11 @@ class ProjetCreationSerializer(serializers.Serializer):
                 AffectationProjet.objects.get_or_create(
                     utilisateur=conducteur_travaux,
                     projet=projet,
-                    defaults={"role_projet": RoleProjet.CONDUCTEUR_TRAVAUX, "est_actif": True},
+                    defaults={
+                        "role_projet": RoleProjet.CONDUCTEUR_TRAVAUX,
+                        "est_actif": True,
+                        "cree_par": user_connecte,
+                    },
                 )
 
             # Affectation des Chefs de Chantier
@@ -511,7 +577,11 @@ class ProjetCreationSerializer(serializers.Serializer):
                     AffectationProjet.objects.get_or_create(
                         utilisateur=cc_user,
                         projet=projet,
-                        defaults={"role_projet": RoleProjet.CHEF_CHANTIER, "est_actif": True},
+                        defaults={
+                            "role_projet": RoleProjet.CHEF_CHANTIER,
+                            "est_actif": True,
+                            "cree_par": user_connecte,
+                        },
                     )
                 except Utilisateur.DoesNotExist:
                     pass
@@ -523,7 +593,11 @@ class ProjetCreationSerializer(serializers.Serializer):
                     AffectationProjet.objects.get_or_create(
                         utilisateur=vis_user,
                         projet=projet,
-                        defaults={"role_projet": RoleProjet.VISITEUR, "est_actif": True},
+                        defaults={
+                            "role_projet": RoleProjet.VISITEUR,
+                            "est_actif": True,
+                            "cree_par": user_connecte,
+                        },
                     )
                 except Utilisateur.DoesNotExist:
                     pass
@@ -535,6 +609,7 @@ class ProjetCreationSerializer(serializers.Serializer):
                     code = f"L-{idx:02d}"
                 Lot.objects.create(
                     projet=projet,
+                    cree_par=user_connecte,
                     code=str(code).strip(),
                     libelle=ldata["libelle"].strip(),
                     mode_execution=ldata.get("mode_execution", ModeExecution.REGIE),

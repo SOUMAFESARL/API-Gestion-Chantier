@@ -51,13 +51,13 @@ class ProjetListCreateView(APIView):
     def get(self, request):
         qs = (
             Projet.objects.all()
-            .select_related("client", "chef_projet", "conducteur_travaux")
+            .select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
             .prefetch_related("lots")
         )
         qs = filtrer_queryset_par_affectations(
             qs, request.user, champ_projet="id", request=request
         )
-        serializer = ProjetSerializer(qs, many=True)
+        serializer = ProjetSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -70,11 +70,11 @@ class ProjetListCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
         projet_charge = (
-            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux")
+            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
             .prefetch_related("lots")
             .get(pk=projet.pk)
         )
-        retour = ProjetSerializer(projet_charge)
+        retour = ProjetSerializer(projet_charge, context={"request": request})
         return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
@@ -102,11 +102,16 @@ class ProjetDetailView(APIView):
     )
     def get(self, request, pk):
         projet = get_object_or_404(
-            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux").prefetch_related("lots"),
+            Projet.objects.select_related(
+                "client", "chef_projet", "conducteur_travaux", "cree_par"
+            ).prefetch_related("lots"),
             pk=pk,
         )
         self.check_object_permissions(request, projet)
-        return Response(ProjetSerializer(projet).data, status=status.HTTP_200_OK)
+        return Response(
+            ProjetSerializer(projet, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary="Modifier un projet",
@@ -122,9 +127,9 @@ class ProjetDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
         projet_charge = (
-            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux")
+            Projet.objects.select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
             .prefetch_related("lots")
             .get(pk=projet.pk)
         )
-        retour = ProjetSerializer(projet_charge)
+        retour = ProjetSerializer(projet_charge, context={"request": request})
         return Response(retour.data, status=status.HTTP_200_OK)

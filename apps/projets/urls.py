@@ -10,16 +10,21 @@ from apps.projets.views import (
     ReferentielVillesView,
     TableauDeBordView,
 )
-
 from apps.projets.views.affectation import (
     ProjetAffectationDetailView,
     ProjetAffectationListCreateView,
 )
+from apps.projets.views.contexte_creation import ContexteCreationProjetView
 
 app_name = "projets"
 
 urlpatterns = [
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path(
+        "projets/contexte-creation/",
+        ContexteCreationProjetView.as_view(),
+        name="projet-contexte-creation",
+    ),
     path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
     path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),

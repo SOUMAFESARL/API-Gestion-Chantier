@@ -4,7 +4,7 @@ import re
 
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.accounts.models import Utilisateur
@@ -25,6 +25,7 @@ from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
     ReferentielVillesResponseSerializer,
 )
+from apps.projets.services.affectations import affecter_collaborateur_projet
 from apps.projets.services.references import generer_reference_projet
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
@@ -77,6 +78,7 @@ class ChefProjetInviteSerializer(serializers.Serializer):
     telephone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
 
 
+@extend_schema_serializer(component_name="LotProjet")
 class LotSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lot
@@ -197,9 +199,7 @@ class EquipeCreationSerializer(serializers.Serializer):
 
 class ProjetCreationSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
-    reference = serializers.CharField(
-        max_length=30, required=False, allow_blank=True, default=""
-    )
+    reference = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     nom = serializers.CharField(max_length=200)
     type_projet = serializers.ChoiceField(
         choices=TypeProjet.choices, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
@@ -219,6 +219,11 @@ class ProjetCreationSerializer(serializers.Serializer):
 
     # Lots (Étape 2) — 0 à N lots acceptés
     lots = LotCreationProjetSerializer(many=True, required=False, default=list)
+    lots_supprimer_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        help_text="UUID des lots à supprimer logiquement, uniquement en PATCH.",
+    )
 
     # Équipe (Étape 3) — groupée ou à plat
     equipe = EquipeCreationSerializer(required=False, allow_null=True, default=None)
@@ -238,6 +243,77 @@ class ProjetCreationSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
+        if self.instance is None and "lots_supprimer_ids" in attrs:
+            raise serializers.ValidationError(
+                {"lots_supprimer_ids": _("Disponible uniquement en modification.")}
+            )
+        if self.instance is not None and "lots" in attrs:
+            # Le PATCH du parent ne rend pas facultatifs les champs des nouveaux lots.
+            nouveaux = LotCreationProjetSerializer(data=self.initial_data["lots"], many=True)
+            nouveaux.is_valid(raise_exception=True)
+            attrs["lots"] = nouveaux.validated_data
+        if self.instance is not None:
+            non_modifiables = {
+                "equipe",
+                "chefs_chantier_ids",
+                "visiteurs_ids",
+                "chef_projet_invite",
+                "conducteur_travaux_invite",
+            }
+            erreurs = {
+                champ: _(
+                    "Champ réservé à la création. "
+                    "Pour l'équipe, utilisez les routes d'affectations."
+                )
+                for champ in non_modifiables
+                if champ in self.initial_data
+            }
+            if erreurs:
+                raise serializers.ValidationError(erreurs)
+            if "reference" in attrs and not attrs["reference"].strip():
+                raise serializers.ValidationError(
+                    {"reference": _("La référence ne peut être vide.")}
+                )
+            if "chef_projet_id" in attrs and attrs["chef_projet_id"] is None:
+                raise ChefProjetRequis()
+            responsables = {
+                "chef_projet_id": attrs.get("chef_projet_id", self.instance.chef_projet_id),
+                "conducteur_travaux_id": attrs.get(
+                    "conducteur_travaux_id", self.instance.conducteur_travaux_id
+                ),
+            }
+            if responsables["chef_projet_id"] == responsables["conducteur_travaux_id"]:
+                raise serializers.ValidationError(
+                    {"conducteur_travaux_id": _("Les responsables doivent être distincts.")}
+                )
+            for champ, pk in responsables.items():
+                if champ not in attrs or pk is None:
+                    continue
+                if not Utilisateur.objects.filter(
+                    pk=pk,
+                    is_active=True,
+                    statut__in=[StatutUtilisateur.ACTIF, StatutUtilisateur.INVITE],
+                ).exists():
+                    raise serializers.ValidationError(
+                        {champ: _("Utilisateur introuvable ou inactif.")}
+                    )
+                role = (
+                    RoleProjet.CHEF_PROJET
+                    if champ == "chef_projet_id"
+                    else RoleProjet.CONDUCTEUR_TRAVAUX
+                )
+                if (
+                    AffectationProjet.objects.filter(
+                        projet=self.instance,
+                        utilisateur_id=pk,
+                        est_actif=True,
+                    )
+                    .exclude(role_projet=role)
+                    .exists()
+                ):
+                    raise serializers.ValidationError(
+                        {champ: _("Ce membre occupe déjà un autre rôle sur le projet.")}
+                    )
         debut = attrs.get("date_debut_prevue") or (
             self.instance.date_debut_prevue if self.instance else None
         )
@@ -603,10 +679,20 @@ class ProjetCreationSerializer(serializers.Serializer):
                     pass
 
             # Création des lots initiaux (0 à N lots)
+            codes_reserves = {
+                str(lot.get("code", "")).strip().upper()
+                for lot in lots_data
+                if lot.get("code", "").strip()
+            }
             for idx, ldata in enumerate(lots_data, start=1):
                 code = ldata.get("code")
                 if not code or not str(code).strip():
-                    code = f"L-{idx:02d}"
+                    numero = idx
+                    while f"L-{numero:02d}" in codes_reserves:
+                        numero += 1
+                    code = f"L-{numero:02d}"
+                code = str(code).strip().upper()
+                codes_reserves.add(code)
                 Lot.objects.create(
                     projet=projet,
                     cree_par=user_connecte,
@@ -621,36 +707,71 @@ class ProjetCreationSerializer(serializers.Serializer):
 
         return projet
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        validated_data.pop("equipe", None)
-        validated_data.pop("lots", None)
-        validated_data.pop("chefs_chantier_ids", None)
-        validated_data.pop("visiteurs_ids", None)
-        validated_data.pop("conducteur_travaux_invite", None)
-        validated_data.pop("chef_projet_invite", None)
-
-        chef_projet_id = validated_data.pop("chef_projet_id", None)
-        conducteur_travaux_id = validated_data.pop("conducteur_travaux_id", None)
-
-        if chef_projet_id:
-            instance.chef_projet = Utilisateur.objects.get(id=chef_projet_id)
-            AffectationProjet.objects.get_or_create(
-                utilisateur=instance.chef_projet,
-                projet=instance,
-                defaults={"role_projet": RoleProjet.CHEF_PROJET, "est_actif": True},
+        # Sérialise les changements de responsables concurrents sur ce projet.
+        instance = Projet.objects.select_for_update().get(pk=instance.pk)
+        user = getattr(self.context.get("request"), "user", None)
+        nouveaux_lots = validated_data.pop("lots", [])
+        supprimer_ids = set(validated_data.pop("lots_supprimer_ids", []))
+        lots_actifs = list(Lot.objects.filter(projet=instance).select_for_update())
+        if supprimer_ids - {lot.pk for lot in lots_actifs}:
+            raise serializers.ValidationError(
+                {"lots_supprimer_ids": _("Lot introuvable ou extérieur à ce projet.")}
             )
-
-        if conducteur_travaux_id is not None:
-            if conducteur_travaux_id:
-                instance.conducteur_travaux = Utilisateur.objects.get(id=conducteur_travaux_id)
-                AffectationProjet.objects.get_or_create(
-                    utilisateur=instance.conducteur_travaux,
+        codes = {lot.code.upper() for lot in lots_actifs if lot.pk not in supprimer_ids}
+        # Réserver tous les codes explicites avant de générer les codes automatiques.
+        for lot in nouveaux_lots:
+            code = lot.get("code", "").strip().upper()
+            if code:
+                if code in codes:
+                    raise serializers.ValidationError({"lots": _("Code de lot déjà utilisé.")})
+                codes.add(code)
+        ordre = max((lot.ordre for lot in lots_actifs), default=0)
+        for lot in lots_actifs:
+            if lot.pk in supprimer_ids:
+                lot.est_actif = False
+                lot.save(update_fields=["est_actif"])
+                lot.delete(utilisateur=user)
+        for donnees in nouveaux_lots:
+            donnees = dict(donnees)
+            code = donnees.pop("code", "").strip().upper()
+            if not code:
+                numero = 1
+                while f"L-{numero:02d}" in codes:
+                    numero += 1
+                code = f"L-{numero:02d}"
+                codes.add(code)
+            ordre += 1
+            Lot.objects.create(
+                projet=instance,
+                cree_par=user,
+                code=code,
+                ordre=ordre,
+                **donnees,
+            )
+        for champ, role in (
+            ("chef_projet_id", RoleProjet.CHEF_PROJET),
+            ("conducteur_travaux_id", RoleProjet.CONDUCTEUR_TRAVAUX),
+        ):
+            if champ not in validated_data:
+                continue
+            nouveau_id = validated_data.pop(champ)
+            ancien_id = getattr(instance, champ)
+            if ancien_id != nouveau_id and ancien_id:
+                AffectationProjet.objects.filter(
                     projet=instance,
-                    defaults={"role_projet": RoleProjet.CONDUCTEUR_TRAVAUX, "est_actif": True},
+                    utilisateur_id=ancien_id,
+                    role_projet=role,
+                ).update(est_actif=False)
+            setattr(instance, champ, nouveau_id)
+            if nouveau_id:
+                affecter_collaborateur_projet(
+                    projet=instance,
+                    utilisateur=Utilisateur.objects.get(pk=nouveau_id),
+                    role_projet=role,
+                    modifie_par=user,
                 )
-            else:
-                instance.conducteur_travaux = None
-
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
         instance.save()

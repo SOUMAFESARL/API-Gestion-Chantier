@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import Role
 from apps.core.enums import RoleGlobal
+from apps.core.permissions import MembreDuProjet
 from apps.projets.models import Projet
 from apps.projets.services.overrides import (
     get_matrice_permissions_projet,
@@ -62,7 +63,7 @@ class MatricePermissionProjetRoleSerializer(serializers.Serializer):
 class ProjetPermissionsRolesView(APIView):
     """`GET` et `PUT /api/v1/projets/{id}/permissions-roles/` — Matrice des droits par chantier."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, MembreDuProjet]
     parser_classes = [JSONParser]
     serializer_class = SurchargeMatriceInputSerializer
 
@@ -73,6 +74,7 @@ class ProjetPermissionsRolesView(APIView):
     )
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         matrice = get_matrice_permissions_projet(projet)
         return Response(matrice, status=status.HTTP_200_OK)
 
@@ -85,6 +87,7 @@ class ProjetPermissionsRolesView(APIView):
     def put(self, request, pk):
         # Seul l'administrateur ou le chef de projet assigné peut modifier les droits du chantier
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
 
         est_admin = request.user.role_global in (
             RoleGlobal.ADMIN,

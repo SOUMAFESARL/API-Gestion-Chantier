@@ -6,6 +6,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.core.permissions import (
+    MembreDuProjet,
+    PermissionModule,
+    filtrer_queryset_par_affectations,
+)
 from apps.projets.models import Projet
 from apps.projets.serializers import ProjetCreationSerializer, ProjetSerializer
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
@@ -25,8 +31,18 @@ __all__ = [
 class ProjetListCreateView(APIView):
     """`GET` et `POST /api/v1/projets/`."""
 
-    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [
+                IsAuthenticated(),
+                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
+            ]
+        return [
+            IsAuthenticated(),
+            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
+        ]
 
     @extend_schema(
         summary="Lister les projets",
@@ -37,6 +53,9 @@ class ProjetListCreateView(APIView):
             Projet.objects.all()
             .select_related("client", "chef_projet", "conducteur_travaux")
             .prefetch_related("lots")
+        )
+        qs = filtrer_queryset_par_affectations(
+            qs, request.user, champ_projet="id", request=request
         )
         serializer = ProjetSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -62,8 +81,20 @@ class ProjetListCreateView(APIView):
 class ProjetDetailView(APIView):
     """`GET` et `PATCH /api/v1/projets/<uuid:pk>/`."""
 
-    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [
+                IsAuthenticated(),
+                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
+                MembreDuProjet(),
+            ]
+        return [
+            IsAuthenticated(),
+            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
+            MembreDuProjet(),
+        ]
 
     @extend_schema(
         summary="Détail d'un projet",
@@ -74,6 +105,7 @@ class ProjetDetailView(APIView):
             Projet.objects.select_related("client", "chef_projet", "conducteur_travaux").prefetch_related("lots"),
             pk=pk,
         )
+        self.check_object_permissions(request, projet)
         return Response(ProjetSerializer(projet).data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -83,6 +115,7 @@ class ProjetDetailView(APIView):
     )
     def patch(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk)
+        self.check_object_permissions(request, projet)
         serializer = ProjetCreationSerializer(
             projet, data=request.data, partial=True, context={"request": request}
         )

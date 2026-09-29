@@ -50,7 +50,7 @@ class Role(ModeleBase):
 
 
 class RoleModulePermission(ModeleBase):
-    """Niveau d'accès d'un rôle sur l'un des 12 modules de CCD Digital.
+    """Niveau d'accès d'un rôle sur l'un des 5 modules BTP.
 
     Matrice par défaut au niveau de l'entreprise (tenant).
     Niveaux : AUCUN (0), LECTURE (1), ECRITURE (2), VALIDATION (3).

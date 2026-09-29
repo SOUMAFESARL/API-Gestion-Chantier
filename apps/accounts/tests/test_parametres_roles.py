@@ -122,8 +122,8 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
         "description": "Responsable de l'équipe gros œuvre sur chantier",
         "permissions_modules": {
             ModuleChoix.CHANTIER: NiveauAcces.ECRITURE,
-            ModuleChoix.QHSE: NiveauAcces.LECTURE,
-            ModuleChoix.FINANCE: NiveauAcces.AUCUN,
+            ModuleChoix.GED: NiveauAcces.LECTURE,
+            ModuleChoix.TIERS: NiveauAcces.AUCUN,
         },
     }
     rep = client.post("/api/v1/parametres/roles/", payload, format="json")
@@ -132,7 +132,7 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
     assert data["code"] == "CHEF_EQUIPE"
     assert data["libelle"] == "Chef d'Équipe Maçonnerie"
     assert data["permissions_modules"][ModuleChoix.CHANTIER] == NiveauAcces.ECRITURE
-    assert data["permissions_modules"][ModuleChoix.QHSE] == NiveauAcces.LECTURE
+    assert data["permissions_modules"][ModuleChoix.GED] == NiveauAcces.LECTURE
 
 
 @pytest.mark.django_db
@@ -147,7 +147,7 @@ def test_post_parametres_roles_creer_par_dg(client_tenant, dg_user):
         "libelle": "Auditeur Externe",
         "description": "Audit des comptes et chantiers",
         "permissions_modules": {
-            ModuleChoix.FINANCE: NiveauAcces.LECTURE,
+            ModuleChoix.PROJETS: NiveauAcces.LECTURE,
             ModuleChoix.PILOTAGE: NiveauAcces.LECTURE,
         },
     }
@@ -182,26 +182,26 @@ def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user):
         f"/api/v1/parametres/roles/{role_cc.id}/",
         {
             "permissions_modules": {
-                ModuleChoix.FINANCE: NiveauAcces.LECTURE,
+                ModuleChoix.GED: NiveauAcces.LECTURE,
             }
         },
         format="json",
     )
     assert rep_patch.status_code == status.HTTP_200_OK
-    assert rep_patch.json()["permissions_modules"][ModuleChoix.FINANCE] == NiveauAcces.LECTURE
+    assert rep_patch.json()["permissions_modules"][ModuleChoix.GED] == NiveauAcces.LECTURE
 
     # 2. Modification via POST (supporté pour flexibilité frontend)
     rep_post = client.post(
         f"/api/v1/parametres/roles/{role_cc.id}/",
         {
             "permissions_modules": {
-                ModuleChoix.FINANCE: NiveauAcces.ECRITURE,
+                ModuleChoix.GED: NiveauAcces.ECRITURE,
             }
         },
         format="json",
     )
     assert rep_post.status_code == status.HTTP_200_OK
-    assert rep_post.json()["permissions_modules"][ModuleChoix.FINANCE] == NiveauAcces.ECRITURE
+    assert rep_post.json()["permissions_modules"][ModuleChoix.GED] == NiveauAcces.ECRITURE
 
 
 @pytest.mark.django_db

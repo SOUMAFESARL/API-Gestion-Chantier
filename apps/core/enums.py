@@ -245,17 +245,11 @@ class NiveauAcces(models.IntegerChoices):
 
 
 class ModuleChoix(models.TextChoices):
-    """Les 12 modules applicatifs de CCD Digital."""
+    """Les 5 modules applicatifs souverains de CCD Digital."""
 
     PROJETS = "projets", "Gestion des Projets"
     CHANTIER = "chantier", "Suivi Technique / Chantier"
-    FINANCE = "finance", "Gestion Financière"
-    ACHATS = "achats", "Achats & Approvisionnements"
-    STOCKS = "stocks", "Gestion des Stocks"
-    RH = "rh", "Ressources Humaines"
-    EQUIPEMENTS = "equipements", "Matériel & Équipements"
-    QHSE = "qhse", "QHSE"
-    CONTRATS = "contrats", "Contrats & Sous-traitance"
-    TIERS = "tiers", "Parties Prenantes / Tiers"
     GED = "ged", "Gestion Documentaire (GED)"
-    PILOTAGE = "pilotage", "Pilotage & Tableaux de bord"
+    PILOTAGE = "pilotage", "Tableaux de bord & Pilotage"
+    TIERS = "tiers", "Parties Prenantes / Tiers"
+

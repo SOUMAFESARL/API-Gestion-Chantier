@@ -27,24 +27,37 @@ __all__ = [
 
 
 def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
-    """Récupère et met en cache sur request la liste des IDs de projets affectés."""
+    """Récupère et met en cache sur request la liste des IDs de projets affectés ou gérés."""
     if not user or not user.is_authenticated:
         return []
     if request and hasattr(request, "_rbac_projets_ids_actifs"):
         return request._rbac_projets_ids_actifs
 
     from django.apps import apps as registre
+    from django.db.models import Q
 
     try:
         AffectationProjet = registre.get_model("projets", "AffectationProjet")
+        Projet = registre.get_model("projets", "Projet")
     except LookupError:
         return []
 
-    projets_ids = list(
+    # 1. Projets issus d'affectations actives
+    projets_ids = set(
         AffectationProjet.objects.filter(
             utilisateur=user, est_actif=True, supprime_le__isnull=True
         ).values_list("projet_id", flat=True)
     )
+
+    # 2. Projets où l'utilisateur est désigné comme chef de projet ou conducteur de travaux direct
+    projets_geres = set(
+        Projet.objects.filter(
+            Q(chef_projet=user) | Q(conducteur_travaux=user),
+            supprime_le__isnull=True,
+        ).values_list("id", flat=True)
+    )
+
+    projets_ids = list(projets_ids.union(projets_geres))
     if request:
         request._rbac_projets_ids_actifs = projets_ids
     return projets_ids
@@ -145,19 +158,8 @@ class MembreDuProjet(permissions.BasePermission):
         if cle in request._rbac_membre_projet_cache:
             return request._rbac_membre_projet_cache[cle]
 
-        from django.apps import apps as registre
-
-        try:
-            AffectationProjet = registre.get_model("projets", "AffectationProjet")
-        except LookupError:
-            return False
-
-        est_membre = AffectationProjet.objects.filter(
-            utilisateur=utilisateur,
-            projet_id=projet_id,
-            est_actif=True,
-            supprime_le__isnull=True,
-        ).exists()
+        projets_ids = obtenir_projets_ids_actifs_utilisateur(utilisateur, request=request)
+        est_membre = (projet_id in projets_ids) or (str(projet_id) in [str(pid) for pid in projets_ids])
         request._rbac_membre_projet_cache[cle] = est_membre
         return est_membre
 

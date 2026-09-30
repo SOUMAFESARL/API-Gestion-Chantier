@@ -8,7 +8,7 @@ from apps.chantier.services.rapport_journalier import (
     creer_rapport_journalier,
     modifier_rapport_journalier,
 )
-from apps.core.enums import Meteo, StatutRapport
+from apps.core.enums import Meteo, RoleGlobal, StatutRapport
 from apps.projets.models import Lot, Projet
 
 __all__ = [
@@ -163,6 +163,25 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
                     {"lot_id": "Le lot sélectionné n'appartient pas au projet spécifié."}
                 )
 
+        # Contrôle du cloisonnement des chantiers (Niveau 2)
+        request = self.context.get("request")
+        user = request.user if request else None
+        if user and user.is_authenticated:
+            est_direction = (
+                user.is_superuser
+                or getattr(user, "is_owner", False)
+                or getattr(user, "is_dg", False)
+                or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+            )
+            if not est_direction:
+                from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
+
+                projets_actifs = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+                if projet.id not in projets_actifs and str(projet.id) not in [str(p) for p in projets_actifs]:
+                    raise serializers.ValidationError(
+                        {"projet_id": "Vous n'êtes pas affecté à ce chantier."}
+                    )
+
         attrs["projet"] = projet
         attrs["lot"] = lot
         return attrs
@@ -214,6 +233,25 @@ class RapportJournalierUpdateSerializer(serializers.Serializer):
                 attrs["projet"] = projet
             except Projet.DoesNotExist:
                 raise serializers.ValidationError({"projet_id": "Le projet spécifié n'existe pas."})
+
+            # Contrôle du cloisonnement des chantiers (Niveau 2)
+            request = self.context.get("request")
+            user = request.user if request else None
+            if user and user.is_authenticated:
+                est_direction = (
+                    user.is_superuser
+                    or getattr(user, "is_owner", False)
+                    or getattr(user, "is_dg", False)
+                    or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+                )
+                if not est_direction:
+                    from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
+
+                    projets_actifs = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+                    if projet.id not in projets_actifs and str(projet.id) not in [str(p) for p in projets_actifs]:
+                        raise serializers.ValidationError(
+                            {"projet_id": "Vous n'êtes pas affecté à ce chantier."}
+                        )
 
         if "lot_id" in attrs:
             lot_id = attrs["lot_id"]

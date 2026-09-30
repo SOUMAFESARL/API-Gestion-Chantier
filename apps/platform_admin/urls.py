@@ -3,6 +3,7 @@ from django.urls import path
 from apps.platform_admin.views import (
     AdminModuleDetailUpdateDeleteView,
     AdminModuleListCreateView,
+    AdminPermissionAffecterModulesView,
     AdminPermissionDetailUpdateDeleteView,
     AdminPermissionListCreateView,
     ChangerPlanClientPlateformeView,
@@ -154,6 +155,8 @@ urlpatterns = [
     # Gestion Dynamique des Permissions (Super Admin)
     path("admin/permissions/", AdminPermissionListCreateView.as_view(), name="admin-permissions-liste-creer"),
     path("admin/permissions/<uuid:pk>/", AdminPermissionDetailUpdateDeleteView.as_view(), name="admin-permissions-detail-modifier-supprimer"),
+    path("admin/permissions/<uuid:pk>/modules/", AdminPermissionAffecterModulesView.as_view(), name="admin-permissions-affecter-modules"),
     path("admins/permissions/", AdminPermissionListCreateView.as_view(), name="admins-permissions-liste-creer"),
     path("admins/permissions/<uuid:pk>/", AdminPermissionDetailUpdateDeleteView.as_view(), name="admins-permissions-detail-modifier-supprimer"),
+    path("admins/permissions/<uuid:pk>/modules/", AdminPermissionAffecterModulesView.as_view(), name="admins-permissions-affecter-modules"),
 ]

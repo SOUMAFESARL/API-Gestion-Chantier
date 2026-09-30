@@ -115,6 +115,7 @@ PERMISSIONS_FONDAMENTALES = [
 
 def initialiser_permissions_par_defaut() -> list[Permission]:
     """Initialise le catalogue des 4 permissions fondamentales dans le schéma courant."""
+    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
     perms_creees = []
     with transaction.atomic():
         for data in PERMISSIONS_FONDAMENTALES:
@@ -122,14 +123,16 @@ def initialiser_permissions_par_defaut() -> list[Permission]:
                 code=data["code"],
                 defaults=data,
             )
+            if modules_actifs:
+                perm.modules.add(*modules_actifs)
             perms_creees.append(perm)
     return perms_creees
 
 
 def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permission]]:
     """Normalise les permissions reçues sous forme de dict ou de list vers un dict {module_code: [Permission, ...]}."""
-    perms_par_code = {p.code.upper(): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True)}
-    perms_par_id = {str(p.id): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True)}
+    perms_par_code = {p.code.upper(): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
+    perms_par_id = {str(p.id): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
 
     resultat: dict[str, list[Permission]] = {}
 
@@ -142,14 +145,21 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permiss
                 m_code = item.get("module") or item.get("module_code")
                 p_items = item.get("permissions") or []
                 if m_code:
+                    m_code_str = str(m_code).lower()
                     resolved = []
                     for p in p_items:
                         p_key = p.get("code") if isinstance(p, dict) else str(p)
+                        target_perm = None
                         if p_key and p_key.upper() in perms_par_code:
-                            resolved.append(perms_par_code[p_key.upper()])
+                            target_perm = perms_par_code[p_key.upper()]
                         elif p_key and p_key in perms_par_id:
-                            resolved.append(perms_par_id[p_key])
-                    resultat[str(m_code).lower()] = resolved
+                            target_perm = perms_par_id[p_key]
+                        if target_perm:
+                            # Vérifier si la permission est éligible pour ce module (ou si aucun module restreint)
+                            if target_perm.modules.exists() and not target_perm.modules.filter(code=m_code_str).exists():
+                                continue
+                            resolved.append(target_perm)
+                    resultat[m_code_str] = resolved
     elif isinstance(permissions_input, dict):
         for m_code, val in permissions_input.items():
             m_code_str = str(m_code).lower()
@@ -170,10 +180,15 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permiss
                 resolved = []
                 for p in val:
                     p_key = p.get("code") if isinstance(p, dict) else str(p)
+                    target_perm = None
                     if p_key and p_key.upper() in perms_par_code:
-                        resolved.append(perms_par_code[p_key.upper()])
+                        target_perm = perms_par_code[p_key.upper()]
                     elif p_key and p_key in perms_par_id:
-                        resolved.append(perms_par_id[p_key])
+                        target_perm = perms_par_id[p_key]
+                    if target_perm:
+                        if target_perm.modules.exists() and not target_perm.modules.filter(code=m_code_str).exists():
+                            continue
+                        resolved.append(target_perm)
                 resultat[m_code_str] = resolved
 
     return resultat

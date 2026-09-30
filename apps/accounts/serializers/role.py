@@ -74,9 +74,10 @@ def _construire_tableau_dynamique_modules(role: Role):
                 "description": p.description,
                 "ordre": p.ordre,
             }
-            for p in rmp.permissions.filter(est_actif=True, supprime_le__isnull=True).order_by(
+            for p in rmp.permissions.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules").order_by(
                 "ordre", "code"
             )
+            if not p.modules.exists() or p.modules.filter(id=rmp.module_id).exists()
         ]
         resultats.append(
             {

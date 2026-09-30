@@ -49,6 +49,13 @@ class Permission(ModeleBase):
         default=True,
         help_text=_("Indique si cette permission est active et disponible."),
     )
+    modules = models.ManyToManyField(
+        "accounts.Module",
+        related_name="permissions",
+        blank=True,
+        verbose_name=_("modules éligibles"),
+        help_text=_("Modules fonctionnels et applicatifs autorisés à porter cette permission."),
+    )
 
     class Meta:
         db_table = "permission"

@@ -32,6 +32,7 @@ from .modules import (
     AdminModuleListCreateView,
 )
 from .permissions import (
+    AdminPermissionAffecterModulesView,
     AdminPermissionDetailUpdateDeleteView,
     AdminPermissionListCreateView,
 )
@@ -39,6 +40,7 @@ from .permissions import (
 __all__ = [
     "AdminModuleDetailUpdateDeleteView",
     "AdminModuleListCreateView",
+    "AdminPermissionAffecterModulesView",
     "AdminPermissionDetailUpdateDeleteView",
     "AdminPermissionListCreateView",
     "ChangerPlanClientPlateformeView",

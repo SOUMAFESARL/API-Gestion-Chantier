@@ -27,6 +27,7 @@ from apps.core.enums import NiveauAcces
 from apps.tenants.models import Entreprise
 
 __all__ = [
+    "propager_affectation_modules_permission",
     "propager_creation_module",
     "propager_creation_permission",
     "propager_modification_module",
@@ -202,6 +203,30 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
     return {"module_supprime": code_supprime}
 
 
+def _resoudre_modules_codes(modules_input) -> list[str]:
+    """Extrait la liste des codes techniques normalisés à partir d'un ensemble de codes ou d'identifiants."""
+    if not modules_input:
+        return []
+    codes = set()
+    from uuid import UUID
+    for m in modules_input:
+        if isinstance(m, dict):
+            m_val = m.get("code") or m.get("id")
+        else:
+            m_val = m
+        if not m_val:
+            continue
+        m_str = str(m_val).strip()
+        try:
+            val_uuid = UUID(m_str)
+            mod = Module.objects.filter(id=val_uuid, supprime_le__isnull=True).first()
+            if mod:
+                codes.add(mod.code.lower())
+        except (ValueError, AttributeError):
+            codes.add(m_str.lower())
+    return sorted(codes)
+
+
 def propager_creation_permission(
     *,
     code: str,
@@ -209,12 +234,15 @@ def propager_creation_permission(
     description: str = "",
     ordre: int = 0,
     est_actif: bool = True,
+    modules: list | None = None,
     cree_par=None,
 ) -> Permission:
-    """Crée une permission dans public et la propage à tous les tenants.
+    """Crée une permission dans public et la propage de façon ciblée à tous les tenants.
 
-    Dans chaque tenant, cette nouvelle permission est automatiquement ajoutée aux rôles DG et ADMIN
-    pour tous les modules actifs.
+    Invariant métier (Module-Scoped Permissions) :
+    - Si des modules sont spécifiés, la permission est liée à ces modules dans public et dans les tenants.
+    - Seuls les RoleModulePermission correspondant aux modules spécifiés reçoivent cette permission pour DG/ADMIN.
+    - Si aucun module n'est spécifié, la permission est créée sans aucun rattachement (Zero-Trust).
     """
     code = code.strip().upper()
     if not code:
@@ -222,6 +250,7 @@ def propager_creation_permission(
     if not libelle.strip():
         raise ValidationError(_("Le libellé de la permission est obligatoire."))
 
+    codes_modules: list[str] = []
     with schema_context("public"):
         if Permission.objects.filter(code=code, supprime_le__isnull=True).exists():
             raise ValidationError(_(f"Une permission avec le code '{code}' existe déjà."))
@@ -235,11 +264,16 @@ def propager_creation_permission(
             cree_par=cree_par,
         )
 
+        codes_modules = _resoudre_modules_codes(modules)
+        if codes_modules:
+            mods_public = list(Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True))
+            perm_public.modules.set(mods_public)
+
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
         with schema_context(entreprise.schema_name):
             with transaction.atomic():
-                perm_tenant, _ = Permission.objects.update_or_create(
+                perm_tenant, _cree = Permission.objects.update_or_create(
                     code=code,
                     defaults={
                         "id": perm_public.id,
@@ -251,14 +285,87 @@ def propager_creation_permission(
                         "supprime_par": None,
                     },
                 )
-                roles_direction = Role.objects.filter(
-                    code__in=["DG", "ADMIN", "AD"], supprime_le__isnull=True
-                )
-                for role in roles_direction:
-                    for rmp in RoleModulePermission.objects.filter(
-                        role=role, supprime_le__isnull=True
-                    ):
-                        rmp.permissions.add(perm_tenant)
+                if codes_modules:
+                    mods_tenant = list(Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True))
+                    perm_tenant.modules.set(mods_tenant)
+
+                    roles_direction = Role.objects.filter(
+                        code__in=["DG", "ADMIN", "AD"], supprime_le__isnull=True
+                    )
+                    for role in roles_direction:
+                        for rmp in RoleModulePermission.objects.filter(
+                            role=role, module__in=mods_tenant, supprime_le__isnull=True
+                        ):
+                            rmp.permissions.add(perm_tenant)
+                else:
+                    perm_tenant.modules.clear()
+
+    return perm_public
+
+
+def propager_affectation_modules_permission(
+    *,
+    permission_id,
+    modules: list,
+    modifie_par=None,
+) -> Permission:
+    """Affecte ou modifie la liste des modules éligibles pour une permission donnée et synchronise les tenants.
+
+    Règles de sécurité :
+    - Les modules nouvellement affectés accordent la permission aux rôles DG et ADMIN dans chaque tenant.
+    - Les modules retirés révoquent immédiatement la permission de TOUS les rôles sur ce module.
+    """
+    with schema_context("public"):
+        try:
+            perm_public = Permission.objects.get(id=permission_id, supprime_le__isnull=True)
+        except Permission.DoesNotExist:
+            raise ValidationError(_("Permission introuvable."))
+
+        codes_modules = _resoudre_modules_codes(modules)
+        mods_public = list(Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True))
+        perm_public.modules.set(mods_public)
+        if modifie_par:
+            perm_public.modifie_par = modifie_par
+            perm_public.save()
+
+    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    for entreprise in entreprises:
+        with schema_context(entreprise.schema_name):
+            with transaction.atomic():
+                perm_tenant = Permission.objects.filter(code=perm_public.code, supprime_le__isnull=True).first()
+                if not perm_tenant:
+                    perm_tenant = Permission.objects.filter(id=perm_public.id, supprime_le__isnull=True).first()
+
+                if perm_tenant:
+                    anciennes_codes = set(perm_tenant.modules.values_list("code", flat=True))
+                    nouvelles_codes = set(codes_modules)
+                    codes_ajoutes = nouvelles_codes - anciennes_codes
+                    codes_retires = anciennes_codes - nouvelles_codes
+
+                    mods_tenant = list(Module.objects.filter(code__in=nouvelles_codes, supprime_le__isnull=True))
+                    perm_tenant.modules.set(mods_tenant)
+
+                    # 1. Révocation immédiate sur les modules désélectionnés
+                    if codes_retires:
+                        rmp_retires = RoleModulePermission.objects.filter(
+                            module__code__in=codes_retires,
+                            supprime_le__isnull=True,
+                        )
+                        for rmp in rmp_retires:
+                            rmp.permissions.remove(perm_tenant)
+
+                    # 2. Ajout pour DG/ADMIN sur les modules nouvellement autorisés
+                    if codes_ajoutes:
+                        roles_direction = Role.objects.filter(
+                            code__in=["DG", "ADMIN", "AD"], supprime_le__isnull=True
+                        )
+                        rmp_ajoutes = RoleModulePermission.objects.filter(
+                            role__in=roles_direction,
+                            module__code__in=codes_ajoutes,
+                            supprime_le__isnull=True,
+                        )
+                        for rmp in rmp_ajoutes:
+                            rmp.permissions.add(perm_tenant)
 
     return perm_public
 
@@ -270,6 +377,7 @@ def propager_modification_permission(
     description: str | None = None,
     ordre: int | None = None,
     est_actif: bool | None = None,
+    modules: list | None = None,
     modifie_par=None,
 ) -> Permission:
     """Modifie une permission dans public et synchronise ses métadonnées dans tous les tenants."""
@@ -310,6 +418,13 @@ def propager_modification_permission(
                     if est_actif is not None:
                         perm.est_actif = est_actif
                     perm.save()
+
+    if modules is not None:
+        propager_affectation_modules_permission(
+            permission_id=permission_id,
+            modules=modules,
+            modifie_par=modifie_par,
+        )
 
     return perm_public
 
@@ -352,21 +467,13 @@ def synchroniser_modules_et_permissions_nouveau_tenant(schema_name: str) -> None
 
     with schema_context("public"):
         modules_publics = list(Module.objects.filter(supprime_le__isnull=True))
-        permissions_publiques = list(Permission.objects.filter(supprime_le__isnull=True))
+        permissions_publiques = list(
+            Permission.objects.filter(supprime_le__isnull=True).prefetch_related("modules")
+        )
 
     with schema_context(schema_name):
         with transaction.atomic():
-            for p in permissions_publiques:
-                Permission.objects.update_or_create(
-                    code=p.code,
-                    defaults={
-                        "id": p.id,
-                        "libelle": p.libelle,
-                        "description": p.description,
-                        "ordre": p.ordre,
-                        "est_actif": p.est_actif,
-                    },
-                )
+            # 1. Synchroniser d'abord les modules
             for m in modules_publics:
                 Module.objects.update_or_create(
                     code=m.code,
@@ -379,3 +486,19 @@ def synchroniser_modules_et_permissions_nouveau_tenant(schema_name: str) -> None
                         "est_actif": m.est_actif,
                     },
                 )
+
+            # 2. Synchroniser les permissions et leurs rattachements ManyToMany
+            for p in permissions_publiques:
+                perm_t, _cree = Permission.objects.update_or_create(
+                    code=p.code,
+                    defaults={
+                        "id": p.id,
+                        "libelle": p.libelle,
+                        "description": p.description,
+                        "ordre": p.ordre,
+                        "est_actif": p.est_actif,
+                    },
+                )
+                codes_m = list(p.modules.values_list("code", flat=True))
+                mods_t = list(Module.objects.filter(code__in=codes_m, supprime_le__isnull=True))
+                perm_t.modules.set(mods_t)

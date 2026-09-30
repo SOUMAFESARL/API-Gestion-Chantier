@@ -14,17 +14,20 @@ from rest_framework.views import APIView
 from apps.accounts.models import Permission
 from apps.platform_admin.permissions import EstSuperAdminPlateforme
 from apps.platform_admin.serializers.permissions import (
+    AdminPermissionAffecterModulesSerializer,
     AdminPermissionCreateSerializer,
     AdminPermissionSerializer,
     AdminPermissionUpdateSerializer,
 )
 from apps.platform_admin.services.catalogue import (
+    propager_affectation_modules_permission,
     propager_creation_permission,
     propager_modification_permission,
     propager_suppression_permission,
 )
 
 __all__ = [
+    "AdminPermissionAffecterModulesView",
     "AdminPermissionDetailUpdateDeleteView",
     "AdminPermissionListCreateView",
 ]
@@ -38,18 +41,22 @@ class AdminPermissionListCreateView(APIView):
 
     @extend_schema(
         summary="Lister toutes les permissions (Super Admin)",
-        description="Renvoie le catalogue complet des autorisations configurées sur la plateforme.",
+        description="Renvoie le catalogue complet des autorisations configurées sur la plateforme avec leurs modules rattachés.",
         responses={200: AdminPermissionSerializer(many=True)},
     )
     def get(self, request):
         with schema_context("public"):
-            permissions = Permission.objects.filter(supprime_le__isnull=True).order_by("ordre", "code")
+            permissions = (
+                Permission.objects.filter(supprime_le__isnull=True)
+                .prefetch_related("modules")
+                .order_by("ordre", "code")
+            )
             serializer = AdminPermissionSerializer(permissions, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Créer une permission et propager à tous les tenants (Super Admin)",
-        description="Crée une nouvelle permission granulaire et l'associe automatiquement aux rôles de direction dans chaque tenant.",
+        description="Crée une nouvelle permission granulaire et l'associe sélectivement aux modules spécifiés.",
         request=AdminPermissionCreateSerializer,
         responses={201: AdminPermissionSerializer},
     )
@@ -65,6 +72,7 @@ class AdminPermissionListCreateView(APIView):
                 description=serializer.validated_data.get("description", ""),
                 ordre=serializer.validated_data.get("ordre", 0),
                 est_actif=serializer.validated_data.get("est_actif", True),
+                modules=serializer.validated_data.get("modules", []),
                 cree_par=request.user,
             )
         except DjangoValidationError as exc:
@@ -87,7 +95,9 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
     )
     def get(self, request, pk):
         with schema_context("public"):
-            perm = get_object_or_404(Permission, pk=pk, supprime_le__isnull=True)
+            perm = get_object_or_404(
+                Permission.objects.prefetch_related("modules"), pk=pk, supprime_le__isnull=True
+            )
             serializer = AdminPermissionSerializer(perm)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -107,6 +117,7 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
                 description=serializer.validated_data.get("description"),
                 ordre=serializer.validated_data.get("ordre"),
                 est_actif=serializer.validated_data.get("est_actif"),
+                modules=serializer.validated_data.get("modules"),
                 modifie_par=request.user,
             )
         except DjangoValidationError as exc:
@@ -137,3 +148,33 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class AdminPermissionAffecterModulesView(APIView):
+    """`POST /api/v1/admin/permissions/{id}/modules/` — Décider et affecter les modules ayant accès à cette permission."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Affecter les modules autorisés à une permission (Super Admin)",
+        description="Associe la permission exclusivement aux modules spécifiés, l'attribue aux rôles de direction sur ces modules et la révoque de tous les autres.",
+        request=AdminPermissionAffecterModulesSerializer,
+        responses={200: AdminPermissionSerializer},
+    )
+    def post(self, request, pk):
+        serializer = AdminPermissionAffecterModulesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            perm = propager_affectation_modules_permission(
+                permission_id=pk,
+                modules=serializer.validated_data["modules"],
+                modifie_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise ValidationError({"detail": msg}) from exc
+
+        retour = AdminPermissionSerializer(perm)
+        return Response(retour.data, status=status.HTTP_200_OK)

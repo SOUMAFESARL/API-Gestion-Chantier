@@ -70,8 +70,8 @@ def test_lister_permissions_super_admin(client_admin, user_non_admin):
 
 
 @pytest.mark.django_db
-def test_creer_permission_et_propagation_dg_admin(client_admin):
-    """Création d'une permission et auto-attribution aux rôles de direction dans les tenants."""
+def test_creer_permission_et_propagation_ciblee_dg_admin(client_admin):
+    """Création d'une permission avec modules cibles et auto-attribution sélective aux rôles de direction."""
     with schema_context(SCHEMA_CLIENT):
         initialiser_roles_par_defaut()
 
@@ -81,24 +81,110 @@ def test_creer_permission_et_propagation_dg_admin(client_admin):
         "description": "Capacité d'audit et d'inspection contradictoire",
         "ordre": 5,
         "est_actif": True,
+        "modules": ["chantier", "ged"],
     }
     rep = client_admin.post("/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
     assert rep.status_code == status.HTTP_201_CREATED
     data = rep.json()
     assert data["code"] == "AUDIT"
+    assert "modules_codes" in data
+    assert sorted(data["modules_codes"]) == ["chantier", "ged"]
     perm_id = data["id"]
 
     # 1. Vérification dans public
     with schema_context(get_public_schema_name()):
         p_pub = Permission.objects.get(id=perm_id, supprime_le__isnull=True)
         assert p_pub.code == "AUDIT"
+        assert set(p_pub.modules.values_list("code", flat=True)) == {"chantier", "ged"}
 
-    # 2. Vérification dans le tenant demo : auto-attribuée à DG et ADMIN
+    # 2. Vérification dans le tenant demo : auto-attribuée à DG UNIQUEMENT sur 'chantier' et 'ged'
     with schema_context(SCHEMA_CLIENT):
         p_tenant = Permission.objects.get(code="AUDIT", supprime_le__isnull=True)
+        assert set(p_tenant.modules.values_list("code", flat=True)) == {"chantier", "ged"}
+
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
         for rmp in RoleModulePermission.objects.filter(role=role_dg):
-            assert rmp.permissions.filter(code="AUDIT").exists()
+            if rmp.module.code in ["chantier", "ged"]:
+                assert rmp.permissions.filter(code="AUDIT").exists()
+            else:
+                assert not rmp.permissions.filter(code="AUDIT").exists()
+
+
+@pytest.mark.django_db
+def test_creer_permission_sans_modules_zero_propagation(client_admin):
+    """Création d'une permission sans module : elle n'est injectée dans aucun RoleModulePermission."""
+    with schema_context(SCHEMA_CLIENT):
+        initialiser_roles_par_defaut()
+
+    payload = {
+        "code": "SIGNER_CONTRAT",
+        "libelle": "Signature de Contrat",
+        "description": "Droit de signature juridique",
+        "modules": [],
+    }
+    rep = client_admin.post("/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+    assert rep.status_code == status.HTTP_201_CREATED
+    perm_id = rep.json()["id"]
+
+    with schema_context(SCHEMA_CLIENT):
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        for rmp in RoleModulePermission.objects.filter(role=role_dg):
+            assert not rmp.permissions.filter(code="SIGNER_CONTRAT").exists()
+
+
+@pytest.mark.django_db
+def test_affecter_modules_a_posteriori_et_revocation(client_admin):
+    """Le Super Admin décide a posteriori d'affecter des modules, puis en retire un (révocation)."""
+    with schema_context(SCHEMA_CLIENT):
+        initialiser_roles_par_defaut()
+
+    # 1. Création sans module
+    rep_create = client_admin.post(
+        "/api/v1/admin/permissions/",
+        {"code": "METTRE_EN_LIGNE", "libelle": "Mettre en ligne"},
+        format="json",
+        HTTP_HOST=HOTE_PLATEFORME,
+    )
+    perm_id = rep_create.json()["id"]
+
+    # 2. Affectation a posteriori : [chantier, ged]
+    rep_affect = client_admin.post(
+        f"/api/v1/admin/permissions/{perm_id}/modules/",
+        {"modules": ["chantier", "ged"]},
+        format="json",
+        HTTP_HOST=HOTE_PLATEFORME,
+    )
+    assert rep_affect.status_code == status.HTTP_200_OK
+    assert sorted(rep_affect.json()["modules_codes"]) == ["chantier", "ged"]
+
+    with schema_context(SCHEMA_CLIENT):
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        rmp_chantier = RoleModulePermission.objects.get(role=role_dg, module__code="chantier")
+        rmp_ged = RoleModulePermission.objects.get(role=role_dg, module__code="ged")
+        rmp_projets = RoleModulePermission.objects.get(role=role_dg, module__code="projets")
+
+        assert rmp_chantier.permissions.filter(code="METTRE_EN_LIGNE").exists()
+        assert rmp_ged.permissions.filter(code="METTRE_EN_LIGNE").exists()
+        assert not rmp_projets.permissions.filter(code="METTRE_EN_LIGNE").exists()
+
+    # 3. Retrait du module 'ged' : seul 'chantier' est conservé
+    rep_retrait = client_admin.post(
+        f"/api/v1/admin/permissions/{perm_id}/modules/",
+        {"modules": ["chantier"]},
+        format="json",
+        HTTP_HOST=HOTE_PLATEFORME,
+    )
+    assert rep_retrait.status_code == status.HTTP_200_OK
+    assert rep_retrait.json()["modules_codes"] == ["chantier"]
+
+    with schema_context(SCHEMA_CLIENT):
+        rmp_chantier = RoleModulePermission.objects.get(role=role_dg, module__code="chantier")
+        rmp_ged = RoleModulePermission.objects.get(role=role_dg, module__code="ged")
+
+        # 'chantier' conserve la permission
+        assert rmp_chantier.permissions.filter(code="METTRE_EN_LIGNE").exists()
+        # 'ged' a été révoqué !
+        assert not rmp_ged.permissions.filter(code="METTRE_EN_LIGNE").exists()
 
 
 @pytest.mark.django_db

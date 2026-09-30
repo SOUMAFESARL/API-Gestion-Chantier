@@ -44,6 +44,12 @@ class ConnexionSerializer(serializers.Serializer):
         ),
     )
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict) and "origin" in data and "origine" not in data:
+            data = data.copy()
+            data["origine"] = data["origin"]
+        return super().to_internal_value(data)
+
     def validate_email(self, valeur: str) -> str:
         return valeur.strip().lower()
 

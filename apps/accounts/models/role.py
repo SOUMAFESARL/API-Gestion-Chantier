@@ -70,10 +70,18 @@ class RoleModulePermission(ModeleBase):
         related_name="permissions_roles",
         verbose_name=_("module"),
     )
+    permissions = models.ManyToManyField(
+        "accounts.Permission",
+        related_name="roles_modules",
+        blank=True,
+        verbose_name=_("permissions accordées"),
+    )
     niveau = models.PositiveSmallIntegerField(
         _("niveau d'accès"),
         choices=NiveauAcces.choices,
         default=NiveauAcces.AUCUN,
+        null=True,
+        blank=True,
     )
 
     class Meta:

@@ -180,19 +180,37 @@ class LectureSeule(permissions.BasePermission):
 
 
 class PermissionModule(permissions.BasePermission):
-    """Contrôle d'accès dynamique avec mémoïsation O(1) par requête HTTP."""
+    """Contrôle d'accès dynamique granulaire avec mémoïsation O(1) par requête HTTP."""
 
     module: str = ""
+    permission_requise: str = "LECTURE"
     niveau_requis: int = 1
     message = "Vos habilitations ne permettent pas d'effectuer cette action sur ce module."
 
     @classmethod
-    def pour(cls, module: str, niveau_requis: int = 1):
-        return type(
-            "PermissionModuleSpecifique",
-            (cls,),
-            {"module": module, "niveau_requis": int(niveau_requis)},
-        )
+    def pour(cls, module: str, permission_ou_niveau=1):
+        if isinstance(permission_ou_niveau, int):
+            mapping = {1: "LECTURE", 2: "ECRITURE", 3: "VALIDATION"}
+            perm_code = mapping.get(permission_ou_niveau, "LECTURE")
+            return type(
+                "PermissionModuleSpecifique",
+                (cls,),
+                {
+                    "module": str(module).lower(),
+                    "permission_requise": perm_code,
+                    "niveau_requis": int(permission_ou_niveau),
+                },
+            )
+        else:
+            return type(
+                "PermissionModuleSpecifique",
+                (cls,),
+                {
+                    "module": str(module).lower(),
+                    "permission_requise": str(permission_ou_niveau).upper(),
+                    "niveau_requis": 1,
+                },
+            )
 
     def has_permission(self, request, view) -> bool:
         utilisateur = request.user
@@ -209,9 +227,9 @@ class PermissionModule(permissions.BasePermission):
         if not hasattr(request, "_rbac_module_permissions_cache"):
             request._rbac_module_permissions_cache = {}
 
-        if self.module in request._rbac_module_permissions_cache:
-            niveau = request._rbac_module_permissions_cache[self.module]
-            return niveau >= self.niveau_requis
+        cle_cache = (self.module, self.permission_requise)
+        if cle_cache in request._rbac_module_permissions_cache:
+            return request._rbac_module_permissions_cache[cle_cache]
 
         from django.apps import apps as registre
 
@@ -228,15 +246,37 @@ class PermissionModule(permissions.BasePermission):
             ).first()
 
         if not role:
-            request._rbac_module_permissions_cache[self.module] = 0
+            request._rbac_module_permissions_cache[cle_cache] = False
             return False
 
         perm = RoleModulePermission.objects.filter(
             role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
-        niveau = perm.niveau if perm else 0
-        request._rbac_module_permissions_cache[self.module] = niveau
-        return niveau >= self.niveau_requis
+
+        if not perm:
+            request._rbac_module_permissions_cache[cle_cache] = False
+            return False
+
+        if perm.niveau == 0:
+            request._rbac_module_permissions_cache[cle_cache] = False
+            return False
+
+        # Vérification granulaire dans les permissions ManyToMany
+        has_perm = perm.permissions.filter(
+            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+        ).exists()
+
+        # Fallback pour compatibilité niveau scalaire UNIQUEMENT si aucune permission M2M n'a été rattachée
+        if not has_perm and not perm.permissions.exists() and perm.niveau is not None and perm.niveau > 0:
+            if self.permission_requise == "LECTURE" and perm.niveau >= 1:
+                has_perm = True
+            elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
+                has_perm = True
+            elif self.permission_requise == "VALIDATION" and perm.niveau >= 3:
+                has_perm = True
+
+        request._rbac_module_permissions_cache[cle_cache] = has_perm
+        return has_perm
 
     def has_object_permission(self, request, view, obj) -> bool:
         utilisateur = request.user
@@ -254,13 +294,12 @@ class PermissionModule(permissions.BasePermission):
         if not projet_id:
             return self.has_permission(request, view)
 
-        cle_cache = (str(utilisateur.id), self.module, str(projet_id))
+        cle_cache = (str(utilisateur.id), self.module, self.permission_requise, str(projet_id))
         if not hasattr(request, "_rbac_object_permissions_cache"):
             request._rbac_object_permissions_cache = {}
 
         if cle_cache in request._rbac_object_permissions_cache:
-            niveau = request._rbac_object_permissions_cache[cle_cache]
-            return niveau >= self.niveau_requis
+            return request._rbac_object_permissions_cache[cle_cache]
 
         from django.apps import apps as registre
 
@@ -280,7 +319,7 @@ class PermissionModule(permissions.BasePermission):
         ).first()
 
         if not affectation:
-            request._rbac_object_permissions_cache[cle_cache] = 0
+            request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
         role = affectation.role
@@ -297,21 +336,47 @@ class PermissionModule(permissions.BasePermission):
             )
 
         if not role:
-            request._rbac_object_permissions_cache[cle_cache] = 0
+            request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
         override = ProjetRoleModuleOverride.objects.filter(
             projet_id=projet_id, role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
         if override:
-            niveau = override.niveau
-            request._rbac_object_permissions_cache[cle_cache] = niveau
-            return niveau >= self.niveau_requis
+            if override.niveau == 0:
+                request._rbac_object_permissions_cache[cle_cache] = False
+                return False
+            has_perm = override.permissions.filter(
+                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+            ).exists()
+            if not has_perm and not override.permissions.exists() and override.niveau is not None and override.niveau > 0:
+                if self.permission_requise == "LECTURE" and override.niveau >= 1:
+                    has_perm = True
+                elif self.permission_requise == "ECRITURE" and override.niveau >= 2:
+                    has_perm = True
+                elif self.permission_requise == "VALIDATION" and override.niveau >= 3:
+                    has_perm = True
+            request._rbac_object_permissions_cache[cle_cache] = has_perm
+            return has_perm
 
         perm = RoleModulePermission.objects.filter(
             role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
-        niveau = perm.niveau if perm else 0
-        request._rbac_object_permissions_cache[cle_cache] = niveau
-        return niveau >= self.niveau_requis
+        if not perm or perm.niveau == 0:
+            request._rbac_object_permissions_cache[cle_cache] = False
+            return False
+
+        has_perm = perm.permissions.filter(
+            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+        ).exists()
+        if not has_perm and not perm.permissions.exists() and perm.niveau is not None and perm.niveau > 0:
+            if self.permission_requise == "LECTURE" and perm.niveau >= 1:
+                has_perm = True
+            elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
+                has_perm = True
+            elif self.permission_requise == "VALIDATION" and perm.niveau >= 3:
+                has_perm = True
+
+        request._rbac_object_permissions_cache[cle_cache] = has_perm
+        return has_perm
 

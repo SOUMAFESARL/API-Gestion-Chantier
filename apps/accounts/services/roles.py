@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.models import Module, Role, RoleModulePermission, Utilisateur
+from apps.accounts.models import Module, Permission, Role, RoleModulePermission, Utilisateur
 from apps.core.enums import MODULES_DETAILS, ModuleChoix, NiveauAcces, RoleGlobal
 
 MATRICE_DEFAUT = {
@@ -81,6 +81,115 @@ def initialiser_modules_par_defaut() -> list[Module]:
     return modules_crees
 
 
+PERMISSIONS_FONDAMENTALES = [
+    {
+        "code": "LECTURE",
+        "libelle": "Lecture / Consultation",
+        "description": "Permet de consulter et visualiser les données du module.",
+        "ordre": 1,
+        "est_actif": True,
+    },
+    {
+        "code": "ECRITURE",
+        "libelle": "Écriture / Saisie",
+        "description": "Permet de créer, éditer et modifier les données du module.",
+        "ordre": 2,
+        "est_actif": True,
+    },
+    {
+        "code": "VALIDATION",
+        "libelle": "Validation / Approbation",
+        "description": "Permet de valider, approuver, signer ou rejeter les éléments du module.",
+        "ordre": 3,
+        "est_actif": True,
+    },
+    {
+        "code": "SUPPRESSION",
+        "libelle": "Suppression / Archivage",
+        "description": "Permet de supprimer ou archiver les éléments du module.",
+        "ordre": 4,
+        "est_actif": True,
+    },
+]
+
+
+def initialiser_permissions_par_defaut() -> list[Permission]:
+    """Initialise le catalogue des 4 permissions fondamentales dans le schéma courant."""
+    perms_creees = []
+    with transaction.atomic():
+        for data in PERMISSIONS_FONDAMENTALES:
+            perm, _ = Permission.objects.update_or_create(
+                code=data["code"],
+                defaults=data,
+            )
+            perms_creees.append(perm)
+    return perms_creees
+
+
+def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permission]]:
+    """Normalise les permissions reçues sous forme de dict ou de list vers un dict {module_code: [Permission, ...]}."""
+    perms_par_code = {p.code.upper(): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True)}
+    perms_par_id = {str(p.id): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True)}
+
+    resultat: dict[str, list[Permission]] = {}
+
+    if not permissions_input:
+        return resultat
+
+    if isinstance(permissions_input, list):
+        for item in permissions_input:
+            if isinstance(item, dict):
+                m_code = item.get("module") or item.get("module_code")
+                p_items = item.get("permissions") or []
+                if m_code:
+                    resolved = []
+                    for p in p_items:
+                        p_key = p.get("code") if isinstance(p, dict) else str(p)
+                        if p_key and p_key.upper() in perms_par_code:
+                            resolved.append(perms_par_code[p_key.upper()])
+                        elif p_key and p_key in perms_par_id:
+                            resolved.append(perms_par_id[p_key])
+                    resultat[str(m_code).lower()] = resolved
+    elif isinstance(permissions_input, dict):
+        for m_code, val in permissions_input.items():
+            m_code_str = str(m_code).lower()
+            if isinstance(val, int):
+                resolved = []
+                if val == 1 and "LECTURE" in perms_par_code:
+                    resolved.append(perms_par_code["LECTURE"])
+                elif val == 2:
+                    for c in ["LECTURE", "ECRITURE"]:
+                        if c in perms_par_code:
+                            resolved.append(perms_par_code[c])
+                elif val >= 3:
+                    for c in ["LECTURE", "ECRITURE", "VALIDATION"]:
+                        if c in perms_par_code:
+                            resolved.append(perms_par_code[c])
+                resultat[m_code_str] = resolved
+            elif isinstance(val, list):
+                resolved = []
+                for p in val:
+                    p_key = p.get("code") if isinstance(p, dict) else str(p)
+                    if p_key and p_key.upper() in perms_par_code:
+                        resolved.append(perms_par_code[p_key.upper()])
+                    elif p_key and p_key in perms_par_id:
+                        resolved.append(perms_par_id[p_key])
+                resultat[m_code_str] = resolved
+
+    return resultat
+
+
+def _calculer_niveau_scalaire(permissions_list: list[Permission]) -> int:
+    codes = {p.code for p in permissions_list}
+    if "VALIDATION" in codes:
+        return NiveauAcces.VALIDATION
+    if "ECRITURE" in codes:
+        return NiveauAcces.ECRITURE
+    if "LECTURE" in codes:
+        return NiveauAcces.LECTURE
+    return NiveauAcces.AUCUN
+
+
 def initialiser_roles_par_defaut() -> list[Role]:
     """Initialise les rôles par défaut avec leurs permissions dans le schéma courant.
 
@@ -88,7 +197,9 @@ def initialiser_roles_par_defaut() -> list[Role]:
     Les autres rôles sont pré-configurés mais modifiables et supprimables.
     """
     initialiser_modules_par_defaut()
+    initialiser_permissions_par_defaut()
     modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+    all_perms = list(Permission.objects.filter(est_actif=True, supprime_le__isnull=True))
 
     roles_crees = []
     with transaction.atomic():
@@ -104,11 +215,14 @@ def initialiser_roles_par_defaut() -> list[Role]:
             )
             # Met à jour ou crée les permissions de chaque module actif
             for mod in modules_actifs:
-                RoleModulePermission.objects.update_or_create(
+                rmp, _ = RoleModulePermission.objects.update_or_create(
                     role=role,
                     module=mod,
                     defaults={"niveau": NiveauAcces.VALIDATION},
                 )
+                rmp.permissions.set(all_perms)
+                rmp.niveau = NiveauAcces.VALIDATION
+                rmp.save()
             RoleModulePermission.objects.filter(role=role).exclude(
                 module__in=modules_actifs
             ).delete()
@@ -120,10 +234,10 @@ def creer_role(
     code: str,
     libelle: str,
     description: str = "",
-    permissions_modules: dict[str, int] | None = None,
+    permissions_modules=None,
     cree_par=None,
 ) -> Role:
-    """Crée un nouveau rôle personnalisé avec sa matrice de permissions."""
+    """Crée un nouveau rôle personnalisé obligatoirement lié à TOUS les modules actifs."""
     code = code.strip().upper()
     if not code:
         raise ValidationError(_("Le code du rôle est obligatoire."))
@@ -148,16 +262,20 @@ def creer_role(
             cree_par=cree_par,
         )
 
-        permissions_modules = permissions_modules or {}
+        norm_perms = _normaliser_permissions_modules(permissions_modules)
         modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+
+        # Invariant de complétude : Tout rôle est obligatoirement lié à TOUS les modules actifs
         for mod in modules_actifs:
-            niveau = permissions_modules.get(mod.code, NiveauAcces.AUCUN)
-            RoleModulePermission.objects.create(
+            perms_for_mod = norm_perms.get(mod.code.lower(), [])
+            rmp = RoleModulePermission.objects.create(
                 role=role,
                 module=mod,
-                niveau=niveau,
+                niveau=_calculer_niveau_scalaire(perms_for_mod),
                 cree_par=cree_par,
             )
+            if perms_for_mod:
+                rmp.permissions.set(perms_for_mod)
 
     return role
 
@@ -166,7 +284,7 @@ def modifier_role(
     role: Role,
     libelle: str | None = None,
     description: str | None = None,
-    permissions_modules: dict[str, int] | None = None,
+    permissions_modules=None,
     modifie_par=None,
 ) -> Role:
     """Modifie un rôle existant et met à jour sa matrice de permissions."""
@@ -177,17 +295,29 @@ def modifier_role(
             role.description = description.strip()
         role.save()
 
+        modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+        modules_map = {m.code.lower(): m for m in modules_actifs}
+
+        # Garantir l'invariant de liaison à tous les modules
+        for mod in modules_actifs:
+            RoleModulePermission.objects.get_or_create(
+                role=role,
+                module=mod,
+                defaults={"cree_par": modifie_par, "niveau": NiveauAcces.AUCUN},
+            )
+
         if permissions_modules is not None:
-            modules_map = {
-                m.code: m for m in Module.objects.filter(est_actif=True, supprime_le__isnull=True)
-            }
-            for mod_code, niveau in permissions_modules.items():
+            norm_perms = _normaliser_permissions_modules(permissions_modules)
+            for mod_code, perms_list in norm_perms.items():
                 if mod_code in modules_map:
-                    RoleModulePermission.objects.update_or_create(
+                    rmp, _ = RoleModulePermission.objects.get_or_create(
                         role=role,
                         module=modules_map[mod_code],
-                        defaults={"niveau": niveau},
+                        defaults={"cree_par": modifie_par},
                     )
+                    rmp.permissions.set(perms_list)
+                    rmp.niveau = _calculer_niveau_scalaire(perms_list)
+                    rmp.save()
 
     return role
 

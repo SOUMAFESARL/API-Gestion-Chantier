@@ -38,9 +38,17 @@ class ProjetRoleModuleOverride(ModeleBase):
         related_name="overrides_projets",
         verbose_name=_("module"),
     )
+    permissions = models.ManyToManyField(
+        "accounts.Permission",
+        related_name="overrides_projets",
+        blank=True,
+        verbose_name=_("permissions accordées sur ce projet"),
+    )
     niveau = models.PositiveSmallIntegerField(
         _("niveau d'accès sur ce projet"),
         choices=NiveauAcces.choices,
+        null=True,
+        blank=True,
     )
 
     class Meta:

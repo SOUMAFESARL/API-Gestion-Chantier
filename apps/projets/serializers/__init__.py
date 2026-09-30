@@ -27,19 +27,37 @@ from apps.projets.serializers.meteo import (
 )
 from apps.projets.services.affectations import affecter_collaborateur_projet
 from apps.projets.services.references import generer_reference_projet
+from apps.projets.serializers.activite import (
+    ActiviteCreationSerializer,
+    ActiviteSerializer,
+)
+from apps.projets.serializers.reprogrammation import (
+    HistoriqueDateSerializer,
+    MotifReportCreationSerializer,
+    MotifReportSerializer,
+    ReprogrammationRequestSerializer,
+    ReprogrammationResponseSerializer,
+)
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
+    "ActiviteCreationSerializer",
+    "ActiviteSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
     "EquipeCreationSerializer",
+    "HistoriqueDateSerializer",
     "LotCreationProjetSerializer",
     "LotSimpleSerializer",
     "MeteoResponseSerializer",
+    "MotifReportCreationSerializer",
+    "MotifReportSerializer",
     "ProjetCreationSerializer",
     "ProjetSerializer",
     "ReferentielVillesResponseSerializer",
+    "ReprogrammationRequestSerializer",
+    "ReprogrammationResponseSerializer",
     "TableauDeBordResponseSerializer",
 ]
 
@@ -90,6 +108,8 @@ class LotSimpleSerializer(serializers.ModelSerializer):
             "type_bordereau",
             "date_debut_prevue",
             "date_fin_prevue",
+            "date_debut_baseline",
+            "date_fin_baseline",
             "avancement",
             "premier_rapport_soumis",
         ]
@@ -123,6 +143,8 @@ class ProjetSerializer(serializers.ModelSerializer):
             "budget_consomme_montant",
             "date_debut_prevue",
             "date_fin_prevue",
+            "date_debut_baseline",
+            "date_fin_baseline",
             "duree_jours_ouvres",
             "date_debut_reelle",
             "date_fin_reelle",
@@ -253,6 +275,22 @@ class ProjetCreationSerializer(serializers.Serializer):
             nouveaux.is_valid(raise_exception=True)
             attrs["lots"] = nouveaux.validated_data
         if self.instance is not None:
+            if "date_debut_baseline" in self.initial_data or "date_fin_baseline" in self.initial_data:
+                raise serializers.ValidationError(
+                    {"date_debut_baseline": _("La Baseline v0 est immuable et ne peut être modifiée.")}
+                )
+            if (
+                ("date_debut_prevue" in self.initial_data and attrs.get("date_debut_prevue") != self.instance.date_debut_prevue)
+                or ("date_fin_prevue" in self.initial_data and attrs.get("date_fin_prevue") != self.instance.date_fin_prevue)
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "date_fin_prevue": _(
+                            "La modification des dates prévisionnelles requiert un motif et une justification (RG-11). "
+                            "Veuillez utiliser la route dédiée : POST /api/v1/projets/{id}/reprogrammer/."
+                        )
+                    }
+                )
             non_modifiables = {
                 "equipe",
                 "chefs_chantier_ids",

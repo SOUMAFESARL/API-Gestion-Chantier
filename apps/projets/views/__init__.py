@@ -16,15 +16,37 @@ from apps.core.permissions import (
 from apps.projets.models import Projet
 from apps.projets.serializers import ProjetCreationSerializer, ProjetSerializer
 from apps.projets.serializers.swagger import ProjetPatchSerializer, ProjetPostSerializer
+from apps.projets.views.activite import (
+    ActiviteDetailView,
+    LotActiviteListCreateView,
+)
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
 from apps.projets.views.override import ProjetPermissionsRolesView
+from apps.projets.views.reprogrammation import (
+    ActiviteHistoriqueDatesView,
+    ActiviteReprogrammerView,
+    LotHistoriqueDatesView,
+    LotReprogrammerView,
+    MotifReportListCreateView,
+    ProjetHistoriqueDatesView,
+    ProjetReprogrammerView,
+)
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
+    "ActiviteDetailView",
+    "ActiviteHistoriqueDatesView",
+    "ActiviteReprogrammerView",
+    "LotActiviteListCreateView",
+    "LotHistoriqueDatesView",
+    "LotReprogrammerView",
     "MeteoProjetView",
+    "MotifReportListCreateView",
     "ProjetDetailView",
+    "ProjetHistoriqueDatesView",
     "ProjetListCreateView",
     "ProjetPermissionsRolesView",
+    "ProjetReprogrammerView",
     "ReferentielVillesView",
     "TableauDeBordView",
 ]

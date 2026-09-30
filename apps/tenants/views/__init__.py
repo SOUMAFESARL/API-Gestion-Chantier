@@ -169,10 +169,10 @@ class ActivationView(APIView):
     serializer_class = ActivationSerializer
 
     @extend_schema(
-        summary="Verifier l'email et soumettre l'inscription a validation",
+        summary="Activer un espace et lancer le provisionnement",
         description=(
-            "Consomme le jeton et conserve le mot de passe hache. Renvoie A_VALIDER ; "
-            "aucun espace n'est cree avant approbation du super admin."
+            "Consomme le jeton, hache le mot de passe et déclenche la création "
+            "asynchrone du schéma tenant et du compte administrateur."
         ),
         request=ActivationSerializer,
         responses={202: AccuseActivationSerializer, 400: dict},
@@ -237,8 +237,10 @@ class EtatProvisionnementView(APIView):
             )
 
         if demande.statut == DemandeInscription.Statut.ACTIVEE and demande.entreprise_id:
-            base_url = "http://localhost:3000"
-            url_connexion = f"{base_url}/connexion"
+            from django.conf import settings
+
+            frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            url_connexion = f"{frontend_url}/connexion"
 
             return Response(
                 {"statut": "PRET", "url_connexion": url_connexion}

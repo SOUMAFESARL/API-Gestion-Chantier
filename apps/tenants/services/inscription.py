@@ -338,12 +338,40 @@ def verifier(jeton_clair: str) -> DemandeInscription:
     return demande
 
 
+def lancer_provisionnement(demande_id: str) -> None:
+    """Déclenche la tâche de provisionnement du tenant de façon asynchrone et non-bloquante.
+
+    Si Celery est en mode Eager (ex: cPanel sans worker Celery dédié), un thread
+    d'arrière-plan est détaché pour exécuter `provisionner_entreprise` sans bloquer
+    la réponse HTTP de l'activation (évitant un 504 Gateway Timeout lors de migrate_schemas).
+    Si un worker Celery est actif, la tâche est déposée dans la file via `.delay()`.
+    """
+    from apps.tenants.tasks import provisionner_entreprise
+
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        import threading
+        from django.db import connection
+
+        def _executer():
+            try:
+                provisionner_entreprise(demande_id)
+            finally:
+                connection.close()
+
+        thread = threading.Thread(
+            target=_executer, name=f"provisionner-{demande_id}", daemon=True
+        )
+        thread.start()
+    else:
+        provisionner_entreprise.delay(demande_id)
+
+
 # ---------------------------------------------------------------------------
 # §5 — activer
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> DemandeInscription:
-    """Verifie l'email et attend la decision du super admin, sans creer d'espace."""
+    """Vérifie l'email, définit le mot de passe et lance le provisionnement automatique du tenant."""
     demande = DemandeInscription.objects.select_for_update().filter(
         empreinte=DemandeInscription.empreinte_de(jeton_clair)
     ).first()
@@ -352,7 +380,6 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
         raise JetonInscriptionExpire()
 
     if demande.statut in {
-        DemandeInscription.Statut.A_VALIDER,
         DemandeInscription.Statut.PROVISIONNEMENT,
         DemandeInscription.Statut.ACTIVEE,
     }:
@@ -369,7 +396,7 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
         # Haché avant de toucher la base : la colonne vit dans `public`, et le
         # compte qui portera ce mot de passe n'existe pas encore — MLD §4.8.
         demande.mot_de_passe_transitoire = make_password(mot_de_passe)
-        demande.statut = DemandeInscription.Statut.A_VALIDER
+        demande.statut = DemandeInscription.Statut.PROVISIONNEMENT
         demande.save(
             update_fields=[
                 "utilise_le",
@@ -381,6 +408,8 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
             ]
         )
 
+    # Après commit de la transaction : lancement non-bloquant du provisionnement
+    transaction.on_commit(lambda: lancer_provisionnement(str(demande.pk)))
     return demande
 
 

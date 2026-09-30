@@ -12,8 +12,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.models import Role, RoleModulePermission, Utilisateur
-from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal
+from apps.accounts.models import Module, Role, RoleModulePermission, Utilisateur
+from apps.core.enums import MODULES_DETAILS, ModuleChoix, NiveauAcces, RoleGlobal
 
 MATRICE_DEFAUT = {
     code: dict.fromkeys(ModuleChoix.values, NiveauAcces.VALIDATION) for code in RoleGlobal.values
@@ -61,6 +61,25 @@ ROLES_SYSTEME_INFOS = {
 CODES_ROLES_SYSTEME = frozenset({RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.ADMIN})
 
 
+def initialiser_modules_par_defaut() -> list[Module]:
+    """Initialise ou met à jour le catalogue des 5 modules souverains BTP dans le schéma courant."""
+    modules_crees = []
+    with transaction.atomic():
+        for code, details in MODULES_DETAILS.items():
+            libelle = dict(ModuleChoix.choices).get(code, code)
+            mod, _ = Module.objects.update_or_create(
+                code=code,
+                defaults={
+                    "libelle": libelle,
+                    "description": details.get("description", ""),
+                    "ordre": details.get("ordre", 0),
+                    "icone": details.get("icone", "box"),
+                    "est_actif": True,
+                },
+            )
+            modules_crees.append(mod)
+    return modules_crees
+
 
 def initialiser_roles_par_defaut() -> list[Role]:
     """Initialise les rôles par défaut avec leurs permissions dans le schéma courant.
@@ -68,6 +87,9 @@ def initialiser_roles_par_defaut() -> list[Role]:
     Seuls DG et AD reçoivent ``est_systeme=True`` (non supprimables).
     Les autres rôles sont pré-configurés mais modifiables et supprimables.
     """
+    initialiser_modules_par_defaut()
+    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+
     roles_crees = []
     with transaction.atomic():
         for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
@@ -80,17 +102,15 @@ def initialiser_roles_par_defaut() -> list[Role]:
                     "est_actif": True,
                 },
             )
-            # Met à jour ou crée les permissions de chaque module
-            matrice = MATRICE_DEFAUT.get(code, {})
-            for module in ModuleChoix.values:
-                niveau = matrice.get(module, NiveauAcces.VALIDATION)
+            # Met à jour ou crée les permissions de chaque module actif
+            for mod in modules_actifs:
                 RoleModulePermission.objects.update_or_create(
                     role=role,
-                    module=module,
-                    defaults={"niveau": niveau},
+                    module=mod,
+                    defaults={"niveau": NiveauAcces.VALIDATION},
                 )
             RoleModulePermission.objects.filter(role=role).exclude(
-                module__in=ModuleChoix.values
+                module__in=modules_actifs
             ).delete()
             roles_crees.append(role)
     return roles_crees
@@ -129,11 +149,12 @@ def creer_role(
         )
 
         permissions_modules = permissions_modules or {}
-        for module in ModuleChoix.values:
-            niveau = permissions_modules.get(module, NiveauAcces.AUCUN)
+        modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+        for mod in modules_actifs:
+            niveau = permissions_modules.get(mod.code, NiveauAcces.AUCUN)
             RoleModulePermission.objects.create(
                 role=role,
-                module=module,
+                module=mod,
                 niveau=niveau,
                 cree_par=cree_par,
             )
@@ -157,11 +178,14 @@ def modifier_role(
         role.save()
 
         if permissions_modules is not None:
-            for module, niveau in permissions_modules.items():
-                if module in ModuleChoix.values:
+            modules_map = {
+                m.code: m for m in Module.objects.filter(est_actif=True, supprime_le__isnull=True)
+            }
+            for mod_code, niveau in permissions_modules.items():
+                if mod_code in modules_map:
                     RoleModulePermission.objects.update_or_create(
                         role=role,
-                        module=module,
+                        module=modules_map[mod_code],
                         defaults={"niveau": niveau},
                     )
 

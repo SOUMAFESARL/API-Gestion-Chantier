@@ -50,10 +50,12 @@ class Role(ModeleBase):
 
 
 class RoleModulePermission(ModeleBase):
-    """Niveau d'accès d'un rôle sur l'un des 5 modules BTP.
+    """Niveau d'accès d'un rôle sur l'un des modules applicatifs dynamiques BTP.
 
     Matrice par défaut au niveau de l'entreprise (tenant).
     Niveaux : AUCUN (0), LECTURE (1), ECRITURE (2), VALIDATION (3).
+    Intégrité référentielle stricte : la suppression d'un module supprime
+    automatiquement en cascade ses habilitations associées.
     """
 
     role = models.ForeignKey(
@@ -62,10 +64,11 @@ class RoleModulePermission(ModeleBase):
         related_name="permissions_modules",
         verbose_name=_("rôle"),
     )
-    module = models.CharField(
-        _("module"),
-        max_length=30,
-        choices=ModuleChoix.choices,
+    module = models.ForeignKey(
+        "accounts.Module",
+        on_delete=models.CASCADE,
+        related_name="permissions_roles",
+        verbose_name=_("module"),
     )
     niveau = models.PositiveSmallIntegerField(
         _("niveau d'accès"),
@@ -86,4 +89,5 @@ class RoleModulePermission(ModeleBase):
         ]
 
     def __str__(self) -> str:
-        return f"{self.role.libelle} — {self.get_module_display()}: {self.get_niveau_display()}"
+        mod_libelle = self.module.libelle if self.module_id else "?"
+        return f"{self.role.libelle} — {mod_libelle}: {self.get_niveau_display()}"

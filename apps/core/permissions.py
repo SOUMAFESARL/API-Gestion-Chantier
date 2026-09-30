@@ -232,7 +232,7 @@ class PermissionModule(permissions.BasePermission):
             return False
 
         perm = RoleModulePermission.objects.filter(
-            role=role, module=self.module, supprime_le__isnull=True
+            role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
         niveau = perm.niveau if perm else 0
         request._rbac_module_permissions_cache[self.module] = niveau
@@ -301,7 +301,7 @@ class PermissionModule(permissions.BasePermission):
             return False
 
         override = ProjetRoleModuleOverride.objects.filter(
-            projet_id=projet_id, role=role, module=self.module, supprime_le__isnull=True
+            projet_id=projet_id, role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
         if override:
             niveau = override.niveau
@@ -309,7 +309,7 @@ class PermissionModule(permissions.BasePermission):
             return niveau >= self.niveau_requis
 
         perm = RoleModulePermission.objects.filter(
-            role=role, module=self.module, supprime_le__isnull=True
+            role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
         niveau = perm.niveau if perm else 0
         request._rbac_object_permissions_cache[cle_cache] = niveau

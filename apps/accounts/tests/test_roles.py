@@ -68,9 +68,9 @@ def test_initialiser_roles_par_defaut():
 
         # Vérifie que tous les rôles ont accès complet à tous les modules à ce stade
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
-        perm_chantier = RoleModulePermission.objects.get(role=role_cc, module=ModuleChoix.CHANTIER)
+        perm_chantier = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.CHANTIER)
         assert perm_chantier.niveau == NiveauAcces.VALIDATION
-        perm_ged = RoleModulePermission.objects.get(role=role_cc, module=ModuleChoix.GED)
+        perm_ged = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.GED)
         assert perm_ged.niveau == NiveauAcces.VALIDATION
 
 
@@ -287,7 +287,7 @@ def test_permission_module_enforcement():
 
         # Pour tester l'enforcement quand un niveau est insuffisant, on ajuste TIERS à AUCUN pour CHEF_CHANTIER
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
-        RoleModulePermission.objects.filter(role=role_cc, module=ModuleChoix.TIERS).update(
+        RoleModulePermission.objects.filter(role=role_cc, module__code=ModuleChoix.TIERS).update(
             niveau=NiveauAcces.AUCUN
         )
 

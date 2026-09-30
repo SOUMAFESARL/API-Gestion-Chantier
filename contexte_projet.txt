@@ -1,0 +1,4897 @@
+﻿================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class AccountsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.accounts"
+    verbose_name = "Utilisateurs, rôles, invitations, appareils"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\accounts\urls.py
+================================================================================
+from django.urls import path
+
+from apps.accounts.views import (
+    ConnexionView,
+    DeconnexionView,
+    DemandeReinitialisationView,
+    InvitationAccepterView,
+    InvitationListCreateView,
+    InvitationVerifierView,
+    ReinitialisationView,
+    RenouvellementView,
+    RoleDetailUpdateView,
+    RoleListCreateView,
+    RoleSupprimerReassignerView,
+    UtilisateurMoiView,
+    VerificationJetonView,
+)
+
+app_name = "accounts"
+
+urlpatterns = [
+    path("auth/token/", ConnexionView.as_view(), name="connexion"),
+    path("auth/token/refresh/", RenouvellementView.as_view(), name="jeton-renouveler"),
+    path("auth/deconnexion/", DeconnexionView.as_view(), name="deconnexion"),
+    path("utilisateurs/moi/", UtilisateurMoiView.as_view(), name="utilisateur-moi"),
+    path("invitations/", InvitationListCreateView.as_view(), name="invitations-liste-creer"),
+    path("invitations/verifier/", InvitationVerifierView.as_view(), name="invitation-verifier"),
+    path("invitations/accepter/", InvitationAccepterView.as_view(), name="invitation-accepter"),
+    # Rôles et habilitations par module
+    path("roles/", RoleListCreateView.as_view(), name="roles-liste-creer"),
+    path("roles/<uuid:pk>/", RoleDetailUpdateView.as_view(), name="role-detail-modifier"),
+    path(
+        "roles/<uuid:pk>/supprimer/",
+        RoleSupprimerReassignerView.as_view(),
+        name="role-supprimer-reassigner",
+    ),
+    # Réinitialisation du mot de passe — les trois portes d'un seul couloir.
+    path(
+        "auth/mot-de-passe/demande/",
+        DemandeReinitialisationView.as_view(),
+        name="mot-de-passe-demande",
+    ),
+    path(
+        "auth/mot-de-passe/verifier/",
+        VerificationJetonView.as_view(),
+        name="mot-de-passe-verifier",
+    ),
+    path(
+        "auth/mot-de-passe/reinitialiser/",
+        ReinitialisationView.as_view(),
+        name="mot-de-passe-reinitialiser",
+    ),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class AchatsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.achats"
+    verbose_name = "Achats et approvisionnements"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\achats\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "achats"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class AuditConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.audit"
+    verbose_name = "Journal d'audit immuable — insertion et lecture seulement"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\audit\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "audit"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class BillingConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.billing"
+    verbose_name = "Plans, abonnements, factures OHADA et paiements CinetPay"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\tasks.py
+================================================================================
+"""Tâches Celery de la facturation. Elles appellent un service, jamais l'inverse."""
+
+import logging
+from datetime import timedelta
+
+from celery import shared_task
+from django.utils import timezone
+from django_tenants.utils import schema_context
+
+logger = logging.getLogger(__name__)
+
+# Les quatre seuils du parcours de l'essai gratuit §2.1, dans l'ordre où ils
+# tombent. J+0 clôt la série : c'est le jour où l'essai est fini.
+SEUILS = (7, 3, 1, 0)
+
+
+@shared_task
+def relancer_essais() -> int:
+    """Les quatre relances de l'essai — parcours §2, US-016.
+
+    **Elle tourne dans `public`** : c'est là que vivent les abonnements. Puis
+    elle **entre dans le schéma de chaque client** pour compter ce qui y a été
+    construit. Sans cette bascule, elle compterait les projets de `public` —
+    c'est-à-dire aucun — et annoncerait à chaque client qu'il n'a rien fait.
+    *La tâche ne lèverait aucune erreur : elle trouve zéro, et zéro est un
+    nombre valide.* C'est la règle 3 du `CLAUDE.md`, et c'est ici qu'elle se paie.
+
+    **Elle ne décide de rien.** Le passage en lecture seule est évalué à la
+    requête, pas ici : une tâche qui coupe l'accès à 06 h 00 UTC couperait
+    quelqu'un en train de saisir. À J+0 elle pose le statut et envoie le
+    message — elle rend l'état visible (§3.1).
+    """
+    from apps.billing.models import Abonnement, RelanceEssai
+    from apps.billing.services.relances import bilan_du_schema, destinataires_relance
+    from apps.core.emails import envoyer
+
+    envoyees = 0
+    aujourdhui = timezone.localdate()
+
+    for seuil in SEUILS:
+        # Une date **exacte**, pas un intervalle : c'est ce qui rend la tâche
+        # rejouable sans rattraper des jours passés.
+        cible = aujourdhui + timedelta(days=seuil)
+        abonnements = Abonnement.objects.filter(
+            statut=Abonnement.Statut.ESSAI, fin_essai=cible
+        ).select_related("entreprise")
+
+        for abonnement in abonnements:
+            schema = abonnement.entreprise.schema_name
+
+            try:
+                with schema_context(schema):
+                    bilan = bilan_du_schema()
+                    adresses = destinataires_relance()
+            except Exception:
+                # Un schéma illisible ne doit pas arrêter la tournée des autres.
+                logger.exception("Relance impossible pour le schéma %s", schema)
+                continue
+
+            if not adresses:
+                # Un espace sans administrateur actif : personne à qui écrire.
+                logger.warning("Aucun destinataire de relance dans le schéma %s", schema)
+                continue
+
+            # La trace **avant** l'envoi : si la contrainte refuse la ligne, la
+            # relance a déjà été faite et le message ne doit pas repartir.
+            _, cree = RelanceEssai.objects.get_or_create(
+                abonnement=abonnement,
+                seuil=seuil,
+                defaults={"destinataires": len(adresses)},
+            )
+            if not cree:
+                continue
+
+            envoyer(
+                "essai_relance",
+                _sujet(seuil, abonnement.entreprise.raison_sociale),
+                adresses,
+                {
+                    "raison_sociale": abonnement.entreprise.raison_sociale,
+                    "jours_restants": seuil,
+                    "bilan": bilan,
+                    "lien_abonnement": _lien_abonnement(abonnement.entreprise),
+                },
+            )
+            envoyees += 1
+
+            if seuil == 0:
+                _clore_essai(abonnement)
+
+    return envoyees
+
+
+def _sujet(seuil: int, raison_sociale: str) -> str:
+    if seuil == 0:
+        return f"L'essai de {raison_sociale} est terminé"
+    if seuil == 1:
+        return f"Dernier jour d'essai pour {raison_sociale}"
+    return f"Il reste {seuil} jours d'essai à {raison_sociale}"
+
+
+def _lien_abonnement(entreprise) -> str:
+    from django.conf import settings
+
+    domaine = entreprise.domains.filter(is_primary=True).first()
+    hote = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
+    protocole = "http" if settings.DEBUG else "https"
+    port = ":3000" if settings.DEBUG else ""
+    return f"{protocole}://{hote}{port}/parametres/abonnement"
+
+
+def _clore_essai(abonnement) -> None:
+    """J+0 — le statut suit ce que l'email vient d'annoncer.
+
+    `lecture_seule_depuis` est posé ici, mais **ce n'est pas lui qui coupe
+    l'accès** : la permission l'évalue à chaque requête, de sorte que la
+    personne finit son geste et rencontre le mur à l'action suivante (§3.1).
+    """
+    from django.utils import timezone as tz
+
+    abonnement.statut = abonnement.Statut.SUSPENDU
+    abonnement.lecture_seule_depuis = abonnement.lecture_seule_depuis or tz.now()
+    abonnement.save(update_fields=["statut", "lecture_seule_depuis", "modifie_le"])
+
+
+@shared_task
+def reconcilier_paiements_recents() -> dict:
+    """Réconciliation rapide des paiements Mobile Money récents (entre 2 et 30 min).
+
+    Tourne à haute fréquence (toutes les 2 minutes) pour débloquer sans délai les utilisateurs
+    dont le push USSD/Mobile Money a tardé (> 3 min) ou dont l'IPN CinetPay a été retardé.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage réconciliation CinetPay (transactions récentes 2-30 min)...")
+    return PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=2,
+        delai_max_minutes=30,
+        timeout_heures=None,
+    )
+
+
+@shared_task
+def reconcilier_paiements_anciens() -> dict:
+    """Réconciliation périodique des paiements en attente plus anciens (entre 30 min et 24h).
+
+    Tourne toutes les 15 minutes. Marque également comme `EXPIRE` les transactions
+    qui ont dépassé le délai de 24h sans confirmation opérateur.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage réconciliation CinetPay (transactions anciennes 30 min - 24h)...")
+    return PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=30,
+        delai_max_minutes=1440,
+        timeout_heures=24,
+    )
+
+
+@shared_task
+def verifier_paiements_en_attente() -> dict:
+    """Tâche générique de réconciliation de l'ensemble des paiements CinetPay en attente.
+
+    Tourne dans le schéma `public` (tables billing) sur un intervalle régulier.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage de la tâche Celery globale de réconciliation des paiements CinetPay...")
+    resultat = PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=2,
+        timeout_heures=24,
+    )
+    logger.info(
+        f"Fin de la réconciliation CinetPay : {resultat.get('confirmes')} confirmés, "
+        f"{resultat.get('echoues')} échoués/expirés, {resultat.get('en_attente')} en attente."
+    )
+    return resultat
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\billing\urls.py
+================================================================================
+from django.urls import path
+
+from apps.billing.views import (
+    AbonnementView,
+    AnnulerPaiementView,
+    CinetPayWebhookView,
+    InitierPaiementView,
+    PlansCatalogueView,
+    StatutPaiementView,
+)
+
+app_name = "billing"
+
+urlpatterns = [
+    path("abonnement/", AbonnementView.as_view(), name="abonnement"),
+    path("plans/", PlansCatalogueView.as_view(), name="plans-catalogue"),
+    path("cinetpay/initier/", InitierPaiementView.as_view(), name="cinetpay-initier"),
+    path("cinetpay/annuler/", AnnulerPaiementView.as_view(), name="cinetpay-annuler"),
+    path("cinetpay/webhook/", CinetPayWebhookView.as_view(), name="cinetpay-webhook"),
+    path(
+        "billing/cinetpay/webhook/",
+        CinetPayWebhookView.as_view(),
+        name="billing-cinetpay-webhook",
+    ),
+    path(
+        "cinetpay/statut/<str:transaction_id>/",
+        StatutPaiementView.as_view(),
+        name="cinetpay-statut",
+    ),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ChantierConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.chantier"
+    verbose_name = "Journal de chantier : rapports journaliers, production, photos, blocages"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\chantier\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "chantier"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ContratsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.contrats"
+    verbose_name = "Gestion contractuelle"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\contrats\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "contrats"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class CoreConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.core"
+    verbose_name = "Socle technique : modèle de base, suppression logique, permissions, formats"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\permissions.py
+================================================================================
+"""Permissions transverses — contrôle d'accès à deux niveaux.
+
+Socle Commun §2.3 : les deux niveaux sont **cumulatifs**.
+
+  Niveau 1 — rôle global        : ce que la personne a le droit de faire
+  Niveau 2 — appartenance projet: sur quels chantiers elle a le droit de le faire
+
+Le rôle seul ne donne accès à rien (RG-01). Le contrôle est fait côté
+serveur à chaque requête : un utilisateur qui modifie l'URL à la main
+reçoit un 403, sans aucune donnée.
+"""
+
+from rest_framework import permissions
+
+from apps.core.enums import RoleGlobal
+
+
+class RoleRequis(permissions.BasePermission):
+    """Niveau 1 — restreint une vue à une liste de rôles globaux.
+
+    Usage :
+
+        class VueBudget(APIView):
+            permission_classes = [RoleRequis.pour("DG", "DF")]
+    """
+
+    roles_autorises: tuple[str, ...] = ()
+    message = "Votre rôle ne permet pas d'accéder à cette ressource."
+
+    @classmethod
+    def pour(cls, *roles: str):
+        inconnus = set(roles) - set(RoleGlobal.values)
+        if inconnus:
+            raise ValueError(f"Rôles inconnus : {sorted(inconnus)}")
+        return type("RoleRequisSpecifique", (cls,), {"roles_autorises": tuple(roles)})
+
+    def has_permission(self, request, view) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+        if not self.roles_autorises:
+            return True
+        return utilisateur.role_global in self.roles_autorises
+
+
+class MembreDuProjet(permissions.BasePermission):
+    """Niveau 2 — l'utilisateur doit être affecté au projet visé.
+
+    L'objet doit exposer un `projet_id`, un `projet`, ou être un projet.
+    """
+
+    message = "Vous n'êtes pas affecté à ce projet."
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+
+        projet_id = self._extraire_projet_id(obj)
+        if projet_id is None:
+            return False
+
+        # Résolution tardive : `core` est la couche la plus basse et ne doit
+        # pas importer un module métier (règle R1 de la structure de projet).
+        from django.apps import apps as registre
+
+        try:
+            AffectationProjet = registre.get_model("projets", "AffectationProjet")
+        except LookupError:  # pragma: no cover — tant que le module 1 n'existe pas
+            return False
+
+        return AffectationProjet.objects.filter(
+            utilisateur=utilisateur, projet_id=projet_id, est_actif=True
+        ).exists()
+
+    @staticmethod
+    def _extraire_projet_id(obj):
+        if hasattr(obj, "projet_id"):
+            return obj.projet_id
+        if obj.__class__.__name__ == "Projet":
+            return obj.pk
+        if hasattr(obj, "lot") and hasattr(obj.lot, "projet_id"):
+            return obj.lot.projet_id
+        return None
+
+
+class LectureSeule(permissions.BasePermission):
+    """N'autorise que GET, HEAD et OPTIONS."""
+
+    def has_permission(self, request, view) -> bool:
+        return request.method in permissions.SAFE_METHODS
+
+
+class PermissionModule(permissions.BasePermission):
+    """Contrôle d'accès dynamique basé sur la matrice des modules et le niveau requis.
+
+    Usage :
+        class VueRapport(APIView):
+            permission_classes = [PermissionModule.pour("chantier", NiveauAcces.ECRITURE)]
+    """
+
+    module: str = ""
+    niveau_requis: int = 1
+    message = "Vos habilitations ne permettent pas d'effectuer cette action sur ce module."
+
+    @classmethod
+    def pour(cls, module: str, niveau_requis: int = 1):
+        return type(
+            "PermissionModuleSpecifique",
+            (cls,),
+            {"module": module, "niveau_requis": int(niveau_requis)},
+        )
+
+    def has_permission(self, request, view) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
+
+        from django.apps import apps as registre
+
+        try:
+            Role = registre.get_model("accounts", "Role")
+            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
+        except LookupError:
+            return True
+
+        role = utilisateur.role_personnalise
+        if not role:
+            role = Role.objects.filter(
+                code=utilisateur.role_global, supprime_le__isnull=True
+            ).first()
+
+        if not role:
+            return False
+
+        perm = RoleModulePermission.objects.filter(
+            role=role, module=self.module, supprime_le__isnull=True
+        ).first()
+        if not perm:
+            return False
+
+        return perm.niveau >= self.niveau_requis
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
+
+        projet_id = MembreDuProjet._extraire_projet_id(obj)
+        if not projet_id:
+            return self.has_permission(request, view)
+
+        from django.apps import apps as registre
+
+        try:
+            AffectationProjet = registre.get_model("projets", "AffectationProjet")
+            ProjetRoleModuleOverride = registre.get_model("projets", "ProjetRoleModuleOverride")
+            Role = registre.get_model("accounts", "Role")
+            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
+        except LookupError:
+            return True
+
+        est_direction = utilisateur.role_global in (
+            RoleGlobal.DIRECTEUR_GENERAL,
+            RoleGlobal.DIRECTEUR_FINANCIER,
+        )
+        affectation = AffectationProjet.objects.filter(
+            utilisateur=utilisateur, projet_id=projet_id, est_actif=True
+        ).first()
+
+        if not affectation and not est_direction:
+            return False
+
+        role = None
+        if affectation:
+            role = affectation.role
+            if not role:
+                role = Role.objects.filter(
+                    code=affectation.role_projet, supprime_le__isnull=True
+                ).first()
+        if not role:
+            role = (
+                utilisateur.role_personnalise
+                or Role.objects.filter(
+                    code=utilisateur.role_global, supprime_le__isnull=True
+                ).first()
+            )
+
+        if not role:
+            return False
+
+        override = ProjetRoleModuleOverride.objects.filter(
+            projet_id=projet_id, role=role, module=self.module, supprime_le__isnull=True
+        ).first()
+        if override:
+            return override.niveau >= self.niveau_requis
+
+        perm = RoleModulePermission.objects.filter(
+            role=role, module=self.module, supprime_le__isnull=True
+        ).first()
+        if not perm:
+            return False
+
+        return perm.niveau >= self.niveau_requis
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\core\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "core"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class EquipementsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.equipements"
+    verbose_name = "Équipements et matériels"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\equipements\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "equipements"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class FinanceConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.finance"
+    verbose_name = "Budgets, bons de paiement, signatures, soldes intervenants, rejets de travaux"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\finance\urls.py
+================================================================================
+from django.urls import path
+
+from .views import (
+    BonPaiementDetailView,
+    BonPaiementListCreateView,
+    SignerBonPaiementView,
+)
+
+app_name = "finance"
+
+urlpatterns = [
+    path(
+        "finance/bons-paiement/",
+        BonPaiementListCreateView.as_view(),
+        name="bon-paiement-liste-creer",
+    ),
+    path(
+        "finance/bons-paiement/<uuid:pk>/",
+        BonPaiementDetailView.as_view(),
+        name="bon-paiement-detail",
+    ),
+    path(
+        "finance/bons-paiement/<uuid:pk>/signer/",
+        SignerBonPaiementView.as_view(),
+        name="signer-bon-paiement",
+    ),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class GedConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.ged"
+    verbose_name = "Gestion documentaire : dossiers, documents, versions, partages, RFI"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\ged\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "ged"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class NotificationsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.notifications"
+    verbose_name = "Notifications in-app, email et push, et leurs préférences"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\notifications\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "notifications"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\onboarding\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class OnboardingConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.onboarding"
+    verbose_name = "Configuration initiale — le wizard d entree"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\onboarding\urls.py
+================================================================================
+"""Routes de la configuration initiale — schéma tenant uniquement.
+
+Le code d'étape voyage en `<str:code>` et **n'est pas validé par l'URL** : un
+code inconnu doit répondre `400 validation` avec le catalogue en `details`, pas
+un `404` muet qui laisse le client deviner s'il s'est trompé de code ou de
+route.
+"""
+
+from django.urls import path
+
+from apps.onboarding.views import (
+    ConfigurationView,
+    FranchirEtapeView,
+    PasserEtapeView,
+    RecapitulatifView,
+    TerminerView,
+)
+
+app_name = "onboarding"
+
+urlpatterns = [
+    path("configuration/", ConfigurationView.as_view(), name="configuration"),
+    path(
+        "configuration/etapes/<str:code>/valider/",
+        FranchirEtapeView.as_view(),
+        name="configuration-etape-valider",
+    ),
+    path(
+        "configuration/etapes/<str:code>/passer/",
+        PasserEtapeView.as_view(),
+        name="configuration-etape-passer",
+    ),
+    path(
+        "configuration/recapitulatif/",
+        RecapitulatifView.as_view(),
+        name="configuration-recapitulatif",
+    ),
+    path("configuration/terminer/", TerminerView.as_view(), name="configuration-terminer"),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class PartiesPrenantesConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.parties_prenantes"
+    verbose_name = "Parties prenantes"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\parties_prenantes\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "parties_prenantes"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class PilotageConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.pilotage"
+    verbose_name = "Pilotage stratégique et BI"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\pilotage\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "pilotage"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class PlatformAdminConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.platform_admin"
+    verbose_name = "Super Admin CCD Digital : métriques plateforme, impersonification"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\platform_admin\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "platform_admin"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ProjetsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.projets"
+    verbose_name = "Projets, lots, activités, affectations, bordereaux de prix, indice de santé"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\projets\urls.py
+================================================================================
+"""Routes pour l'application projets."""
+
+from django.urls import path
+
+from apps.projets.views import (
+    MeteoProjetView,
+    ProjetDetailView,
+    ProjetListCreateView,
+    ProjetPermissionsRolesView,
+    ReferentielVillesView,
+    TableauDeBordView,
+)
+
+app_name = "projets"
+
+urlpatterns = [
+    path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
+    path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
+    path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
+    path(
+        "projets/<uuid:pk>/permissions-roles/",
+        ProjetPermissionsRolesView.as_view(),
+        name="projet-permissions-roles",
+    ),
+    path("tableau-de-bord/", TableauDeBordView.as_view(), name="tableau-de-bord"),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class QhseConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.qhse"
+    verbose_name = "Risques, qualité et sécurité"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\qhse\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "qhse"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ReferentielsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.referentiels"
+    verbose_name = "Référentiels partagés par tous les tenants"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\referentiels\urls.py
+================================================================================
+from django.urls import path
+
+from apps.referentiels.views import EnumerationsView, ReglesMotDePasseView
+
+app_name = "referentiels"
+
+urlpatterns = [
+    path("referentiels/enumerations/", EnumerationsView.as_view(), name="enumerations"),
+    # Les règles de complexité, servies une fois — contrat §6.3. Le client
+    # allume ses coches à partir de cette liste ; le serveur reste juge.
+    path(
+        "referentiels/regles-mot-de-passe/",
+        ReglesMotDePasseView.as_view(),
+        name="regles-mot-de-passe",
+    ),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class RhConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.rh"
+    verbose_name = "Ressources humaines chantier"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\rh\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "rh"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class StocksConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.stocks"
+    verbose_name = "Gestion des stocks"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\stocks\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "stocks"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class SupportConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.support"
+    verbose_name = "Tickets de support et base de connaissances"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\support\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "support"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class TenantsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.tenants"
+    verbose_name = "Entreprises clientes abonnées et cycle de vie de leur schéma PostgreSQL"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+import logging
+
+from celery import shared_task
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=10)
+def provisionner_entreprise(self, identifiant: str) -> None:
+    """Crée l'espace d'une entreprise — contrat d'inscription §5, effet 5.
+
+    **La tâche ne porte que l'identifiant de la demande.** Le mot de passe reste
+    en base, haché, et n'entre jamais dans la charge utile — R-86 : un message
+    Celery traverse Redis, s'y attarde, et s'affiche dans les outils de
+    supervision.
+
+    **Elle n'a pas besoin de `schema_context` pour démarrer** : elle travaille
+    d'abord dans `public`, où vit la demande. C'est le service qui bascule vers
+    le schéma du client une fois celui-ci créé — et c'est là que le piège de la
+    règle 3 se referme, `migrate_schemas` repositionnant la connexion sur
+    `public` juste avant.
+    """
+    from apps.tenants.services.inscription import provisionner
+
+    try:
+        provisionner(identifiant)
+    except Exception as erreur:
+        # La demande est déjà passée à `ECHEC` par la compensation du service :
+        # l'écran d'attente saura quoi afficher même si les reprises échouent.
+        logger.exception("Provisionnement en échec — demande %s", identifiant)
+        raise self.retry(exc=erreur) from erreur
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tenants\urls.py
+================================================================================
+"""Routes de l'inscription — **domaine de la plateforme uniquement**.
+
+Au moment de l'inscription, le client n'a pas encore de sous-domaine : ces cinq
+routes sont montées par `config/urls_public.py`, jamais par `urls_tenant.py`.
+"""
+
+from django.urls import path
+
+from apps.tenants.views import (
+    ActivationView,
+    DepotInscriptionView,
+    EtatProvisionnementView,
+    RenvoiActivationView,
+    VerificationJetonInscriptionView,
+)
+
+app_name = "tenants"
+
+urlpatterns = [
+    path("inscription/", DepotInscriptionView.as_view(), name="inscription"),
+    path("inscription/renvoyer/", RenvoiActivationView.as_view(), name="inscription-renvoyer"),
+    path(
+        "inscription/verifier/",
+        VerificationJetonInscriptionView.as_view(),
+        name="inscription-verifier",
+    ),
+    path("inscription/activer/", ActivationView.as_view(), name="inscription-activer"),
+    path(
+        "inscription/etat/<uuid:suivi>/",
+        EtatProvisionnementView.as_view(),
+        name="inscription-etat",
+    ),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class TiersConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.tiers"
+    verbose_name = "Référentiel unique des acteurs externes (décision H3 du MCD)"
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\apps\tiers\urls.py
+================================================================================
+"""Routes pour l'application tiers."""
+
+from django.urls import path
+
+from apps.tiers.views import TiersDetailView, TiersListCreateView
+
+app_name = "tiers"
+
+urlpatterns = [
+    path("tiers/", TiersListCreateView.as_view(), name="tiers-liste-creer"),
+    path("tiers/<uuid:pk>/", TiersDetailView.as_view(), name="tiers-detail"),
+]
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\config\settings\base.py
+================================================================================
+"""Configuration commune à tous les environnements — CCD Digital.
+
+Aucune valeur secrète ni dépendante de l'environnement n'est écrite ici :
+tout passe par le fichier `.env` à la racine du dépôt (voir `.env.example`).
+
+Décisions appliquées, issues du dossier de conception :
+  D1  isolation multi-tenant par schéma PostgreSQL (django-tenants)
+  D5  montants en centimes de FCFA
+  D6  stockage des horodatages en UTC, affichage en heure locale
+"""
+
+from datetime import timedelta
+from pathlib import Path
+
+from decouple import Config, RepositoryEnv, UndefinedValueError
+from decouple import config as env_config
+
+# --------------------------------------------------------------------------
+# Chemins
+# --------------------------------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+RACINE_DEPOT = BASE_DIR.parent
+
+# Recherche du .env : à la racine du projet ou dans le dossier parent
+if (BASE_DIR / ".env").exists():
+    _fichier_env = BASE_DIR / ".env"
+elif (RACINE_DEPOT / ".env").exists():
+    _fichier_env = RACINE_DEPOT / ".env"
+else:
+    _fichier_env = BASE_DIR / ".env"
+
+config = Config(RepositoryEnv(_fichier_env)) if _fichier_env.exists() else env_config
+
+# --------------------------------------------------------------------------
+# Sécurité
+# --------------------------------------------------------------------------
+try:
+    SECRET_KEY = "***MASQUE***"
+except UndefinedValueError as exc:  # pragma: no cover
+    raise RuntimeError(
+        "DJANGO_SECRET_KEY est absent. Copiez .env.example en .env et renseignez-le (voir README)."
+    ) from exc
+
+DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
+
+
+def _liste(valeur: str) -> list[str]:
+    """Transforme une variable « a,b,c » en liste."""
+    return [element.strip() for element in valeur.split(",") if element.strip()]
+
+
+ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="", cast=_liste)
+
+# --------------------------------------------------------------------------
+# Applications — la répartition entre les deux listes EST l'isolation.
+# Une application placée dans TENANT_APPS voit ses tables créées dans chaque
+# schéma client ; dans SHARED_APPS, dans le seul schéma `public`.
+# Se tromper de liste, c'est exposer les données d'un client à un autre.
+# --------------------------------------------------------------------------
+SHARED_APPS = [
+    "django_tenants",  # doit rester en premier
+    "apps.tenants",  # porte le modèle de tenant
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
+    "django.contrib.admin",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "apps.core",
+    "apps.accounts",  # écart E1 — voir README §Écarts
+    # Même raison que `accounts`, et c'est l'écart E1 qui l'impose : le journal
+    # d'audit suit les utilisateurs, qui existent dans `public` **et** dans
+    # chaque schéma client. Présent d'un seul côté, il laissait les actions du
+    # personnel de l'éditeur sans trace — or le Socle §2.4 dit « sans
+    # exception », et un registre à trous ne prouve rien en cas de litige.
+    "apps.audit",
+    "apps.billing",
+    "apps.platform_admin",
+    "apps.support",
+    "apps.referentiels",
+]
+
+TENANT_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
+    # socle transverse
+    "apps.core",
+    "apps.accounts",
+    "apps.audit",
+    "apps.notifications",
+    "apps.tiers",
+    "apps.onboarding",
+    # modules métier — niveau B
+    "apps.projets",  # module 1
+    "apps.chantier",  # module 2
+    "apps.finance",  # module 3
+    # modules métier — niveau A, squelettes en attente de leur MLD
+    "apps.achats",  # module 4
+    "apps.stocks",  # module 5
+    "apps.rh",  # module 6
+    "apps.equipements",  # module 7
+    "apps.qhse",  # module 8
+    "apps.contrats",  # module 9
+    "apps.parties_prenantes",  # module 10
+    "apps.ged",  # module 11
+    "apps.pilotage",  # module 12
+]
+
+TIERCES_APPS = [
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "django_filters",
+    "corsheaders",
+    "drf_spectacular",
+    "django_celery_beat",
+]
+
+SHARED_APPS += TIERCES_APPS
+TENANT_APPS += ["rest_framework", "django_filters"]
+
+INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
+
+# --------------------------------------------------------------------------
+# Multi-tenant
+# --------------------------------------------------------------------------
+TENANT_MODEL = "tenants.Entreprise"
+TENANT_DOMAIN_MODEL = "tenants.Domaine"
+PUBLIC_SCHEMA_NAME = "public"
+PUBLIC_SCHEMA_URLCONF = "config.urls_public"
+DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
+
+# --------------------------------------------------------------------------
+# Middleware — TenantMainMiddleware doit rester en tête : il détermine le
+# schéma avant que la moindre requête ne touche la base.
+# --------------------------------------------------------------------------
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "apps.core.middleware_tenant.TenantResolutionMiddleware",
+    "apps.core.middleware.IdentifiantRequeteMiddleware",
+    # Après le middleware de tenant, qui pose `request.tenant`, et avant
+    # tout le reste : une porte se ferme au plus tôt.
+    "apps.core.middleware.RestrictionIPPlateformeMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # En dernier : il a besoin de `request.tenant`, et il ne doit refuser
+    # l'écriture qu'après que tout le reste a laissé passer la requête.
+    "apps.billing.middleware.LectureSeuleAbonnementMiddleware",
+]
+
+ROOT_URLCONF = "config.urls_tenant"
+WSGI_APPLICATION = "config.wsgi.application"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+# --------------------------------------------------------------------------
+# Base de données — le moteur django_tenants est obligatoire, c'est lui qui
+# positionne le `search_path` sur le schéma du client à chaque connexion.
+# --------------------------------------------------------------------------
+DATABASES = {
+    "default": {
+        "ENGINE": "django_tenants.postgresql_backend",
+        "NAME": config("POSTGRES_DB", default="ccd_digital"),
+        "USER": config("POSTGRES_USER", default="ccd"),
+        "PASSWORD": "***MASQUE***",
+        "HOST": config("POSTGRES_HOST", default="localhost"),
+        "PORT": config("POSTGRES_PORT", default="5432"),
+        "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
+    }
+}
+
+# --------------------------------------------------------------------------
+# Compatibilité SGBD : autoriser PostgreSQL >= 13.0 (notamment PostgreSQL 13.23
+# sur hébergements mutualisés cPanel / CloudLinux).
+# --------------------------------------------------------------------------
+from django.db.backends.postgresql.features import DatabaseFeatures
+
+DatabaseFeatures.minimum_database_version = (13,)
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# --------------------------------------------------------------------------
+# Authentification
+# --------------------------------------------------------------------------
+AUTH_USER_MODEL = "accounts.Utilisateur"
+
+# auth.E003 exige que USERNAME_FIELD porte `unique=True`.
+# Nous appliquons à la place une unicité **partielle** — unique parmi les
+# comptes vivants seulement (MLD §7.2) — pour qu'une adresse libérée par une
+# suppression logique puisse resservir. La garantie est plus forte, pas plus
+# faible : la contrainte existe bien en base, et le manager d'authentification
+# ignore les comptes supprimés. Le contrôle de Django ne sait simplement pas
+# lire une contrainte conditionnelle.
+SILENCED_SYSTEM_CHECKS = ["auth.E003"]
+
+AUTH_PASSWORD_VALIDATORS = "***MASQUE***"
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},  # Socle Commun §2.1
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # Défaut D-4 : Django n'apporte que la longueur. Le Socle §2.1 exige aussi
+    # une majuscule, un chiffre et un caractère spécial — les trois coches que
+    # M6 affichait sans qu'aucun contrôle serveur ne leur corresponde.
+    {"NAME": "apps.core.validators.ValidateurMajuscule"},
+    {"NAME": "apps.core.validators.ValidateurChiffre"},
+    {"NAME": "apps.core.validators.ValidateurCaractereSpecial"},
+]
+
+# Adresse du frontend, pour composer les liens envoyés par email. Le jeton
+# voyage en **fragment** (`#jeton=…`), jamais en paramètre de requête : un
+# paramètre finirait dans les journaux du serveur, ce que la stratégie de
+# déploiement §6 interdit — décision J5 du contrat de réinitialisation.
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
+
+# Domaine sous lequel vivent les sous-domaines clients : `<slug>.<domaine>`.
+# En développement, `.localhost` est résolu vers 127.0.0.1 par les navigateurs
+# modernes — c'est ce qui permet d'atteindre un tenant sans toucher au fichier
+# hosts. En production, le domaine de l'éditeur.
+DOMAINE_PRINCIPAL = config("DOMAINE_PRINCIPAL", default="localhost")
+
+# --------------------------------------------------------------------------
+# Emails & Configuration SMTP (Gmail / Fournisseur SMTP)
+# --------------------------------------------------------------------------
+EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_SSL_CERT_VERIFY = config("EMAIL_SSL_CERT_VERIFY", default=True, cast=bool)
+
+# Supporte indifféremment SYSTEM_SMTP_USER / SYSTEM_SMTP_PASS ou EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
+EMAIL_HOST_USER = config(
+    "SYSTEM_SMTP_USER",
+    default=config("EMAIL_HOST_USER", default=""),
+)
+EMAIL_HOST_PASSWORD = "***MASQUE***"
+    "SYSTEM_SMTP_PASS",
+    default=config("EMAIL_HOST_PASSWORD", default=""),
+)
+
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL",
+    default=f"CCD Digital <{EMAIL_HOST_USER}>"
+    if EMAIL_HOST_USER
+    else "ne-pas-repondre@ccd-digital.ci",
+)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Le contact commercial, cité dans l'email d'espace suspendu.
+EMAIL_COMMERCIAL = config("EMAIL_COMMERCIAL", default="commercial@ccd-digital.ci")
+TELEPHONE_COMMERCIAL = config("TELEPHONE_COMMERCIAL", default="+225 27 00 00 00 00")
+
+# Adresses autorisées à atteindre l'authentification du schéma `public` — la
+# porte du personnel de l'éditeur. Matrice des rôles §1.1.
+#
+# **Vide et hors développement, elle interdit tout.** La valeur par défaut d'une
+# porte d'administration doit être fermée : un déploiement qui oublie ce réglage
+# s'en aperçoit à la première connexion, ce qui vaut mieux que de ne jamais s'en
+# apercevoir.
+SUPER_ADMIN_IPS = [
+    ip.strip() for ip in config("SUPER_ADMIN_IPS", default="").split(",") if ip.strip()
+]
+
+# Socle Commun §2.1 — bcrypt en premier.
+PASSWORD_HASHERS = "***MASQUE***"
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
+# --------------------------------------------------------------------------
+# API
+# --------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.PaginationStandard",
+    "PAGE_SIZE": 20,  # Socle Commun — 20 par page
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ),
+    "EXCEPTION_HANDLER": "apps.core.exceptions.gestionnaire_erreurs",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/min",
+        "user": "1000/min",
+        # La connexion porte deux compteurs, pour deux menaces distinctes.
+        # Par IP : protège la plateforme d'un balayage — un mot de passe
+        # courant essayé sur des milliers d'adresses ne bloque aucun compte,
+        # puisqu'il ne s'acharne sur aucun.
+        "connexion": "30/min",
+        # Par adresse : protège **un** compte d'un essaimage — le même email
+        # tenté depuis cent IP passe sous le compteur précédent sans le faire
+        # sonner. Voir apps/accounts/throttling.py.
+        "connexion_email": "10/min",
+        # Réinitialisation du mot de passe — contrat §3.4, §5.3 et §5bis.
+        # Par IP : empêche le balayage d'adresses.
+        "mdp_demande": "5/hour",
+        # Par adresse : empêche le harcèlement d'un tiers par email. Le même
+        # `429` est renvoyé que l'adresse existe ou non — une limite qui ne se
+        # déclencherait que sur les comptes réels serait un oracle de plus.
+        "mdp_demande_email": "3/hour",
+        # Une demande par cinq minutes : c'est le délai que le bouton
+        # « Renvoyer l'email » de M6 doit respecter à l'écran.
+        "mdp_demande_rapprochee": "1/5min",
+        # Un jeton ne se devine pas par balayage.
+        "mdp_reinitialiser": "10/hour",
+        "mdp_verifier": "20/hour",
+        # Inscription — contrat T-021 §8. Le dépôt est le plus exposé : c'est
+        # un formulaire public qui déclenche un email.
+        "inscription": "10/hour",
+        "inscription_renvoi": "5/hour",
+        "inscription_verifier": "30/hour",
+        "inscription_activer": "10/hour",
+        # La sonde est interrogée toutes les 2 s pendant 2 minutes : 60 appels
+        # par activation, et il peut y en avoir plusieurs par poste.
+        "inscription_etat": "300/hour",
+        # Invitations collaborateurs
+        "invitation_verifier": "30/hour",
+        "invitation_accepter": "10/hour",
+    },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "CCD Digital — API Gestion de Chantier BTP",
+    "DESCRIPTION": (
+        "# Guide d'intégration Frontend — API CCD Digital\n\n"
+        "Bienvenue sur la documentation interactive de l'API de gestion "
+        "de chantiers BTP **CCD Digital**.\n\n"
+        "### 1. Architecture Multi-Tenancy (Isolation des données)\n"
+        "- **Schéma Public (`urls_public.py`)** : Domaine principal de la plateforme "
+        "(ex: `api.ccd-digital.ci`). Utilisé pour l'inscription d'une nouvelle entreprise "
+        "(`/api/v1/inscription/`), l'activation d'espace, la consultation des forfaits "
+        "(`/api/v1/plans/`) et les webhooks de paiement CinetPay.\n"
+        "- **Schéma Tenant (`urls_tenant.py`)** : Sous-domaine spécifique de chaque entreprise "
+        "(ex: `mon-entreprise.ccd-digital.ci` ou `mon-entreprise.localhost:8000` en local). "
+        "Toutes les requêtes de gestion de chantier, finances, tiers, utilisateurs et rôles "
+        "doivent obligatoirement être adressées sur le sous-domaine de l'entreprise.\n\n"
+        "### 2. Authentification JWT\n"
+        "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
+        "`Authorization: Bearer <access_token>`.\n"
+        "- Durée de validité du jeton d'accès : **15 minutes**.\n"
+        "- Le rafraîchissement s'effectue via `POST /api/v1/auth/token/refresh/` avec le "
+        "jeton de renouvellement (valide 8 heures).\n"
+        "- La déconnexion `POST /api/v1/auth/deconnexion/` révoque instantanément les jetons "
+        "côté serveur dans le cache Redis.\n\n"
+        "### 3. Conventions de Réponses et Gestion des Erreurs\n"
+        "- Toutes les ressources renvoient du JSON strict (`Content-Type: application/json`).\n"
+        "- Format standard des erreurs (4xx / 5xx) :\n"
+        "```json\n"
+        "{\n"
+        '  "code": "permission_refusee",\n'
+        '  "message": "Explication claire en français",\n'
+        '  "details": {}\n'
+        "}\n"
+        "```\n"
+        "- **Pagination** : Les endpoints de listing paginés renvoient un objet avec "
+        "`{ count, next, previous, results }` (20 éléments par page).\n"
+        "- **Devise** : Les montants monétaires stockés en base sont exprimés en centimes FCFA. "
+        "Les serializers fournissent les méthodes de conversion `*_fcfa` en unités FCFA entières.\n"
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": "/api/v1",
+    "ENUM_NAME_OVERRIDES": {
+        "PlanCodeEnum": "apps.billing.models.Plan.Code",
+        "RoleGlobalEnum": "apps.core.enums.RoleGlobal",
+        "RoleTiersChoixEnum": "apps.core.enums.RoleTiersChoix",
+    },
+}
+
+# Socle Commun §2.2 — 15 min pour l'accès, 8 h pour le renouvellement web.
+# Le cas mobile (24 h) est traité par une vue dédiée, pas par ce réglage global.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(hours=8),
+    # Ces deux réglages sont volontairement à False : la rotation n'est plus
+    # faite par SimpleJWT mais par `apps.accounts.services.renouvellement`,
+    # avec la liste noire du cache (T-008 §3, décision S4).
+    #
+    # Les laisser à True serait exactement le défaut D-1 : `TokenRefreshView`
+    # appelle `refresh.blacklist()` dans un `try/except AttributeError: pass`,
+    # la méthode n'existe pas sans l'application `token_blacklist`, et deux
+    # réglages parfaitement lisibles ne révoquent rien du tout.
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# À n'activer que si l'API doit volontairement être consommable depuis toute
+# origine web. Les permissions applicatives restent contrôlées par le JWT.
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
+CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=_liste)
+
+for _origine in [
+    FRONTEND_URL.rstrip("/"),
+    "https://app-chantier.soumafe.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]:
+    if _origine and _origine not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_origine)
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.soumafe\.com$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-request-id",
+    "x-tenant",
+]
+CORS_EXPOSE_HEADERS = [
+    "x-request-id",
+]
+
+# --------------------------------------------------------------------------
+# Internationalisation — décision D6 : on stocke en UTC, sans exception.
+# --------------------------------------------------------------------------
+LANGUAGE_CODE = "fr-fr"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+FUSEAU_AFFICHAGE = config("FUSEAU_AFFICHAGE", default="Africa/Abidjan")
+DEVISE = "XOF"  # FCFA BCEAO — seule devise du MVP (Socle §1.3)
+
+# --------------------------------------------------------------------------
+# Fichiers
+# --------------------------------------------------------------------------
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Barre initiale obligatoire : `default_storage.url()` la reprend telle quelle.
+# Sans elle, la vignette d'un logo servie depuis `/tableau-de-bord` était
+# résolue en `/tableau-de-bord/media/...` — une URL relative dans une
+# application dont toutes les pages sont à des profondeurs différentes.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+TAILLE_MAX_FICHIER_MO = 50  # US-006 : refus 413 au-delà
+PHOTOS_MAX_PAR_RAPPORT = 5  # RG-14
+
+# --------------------------------------------------------------------------
+# Cache et tâches asynchrones
+# --------------------------------------------------------------------------
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+    }
+}
+
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=REDIS_URL)
+CELERY_TIMEZONE = FUSEAU_AFFICHAGE  # l'alerte de 17 h 30 est une heure locale
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
+
+# --------------------------------------------------------------------------
+# Journalisation
+# --------------------------------------------------------------------------
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {"format": "{levelname} {asctime} {name} {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard"},
+    },
+    "root": {"handlers": ["console"], "level": config("LOG_LEVEL", default="INFO")},
+}
+
+# --------------------------------------------------------------------------
+# CinetPay — Passerelle de paiement (Orange Money, Wave, MTN MoMo, Carte)
+# --------------------------------------------------------------------------
+CINETPAY_API_KEY = "***MASQUE***"
+CINETPAY_SITE_ID = config("CINETPAY_SITE_ID", default="")
+CINETPAY_SECRET_KEY = "***MASQUE***"
+CINETPAY_NOTIFY_URL = config("CINETPAY_NOTIFY_URL", default="")
+CINETPAY_CHECKOUT_URL = config(
+    "CINETPAY_CHECKOUT_URL", default="https://api-checkout.cinetpay.com/v2/payment"
+)
+CINETPAY_CHECK_URL = config(
+    "CINETPAY_CHECK_URL", default="https://api-checkout.cinetpay.com/v2/payment/check"
+)
+
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\docker-compose.yml
+================================================================================
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ccd_digital}
+      POSTGRES_USER: ${POSTGRES_USER:-ccd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ccd}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  postgres_data:
+
+================================================================================
+FICHIER : .kilo\worktrees\voltaic-krill\Dockerfile
+================================================================================
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/ requirements/
+ARG ENVIRONNEMENT=local
+RUN pip install --upgrade pip && pip install -r requirements/${ENVIRONNEMENT}.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+
+================================================================================
+FICHIER : apps\accounts\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\accounts\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class AccountsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.accounts"
+    verbose_name = "Utilisateurs, rôles, invitations, appareils"
+
+
+================================================================================
+FICHIER : apps\accounts\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\accounts\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\accounts\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\accounts\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\accounts\urls.py
+================================================================================
+from django.urls import path
+
+from apps.accounts.views import (
+    ConnexionView,
+    DeconnexionView,
+    DemandeReinitialisationView,
+    InvitationAccepterView,
+    InvitationListCreateView,
+    InvitationVerifierView,
+    ParametresCollaborateurListCreateView,
+    ParametresCollaborateurDetailView,
+    ParametresRoleDetailUpdateView,
+    ParametresRoleListCreateView,
+    ParametresRoleSupprimerReassignerView,
+    ReinitialisationView,
+    AvatarProfilView,
+    ChangerMotDePasseView,
+    ProfilView,
+    RenouvellementView,
+    RoleDetailUpdateView,
+    RoleListCreateView,
+    RoleSupprimerReassignerView,
+    VerificationJetonView,
+    VerifierAccesSuperAdminView,
+)
+
+app_name = "accounts"
+
+urlpatterns = [
+    path("admins/verifier-acces/", VerifierAccesSuperAdminView.as_view(), name="admins-verifier-acces"),
+    path("super-admin/verifier-acces/", VerifierAccesSuperAdminView.as_view(), name="super-admin-verifier-acces"),
+    path("auth/token/", ConnexionView.as_view(), name="connexion"),
+    path("auth/token/refresh/", RenouvellementView.as_view(), name="jeton-renouveler"),
+    path("auth/deconnexion/", DeconnexionView.as_view(), name="deconnexion"),
+    path("auth/profil/", ProfilView.as_view(), name="auth-profil"),
+    path("auth/profil/mot-de-passe/", ChangerMotDePasseView.as_view(), name="auth-profil-mot-de-passe"),
+    path("auth/profil/avatar/", AvatarProfilView.as_view(), name="auth-profil-avatar"),
+    path("utilisateurs/moi/", ProfilView.as_view(), name="utilisateur-moi"),
+    path("invitations/", InvitationListCreateView.as_view(), name="invitations-liste-creer"),
+    path("invitations/verifier/", InvitationVerifierView.as_view(), name="invitation-verifier"),
+    path("invitations/accepter/", InvitationAccepterView.as_view(), name="invitation-accepter"),
+    # Collaborateurs — Paramètres (/api/v1/parametres/collaborateurs/)
+    path(
+        "parametres/collaborateurs/",
+        ParametresCollaborateurListCreateView.as_view(),
+        name="parametres-collaborateurs-liste-creer",
+    ),
+    # Rôles et habilitations par module — Paramètres (/api/v1/parametres/roles/)
+    path("parametres/roles/", ParametresRoleListCreateView.as_view(), name="parametres-roles-liste-creer"),
+    path("parametres/roles/<uuid:pk>/", ParametresRoleDetailUpdateView.as_view(), name="parametres-role-detail-modifier"),
+    path(
+        "parametres/roles/<uuid:pk>/supprimer/",
+        ParametresRoleSupprimerReassignerView.as_view(),
+        name="parametres-role-supprimer-reassigner",
+    ),
+    # Rôles — Routes directes (rétrocompatibilité)
+    path("roles/", RoleListCreateView.as_view(), name="roles-liste-creer"),
+    path("roles/<uuid:pk>/", RoleDetailUpdateView.as_view(), name="role-detail-modifier"),
+    path(
+        "roles/<uuid:pk>/supprimer/",
+        RoleSupprimerReassignerView.as_view(),
+        name="role-supprimer-reassigner",
+    ),
+    # Réinitialisation du mot de passe — les trois portes d'un seul couloir.
+    path(
+        "auth/mot-de-passe/demande/",
+        DemandeReinitialisationView.as_view(),
+        name="mot-de-passe-demande",
+    ),
+    path(
+        "auth/mot-de-passe/verifier/",
+        VerificationJetonView.as_view(),
+        name="mot-de-passe-verifier",
+    ),
+    path(
+        "auth/mot-de-passe/reinitialiser/",
+        ReinitialisationView.as_view(),
+        name="mot-de-passe-reinitialiser",
+    ),
+    path(
+        "parametres/collaborateurs/<uuid:pk>/", 
+        ParametresCollaborateurDetailView.as_view(),
+        name="parametres-collaborateur-detail-modifier",
+    ),
+]
+
+
+================================================================================
+FICHIER : apps\audit\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\audit\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class AuditConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.audit"
+    verbose_name = "Journal d'audit immuable — insertion et lecture seulement"
+
+
+================================================================================
+FICHIER : apps\audit\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\audit\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\audit\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\audit\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\audit\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "audit"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : apps\billing\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\billing\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class BillingConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.billing"
+    verbose_name = "Plans, abonnements, factures OHADA et paiements CinetPay"
+
+
+================================================================================
+FICHIER : apps\billing\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\billing\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\billing\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\billing\tasks.py
+================================================================================
+"""Tâches Celery de la facturation. Elles appellent un service, jamais l'inverse."""
+
+import logging
+from datetime import timedelta
+
+from celery import shared_task
+from django.utils import timezone
+from django_tenants.utils import schema_context
+
+logger = logging.getLogger(__name__)
+
+# Les quatre seuils du parcours de l'essai gratuit §2.1, dans l'ordre où ils
+# tombent. J+0 clôt la série : c'est le jour où l'essai est fini.
+SEUILS = (7, 3, 1, 0)
+
+
+@shared_task
+def relancer_abonnements():
+    from apps.billing.services.expiration import envoyer_rappels_expiration
+
+    return envoyer_rappels_expiration()
+
+
+@shared_task
+def relancer_essais() -> int:
+    """Les quatre relances de l'essai — parcours §2, US-016.
+
+    **Elle tourne dans `public`** : c'est là que vivent les abonnements. Puis
+    elle **entre dans le schéma de chaque client** pour compter ce qui y a été
+    construit. Sans cette bascule, elle compterait les projets de `public` —
+    c'est-à-dire aucun — et annoncerait à chaque client qu'il n'a rien fait.
+    *La tâche ne lèverait aucune erreur : elle trouve zéro, et zéro est un
+    nombre valide.* C'est la règle 3 du `CLAUDE.md`, et c'est ici qu'elle se paie.
+
+    **Elle ne décide de rien.** Le passage en lecture seule est évalué à la
+    requête, pas ici : une tâche qui coupe l'accès à 06 h 00 UTC couperait
+    quelqu'un en train de saisir. À J+0 elle pose le statut et envoie le
+    message — elle rend l'état visible (§3.1).
+    """
+    from apps.billing.models import Abonnement, RelanceEssai
+    from apps.billing.services.relances import bilan_du_schema, destinataires_relance
+    from apps.core.emails import envoyer
+
+    envoyees = 0
+    aujourdhui = timezone.localdate()
+
+    for seuil in SEUILS:
+        # Une date **exacte**, pas un intervalle : c'est ce qui rend la tâche
+        # rejouable sans rattraper des jours passés.
+        cible = aujourdhui + timedelta(days=seuil)
+        abonnements = Abonnement.objects.filter(
+            statut=Abonnement.Statut.ESSAI, fin_essai=cible
+        ).select_related("entreprise")
+
+        for abonnement in abonnements:
+            schema = abonnement.entreprise.schema_name
+
+            try:
+                with schema_context(schema):
+                    bilan = bilan_du_schema()
+                    adresses = destinataires_relance()
+            except Exception:
+                # Un schéma illisible ne doit pas arrêter la tournée des autres.
+                logger.exception("Relance impossible pour le schéma %s", schema)
+                continue
+
+            if not adresses:
+                # Un espace sans administrateur actif : personne à qui écrire.
+                logger.warning("Aucun destinataire de relance dans le schéma %s", schema)
+                continue
+
+            # La trace **avant** l'envoi : si la contrainte refuse la ligne, la
+            # relance a déjà été faite et le message ne doit pas repartir.
+            _, cree = RelanceEssai.objects.get_or_create(
+                abonnement=abonnement,
+                seuil=seuil,
+                defaults={"destinataires": len(adresses)},
+            )
+            if not cree:
+                continue
+
+            envoyer(
+                "essai_relance",
+                _sujet(seuil, abonnement.entreprise.raison_sociale),
+                adresses,
+                {
+                    "raison_sociale": abonnement.entreprise.raison_sociale,
+                    "jours_restants": seuil,
+                    "bilan": bilan,
+                    "lien_abonnement": _lien_abonnement(abonnement.entreprise),
+                },
+            )
+            envoyees += 1
+
+            if seuil == 0:
+                _clore_essai(abonnement)
+
+    return envoyees
+
+
+def _sujet(seuil: int, raison_sociale: str) -> str:
+    if seuil == 0:
+        return f"L'essai de {raison_sociale} est terminé"
+    if seuil == 1:
+        return f"Dernier jour d'essai pour {raison_sociale}"
+    return f"Il reste {seuil} jours d'essai à {raison_sociale}"
+
+
+def _lien_abonnement(entreprise) -> str:
+    base_url = "http://localhost:3000"
+    return f"{base_url}/parametres/abonnement"
+
+
+def _clore_essai(abonnement) -> None:
+    """J+0 — le statut suit ce que l'email vient d'annoncer.
+
+    `lecture_seule_depuis` est posé ici, mais **ce n'est pas lui qui coupe
+    l'accès** : la permission l'évalue à chaque requête, de sorte que la
+    personne finit son geste et rencontre le mur à l'action suivante (§3.1).
+    """
+    from django.utils import timezone as tz
+
+    abonnement.statut = abonnement.Statut.SUSPENDU
+    abonnement.lecture_seule_depuis = abonnement.lecture_seule_depuis or tz.now()
+    abonnement.save(update_fields=["statut", "lecture_seule_depuis", "modifie_le"])
+
+
+@shared_task
+def reconcilier_paiements_recents() -> dict:
+    """Réconciliation rapide des paiements Mobile Money récents (entre 2 et 30 min).
+
+    Tourne à haute fréquence (toutes les 2 minutes) pour débloquer sans délai les utilisateurs
+    dont le push USSD/Mobile Money a tardé (> 3 min) ou dont l'IPN CinetPay a été retardé.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage réconciliation CinetPay (transactions récentes 2-30 min)...")
+    return PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=2,
+        delai_max_minutes=30,
+        timeout_heures=None,
+    )
+
+
+@shared_task
+def reconcilier_paiements_anciens() -> dict:
+    """Réconciliation périodique des paiements en attente plus anciens (entre 30 min et 24h).
+
+    Tourne toutes les 15 minutes. Marque également comme `EXPIRE` les transactions
+    qui ont dépassé le délai de 24h sans confirmation opérateur.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage réconciliation CinetPay (transactions anciennes 30 min - 24h)...")
+    return PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=30,
+        delai_max_minutes=1440,
+        timeout_heures=24,
+    )
+
+
+@shared_task
+def verifier_paiements_en_attente() -> dict:
+    """Tâche générique de réconciliation de l'ensemble des paiements CinetPay en attente.
+
+    Tourne dans le schéma `public` (tables billing) sur un intervalle régulier.
+    """
+    from apps.billing.services.paiement import PaiementAbonnementService
+
+    logger.info("Démarrage de la tâche Celery globale de réconciliation des paiements CinetPay...")
+    resultat = PaiementAbonnementService.verifier_paiements_en_attente(
+        delai_min_minutes=2,
+        timeout_heures=24,
+    )
+    logger.info(
+        f"Fin de la réconciliation CinetPay : {resultat.get('confirmes')} confirmés, "
+        f"{resultat.get('echoues')} échoués/expirés, {resultat.get('en_attente')} en attente."
+    )
+    return resultat
+
+
+================================================================================
+FICHIER : apps\billing\urls.py
+================================================================================
+from django.urls import path
+
+from apps.billing.views import (
+    AbonnementView,
+    AnnulerPaiementView,
+    CinetPayWebhookView,
+    InitierPaiementView,
+    PlansCatalogueView,
+    StatutPaiementView,
+)
+from apps.billing.views.expiration import NotificationsExpirationView
+from apps.billing.views.facture import FactureDetailView, FactureListeView, FacturePDFView
+
+app_name = "billing"
+
+urlpatterns = [
+    path(
+        "abonnement/notifications/",
+        NotificationsExpirationView.as_view(),
+        name="notifications-expiration",
+    ),
+    path("factures/", FactureListeView.as_view(), name="factures"),
+    path("factures/<uuid:pk>/", FactureDetailView.as_view(), name="facture-detail"),
+    path("factures/<uuid:pk>/pdf/", FacturePDFView.as_view(), name="facture-pdf"),
+    path("abonnement/", AbonnementView.as_view(), name="abonnement"),
+    path("plans/", PlansCatalogueView.as_view(), name="plans-catalogue"),
+    path("cinetpay/initier/", InitierPaiementView.as_view(), name="cinetpay-initier"),
+    path("cinetpay/annuler/", AnnulerPaiementView.as_view(), name="cinetpay-annuler"),
+    path("cinetpay/webhook/", CinetPayWebhookView.as_view(), name="cinetpay-webhook"),
+    path(
+        "billing/cinetpay/webhook/",
+        CinetPayWebhookView.as_view(),
+        name="billing-cinetpay-webhook",
+    ),
+    path(
+        "cinetpay/statut/<str:transaction_id>/",
+        StatutPaiementView.as_view(),
+        name="cinetpay-statut",
+    ),
+]
+
+
+================================================================================
+FICHIER : apps\chantier\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\chantier\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ChantierConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.chantier"
+    verbose_name = "Journal de chantier : rapports journaliers, production, photos, blocages"
+
+
+================================================================================
+FICHIER : apps\chantier\filters.py
+================================================================================
+"""Filtres django-filter pour l'application chantier."""
+
+import django_filters
+
+from apps.chantier.models import RapportJournalier
+from apps.core.enums import Meteo, StatutRapport
+
+__all__ = ["RapportJournalierFilter"]
+
+
+class RapportJournalierFilter(django_filters.FilterSet):
+    """Filtres applicables sur la liste des rapports journaliers."""
+
+    projet = django_filters.UUIDFilter(field_name="projet_id")
+    lot = django_filters.UUIDFilter(field_name="lot_id")
+    auteur = django_filters.UUIDFilter(field_name="auteur_id")
+    valide_par = django_filters.UUIDFilter(field_name="valide_par_id")
+    statut = django_filters.ChoiceFilter(choices=StatutRapport.choices)
+    meteo = django_filters.ChoiceFilter(choices=Meteo.choices)
+    date_debut = django_filters.DateFilter(field_name="date_rapport", lookup_expr="gte")
+    date_fin = django_filters.DateFilter(field_name="date_rapport", lookup_expr="lte")
+    date_rapport = django_filters.DateFilter(field_name="date_rapport")
+
+    class Meta:
+        model = RapportJournalier
+        fields = [
+            "projet",
+            "lot",
+            "auteur",
+            "valide_par",
+            "statut",
+            "meteo",
+            "date_debut",
+            "date_fin",
+            "date_rapport",
+        ]
+
+
+================================================================================
+FICHIER : apps\chantier\permissions.py
+================================================================================
+"""Permissions DRF propres au module « chantier » — rapports journaliers.
+
+Contrôle d'accès à deux niveaux (Socle Commun §2.3) :
+- Niveau 1 : Rôle global et permissions du module (CHANTIER).
+- Niveau 2 : Affectation au projet spécifique.
+"""
+
+from rest_framework import permissions
+
+from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal, RoleProjet
+from apps.core.permissions import MembreDuProjet, PermissionModule
+
+__all__ = [
+    "PeutConsulterRapports",
+    "PeutRedigerRapports",
+    "PeutValiderRapports",
+]
+
+ROLES_DIRECTION = (
+    RoleGlobal.ADMIN,
+    RoleGlobal.DIRECTEUR_GENERAL,
+)
+
+ROLES_GESTION_CHANTIER = (
+    RoleGlobal.ADMIN,
+    RoleGlobal.DIRECTEUR_GENERAL,
+    RoleGlobal.CHEF_PROJET,
+    RoleGlobal.CONDUCTEUR_TRAVAUX,
+    RoleGlobal.CHEF_CHANTIER,
+)
+
+ROLES_VALIDATION_CHANTIER = (
+    RoleGlobal.ADMIN,
+    RoleGlobal.DIRECTEUR_GENERAL,
+    RoleGlobal.CHEF_PROJET,
+    RoleGlobal.CONDUCTEUR_TRAVAUX,
+)
+
+
+class PeutConsulterRapports(permissions.BasePermission):
+    """Vérifie que l'utilisateur peut consulter les rapports de chantier."""
+
+    def has_permission(self, request, view) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if (
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in ROLES_GESTION_CHANTIER
+        ):
+            return True
+
+        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.LECTURE)()
+        return perm.has_permission(request, view)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if (
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in ROLES_DIRECTION
+        ):
+            return True
+
+        return MembreDuProjet().has_object_permission(request, view, obj)
+
+
+class PeutRedigerRapports(permissions.BasePermission):
+    """Vérifie que l'utilisateur peut créer ou modifier un rapport journalier."""
+
+    def has_permission(self, request, view) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if (
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in (
+                RoleGlobal.ADMIN,
+                RoleGlobal.DIRECTEUR_GENERAL,
+                RoleGlobal.CHEF_CHANTIER,
+                RoleGlobal.CONDUCTEUR_TRAVAUX,
+                RoleGlobal.CHEF_PROJET,
+            )
+        ):
+            return True
+
+        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.ECRITURE)()
+        return perm.has_permission(request, view)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if (
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in ROLES_DIRECTION
+        ):
+            return True
+
+        return MembreDuProjet().has_object_permission(request, view, obj)
+
+
+class PeutValiderRapports(permissions.BasePermission):
+    """Vérifie que l'utilisateur a autorité pour valider ou rejeter un rapport (CT / CP / DG)."""
+
+    def has_permission(self, request, view) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if (
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in ROLES_VALIDATION_CHANTIER
+        ):
+            return True
+
+        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.VALIDATION)()
+        return perm.has_permission(request, view)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if (
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in ROLES_DIRECTION
+        ):
+            return True
+
+        # Vérifier l'affectation projet
+        from django.apps import apps as registre
+
+        try:
+            AffectationProjet = registre.get_model("projets", "AffectationProjet")
+            projet_id = MembreDuProjet._extraire_projet_id(obj)
+            if not projet_id:
+                return False
+
+            affectation = AffectationProjet.objects.filter(
+                utilisateur=user, projet_id=projet_id, est_actif=True
+            ).first()
+
+            if affectation and (
+                affectation.role_projet
+                in (
+                    RoleProjet.CONDUCTEUR_TRAVAUX,
+                    RoleProjet.CHEF_PROJET,
+                )
+                or user.role_global in ROLES_VALIDATION_CHANTIER
+            ):
+                return True
+        except LookupError:
+            pass
+
+        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.VALIDATION)()
+        return perm.has_object_permission(request, view, obj)
+
+
+================================================================================
+FICHIER : apps\chantier\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\chantier\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\chantier\urls.py
+================================================================================
+"""Routes pour l'application chantier — journal de chantier."""
+
+from django.urls import path
+
+from apps.chantier.views import (
+    RapportDetailView,
+    RapportListCreateView,
+    RapportRejeterView,
+    RapportSoumettreView,
+    RapportValiderView,
+)
+
+app_name = "chantier"
+
+urlpatterns = [
+    path("rapports/", RapportListCreateView.as_view(), name="rapport-liste-creer"),
+    path("rapports/<uuid:pk>/", RapportDetailView.as_view(), name="rapport-detail"),
+    path(
+        "rapports/<uuid:pk>/soumettre/",
+        RapportSoumettreView.as_view(),
+        name="rapport-soumettre",
+    ),
+    path(
+        "rapports/<uuid:pk>/valider/",
+        RapportValiderView.as_view(),
+        name="rapport-valider",
+    ),
+    path(
+        "rapports/<uuid:pk>/rejeter/",
+        RapportRejeterView.as_view(),
+        name="rapport-rejeter",
+    ),
+]
+
+
+================================================================================
+FICHIER : apps\core\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\core\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class CoreConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.core"
+    verbose_name = "Socle technique : modèle de base, suppression logique, permissions, formats"
+
+
+================================================================================
+FICHIER : apps\core\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\core\permissions.py
+================================================================================
+"""Permissions transverses — contrôle d'accès à deux niveaux.
+
+Socle Commun §2.3 : les deux niveaux sont **cumulatifs**.
+
+  Niveau 1 — rôle global        : ce que la personne a le droit de faire
+  Niveau 2 — appartenance projet: sur quels chantiers elle a le droit de le faire
+
+Le rôle seul ne donne accès à rien (RG-01). Le contrôle est fait côté
+serveur à chaque requête : un utilisateur qui modifie l'URL à la main
+reçoit un 403, sans aucune donnée.
+"""
+
+from rest_framework import permissions
+
+from apps.core.enums import RoleGlobal
+
+
+__all__ = [
+    "LectureSeule",
+    "MembreDuProjet",
+    "PermissionModule",
+    "RoleRequis",
+    "ScopedProjetQuerySetMixin",
+    "filtrer_queryset_par_affectations",
+    "obtenir_projets_ids_actifs_utilisateur",
+]
+
+
+def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
+    """Récupère et met en cache sur request la liste des IDs de projets affectés."""
+    if not user or not user.is_authenticated:
+        return []
+    if request and hasattr(request, "_rbac_projets_ids_actifs"):
+        return request._rbac_projets_ids_actifs
+
+    from django.apps import apps as registre
+
+    try:
+        AffectationProjet = registre.get_model("projets", "AffectationProjet")
+    except LookupError:
+        return []
+
+    projets_ids = list(
+        AffectationProjet.objects.filter(
+            utilisateur=user, est_actif=True, supprime_le__isnull=True
+        ).values_list("projet_id", flat=True)
+    )
+    if request:
+        request._rbac_projets_ids_actifs = projets_ids
+    return projets_ids
+
+
+def filtrer_queryset_par_affectations(qs, user, champ_projet="id", request=None):
+    """Restreint un QuerySet aux seuls chantiers où l'utilisateur est affecté.
+
+    Pour la Direction (DG, Admin, Propriétaire, Superuser) : vision consolidée sans restriction.
+    Pour les collaborateurs opérationnels : vision bornée aux chantiers affectés.
+    """
+    if not user or not user.is_authenticated:
+        return qs.none()
+
+    est_direction = (
+        user.is_superuser
+        or getattr(user, "is_owner", False)
+        or getattr(user, "is_dg", False)
+        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+    )
+    if est_direction:
+        return qs
+
+    projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+    filtre = {f"{champ_projet}__in": projets_ids}
+    return qs.filter(**filtre)
+
+
+class ScopedProjetQuerySetMixin:
+    """Mixin DRF appliquant le scoping automatique par affectation sur get_queryset()."""
+
+    champ_projet_scoping: str = "id"
+
+    def filtrer_par_affectation(self, qs, champ_projet=None):
+        champ = champ_projet or getattr(self, "champ_projet_scoping", "id")
+        return filtrer_queryset_par_affectations(
+            qs, self.request.user, champ_projet=champ, request=self.request
+        )
+
+
+class RoleRequis(permissions.BasePermission):
+    """Niveau 1 — restreint une vue à une liste de rôles globaux.
+
+    Usage :
+
+        class VueBudget(APIView):
+            permission_classes = [RoleRequis.pour("DG", "DF")]
+    """
+
+    roles_autorises: tuple[str, ...] = ()
+    message = "Votre rôle ne permet pas d'accéder à cette ressource."
+
+    @classmethod
+    def pour(cls, *roles: str):
+        inconnus = set(roles) - set(RoleGlobal.values)
+        if inconnus:
+            raise ValueError(f"Rôles inconnus : {sorted(inconnus)}")
+        return type("RoleRequisSpecifique", (cls,), {"roles_autorises": tuple(roles)})
+
+    def has_permission(self, request, view) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+        if not self.roles_autorises:
+            return True
+        return utilisateur.role_global in self.roles_autorises
+
+
+class MembreDuProjet(permissions.BasePermission):
+    """Niveau 2 — l'utilisateur doit être affecté au projet visé avec mémoïsation O(1).
+
+    L'objet doit exposer un `projet_id`, un `projet`, ou être un projet.
+    """
+
+    message = "Vous n'êtes pas affecté à ce projet."
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
+
+        projet_id = self._extraire_projet_id(obj)
+        if projet_id is None:
+            return False
+
+        if not hasattr(request, "_rbac_membre_projet_cache"):
+            request._rbac_membre_projet_cache = {}
+
+        cle = (str(utilisateur.id), str(projet_id))
+        if cle in request._rbac_membre_projet_cache:
+            return request._rbac_membre_projet_cache[cle]
+
+        from django.apps import apps as registre
+
+        try:
+            AffectationProjet = registre.get_model("projets", "AffectationProjet")
+        except LookupError:
+            return False
+
+        est_membre = AffectationProjet.objects.filter(
+            utilisateur=utilisateur,
+            projet_id=projet_id,
+            est_actif=True,
+            supprime_le__isnull=True,
+        ).exists()
+        request._rbac_membre_projet_cache[cle] = est_membre
+        return est_membre
+
+    @staticmethod
+    def _extraire_projet_id(obj):
+        if hasattr(obj, "projet_id"):
+            return obj.projet_id
+        if obj.__class__.__name__ == "Projet":
+            return obj.pk
+        if hasattr(obj, "lot") and hasattr(obj.lot, "projet_id"):
+            return obj.lot.projet_id
+        return None
+
+
+class LectureSeule(permissions.BasePermission):
+    """N'autorise que GET, HEAD et OPTIONS."""
+
+    def has_permission(self, request, view) -> bool:
+        return request.method in permissions.SAFE_METHODS
+
+
+class PermissionModule(permissions.BasePermission):
+    """Contrôle d'accès dynamique avec mémoïsation O(1) par requête HTTP."""
+
+    module: str = ""
+    niveau_requis: int = 1
+    message = "Vos habilitations ne permettent pas d'effectuer cette action sur ce module."
+
+    @classmethod
+    def pour(cls, module: str, niveau_requis: int = 1):
+        return type(
+            "PermissionModuleSpecifique",
+            (cls,),
+            {"module": module, "niveau_requis": int(niveau_requis)},
+        )
+
+    def has_permission(self, request, view) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
+
+        if not hasattr(request, "_rbac_module_permissions_cache"):
+            request._rbac_module_permissions_cache = {}
+
+        if self.module in request._rbac_module_permissions_cache:
+            niveau = request._rbac_module_permissions_cache[self.module]
+            return niveau >= self.niveau_requis
+
+        from django.apps import apps as registre
+
+        try:
+            Role = registre.get_model("accounts", "Role")
+            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
+        except LookupError:
+            return True
+
+        role = utilisateur.role_personnalise
+        if not role:
+            role = Role.objects.filter(
+                code=utilisateur.role_global, supprime_le__isnull=True
+            ).first()
+
+        if not role:
+            request._rbac_module_permissions_cache[self.module] = 0
+            return False
+
+        perm = RoleModulePermission.objects.filter(
+            role=role, module=self.module, supprime_le__isnull=True
+        ).first()
+        niveau = perm.niveau if perm else 0
+        request._rbac_module_permissions_cache[self.module] = niveau
+        return niveau >= self.niveau_requis
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        utilisateur = request.user
+        if not utilisateur or not utilisateur.is_authenticated:
+            return False
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
+
+        projet_id = MembreDuProjet._extraire_projet_id(obj)
+        if not projet_id:
+            return self.has_permission(request, view)
+
+        cle_cache = (str(utilisateur.id), self.module, str(projet_id))
+        if not hasattr(request, "_rbac_object_permissions_cache"):
+            request._rbac_object_permissions_cache = {}
+
+        if cle_cache in request._rbac_object_permissions_cache:
+            niveau = request._rbac_object_permissions_cache[cle_cache]
+            return niveau >= self.niveau_requis
+
+        from django.apps import apps as registre
+
+        try:
+            AffectationProjet = registre.get_model("projets", "AffectationProjet")
+            ProjetRoleModuleOverride = registre.get_model("projets", "ProjetRoleModuleOverride")
+            Role = registre.get_model("accounts", "Role")
+            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
+        except LookupError:
+            return True
+
+        affectation = AffectationProjet.objects.filter(
+            utilisateur=utilisateur,
+            projet_id=projet_id,
+            est_actif=True,
+            supprime_le__isnull=True,
+        ).first()
+
+        if not affectation:
+            request._rbac_object_permissions_cache[cle_cache] = 0
+            return False
+
+        role = affectation.role
+        if not role:
+            role = Role.objects.filter(
+                code=affectation.role_projet, supprime_le__isnull=True
+            ).first()
+        if not role:
+            role = (
+                utilisateur.role_personnalise
+                or Role.objects.filter(
+                    code=utilisateur.role_global, supprime_le__isnull=True
+                ).first()
+            )
+
+        if not role:
+            request._rbac_object_permissions_cache[cle_cache] = 0
+            return False
+
+        override = ProjetRoleModuleOverride.objects.filter(
+            projet_id=projet_id, role=role, module=self.module, supprime_le__isnull=True
+        ).first()
+        if override:
+            niveau = override.niveau
+            request._rbac_object_permissions_cache[cle_cache] = niveau
+            return niveau >= self.niveau_requis
+
+        perm = RoleModulePermission.objects.filter(
+            role=role, module=self.module, supprime_le__isnull=True
+        ).first()
+        niveau = perm.niveau if perm else 0
+        request._rbac_object_permissions_cache[cle_cache] = niveau
+        return niveau >= self.niveau_requis
+
+
+
+================================================================================
+FICHIER : apps\core\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\core\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\core\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "core"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : apps\ged\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\ged\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class GedConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.ged"
+    verbose_name = "Gestion documentaire : dossiers, documents, versions, partages, RFI"
+
+
+================================================================================
+FICHIER : apps\ged\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\ged\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\ged\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\ged\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\ged\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "ged"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : apps\notifications\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\notifications\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class NotificationsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.notifications"
+    verbose_name = "Notifications in-app, email et push, et leurs préférences"
+
+
+================================================================================
+FICHIER : apps\notifications\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\notifications\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\notifications\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\notifications\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\notifications\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "notifications"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : apps\onboarding\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class OnboardingConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.onboarding"
+    verbose_name = "Configuration initiale — le wizard d entree"
+
+
+================================================================================
+FICHIER : apps\onboarding\urls.py
+================================================================================
+"""Routes de la configuration initiale — schéma tenant uniquement.
+
+Le code d'étape voyage en `<str:code>` et **n'est pas validé par l'URL** : un
+code inconnu doit répondre `400 validation` avec le catalogue en `details`, pas
+un `404` muet qui laisse le client deviner s'il s'est trompé de code ou de
+route.
+"""
+
+from django.urls import path
+
+from apps.onboarding.views import (
+    ConfigurationView,
+    FranchirEtapeView,
+    PasserEtapeView,
+    RecapitulatifView,
+    TerminerView,
+)
+
+app_name = "onboarding"
+
+urlpatterns = [
+    path("configuration/", ConfigurationView.as_view(), name="configuration"),
+    path(
+        "configuration/etapes/<str:code>/valider/",
+        FranchirEtapeView.as_view(),
+        name="configuration-etape-valider",
+    ),
+    path(
+        "configuration/etapes/<str:code>/passer/",
+        PasserEtapeView.as_view(),
+        name="configuration-etape-passer",
+    ),
+    path(
+        "configuration/recapitulatif/",
+        RecapitulatifView.as_view(),
+        name="configuration-recapitulatif",
+    ),
+    path("configuration/terminer/", TerminerView.as_view(), name="configuration-terminer"),
+]
+
+
+================================================================================
+FICHIER : apps\pilotage\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\pilotage\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class PilotageConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.pilotage"
+    verbose_name = "Pilotage stratégique et BI"
+
+
+================================================================================
+FICHIER : apps\pilotage\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\pilotage\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\pilotage\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\pilotage\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\pilotage\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "pilotage"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : apps\platform_admin\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\platform_admin\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class PlatformAdminConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.platform_admin"
+    verbose_name = "Super Admin CCD Digital : métriques plateforme, impersonification"
+
+
+================================================================================
+FICHIER : apps\platform_admin\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\platform_admin\permissions.py
+================================================================================
+"""Permissions DRF pour le module platform_admin."""
+
+from django.db import connection
+from django_tenants.utils import get_public_schema_name
+from rest_framework.permissions import BasePermission
+
+from apps.core.enums import RoleGlobal
+
+
+class EstSuperAdminPlateforme(BasePermission):
+    """
+    Vérifie que l'utilisateur est authentifié et possède les droits Super Admin / Staff éditeur.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        schema_courant = getattr(connection, "schema_name", "public")
+        public_schema = get_public_schema_name()
+
+        # Doit être authentifié dans le schéma public ou avoir un statut staff
+        est_schema_autorise = (schema_courant == public_schema) or getattr(user, "is_staff", False)
+        if not est_schema_autorise:
+            return False
+
+        return bool(
+            getattr(user, "is_superuser", False)
+            or getattr(user, "is_staff", False)
+            or getattr(user, "role_global", None) == RoleGlobal.ADMIN
+        )
+
+
+================================================================================
+FICHIER : apps\platform_admin\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\platform_admin\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\platform_admin\urls.py
+================================================================================
+from django.urls import path
+
+from apps.platform_admin.views import (
+    ChangerPlanClientPlateformeView,
+    ClientsPlateformeListView,
+    ConnexionAdminView,
+    DeconnexionAdminView,
+    DeconnexionAssistanceView,
+    DemandeReinitialisationAdminView,
+    DemarrerAssistanceView,
+    EvolutionAbonnementsView,
+    FicheClientPlateformeView,
+    IndicateursPlateformeView,
+    JournalPlateformeListView,
+    ListerUtilisateursEntrepriseView,
+    ReactiverClientPlateformeView,
+    ReinitialisationAdminView,
+    RenouvellementAdminView,
+    SuspendreClientPlateformeView,
+    TendancesIndicateursView,
+    VerificationJetonAdminView,
+)
+from apps.platform_admin.views.inscriptions import (
+    ApprouverInscriptionView,
+    DemandeInscriptionDetailView,
+    DemandesInscriptionView,
+    RefuserInscriptionView,
+)
+
+app_name = "platform_admin"
+
+urlpatterns = [
+    path("admins/inscriptions/", DemandesInscriptionView.as_view(), name="inscriptions-liste"),
+    path(
+        "admins/inscriptions/<uuid:pk>/",
+        DemandeInscriptionDetailView.as_view(),
+        name="inscriptions-detail",
+    ),
+    path(
+        "admins/inscriptions/<uuid:pk>/approuver/",
+        ApprouverInscriptionView.as_view(),
+        name="inscriptions-approuver",
+    ),
+    path(
+        "admins/inscriptions/<uuid:pk>/refuser/",
+        RefuserInscriptionView.as_view(),
+        name="inscriptions-refuser",
+    ),
+    # Authentification Super Admin (Control Plane)
+    path(
+        "admins/connexion/",
+        ConnexionAdminView.as_view(),
+        name="admins-connexion",
+    ),
+    path(
+        "admins/deconnexion/",
+        DeconnexionAdminView.as_view(),
+        name="admins-deconnexion",
+    ),
+    path(
+        "admins/token/refresh/",
+        RenouvellementAdminView.as_view(),
+        name="admins-token-refresh",
+    ),
+    # Réinitialisation Mot de passe Super Admin
+    path(
+        "admins/mot-de-passe/demande/",
+        DemandeReinitialisationAdminView.as_view(),
+        name="admins-mot-de-passe-demande",
+    ),
+    path(
+        "admins/mot-de-passe/verifier/",
+        VerificationJetonAdminView.as_view(),
+        name="admins-mot-de-passe-verifier",
+    ),
+    path(
+        "admins/mot-de-passe/reinitialiser/",
+        ReinitialisationAdminView.as_view(),
+        name="admins-mot-de-passe-reinitialiser",
+    ),
+    # Assistance Super Admin & Impersonation (R-128)
+    path(
+        "admins/entreprises/<uuid:entreprise_id>/assistance/",
+        DemarrerAssistanceView.as_view(),
+        name="assistance-demarrer",
+    ),
+    path(
+        "admins/entreprises/<uuid:entreprise_id>/utilisateurs/",
+        ListerUtilisateursEntrepriseView.as_view(),
+        name="assistance-utilisateurs",
+    ),
+    path(
+        "admins/assistance/deconnexion/",
+        DeconnexionAssistanceView.as_view(),
+        name="assistance-deconnexion",
+    ),
+    # Journal de Plateforme
+    path(
+        "admins/journal-plateforme/",
+        JournalPlateformeListView.as_view(),
+        name="journal-plateforme-liste",
+    ),
+    # Tableau de bord d'administration & Indicateurs
+    path(
+        "admins/indicateurs/",
+        IndicateursPlateformeView.as_view(),
+        name="admins-indicateurs-plateforme",
+    ),
+    path(
+        "admins/indicateurs/tendances/",
+        TendancesIndicateursView.as_view(),
+        name="admins-indicateurs-tendances",
+    ),
+    path(
+        "admins/indicateurs/evolution/",
+        EvolutionAbonnementsView.as_view(),
+        name="admins-indicateurs-evolution",
+    ),
+    # Gestion Clients & Actions Super Admin
+    path(
+        "admins/clients/",
+        ClientsPlateformeListView.as_view(),
+        name="admins-clients-plateforme-liste",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/",
+        FicheClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-fiche",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/suspendre/",
+        SuspendreClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-suspendre",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/reactiver/",
+        ReactiverClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-reactiver",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/abonnement/",
+        ChangerPlanClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-abonnement",
+    ),
+]
+
+
+================================================================================
+FICHIER : apps\projets\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\projets\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ProjetsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.projets"
+    verbose_name = "Projets, lots, activités, affectations, bordereaux de prix, indice de santé"
+
+
+================================================================================
+FICHIER : apps\projets\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\projets\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\projets\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\projets\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\projets\urls.py
+================================================================================
+"""Routes pour l'application projets."""
+
+from django.urls import path
+
+from apps.projets.views import (
+    MeteoProjetView,
+    ProjetDetailView,
+    ProjetListCreateView,
+    ProjetPermissionsRolesView,
+    ReferentielVillesView,
+    TableauDeBordView,
+)
+from apps.projets.views.affectation import (
+    ProjetAffectationDetailView,
+    ProjetAffectationListCreateView,
+)
+from apps.projets.views.contexte_creation import ContexteCreationProjetView
+
+app_name = "projets"
+
+urlpatterns = [
+    path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path(
+        "projets/contexte-creation/",
+        ContexteCreationProjetView.as_view(),
+        name="projet-contexte-creation",
+    ),
+    path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
+    path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
+    path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
+    path(
+        "projets/<uuid:pk>/permissions-roles/",
+        ProjetPermissionsRolesView.as_view(),
+        name="projet-permissions-roles",
+    ),
+    path(
+        "projets/<uuid:projet_id>/affectations/",
+        ProjetAffectationListCreateView.as_view(),
+        name="projet-affectations-liste",
+    ),
+    path(
+        "projets/<uuid:projet_id>/affectations/<uuid:pk>/",
+        ProjetAffectationDetailView.as_view(),
+        name="projet-affectation-detail",
+    ),
+    path("tableau-de-bord/", TableauDeBordView.as_view(), name="tableau-de-bord"),
+]
+
+
+
+================================================================================
+FICHIER : apps\referentiels\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\referentiels\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class ReferentielsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.referentiels"
+    verbose_name = "Référentiels partagés par tous les tenants"
+
+
+================================================================================
+FICHIER : apps\referentiels\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\referentiels\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\referentiels\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\referentiels\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\referentiels\urls.py
+================================================================================
+from django.urls import path
+
+from apps.referentiels.views import (
+    EnumerationsView,
+    ModuleListView,
+    ReglesMotDePasseView,
+)
+
+app_name = "referentiels"
+
+urlpatterns = [
+    path("modules/", ModuleListView.as_view(), name="modules-liste"),
+    path("referentiels/enumerations/", EnumerationsView.as_view(), name="enumerations"),
+    # Les règles de complexité, servies une fois — contrat §6.3. Le client
+    # allume ses coches à partir de cette liste ; le serveur reste juge.
+    path(
+        "referentiels/regles-mot-de-passe/",
+        ReglesMotDePasseView.as_view(),
+        name="regles-mot-de-passe",
+    ),
+]
+
+
+================================================================================
+FICHIER : apps\support\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\support\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class SupportConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.support"
+    verbose_name = "Tickets de support et base de connaissances"
+
+
+================================================================================
+FICHIER : apps\support\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\support\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\support\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\support\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\support\urls.py
+================================================================================
+from django.urls import path
+
+app_name = "support"
+
+urlpatterns: list[path] = []
+
+
+================================================================================
+FICHIER : apps\tenants\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\tenants\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class TenantsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.tenants"
+    verbose_name = "Entreprises clientes abonnées et cycle de vie de leur schéma PostgreSQL"
+
+
+================================================================================
+FICHIER : apps\tenants\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\tenants\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\tenants\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\tenants\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+import logging
+
+from celery import shared_task
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=10)
+def provisionner_entreprise(self, identifiant: str) -> None:
+    """Crée l'espace d'une entreprise — contrat d'inscription §5, effet 5.
+
+    **La tâche ne porte que l'identifiant de la demande.** Le mot de passe reste
+    en base, haché, et n'entre jamais dans la charge utile — R-86 : un message
+    Celery traverse Redis, s'y attarde, et s'affiche dans les outils de
+    supervision.
+
+    **Elle n'a pas besoin de `schema_context` pour démarrer** : elle travaille
+    d'abord dans `public`, où vit la demande. C'est le service qui bascule vers
+    le schéma du client une fois celui-ci créé — et c'est là que le piège de la
+    règle 3 se referme, `migrate_schemas` repositionnant la connexion sur
+    `public` juste avant.
+    """
+    from apps.tenants.services.inscription import provisionner
+
+    try:
+        provisionner(identifiant)
+    except Exception as erreur:
+        # La demande est déjà passée à `ECHEC` par la compensation du service :
+        # l'écran d'attente saura quoi afficher même si les reprises échouent.
+        logger.exception("Provisionnement en échec — demande %s", identifiant)
+        raise self.retry(exc=erreur) from erreur
+
+
+================================================================================
+FICHIER : apps\tenants\urls.py
+================================================================================
+"""Routes de l'inscription — **domaine de la plateforme uniquement**.
+
+Au moment de l'inscription, le client n'a pas encore de sous-domaine : ces cinq
+routes sont montées par `config/urls_public.py`, jamais par `urls_tenant.py`.
+"""
+
+from django.urls import path
+
+from apps.tenants.views import (
+    ActivationView,
+    DepotInscriptionView,
+    EtatProvisionnementView,
+    RenvoiActivationView,
+    VerificationJetonInscriptionView,
+)
+
+app_name = "tenants"
+
+urlpatterns = [
+    path("inscription/", DepotInscriptionView.as_view(), name="inscription"),
+    path("inscription/renvoyer/", RenvoiActivationView.as_view(), name="inscription-renvoyer"),
+    path(
+        "inscription/verifier/",
+        VerificationJetonInscriptionView.as_view(),
+        name="inscription-verifier",
+    ),
+    path("inscription/activer/", ActivationView.as_view(), name="inscription-activer"),
+    path(
+        "inscription/etat/<uuid:suivi>/",
+        EtatProvisionnementView.as_view(),
+        name="inscription-etat",
+    ),
+]
+
+
+================================================================================
+FICHIER : apps\tiers\admin.py
+================================================================================
+from django.contrib import admin  # noqa: F401
+
+
+================================================================================
+FICHIER : apps\tiers\apps.py
+================================================================================
+from django.apps import AppConfig
+
+
+class TiersConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.tiers"
+    verbose_name = "Référentiel unique des acteurs externes (décision H3 du MCD)"
+
+
+================================================================================
+FICHIER : apps\tiers\filters.py
+================================================================================
+"""Filtres django-filter du module."""
+
+
+================================================================================
+FICHIER : apps\tiers\permissions.py
+================================================================================
+"""Permissions DRF propres au module."""
+
+
+================================================================================
+FICHIER : apps\tiers\signals.py
+================================================================================
+"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+
+
+================================================================================
+FICHIER : apps\tiers\tasks.py
+================================================================================
+"""Tâches Celery du module. Elles appellent un service, jamais l'inverse."""
+
+
+================================================================================
+FICHIER : apps\tiers\urls.py
+================================================================================
+"""Routes pour l'application tiers."""
+
+from django.urls import path
+
+from apps.tiers.views import TiersDetailView, TiersListCreateView
+
+app_name = "tiers"
+
+urlpatterns = [
+    path("tiers/", TiersListCreateView.as_view(), name="tiers-liste-creer"),
+    path("tiers/<uuid:pk>/", TiersDetailView.as_view(), name="tiers-detail"),
+]
+
+
+================================================================================
+FICHIER : config\settings\base.py
+================================================================================
+"""Configuration commune à tous les environnements — CCD Digital.
+
+Aucune valeur secrète ni dépendante de l'environnement n'est écrite ici :
+tout passe par le fichier `.env` à la racine du dépôt (voir `.env.example`).
+
+Décisions appliquées, issues du dossier de conception :
+  D1  isolation multi-tenant par schéma PostgreSQL (django-tenants)
+  D5  montants en centimes de FCFA
+  D6  stockage des horodatages en UTC, affichage en heure locale
+"""
+
+from datetime import timedelta
+from pathlib import Path
+
+from decouple import Config, RepositoryEnv, UndefinedValueError
+from decouple import config as env_config
+
+# --------------------------------------------------------------------------
+# Chemins
+# --------------------------------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+RACINE_DEPOT = BASE_DIR.parent
+
+# Recherche du .env : à la racine du projet ou dans le dossier parent
+if (BASE_DIR / ".env").exists():
+    _fichier_env = BASE_DIR / ".env"
+elif (RACINE_DEPOT / ".env").exists():
+    _fichier_env = RACINE_DEPOT / ".env"
+else:
+    _fichier_env = BASE_DIR / ".env"
+
+config = Config(RepositoryEnv(_fichier_env)) if _fichier_env.exists() else env_config
+
+FACTURATION_EMETTEUR = {
+    champ: config(f"FACTURATION_{champ.upper()}", default="")
+    for champ in (
+        "raison_sociale", "forme_juridique", "capital", "adresse", "ville", "pays",
+        "rccm", "nif", "centre_fiscal", "email", "telephone", "banque", "iban", "bic",
+    )
+}
+
+# --------------------------------------------------------------------------
+# Sécurité
+# --------------------------------------------------------------------------
+try:
+    SECRET_KEY = "***MASQUE***"
+except UndefinedValueError as exc:  # pragma: no cover
+    raise RuntimeError(
+        "DJANGO_SECRET_KEY est absent. Copiez .env.example en .env et renseignez-le (voir README)."
+    ) from exc
+
+DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
+
+
+def _liste(valeur: str) -> list[str]:
+    """Transforme une variable « a,b,c » en liste."""
+    return [element.strip() for element in valeur.split(",") if element.strip()]
+
+
+ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="", cast=_liste)
+
+# --------------------------------------------------------------------------
+# Applications — la répartition entre les deux listes EST l'isolation.
+# Une application placée dans TENANT_APPS voit ses tables créées dans chaque
+# schéma client ; dans SHARED_APPS, dans le seul schéma `public`.
+# Se tromper de liste, c'est exposer les données d'un client à un autre.
+# --------------------------------------------------------------------------
+SHARED_APPS = [
+    "django_tenants",  # doit rester en premier
+    "apps.tenants",  # porte le modèle de tenant
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
+    "django.contrib.admin",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "apps.core",
+    "apps.accounts",  # écart E1 — voir README §Écarts
+    # Même raison que `accounts`, et c'est l'écart E1 qui l'impose : le journal
+    # d'audit suit les utilisateurs, qui existent dans `public` **et** dans
+    # chaque schéma client. Présent d'un seul côté, il laissait les actions du
+    # personnel de l'éditeur sans trace — or le Socle §2.4 dit « sans
+    # exception », et un registre à trous ne prouve rien en cas de litige.
+    "apps.audit",
+    "apps.billing",
+    "apps.platform_admin",
+    "apps.support",
+    "apps.referentiels",
+]
+
+TENANT_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
+    # socle transverse
+    "apps.core",
+    "apps.accounts",
+    "apps.audit",
+    "apps.notifications",
+    "apps.tiers",
+    "apps.onboarding",
+    # modules métier souverains (5 modules cibles)
+    "apps.projets",  # module 1 : projets et affectations
+    "apps.chantier",  # module 2 : suivi technique et rapports
+    "apps.ged",  # module 3 : gestion documentaire
+    "apps.pilotage",  # module 4 : tableaux de bord et pilotage
+]
+
+
+
+TIERCES_APPS = [
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "django_filters",
+    "corsheaders",
+    "drf_spectacular",
+    "django_celery_beat",
+]
+
+SHARED_APPS += TIERCES_APPS
+TENANT_APPS += ["rest_framework", "django_filters"]
+
+INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
+
+# --------------------------------------------------------------------------
+# Multi-tenant
+# --------------------------------------------------------------------------
+TENANT_MODEL = "tenants.Entreprise"
+TENANT_DOMAIN_MODEL = "tenants.Domaine"
+PUBLIC_SCHEMA_NAME = "public"
+PUBLIC_SCHEMA_URLCONF = "config.urls_public"
+DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
+
+# --------------------------------------------------------------------------
+# Middleware — TenantMainMiddleware doit rester en tête : il détermine le
+# schéma avant que la moindre requête ne touche la base.
+# --------------------------------------------------------------------------
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "apps.core.middleware_tenant.TenantResolutionMiddleware",
+    "apps.core.middleware.IdentifiantRequeteMiddleware",
+    # Après le middleware de tenant, qui pose `request.tenant`, et avant
+    # tout le reste : une porte se ferme au plus tôt.
+    "apps.core.middleware.RestrictionIPPlateformeMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Verrou absolu R-128 : refuse toute mutation sous jeton d'assistance Super Admin
+    "apps.platform_admin.middleware.LectureSeuleAssistanceMiddleware",
+    # En dernier : il a besoin de `request.tenant`, et il ne doit refuser
+    # l'écriture qu'après que tout le reste a laissé passer la requête.
+    "apps.billing.middleware.LectureSeuleAbonnementMiddleware",
+]
+
+ROOT_URLCONF = "config.urls_tenant"
+WSGI_APPLICATION = "config.wsgi.application"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+# --------------------------------------------------------------------------
+# Base de données — le moteur django_tenants est obligatoire, c'est lui qui
+# positionne le `search_path` sur le schéma du client à chaque connexion.
+# --------------------------------------------------------------------------
+DATABASES = {
+    "default": {
+        "ENGINE": "django_tenants.postgresql_backend",
+        "NAME": config("POSTGRES_DB", default="ccd_digital"),
+        "USER": config("POSTGRES_USER", default="ccd"),
+        "PASSWORD": "***MASQUE***",
+        "HOST": config("POSTGRES_HOST", default="localhost"),
+        "PORT": config("POSTGRES_PORT", default="5432"),
+        "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
+    }
+}
+
+# --------------------------------------------------------------------------
+# Compatibilité SGBD : autoriser PostgreSQL >= 13.0 (notamment PostgreSQL 13.23
+# sur hébergements mutualisés cPanel / CloudLinux).
+# --------------------------------------------------------------------------
+from django.db.backends.postgresql.features import DatabaseFeatures
+
+DatabaseFeatures.minimum_database_version = (13,)
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# --------------------------------------------------------------------------
+# Authentification
+# --------------------------------------------------------------------------
+AUTH_USER_MODEL = "accounts.Utilisateur"
+
+# auth.E003 exige que USERNAME_FIELD porte `unique=True`.
+# Nous appliquons à la place une unicité **partielle** — unique parmi les
+# comptes vivants seulement (MLD §7.2) — pour qu'une adresse libérée par une
+# suppression logique puisse resservir. La garantie est plus forte, pas plus
+# faible : la contrainte existe bien en base, et le manager d'authentification
+# ignore les comptes supprimés. Le contrôle de Django ne sait simplement pas
+# lire une contrainte conditionnelle.
+SILENCED_SYSTEM_CHECKS = ["auth.E003"]
+
+AUTH_PASSWORD_VALIDATORS = "***MASQUE***"
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},  # Socle Commun §2.1
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # Défaut D-4 : Django n'apporte que la longueur. Le Socle §2.1 exige aussi
+    # une majuscule, un chiffre et un caractère spécial — les trois coches que
+    # M6 affichait sans qu'aucun contrôle serveur ne leur corresponde.
+    {"NAME": "apps.core.validators.ValidateurMajuscule"},
+    {"NAME": "apps.core.validators.ValidateurChiffre"},
+    {"NAME": "apps.core.validators.ValidateurCaractereSpecial"},
+]
+
+# Adresse du frontend, pour composer les liens envoyés par email. Le jeton
+# voyage en **fragment** (`#jeton=…`), jamais en paramètre de requête : un
+# paramètre finirait dans les journaux du serveur, ce que la stratégie de
+# déploiement §6 interdit — décision J5 du contrat de réinitialisation.
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
+
+# Domaine principal de la plateforme (Architecture Domaine Unique - Option A).
+# L'API et le frontend partagent un point d'accès unifié sans sous-domaines clients.
+DOMAINE_PRINCIPAL = config("DOMAINE_PRINCIPAL", default="localhost")
+
+# --------------------------------------------------------------------------
+# Emails & Configuration SMTP (Gmail / Fournisseur SMTP)
+# --------------------------------------------------------------------------
+EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_SSL_CERT_VERIFY = config("EMAIL_SSL_CERT_VERIFY", default=True, cast=bool)
+
+# Supporte indifféremment SYSTEM_SMTP_USER / SYSTEM_SMTP_PASS ou EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
+EMAIL_HOST_USER = config(
+    "SYSTEM_SMTP_USER",
+    default=config("EMAIL_HOST_USER", default=""),
+)
+EMAIL_HOST_PASSWORD = "***MASQUE***"
+    "SYSTEM_SMTP_PASS",
+    default=config("EMAIL_HOST_PASSWORD", default=""),
+)
+
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL",
+    default=f"CCD Digital <{EMAIL_HOST_USER}>"
+    if EMAIL_HOST_USER
+    else "ne-pas-repondre@ccd-digital.ci",
+)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Le contact commercial, cité dans l'email d'espace suspendu.
+EMAIL_COMMERCIAL = config("EMAIL_COMMERCIAL", default="commercial@ccd-digital.ci")
+TELEPHONE_COMMERCIAL = config("TELEPHONE_COMMERCIAL", default="+225 27 00 00 00 00")
+
+# Adresses autorisées à atteindre l'authentification du schéma `public` — la
+# porte du personnel de l'éditeur. Matrice des rôles §1.1.
+#
+# **Vide et hors développement, elle interdit tout.** La valeur par défaut d'une
+# porte d'administration doit être fermée : un déploiement qui oublie ce réglage
+# s'en aperçoit à la première connexion, ce qui vaut mieux que de ne jamais s'en
+# apercevoir.
+SUPER_ADMIN_IPS = [
+    ip.strip() for ip in config("SUPER_ADMIN_IPS", default="").split(",") if ip.strip()
+]
+
+# Socle Commun §2.1 — bcrypt en premier.
+PASSWORD_HASHERS = "***MASQUE***"
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
+# --------------------------------------------------------------------------
+# API
+# --------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.PaginationStandard",
+    "PAGE_SIZE": 20,  # Socle Commun — 20 par page
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ),
+    "EXCEPTION_HANDLER": "apps.core.exceptions.gestionnaire_erreurs",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/min",
+        "user": "1000/min",
+        # La connexion porte deux compteurs, pour deux menaces distinctes.
+        # Par IP : protège la plateforme d'un balayage — un mot de passe
+        # courant essayé sur des milliers d'adresses ne bloque aucun compte,
+        # puisqu'il ne s'acharne sur aucun.
+        "connexion": "30/min",
+        # Par adresse : protège **un** compte d'un essaimage — le même email
+        # tenté depuis cent IP passe sous le compteur précédent sans le faire
+        # sonner. Voir apps/accounts/throttling.py.
+        "connexion_email": "10/min",
+        # Réinitialisation du mot de passe — contrat §3.4, §5.3 et §5bis.
+        # Par IP : empêche le balayage d'adresses.
+        "mdp_demande": "5/hour",
+        # Par adresse : empêche le harcèlement d'un tiers par email. Le même
+        # `429` est renvoyé que l'adresse existe ou non — une limite qui ne se
+        # déclencherait que sur les comptes réels serait un oracle de plus.
+        "mdp_demande_email": "3/hour",
+        # Une demande par cinq minutes : c'est le délai que le bouton
+        # « Renvoyer l'email » de M6 doit respecter à l'écran.
+        "mdp_demande_rapprochee": "1/5min",
+        # Un jeton ne se devine pas par balayage.
+        "mdp_reinitialiser": "10/hour",
+        "mdp_verifier": "20/hour",
+        # Inscription — contrat T-021 §8. Le dépôt est le plus exposé : c'est
+        # un formulaire public qui déclenche un email.
+        "inscription": "10/hour",
+        "inscription_renvoi": "5/hour",
+        "inscription_verifier": "30/hour",
+        "inscription_activer": "10/hour",
+        # La sonde est interrogée toutes les 2 s pendant 2 minutes : 60 appels
+        # par activation, et il peut y en avoir plusieurs par poste.
+        "inscription_etat": "300/hour",
+        # Invitations collaborateurs
+        "invitation_verifier": "30/hour",
+        "invitation_accepter": "10/hour",
+    },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "CCD Digital — API Gestion de Chantier BTP",
+    "DESCRIPTION": (
+        "# Guide d'intégration Frontend — API CCD Digital\n\n"
+        "Bienvenue sur la documentation interactive de l'API de gestion "
+        "de chantiers BTP **CCD Digital**.\n\n"
+        "### Démarrage rapide — Projets\n"
+        "**GET récupère des données ; POST envoie des données pour créer.**\n\n"
+        "1. Se connecter avec `POST /api/v1/auth/token/`, puis copier `access` dans "
+        "**Authorize** (champ JWT, sans ajouter le mot Bearer).\n"
+        "2. Mon profil et mon entreprise : `GET /api/v1/auth/profil/`.\n"
+        "3. Page Projets : `GET /api/v1/projets/` (tableau non paginé).\n"
+        "4. Ouvrir Nouveau projet : `GET /api/v1/projets/contexte-creation/` "
+        "pour charger les collaborateurs, clients et listes de choix.\n"
+        "5. Cliquer Créer : `POST /api/v1/projets/` avec informations, lots et équipe. "
+        "Un exemple JSON complet figure dans cette opération.\n"
+        "6. Ouvrir la fiche : `GET /api/v1/projets/{id}/`.\n\n"
+        "Pour essayer une opération, ouvrir son bloc puis utiliser **Try it out** et "
+        "**Execute**. Le POST crée réellement un projet : remplacer les UUID fictifs "
+        "de l'exemple par ceux du contexte.\n\n"
+        "### 1. Architecture Multi-Tenancy à Domaine Unique (Option A)\n"
+        "- **Point d'accès unifié** : Toutes les requêtes (publiques et tenant) "
+        "sont adressées au même domaine d'API (ex: `https://api.ccd-digital.ci` ou `http://localhost:8000`).\n"
+        "- **Résolution automatique par JWT** : Pour les routes protégées des tenants "
+        "(chantiers, finances, tiers, utilisateurs, etc.), le middleware résout automatiquement le schéma PostgreSQL "
+        "de l'entreprise à partir du claim `schema` dans le jeton JWT Bearer, ou via l'en-tête `X-Tenant`.\n"
+        "- **Routes Publiques** : L'inscription (`/api/v1/inscription/`), l'authentification "
+        "(`/api/v1/auth/token/`), la santé (`/api/health/`) et les forfaits (`/api/v1/plans/`) "
+        "s'exécutent sur le schéma public sans sous-domaine.\n\n"
+        "### 2. Authentification JWT\n"
+        "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
+        "`Authorization: Bearer <access_token>`.\n"
+        "- Durée de validité du jeton d'accès : **15 minutes**.\n"
+        "- Le rafraîchissement s'effectue via `POST /api/v1/auth/token/refresh/` avec le "
+        "jeton de renouvellement (valide 8 heures).\n"
+        "- La déconnexion `POST /api/v1/auth/deconnexion/` révoque instantanément les jetons "
+        "côté serveur dans le cache Redis.\n\n"
+        "### 3. Conventions de Réponses et Gestion des Erreurs\n"
+        "- Toutes les ressources renvoient du JSON strict (`Content-Type: application/json`).\n"
+        "- Format standard des erreurs (4xx / 5xx) :\n"
+        "```json\n"
+        "{\n"
+        '  "code": "permission_refusee",\n'
+        '  "message": "Explication claire en français",\n'
+        '  "details": {}\n'
+        "}\n"
+        "```\n"
+        "- **Pagination** : Les endpoints de listing paginés renvoient un objet avec "
+        "`{ count, next, previous, results }` (20 éléments par page).\n"
+        "- **Devise** : Les montants monétaires stockés en base sont exprimés en centimes FCFA. "
+        "Les serializers fournissent les méthodes de conversion `*_fcfa` en unités FCFA entières.\n"
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": "/api/v1",
+    "ENUM_NAME_OVERRIDES": {
+        "StatutRapportEnum": "apps.core.enums.StatutRapport",
+        "PlanCodeEnum": "apps.billing.models.Plan.Code",
+        "RoleGlobalEnum": "apps.core.enums.RoleGlobal",
+        "RoleTiersChoixEnum": "apps.core.enums.RoleTiersChoix",
+    },
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
+    "REFRESH_TOKEN_LIFETIME": timedelta(hours=8),
+    # Ces deux réglages sont volontairement à False : la rotation n'est plus
+    # faite par SimpleJWT mais par `apps.accounts.services.renouvellement`,
+    # avec la liste noire du cache (T-008 §3, décision S4).
+    #
+    # Les laisser à True serait exactement le défaut D-1 : `TokenRefreshView`
+    # appelle `refresh.blacklist()` dans un `try/except AttributeError: pass`,
+    # la méthode n'existe pas sans l'application `token_blacklist`, et deux
+    # réglages parfaitement lisibles ne révoquent rien du tout.
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# À n'activer que si l'API doit volontairement être consommable depuis toute
+# origine web. Les permissions applicatives restent contrôlées par le JWT.
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=_liste)
+
+for _origine in [
+    FRONTEND_URL.rstrip("/"),
+    "https://app-chantier.soumafe.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]:
+    if _origine and _origine not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_origine)
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.soumafe\.com$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-request-id",
+    "x-tenant",
+]
+CORS_EXPOSE_HEADERS = [
+    "x-request-id",
+]
+
+# --------------------------------------------------------------------------
+# Internationalisation — décision D6 : on stocke en UTC, sans exception.
+# --------------------------------------------------------------------------
+LANGUAGE_CODE = "fr-fr"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+FUSEAU_AFFICHAGE = config("FUSEAU_AFFICHAGE", default="Africa/Abidjan")
+DEVISE = "XOF"  # FCFA BCEAO — seule devise du MVP (Socle §1.3)
+
+# --------------------------------------------------------------------------
+# Fichiers
+# --------------------------------------------------------------------------
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Barre initiale obligatoire : `default_storage.url()` la reprend telle quelle.
+# Sans elle, la vignette d'un logo servie depuis `/tableau-de-bord` était
+# résolue en `/tableau-de-bord/media/...` — une URL relative dans une
+# application dont toutes les pages sont à des profondeurs différentes.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+TAILLE_MAX_FICHIER_MO = 50  # US-006 : refus 413 au-delà
+PHOTOS_MAX_PAR_RAPPORT = 5  # RG-14
+
+# --------------------------------------------------------------------------
+# Cache et tâches asynchrones
+# --------------------------------------------------------------------------
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+    }
+}
+
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=REDIS_URL)
+CELERY_TIMEZONE = FUSEAU_AFFICHAGE  # l'alerte de 17 h 30 est une heure locale
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
+
+# --------------------------------------------------------------------------
+# Journalisation
+# --------------------------------------------------------------------------
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {"format": "{levelname} {asctime} {name} {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard"},
+    },
+    "root": {"handlers": ["console"], "level": config("LOG_LEVEL", default="INFO")},
+}
+
+# --------------------------------------------------------------------------
+# CinetPay — Passerelle de paiement (Orange Money, Wave, MTN MoMo, Carte)
+# --------------------------------------------------------------------------
+CINETPAY_API_KEY = "***MASQUE***"
+CINETPAY_SITE_ID = config("CINETPAY_SITE_ID", default="")
+CINETPAY_SECRET_KEY = "***MASQUE***"
+CINETPAY_NOTIFY_URL = config("CINETPAY_NOTIFY_URL", default="")
+CINETPAY_CHECKOUT_URL = config(
+    "CINETPAY_CHECKOUT_URL", default="https://api-checkout.cinetpay.com/v2/payment"
+)
+CINETPAY_CHECK_URL = config(
+    "CINETPAY_CHECK_URL", default="https://api-checkout.cinetpay.com/v2/payment/check"
+)
+
+
+================================================================================
+FICHIER : docker-compose.yml
+================================================================================
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ccd_digital}
+      POSTGRES_USER: ${POSTGRES_USER:-ccd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ccd}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  postgres_data:
+
+================================================================================
+FICHIER : Dockerfile
+================================================================================
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/ requirements/
+ARG ENVIRONNEMENT=local
+RUN pip install --upgrade pip && pip install -r requirements/${ENVIRONNEMENT}.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+

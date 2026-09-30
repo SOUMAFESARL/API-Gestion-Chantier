@@ -68,6 +68,20 @@ class ParametresCollaborateurListCreateView(APIView):
         responses={200: CollaborateurResponseSerializer(many=True)},
     )
     def get(self, request):
+        est_direction = (
+            request.user.is_superuser
+            or getattr(request.user, "is_owner", False)
+            or getattr(request.user, "is_dg", False)
+            or getattr(request.user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        )
+        projets_visibles_ids = None
+        if not est_direction:
+            from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
+
+            projets_visibles_ids = set(
+                str(pid) for pid in obtenir_projets_ids_actifs_utilisateur(request.user, request=request)
+            )
+
         # 1. Tous les utilisateurs du tenant
         utilisateurs = list(
             Utilisateur.objects.filter(supprime_le__isnull=True)
@@ -135,6 +149,10 @@ class ParametresCollaborateurListCreateView(APIView):
                     "libelle": u.role_personnalise.libelle,
                 }
 
+            user_projets = list(projets_par_utilisateur[u.id].values())
+            if projets_visibles_ids is not None:
+                user_projets = [p for p in user_projets if str(p["id"]) in projets_visibles_ids]
+
             resultats.append(
                 {
                     "id": u.id,
@@ -149,7 +167,7 @@ class ParametresCollaborateurListCreateView(APIView):
                     "statut": u.statut,
                     "is_owner": u.is_owner,
                     "cree_le": u.cree_le,
-                    "projets": list(projets_par_utilisateur[u.id].values()),
+                    "projets": user_projets,
                     "lien_activation": None,
                 }
             )

@@ -11,7 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import RoleGlobal
+from apps.core.enums import RoleGlobal, RoleProjet
+from apps.core.permissions import MembreDuProjet
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.serializers.affectation import (
     AffectationProjetCreateSerializer,
@@ -41,7 +42,13 @@ def _verifier_droits_gestion_equipe(user, projet: Projet):
     )
     est_cp_du_projet = (
         projet.chef_projet_id == user.id
-        or getattr(user, "role_global", None) == RoleGlobal.CHEF_PROJET
+        or AffectationProjet.objects.filter(
+            projet=projet,
+            utilisateur=user,
+            role_projet=RoleProjet.CHEF_PROJET,
+            est_actif=True,
+            supprime_le__isnull=True,
+        ).exists()
     )
 
     if not (est_admin or est_cp_du_projet):
@@ -51,7 +58,7 @@ def _verifier_droits_gestion_equipe(user, projet: Projet):
 class ProjetAffectationListCreateView(APIView):
     """`GET` et `POST /api/v1/projets/{projet_id}/affectations/`."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, MembreDuProjet]
     parser_classes = [JSONParser]
 
     @extend_schema(
@@ -61,6 +68,7 @@ class ProjetAffectationListCreateView(APIView):
     )
     def get(self, request, projet_id):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         actifs_seulement = request.query_params.get("actifs_seulement", "false").lower() == "true"
         qs = lister_affectations_projet(projet, actifs_seulement=actifs_seulement)
         serializer = AffectationProjetResponseSerializer(qs, many=True)
@@ -74,6 +82,7 @@ class ProjetAffectationListCreateView(APIView):
     )
     def post(self, request, projet_id):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         _verifier_droits_gestion_equipe(request.user, projet)
 
         serializer = AffectationProjetCreateSerializer(data=request.data)
@@ -99,7 +108,7 @@ class ProjetAffectationListCreateView(APIView):
 class ProjetAffectationDetailView(APIView):
     """`GET`, `PATCH` et `DELETE /api/v1/projets/{projet_id}/affectations/{pk}/`."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, MembreDuProjet]
     parser_classes = [JSONParser]
 
     @extend_schema(
@@ -108,6 +117,7 @@ class ProjetAffectationDetailView(APIView):
     )
     def get(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         affectation = get_object_or_404(
             AffectationProjet.objects.select_related("utilisateur", "role"),
             pk=pk,
@@ -123,6 +133,7 @@ class ProjetAffectationDetailView(APIView):
     )
     def patch(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         _verifier_droits_gestion_equipe(request.user, projet)
 
         affectation = get_object_or_404(
@@ -153,6 +164,7 @@ class ProjetAffectationDetailView(APIView):
     )
     def delete(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         _verifier_droits_gestion_equipe(request.user, projet)
 
         affectation = get_object_or_404(

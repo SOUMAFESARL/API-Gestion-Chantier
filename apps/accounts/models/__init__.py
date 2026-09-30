@@ -19,12 +19,14 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 from apps.core.models import ModeleBase
 
+from .module import Module
 from .role import Role, RoleModulePermission
 
 __all__ = [
     "Appareil",
     "Invitation",
     "JetonReinitialisation",
+    "Module",
     "Role",
     "RoleModulePermission",
     "Utilisateur",

@@ -2,9 +2,8 @@
 
 from rest_framework import serializers
 
-from apps.accounts.models import Role, RoleModulePermission
+from apps.accounts.models import Module, Role, RoleModulePermission
 from apps.accounts.services.roles import compter_utilisateurs_et_affectations
-from apps.core.enums import ModuleChoix
 
 __all__ = [
     "RoleCreationSerializer",
@@ -17,11 +16,13 @@ __all__ = [
 
 
 class RoleModulePermissionSerializer(serializers.ModelSerializer):
+    module_code = serializers.CharField(source="module.code", read_only=True)
+    module_libelle = serializers.CharField(source="module.libelle", read_only=True)
     niveau_libelle = serializers.CharField(source="get_niveau_display", read_only=True)
 
     class Meta:
         model = RoleModulePermission
-        fields = ["module", "niveau", "niveau_libelle"]
+        fields = ["module", "module_code", "module_libelle", "niveau", "niveau_libelle"]
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -47,8 +48,10 @@ class RoleSerializer(serializers.ModelSerializer):
         return compter_utilisateurs_et_affectations(obj)["total"]
 
     def get_permissions_modules(self, obj: Role) -> dict[str, int]:
-        perms = RoleModulePermission.objects.filter(role=obj, supprime_le__isnull=True)
-        return {p.module: p.niveau for p in perms}
+        perms = RoleModulePermission.objects.filter(
+            role=obj, supprime_le__isnull=True
+        ).select_related("module")
+        return {p.module.code: p.niveau for p in perms if p.module and p.module.est_actif}
 
 
 class RoleDetailSerializer(RoleSerializer):
@@ -80,7 +83,9 @@ class RoleCreationSerializer(serializers.Serializer):
         return code
 
     def validate_permissions_modules(self, value: dict) -> dict:
-        modules_valides = set(ModuleChoix.values)
+        modules_valides = set(
+            Module.objects.filter(est_actif=True, supprime_le__isnull=True).values_list("code", flat=True)
+        )
         for module in value:
             if module not in modules_valides:
                 raise serializers.ValidationError(f"Module inconnu : '{module}'.")
@@ -96,7 +101,9 @@ class RoleModificationSerializer(serializers.Serializer):
     )
 
     def validate_permissions_modules(self, value: dict) -> dict:
-        modules_valides = set(ModuleChoix.values)
+        modules_valides = set(
+            Module.objects.filter(est_actif=True, supprime_le__isnull=True).values_list("code", flat=True)
+        )
         for module in value:
             if module not in modules_valides:
                 raise serializers.ValidationError(f"Module inconnu : '{module}'.")

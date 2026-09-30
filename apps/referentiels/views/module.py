@@ -6,14 +6,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import MODULES_DETAILS, ModuleChoix, NiveauAcces
+from apps.accounts.models import Module
+from apps.accounts.services.roles import initialiser_modules_par_defaut
+from apps.core.enums import NiveauAcces
 from apps.referentiels.serializers.module import ModuleItemSerializer
 
 __all__ = ["ModuleListView"]
 
 
 class ModuleListView(APIView):
-    """`GET /api/v1/modules/` — Catalogue des 5 modules BTP souverains et de leurs droits."""
+    """`GET /api/v1/modules/` — Catalogue des modules BTP souverains et de leurs droits."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = ModuleItemSerializer
@@ -21,7 +23,7 @@ class ModuleListView(APIView):
     @extend_schema(
         summary="Lister les modules BTP du socle",
         description=(
-            "Renvoie la liste ordonnée des 5 modules souverains de CCD Digital avec leurs libellés officiels, "
+            "Renvoie la liste ordonnée des modules souverains de CCD Digital avec leurs libellés officiels, "
             "descriptions métier, icônes recommandées et la liste complète des 4 niveaux d'accès RBAC supportés."
         ),
         responses={200: ModuleItemSerializer(many=True)},
@@ -36,20 +38,27 @@ class ModuleListView(APIView):
             for code, libelle in NiveauAcces.choices
         ]
 
-        modules = []
-        for code, libelle in ModuleChoix.choices:
-            details = MODULES_DETAILS.get(code, {})
-            modules.append(
-                {
-                    "code": code,
-                    "libelle": str(libelle),
-                    "description": details.get("description", ""),
-                    "ordre": details.get("ordre", 99),
-                    "icone": details.get("icone", "box"),
-                    "niveaux_supportes": niveaux_supportes,
-                }
-            )
+        modules_qs = Module.objects.filter(
+            est_actif=True, supprime_le__isnull=True
+        ).order_by("ordre", "code")
 
-        modules.sort(key=lambda m: m["ordre"])
+        if not modules_qs.exists():
+            initialiser_modules_par_defaut()
+            modules_qs = Module.objects.filter(
+                est_actif=True, supprime_le__isnull=True
+            ).order_by("ordre", "code")
+
+        modules = [
+            {
+                "code": m.code,
+                "libelle": m.libelle,
+                "description": m.description,
+                "ordre": m.ordre,
+                "icone": m.icone,
+                "niveaux_supportes": niveaux_supportes,
+            }
+            for m in modules_qs
+        ]
+
         serializer = ModuleItemSerializer(modules, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

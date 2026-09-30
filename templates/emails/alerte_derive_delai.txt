@@ -1,0 +1,16 @@
+Alerte Dérive de Planning — Décalage supérieur à 30 jours
+
+Bonjour,
+
+Une reprogrammation de date prévisionnelle a entraîné un dépassement critique sur le {{ type_objet_libelle }} suivant :
+
+- Projet : {{ projet_nom }}
+{% if lot_nom %}- Lot : {{ lot_nom }}{% endif %}
+{% if activite_nom %}- Activité : {{ activite_nom }}{% endif %}
+- Date Fin Baseline v0 : {{ date_fin_baseline|date:"d/m/Y" }}
+- Nouvelle Date Fin : {{ nouvelle_date_fin|date:"d/m/Y" }}
+- Dérive totale : +{{ jours_derive }} jours
+- Motif : {{ motif_libelle }}
+- Justification : « {{ justification }} »
+
+Cette alerte vous est adressée automatiquement conformément aux règles de gouvernance des délais du chantier.

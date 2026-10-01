@@ -37,8 +37,14 @@ urlpatterns = [
     path("auth/profil/avatar/", AvatarProfilView.as_view(), name="auth-profil-avatar"),
     path("utilisateurs/moi/", ProfilView.as_view(), name="utilisateur-moi"),
     path("invitations/", InvitationListCreateView.as_view(), name="invitations-liste-creer"),
+    path(
+        "invitations/<uuid:pk>/",
+        ParametresCollaborateurDetailView.as_view(),
+        name="invitations-detail-modifier",
+    ),
     path("invitations/verifier/", InvitationVerifierView.as_view(), name="invitation-verifier"),
     path("invitations/accepter/", InvitationAccepterView.as_view(), name="invitation-accepter"),
+
     # Collaborateurs — Paramètres (/api/v1/parametres/collaborateurs/)
     path(
         "parametres/collaborateurs/",

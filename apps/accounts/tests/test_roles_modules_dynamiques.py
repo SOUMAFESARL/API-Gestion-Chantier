@@ -176,3 +176,88 @@ def test_non_hierarchie_permissions_validation_seule():
         vue_ecr = VueActionEcriture.as_view()
         rep_ecr = vue_ecr(req_ecr.wsgi_request)
         assert rep_ecr.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_permissions_modules_format_liste_codes_dynamique(client_api):
+    """Vérifie que permissions_modules renvoie un dictionnaire de listes de codes de permissions."""
+    with schema_context(SCHEMA):
+        initialiser_modules_par_defaut()
+        initialiser_permissions_par_defaut()
+
+        role = creer_role(
+            code="AUDITEUR_TEST",
+            libelle="Auditeur Test",
+            permissions_modules={
+                "projets": ["LECTURE", "VALIDATION"],
+                "ged": ["LECTURE"],
+            },
+        )
+
+        rep = client_api.get(f"/api/v1/roles/{role.id}/", HTTP_HOST=HOTE)
+        assert rep.status_code == status.HTTP_200_OK
+        data = rep.json()
+
+        assert "permissions_modules" in data
+        perms_modules = data["permissions_modules"]
+        assert isinstance(perms_modules, dict)
+
+        # Projets doit contenir exactement ['LECTURE', 'VALIDATION']
+        assert "projets" in perms_modules
+        assert perms_modules["projets"] == ["LECTURE", "VALIDATION"]
+
+        # GED doit contenir ['LECTURE']
+        assert perms_modules["ged"] == ["LECTURE"]
+
+        # Les autres modules actifs doivent avoir une liste vide []
+        assert perms_modules["chantier"] == []
+        assert perms_modules["pilotage"] == []
+        assert perms_modules["tiers"] == []
+
+
+@pytest.mark.django_db
+def test_dynamisme_ajout_et_modification_permission_en_base(client_api):
+    """Vérifie que l'ajout ou la modification d'une permission en base remonte dynamiquement sans code en dur."""
+    with schema_context(SCHEMA):
+        initialiser_modules_par_defaut()
+        initialiser_permissions_par_defaut()
+
+        mod_projets = Module.objects.get(code="projets")
+
+        # 1. Création dynamique d'une nouvelle permission en base de données
+        perm_export, _ = Permission.objects.update_or_create(
+            code="EXPORT_EXCEL",
+            defaults={
+                "libelle": "Export Excel / PDF",
+                "description": "Exportation des données comptables et métrés",
+                "ordre": 10,
+                "est_actif": True,
+            },
+        )
+        perm_export.modules.add(mod_projets)
+
+        # Création d'un rôle portant cette nouvelle permission
+        role = creer_role(
+            code="COMPTABLE_EXPORT",
+            libelle="Comptable Export",
+            permissions_modules={"projets": ["LECTURE", "EXPORT_EXCEL"]},
+        )
+
+        # L'API doit renvoyer la nouvelle permission dynamiquement
+        rep = client_api.get(f"/api/v1/roles/{role.id}/", HTTP_HOST=HOTE)
+        assert rep.status_code == status.HTTP_200_OK
+        data = rep.json()
+        assert "EXPORT_EXCEL" in data["permissions_modules"]["projets"]
+        assert data["permissions_modules"]["projets"] == ["LECTURE", "EXPORT_EXCEL"]
+
+        # 2. Modification dynamique du code de la permission en base (renommage)
+        perm_export.code = "EXPORT_DONNEES"
+        perm_export.libelle = "Exportation des données"
+        perm_export.save()
+
+        # Sans aucun redémarrage ni modification de code, l'API reflète immédiatement le nouveau code
+        rep_apres = client_api.get(f"/api/v1/roles/{role.id}/", HTTP_HOST=HOTE)
+        assert rep_apres.status_code == status.HTTP_200_OK
+        data_apres = rep_apres.json()
+        assert "EXPORT_DONNEES" in data_apres["permissions_modules"]["projets"]
+        assert "EXPORT_EXCEL" not in data_apres["permissions_modules"]["projets"]

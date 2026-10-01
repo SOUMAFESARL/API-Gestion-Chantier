@@ -65,6 +65,12 @@ class HistoriqueDateSerializer(serializers.ModelSerializer):
 
     motif = MotifReportSerializer(read_only=True)
     auteur_nom = serializers.SerializerMethodField()
+    auteur_email = serializers.SerializerMethodField()
+    objet_id = serializers.SerializerMethodField()
+    objet_libelle = serializers.SerializerMethodField()
+    projet_id = serializers.SerializerMethodField()
+    projet_reference = serializers.SerializerMethodField()
+    projet_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = HistoriqueDate
@@ -74,10 +80,17 @@ class HistoriqueDateSerializer(serializers.ModelSerializer):
             "champ",
             "valeur_avant",
             "valeur_apres",
+            "ecart_jours",
             "motif",
             "justification",
             "auteur_id",
             "auteur_nom",
+            "auteur_email",
+            "objet_id",
+            "objet_libelle",
+            "projet_id",
+            "projet_reference",
+            "projet_nom",
             "cree_le",
         ]
 
@@ -86,6 +99,31 @@ class HistoriqueDateSerializer(serializers.ModelSerializer):
             return "Système"
         nom_complet = f"{obj.auteur.prenom} {obj.auteur.nom}".strip()
         return nom_complet or obj.auteur.email
+
+    def get_auteur_email(self, obj: HistoriqueDate) -> str | None:
+        return obj.auteur.email if obj.auteur else None
+
+    def get_objet_id(self, obj: HistoriqueDate) -> str | None:
+        cible = obj.activite or obj.lot or obj.projet
+        return str(cible.id) if cible else None
+
+    def get_objet_libelle(self, obj: HistoriqueDate) -> str:
+        cible = obj.activite or obj.lot or obj.projet
+        if not cible:
+            return ""
+        return getattr(cible, "libelle", getattr(cible, "nom", str(cible)))
+
+    def get_projet_id(self, obj: HistoriqueDate) -> str | None:
+        p = obj.projet or (obj.lot.projet if obj.lot else (obj.activite.lot.projet if obj.activite else None))
+        return str(p.id) if p else None
+
+    def get_projet_reference(self, obj: HistoriqueDate) -> str | None:
+        p = obj.projet or (obj.lot.projet if obj.lot else (obj.activite.lot.projet if obj.activite else None))
+        return p.reference if p else None
+
+    def get_projet_nom(self, obj: HistoriqueDate) -> str | None:
+        p = obj.projet or (obj.lot.projet if obj.lot else (obj.activite.lot.projet if obj.activite else None))
+        return p.nom if p else None
 
 
 class ReprogrammationResponseSerializer(serializers.Serializer):

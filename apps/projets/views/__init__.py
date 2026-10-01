@@ -25,10 +25,12 @@ from apps.projets.views.override import ProjetPermissionsRolesView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
+    GlobalJournalReportsView,
     LotHistoriqueDatesView,
     LotReprogrammerView,
     MotifReportListCreateView,
     ProjetHistoriqueDatesView,
+    ProjetJournalReportsConsolideView,
     ProjetReprogrammerView,
 )
 from apps.projets.views.tableau_de_bord import TableauDeBordView
@@ -37,6 +39,7 @@ __all__ = [
     "ActiviteDetailView",
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",
+    "GlobalJournalReportsView",
     "LotActiviteListCreateView",
     "LotHistoriqueDatesView",
     "LotReprogrammerView",
@@ -44,6 +47,7 @@ __all__ = [
     "MotifReportListCreateView",
     "ProjetDetailView",
     "ProjetHistoriqueDatesView",
+    "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
     "ProjetPermissionsRolesView",
     "ProjetReprogrammerView",

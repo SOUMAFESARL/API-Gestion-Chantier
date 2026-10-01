@@ -4,6 +4,7 @@ Schéma : tenant.
 Module CDC : 1 (Gestion des Projets).
 """
 
+from django.db import models
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -13,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal
+from apps.core.pagination import PaginationStandard
 from apps.core.permissions import MembreDuProjet, PermissionModule
 from apps.projets.models import (
     Activite,
@@ -34,12 +36,15 @@ from apps.projets.services.reprogrammation import reprogrammer_date_instance
 __all__ = [
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",
+    "GlobalJournalReportsView",
     "LotHistoriqueDatesView",
     "LotReprogrammerView",
     "MotifReportListCreateView",
     "ProjetHistoriqueDatesView",
+    "ProjetJournalReportsConsolideView",
     "ProjetReprogrammerView",
 ]
+
 
 
 class MotifReportListCreateView(APIView):
@@ -238,3 +243,130 @@ class ActiviteHistoriqueDatesView(BaseHistoriqueDatesView):
             activite,
             {"activite": activite, "type_objet": TypeObjetHistorique.ACTIVITE},
         )
+
+
+class JournalReportsFiltreMixin:
+    """Mixin pour filtrer le journal d'audit des reports."""
+
+    def appliquer_filtres(self, qs, params):
+        motif_id = params.get("motif_id")
+        if motif_id:
+            qs = qs.filter(motif_id=motif_id)
+
+        auteur_id = params.get("auteur_id")
+        if auteur_id:
+            qs = qs.filter(auteur_id=auteur_id)
+
+        type_objet = params.get("type_objet")
+        if type_objet:
+            qs = qs.filter(type_objet=type_objet.upper())
+
+        champ = params.get("champ")
+        if champ:
+            qs = qs.filter(champ=champ)
+
+        ecart_min = params.get("ecart_min")
+        if ecart_min is not None and ecart_min != "":
+            try:
+                qs = qs.filter(ecart_jours__gte=int(ecart_min))
+            except ValueError:
+                pass
+
+        ecart_max = params.get("ecart_max")
+        if ecart_max is not None and ecart_max != "":
+            try:
+                qs = qs.filter(ecart_jours__lte=int(ecart_max))
+            except ValueError:
+                pass
+
+        date_debut = params.get("date_debut")
+        if date_debut:
+            qs = qs.filter(cree_le__date__gte=date_debut)
+
+        date_fin = params.get("date_fin")
+        if date_fin:
+            qs = qs.filter(cree_le__date__lte=date_fin)
+
+        return qs
+
+
+class ProjetJournalReportsConsolideView(APIView, JournalReportsFiltreMixin):
+    """Journal consolidé des reports d'un chantier : projet, lots et activités liés."""
+
+    pagination_class = PaginationStandard
+    permission_classes = [
+        IsAuthenticated,
+        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE),
+        MembreDuProjet,
+    ]
+
+    @extend_schema(
+        summary="Journal d'audit consolidé des reports d'un chantier",
+        tags=["reprogrammation"],
+        responses={200: HistoriqueDateSerializer(many=True)},
+    )
+    def get(self, request, pk):
+        projet = get_object_or_404(Projet, pk=pk)
+        self.check_object_permissions(request, projet)
+
+        qs = (
+            HistoriqueDate.objects.filter(
+                models.Q(projet=projet)
+                | models.Q(lot__projet=projet)
+                | models.Q(activite__lot__projet=projet)
+            )
+            .select_related("motif", "auteur", "projet", "lot", "activite", "lot__projet", "activite__lot__projet")
+            .order_by("-cree_le")
+        )
+        qs = self.appliquer_filtres(qs, request.query_params)
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(qs, request)
+        if page is not None:
+            serializer = HistoriqueDateSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = HistoriqueDateSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
+    """Journal d'audit global des reports pour la Direction Générale et l'Admin Tenant."""
+
+    pagination_class = PaginationStandard
+    permission_classes = [
+        IsAuthenticated,
+        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE),
+    ]
+
+    @extend_schema(
+        summary="Journal d'audit global des reports de dates (multi-chantiers)",
+        tags=["reprogrammation"],
+        responses={200: HistoriqueDateSerializer(many=True)},
+    )
+    def get(self, request):
+        qs = (
+            HistoriqueDate.objects.all()
+            .select_related("motif", "auteur", "projet", "lot", "activite", "lot__projet", "activite__lot__projet")
+            .order_by("-cree_le")
+        )
+
+        projet_id = request.query_params.get("projet_id")
+        if projet_id:
+            qs = qs.filter(
+                models.Q(projet_id=projet_id)
+                | models.Q(lot__projet_id=projet_id)
+                | models.Q(activite__lot__projet_id=projet_id)
+            )
+
+        qs = self.appliquer_filtres(qs, request.query_params)
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(qs, request)
+        if page is not None:
+            serializer = HistoriqueDateSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = HistoriqueDateSerializer(qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

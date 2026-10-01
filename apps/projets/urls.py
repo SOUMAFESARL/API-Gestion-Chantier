@@ -22,10 +22,12 @@ from apps.projets.views.contexte_creation import ContexteCreationProjetView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
+    GlobalJournalReportsView,
     LotHistoriqueDatesView,
     LotReprogrammerView,
     MotifReportListCreateView,
     ProjetHistoriqueDatesView,
+    ProjetJournalReportsConsolideView,
     ProjetReprogrammerView,
 )
 
@@ -41,6 +43,11 @@ urlpatterns = [
 
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path(
+        "projets/journal-reports/",
+        GlobalJournalReportsView.as_view(),
+        name="projets-journal-reports-global",
+    ),
     path(
         "projets/contexte-creation/",
         ContexteCreationProjetView.as_view(),
@@ -63,6 +70,11 @@ urlpatterns = [
         "projets/<uuid:pk>/historique-dates/",
         ProjetHistoriqueDatesView.as_view(),
         name="projet-historique-dates",
+    ),
+    path(
+        "projets/<uuid:pk>/journal-reports/",
+        ProjetJournalReportsConsolideView.as_view(),
+        name="projet-journal-reports-consolide",
     ),
     path(
         "projets/<uuid:projet_id>/affectations/",

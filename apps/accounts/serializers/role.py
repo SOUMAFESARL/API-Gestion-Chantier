@@ -139,11 +139,39 @@ class RoleSerializer(serializers.ModelSerializer):
     def get_modules(self, obj: Role):
         return _construire_tableau_dynamique_modules(obj)
 
-    def get_permissions_modules(self, obj: Role) -> dict[str, int]:
-        perms = RoleModulePermission.objects.filter(
-            role=obj, supprime_le__isnull=True
-        ).select_related("module")
-        return {p.module.code: (p.niveau or 0) for p in perms if p.module and p.module.est_actif}
+    def get_permissions_modules(self, obj: Role) -> dict[str, list[str]]:
+        """Dictionnaire dynamique associant chaque module actif à la liste ordonnée de ses codes de permissions.
+
+        Zéro hardcodage : interroge directement les relations M2M en base de données.
+        Garantit que tous les modules actifs du catalogue apparaissent (liste vide [] si aucune permission).
+        """
+        modules_actifs = list(
+            Module.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
+        )
+        rpm_qs = (
+            RoleModulePermission.objects.filter(
+                role=obj,
+                supprime_le__isnull=True,
+                module__in=modules_actifs,
+            )
+            .select_related("module")
+            .prefetch_related("permissions")
+        )
+        rpm_par_module_id = {rmp.module_id: rmp for rmp in rpm_qs}
+
+        resultat: dict[str, list[str]] = {}
+        for mod in modules_actifs:
+            rmp = rpm_par_module_id.get(mod.id)
+            if rmp:
+                perms = list(
+                    rmp.permissions.filter(est_actif=True, supprime_le__isnull=True)
+                    .order_by("ordre", "code")
+                    .values_list("code", flat=True)
+                )
+                resultat[mod.code] = perms
+            else:
+                resultat[mod.code] = []
+        return resultat
 
 
 class RoleDetailSerializer(RoleSerializer):

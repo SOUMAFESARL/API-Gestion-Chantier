@@ -131,8 +131,9 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
     data = rep.json()
     assert data["code"] == "CHEF_EQUIPE"
     assert data["libelle"] == "Chef d'Équipe Maçonnerie"
-    assert data["permissions_modules"][ModuleChoix.CHANTIER] == NiveauAcces.ECRITURE
-    assert data["permissions_modules"][ModuleChoix.GED] == NiveauAcces.LECTURE
+    assert "ECRITURE" in data["permissions_modules"][ModuleChoix.CHANTIER]
+    assert data["permissions_modules"][ModuleChoix.GED] == ["LECTURE"]
+    assert data["permissions_modules"][ModuleChoix.TIERS] == []
 
 
 @pytest.mark.django_db
@@ -188,7 +189,7 @@ def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user):
         format="json",
     )
     assert rep_patch.status_code == status.HTTP_200_OK
-    assert rep_patch.json()["permissions_modules"][ModuleChoix.GED] == NiveauAcces.LECTURE
+    assert rep_patch.json()["permissions_modules"][ModuleChoix.GED] == ["LECTURE"]
 
     # 2. Modification via POST (supporté pour flexibilité frontend)
     rep_post = client.post(
@@ -201,7 +202,7 @@ def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user):
         format="json",
     )
     assert rep_post.status_code == status.HTTP_200_OK
-    assert rep_post.json()["permissions_modules"][ModuleChoix.GED] == NiveauAcces.ECRITURE
+    assert "ECRITURE" in rep_post.json()["permissions_modules"][ModuleChoix.GED]
 
 
 @pytest.mark.django_db

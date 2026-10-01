@@ -139,10 +139,8 @@ def test_rec_s1_05_a_budget_null_accepte(
 
 
 @pytest.mark.django_db
-def test_rec_s1_05_b_cp_obligatoire(client_tenant, admin_delegue_user, tiers_client):
-    """REC-S1-05-B : L'assignation d'un CP est obligatoire
-    (chef_projet_id ou chef_projet_invite).
-    """
+def test_direction_cp_facultatif_et_conflit_refuse(client_tenant, admin_delegue_user, tiers_client):
+    """La direction peut définir le CP après création ; deux CP restent interdits."""
     cl = auth_client(client_tenant, admin_delegue_user)
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=90)
@@ -160,8 +158,8 @@ def test_rec_s1_05_b_cp_obligatoire(client_tenant, admin_delegue_user, tiers_cli
         },
         format="json",
     )
-    assert rep_sans_cp.status_code == status.HTTP_400_BAD_REQUEST
-    assert rep_sans_cp.json()["erreur"]["code"] == "chef_projet_requis"
+    assert rep_sans_cp.status_code == status.HTTP_201_CREATED
+    assert rep_sans_cp.json()["chef_projet"] is None
 
     # Avec les deux spécifiés en conflit
     rep_deux_cp = cl.post(

@@ -54,7 +54,7 @@ class TableauDeBordView(APIView):
 
         projets_base = (
             Projet.objects.filter(supprime_le__isnull=True)
-            .select_related("client", "chef_projet")
+            .select_related("client", "chef_projet", "conducteur_travaux")
             .order_by("-cree_le")
         )
         projets_qs = filtrer_queryset_par_affectations(
@@ -223,10 +223,14 @@ class TableauDeBordView(APIView):
                 "budget_consomme_montant": budget_consomme,
                 "rapport_jour_statut": "SOUMIS" if rapport_soumis else "EN_ATTENTE",
                 "indice_sante": indice_projet,
-                "chef_projet_nom": f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip()
-                or p.chef_projet.email,
-                "conducteur_travaux_nom": f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip()
-                or p.chef_projet.email,
+                "chef_projet_nom": (
+                    f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip()
+                    or p.chef_projet.email
+                ) if p.chef_projet else "",
+                "conducteur_travaux_nom": (
+                    f"{p.conducteur_travaux.prenom} {p.conducteur_travaux.nom}".strip()
+                    or p.conducteur_travaux.email
+                ) if p.conducteur_travaux else "",
             }
             projets_data.append(p_dict)
 

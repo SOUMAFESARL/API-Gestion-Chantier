@@ -28,10 +28,13 @@ class Projet(ModeleBase):
 
     client = models.ForeignKey(
         "tiers.Tiers",
+        null=True,
+        blank=True,
         on_delete=models.RESTRICT,
         related_name="projets",
         verbose_name=_("client / maître d'ouvrage"),
     )
+    maitre_ouvrage = models.CharField(_("maître d'ouvrage"), max_length=200, blank=True)
     maitre_oeuvre = models.CharField(
         _("maître d'œuvre"),
         max_length=200,
@@ -50,8 +53,8 @@ class Projet(ModeleBase):
         help_text=_("Montant en centimes de FCFA. Facultatif à la création."),
     )
 
-    date_debut_prevue = models.DateField(_("date de début prévue"))
-    date_fin_prevue = models.DateField(_("date de fin prévue"))
+    date_debut_prevue = models.DateField(_("date de début prévue"), null=True, blank=True)
+    date_fin_prevue = models.DateField(_("date de fin prévue"), null=True, blank=True)
 
     date_debut_reelle = models.DateField(_("date de début réelle"), null=True, blank=True)
     date_fin_reelle = models.DateField(_("date de fin réelle"), null=True, blank=True)
@@ -59,6 +62,8 @@ class Projet(ModeleBase):
     chef_projet = models.ForeignKey(
         "accounts.Utilisateur",
         on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
         related_name="projets_geres",
         verbose_name=_("chef de projet"),
     )

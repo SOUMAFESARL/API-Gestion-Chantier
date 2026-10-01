@@ -168,8 +168,125 @@ def test_supprimer_module_soft_delete(client_admin):
         assert mod_pub.est_actif is False
         assert mod_pub.supprime_le is not None
 
-    # Vérification dans tenant demo : soft delete propagé
+    # Vérification dans tenant demo : soft delete propagé et RoleModulePermission désactivés
     with schema_context(SCHEMA_CLIENT):
         mod_tenant = Module.tous_objets.get(code="test_del")
         assert mod_tenant.est_actif is False
         assert mod_tenant.supprime_le is not None
+        assert RoleModulePermission.objects.filter(module__code="test_del", supprime_le__isnull=True).count() == 0
+
+
+@pytest.mark.django_db
+def test_creer_module_avec_permissions_initiales_et_scoping_dg(client_admin):
+    """Création d'un module avec autorisations spécifiques et scoping DG/ADMIN."""
+    with schema_context(SCHEMA_CLIENT):
+        initialiser_roles_par_defaut()
+
+    payload = {
+        "code": "parc_auto",
+        "libelle": "Parc Automobile & Véhicules",
+        "description": "Suivi des véhicules de chantier",
+        "ordre": 10,
+        "icone": "car",
+        "est_actif": True,
+        "permissions": ["LECTURE", "VALIDATION"],
+    }
+    rep = client_admin.post("/api/v1/admin/modules/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+    assert rep.status_code == status.HTTP_201_CREATED
+    data = rep.json()
+    assert data["code"] == "parc_auto"
+    assert "permissions" in data
+    assert "permissions_codes" in data
+    assert sorted(data["permissions_codes"]) == ["LECTURE", "VALIDATION"]
+    assert len(data["permissions"]) == 2
+
+    # Vérification dans public
+    with schema_context(get_public_schema_name()):
+        mod_pub = Module.objects.get(code="parc_auto", supprime_le__isnull=True)
+        assert set(mod_pub.permissions.values_list("code", flat=True)) == {"LECTURE", "VALIDATION"}
+
+    # Vérification dans tenant demo
+    with schema_context(SCHEMA_CLIENT):
+        mod_tenant = Module.objects.get(code="parc_auto", supprime_le__isnull=True)
+        assert set(mod_tenant.permissions.values_list("code", flat=True)) == {"LECTURE", "VALIDATION"}
+
+        # DG reçoit EXCLUSIVEMENT les permissions autorisées pour ce module (LECTURE et VALIDATION)
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        rmp_dg = RoleModulePermission.objects.get(role=role_dg, module=mod_tenant, supprime_le__isnull=True)
+        dg_perms = set(rmp_dg.permissions.values_list("code", flat=True))
+        assert dg_perms == {"LECTURE", "VALIDATION"}
+        assert "ECRITURE" not in dg_perms
+
+        # Chef de chantier reçoit 0 permission (Zero-Trust)
+        role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
+        rmp_cc = RoleModulePermission.objects.get(role=role_cc, module=mod_tenant, supprime_le__isnull=True)
+        assert rmp_cc.permissions.count() == 0
+
+
+@pytest.mark.django_db
+def test_modifier_module_permissions_et_propagation(client_admin):
+    """Modification des permissions d'un module via PATCH et propagation/révocation dans les tenants."""
+    with schema_context(SCHEMA_CLIENT):
+        initialiser_roles_par_defaut()
+
+    payload = {
+        "code": "logistique",
+        "libelle": "Logistique Chantier",
+        "permissions": ["LECTURE", "ECRITURE"],
+    }
+    rep = client_admin.post("/api/v1/admin/modules/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+    assert rep.status_code == status.HTTP_201_CREATED
+    module_id = rep.json()["id"]
+
+    # Modification via PATCH : retirer ECRITURE et ajouter VALIDATION
+    patch_payload = {
+        "libelle": "Logistique Avancée",
+        "permissions": ["LECTURE", "VALIDATION"],
+    }
+    rep_patch = client_admin.patch(
+        f"/api/v1/admin/modules/{module_id}/",
+        patch_payload,
+        format="json",
+        HTTP_HOST=HOTE_PLATEFORME,
+    )
+    assert rep_patch.status_code == status.HTTP_200_OK
+    data_patch = rep_patch.json()
+    assert data_patch["libelle"] == "Logistique Avancée"
+    assert sorted(data_patch["permissions_codes"]) == ["LECTURE", "VALIDATION"]
+
+    # Vérification dans tenant demo : ECRITURE révoqué et VALIDATION accordé à DG
+    with schema_context(SCHEMA_CLIENT):
+        mod_tenant = Module.objects.get(code="logistique", supprime_le__isnull=True)
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        rmp_dg = RoleModulePermission.objects.get(role=role_dg, module=mod_tenant, supprime_le__isnull=True)
+        dg_perms = set(rmp_dg.permissions.values_list("code", flat=True))
+        assert dg_perms == {"LECTURE", "VALIDATION"}
+        assert "ECRITURE" not in dg_perms
+
+
+@pytest.mark.django_db
+def test_affecter_permissions_module_endpoint_dedie(client_admin):
+    """Vérifie l'endpoint dédié PUT /api/v1/admin/modules/{id}/permissions/."""
+    payload = {
+        "code": "topographie",
+        "libelle": "Topographie & Géomètres",
+        "permissions": ["LECTURE"],
+    }
+    rep_create = client_admin.post("/api/v1/admin/modules/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+    assert rep_create.status_code == status.HTTP_201_CREATED
+    module_id = rep_create.json()["id"]
+
+    # Affectation dédiée via PUT
+    put_payload = {
+        "permissions": ["LECTURE", "ECRITURE", "VALIDATION"],
+    }
+    rep_put = client_admin.put(
+        f"/api/v1/admin/modules/{module_id}/permissions/",
+        put_payload,
+        format="json",
+        HTTP_HOST=HOTE_PLATEFORME,
+    )
+    assert rep_put.status_code == status.HTTP_200_OK
+    data_put = rep_put.json()
+    assert sorted(data_put["permissions_codes"]) == ["ECRITURE", "LECTURE", "VALIDATION"]
+

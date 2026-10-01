@@ -28,6 +28,7 @@ from .reinitialisation import (
 )
 
 from .modules import (
+    AdminModuleAffecterPermissionsView,
     AdminModuleDetailUpdateDeleteView,
     AdminModuleListCreateView,
 )
@@ -38,6 +39,7 @@ from .permissions import (
 )
 
 __all__ = [
+    "AdminModuleAffecterPermissionsView",
     "AdminModuleDetailUpdateDeleteView",
     "AdminModuleListCreateView",
     "AdminPermissionAffecterModulesView",

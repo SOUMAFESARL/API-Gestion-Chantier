@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.platform_admin.views import (
+    AdminModuleAffecterPermissionsView,
     AdminModuleDetailUpdateDeleteView,
     AdminModuleListCreateView,
     AdminPermissionAffecterModulesView,
@@ -150,8 +151,10 @@ urlpatterns = [
     # Gestion Dynamique des Modules (Super Admin)
     path("admin/modules/", AdminModuleListCreateView.as_view(), name="admin-modules-liste-creer"),
     path("admin/modules/<uuid:pk>/", AdminModuleDetailUpdateDeleteView.as_view(), name="admin-modules-detail-modifier-supprimer"),
+    path("admin/modules/<uuid:pk>/permissions/", AdminModuleAffecterPermissionsView.as_view(), name="admin-modules-affecter-permissions"),
     path("admins/modules/", AdminModuleListCreateView.as_view(), name="admins-modules-liste-creer"),
     path("admins/modules/<uuid:pk>/", AdminModuleDetailUpdateDeleteView.as_view(), name="admins-modules-detail-modifier-supprimer"),
+    path("admins/modules/<uuid:pk>/permissions/", AdminModuleAffecterPermissionsView.as_view(), name="admins-modules-affecter-permissions"),
     # Gestion Dynamique des Permissions (Super Admin)
     path("admin/permissions/", AdminPermissionListCreateView.as_view(), name="admin-permissions-liste-creer"),
     path("admin/permissions/<uuid:pk>/", AdminPermissionDetailUpdateDeleteView.as_view(), name="admin-permissions-detail-modifier-supprimer"),

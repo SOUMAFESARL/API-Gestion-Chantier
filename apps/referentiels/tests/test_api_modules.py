@@ -79,6 +79,8 @@ class TestApiCatalogueModules:
             assert "description" in item
             assert "ordre" in item
             assert "icone" in item
+            assert "permissions" in item
+            assert "permissions_codes" in item
             assert "niveaux_supportes" in item
             assert item["code"] in ModuleChoix.values
             assert item["description"] == MODULES_DETAILS[item["code"]]["description"]
@@ -102,3 +104,21 @@ class TestApiCatalogueModules:
 
             for n in niveaux:
                 assert n["libelle"] != ""
+
+    def test_get_modules_permissions_dynamiques(self, client_tenant, collaborateur_user):
+        """Vérifie que chaque module inclut la liste dynamique de ses autorisations granulaires."""
+        client_tenant.force_authenticate(user=collaborateur_user)
+        response = client_tenant.get("/api/v1/modules/")
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+        for item in data:
+            assert "permissions" in item
+            assert isinstance(item["permissions"], list)
+            assert len(item["permissions"]) > 0
+            codes = item["permissions_codes"]
+            assert isinstance(codes, list)
+            for p in item["permissions"]:
+                assert "id" in p
+                assert "code" in p
+                assert "libelle" in p

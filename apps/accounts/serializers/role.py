@@ -246,3 +246,4 @@ class RoleModificationSerializer(serializers.Serializer):
 class RoleSuppressionSerializer(serializers.Serializer):
     role_substitution_id = serializers.UUIDField(required=False, allow_null=True)
     reassigner_vers_role_id = serializers.UUIDField(required=False, allow_null=True)
+    supprimer_collaborateurs = serializers.BooleanField(required=False, default=False)

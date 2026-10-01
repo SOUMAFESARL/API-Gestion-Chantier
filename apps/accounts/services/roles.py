@@ -13,7 +13,14 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Module, Permission, Role, RoleModulePermission, Utilisateur
-from apps.core.enums import MODULES_DETAILS, ModuleChoix, NiveauAcces, RoleGlobal
+from apps.core.enums import (
+    MODULES_DETAILS,
+    ModuleChoix,
+    NiveauAcces,
+    RoleGlobal,
+    StatutUtilisateur,
+)
+from apps.core.exceptions import ActionReserveeDg, RoleSubstitutionObligatoire
 
 MATRICE_DEFAUT = {
     code: dict.fromkeys(ModuleChoix.values, NiveauAcces.VALIDATION) for code in RoleGlobal.values
@@ -55,10 +62,10 @@ ROLES_SYSTEME_INFOS = {
 }
 
 
-# Seuls le Directeur Général et l'Administrateur sont des rôles système
-# immuables (non supprimables). Les autres rôles par défaut (CP, CT, CC,
+# Seul le Directeur Général est un rôle système
+# immuable (non supprimable). Les autres rôles par défaut (AD, CP, CT, CC,
 # MOA, MOE, VI) sont pré-configurés mais restent supprimables par le DG.
-CODES_ROLES_SYSTEME = frozenset({RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.ADMIN})
+CODES_ROLES_SYSTEME = frozenset({RoleGlobal.DIRECTEUR_GENERAL})
 
 
 def initialiser_modules_par_defaut() -> list[Module]:
@@ -208,8 +215,8 @@ def _calculer_niveau_scalaire(permissions_list: list[Permission]) -> int:
 def initialiser_roles_par_defaut() -> list[Role]:
     """Initialise les rôles par défaut avec leurs permissions dans le schéma courant.
 
-    Seuls DG et AD reçoivent ``est_systeme=True`` (non supprimables).
-    Les autres rôles sont pré-configurés mais modifiables et supprimables.
+    Seul DG reçoit ``est_systeme=True`` (non supprimable).
+    Les autres rôles (dont AD) sont modifiables et supprimables (AD uniquement par le DG).
     """
     initialiser_modules_par_defaut()
     initialiser_permissions_par_defaut()
@@ -338,11 +345,19 @@ def modifier_role(
 
 
 def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
-    """Compte le nombre d'utilisateurs et d'affectations actives portant ce rôle."""
-    # Nombre d'utilisateurs ayant ce rôle comme rôle personnalisé ou rôle global
+    """Compte le nombre d'utilisateurs actifs et d'affectations actives portant ce rôle."""
+    # Nombre d'utilisateurs actifs ayant ce rôle comme rôle personnalisé ou rôle global
     nb_utilisateurs = (
-        Utilisateur.objects.filter(role_personnalise=role).count()
-        + Utilisateur.objects.filter(role_global=role.code, role_personnalise__isnull=True).count()
+        Utilisateur.objects.filter(role_personnalise=role, supprime_le__isnull=True)
+        .exclude(statut=StatutUtilisateur.DESACTIVE)
+        .count()
+        + Utilisateur.objects.filter(
+            role_global=role.code,
+            role_personnalise__isnull=True,
+            supprime_le__isnull=True,
+        )
+        .exclude(statut=StatutUtilisateur.DESACTIVE)
+        .count()
     )
 
     from apps.projets.models import AffectationProjet
@@ -364,27 +379,52 @@ def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
 def supprimer_role(
     role: Role,
     reassigner_vers_role: Role | None = None,
+    supprimer_collaborateurs: bool = False,
     supprime_par=None,
 ) -> dict:
-    """Supprime logiquement un rôle avec réassignation obligatoire (Option B).
+    """Supprime logiquement un rôle selon deux modes au choix :
+    - Option A (Réassignation) : réassigne collaborateurs et affectations vers un autre rôle.
+    - Option B (Désactivation en cascade) : désactive logiquement tous les collaborateurs portant ce rôle.
 
-    Règles :
-    - Un rôle système ne peut jamais être supprimé.
-    - Si des collaborateurs ou affectations portent ce rôle, reassigner_vers_role est obligatoire.
-    - La réassignation et la suppression sont effectuées dans une transaction atomique.
+    Règles de sécurité souveraines :
+    - Un rôle système (DG) ne peut jamais être supprimé.
+    - Le rôle Administrateur (AD) ne peut être supprimé que par le Directeur Général / Propriétaire.
+    - Le compte Propriétaire / Fondateur (is_owner=True) et le DG racine ne sont JAMAIS désactivés en cascade.
+    - Si le rôle est attribué, l'une des deux options (reassigner_vers_role ou supprimer_collaborateurs) est obligatoire.
+    - La suppression et les opérations associées sont exécutées dans une transaction atomique.
     """
+    from apps.accounts.services.utilisateurs import desactiver_collaborateur_plateforme
+    from django.db.models import Q
+
+    # 1. Rôle système immuable (DG)
     if role.est_systeme:
         raise ValidationError(_("Les rôles système ne peuvent pas être supprimés."))
+
+    # 2. Protection du rôle Administrateur (AD) : seul le DG/Propriétaire peut le supprimer
+    if role.code in (RoleGlobal.ADMIN, "AD"):
+        est_dg_ou_owner = bool(
+            supprime_par
+            and (
+                getattr(supprime_par, "is_dg", False)
+                or getattr(supprime_par, "is_owner", False)
+                or getattr(supprime_par, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+            )
+        )
+        if not est_dg_ou_owner:
+            raise ActionReserveeDg(
+                _("Seul le Directeur Général a autorité pour supprimer le rôle Administrateur.")
+            )
 
     counts = compter_utilisateurs_et_affectations(role)
     total_impacte = counts["total"]
 
-    if total_impacte > 0 and not reassigner_vers_role:
+    # 3. Validation des options
+    if total_impacte > 0 and not reassigner_vers_role and not supprimer_collaborateurs:
         raise ValidationError(
             _(
                 f"Ce rôle est actuellement attribué à {counts['utilisateurs']} utilisateur(s) "
                 f"et {counts['affectations']} affectation(s). "
-                "Veuillez spécifier un rôle de remplacement."
+                "Veuillez spécifier un rôle de remplacement ou confirmer la suppression des collaborateurs."
             )
         )
 
@@ -394,13 +434,61 @@ def supprimer_role(
     with transaction.atomic():
         utilisateurs_reassignes = 0
         affectations_reassignees = 0
+        utilisateurs_supprimes = 0
+        affectations_cloturees = 0
 
-        if reassigner_vers_role:
-            # 1. Réassignation des utilisateurs
+        if supprimer_collaborateurs:
+            # Option B : Désactivation logique des collaborateurs portant ce rôle
+            users_to_deactivate = list(
+                Utilisateur.objects.filter(
+                    Q(role_personnalise=role)
+                    | (Q(role_global=role.code) & Q(role_personnalise__isnull=True))
+                )
+                .filter(supprime_le__isnull=True)
+                .exclude(statut=StatutUtilisateur.DESACTIVE)
+            )
+
+            for collab in users_to_deactivate:
+                # Garde-fou souverain : on ne désactive JAMAIS le propriétaire racine ni le DG ni l'auteur lui-même
+                if (
+                    getattr(collab, "is_owner", False)
+                    or getattr(collab, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+                    or (supprime_par and collab.pk == supprime_par.pk)
+                ):
+                    if collab.role_personnalise_id == role.id:
+                        collab.role_personnalise = None
+                        collab.save(update_fields=["role_personnalise", "modifie_le"])
+                    continue
+
+                desactiver_collaborateur_plateforme(
+                    collaborateur=collab,
+                    auteur=supprime_par,
+                )
+                utilisateurs_supprimes += 1
+
+            # Clôture des affectations de projets associées à ce rôle
+            from apps.projets.models import AffectationProjet
+
+            affectations_cloturees = (
+                AffectationProjet.objects.filter(role=role).update(
+                    est_actif=False,
+                    supprime_le=timezone.now(),
+                    supprime_par=supprime_par,
+                )
+                + AffectationProjet.objects.filter(
+                    role_projet=role.code, role__isnull=True
+                ).update(
+                    est_actif=False,
+                    supprime_le=timezone.now(),
+                    supprime_par=supprime_par,
+                )
+            )
+
+        elif reassigner_vers_role:
+            # Option A : Réassignation des utilisateurs et affectations
             qs_users = Utilisateur.objects.filter(role_personnalise=role)
             utilisateurs_reassignes = qs_users.update(role_personnalise=reassigner_vers_role)
 
-            # S'il y a des utilisateurs avec role_global == role.code
             qs_global = Utilisateur.objects.filter(
                 role_global=role.code, role_personnalise__isnull=True
             )
@@ -409,13 +497,12 @@ def supprimer_role(
             else:
                 qs_global.update(role_personnalise=reassigner_vers_role)
 
-            # 2. Réassignation des affectations projet
             from apps.projets.models import AffectationProjet
 
             qs_aff = AffectationProjet.objects.filter(role=role)
             affectations_reassignees = qs_aff.update(role=reassigner_vers_role)
 
-        # 3. Suppression logique du rôle
+        # Suppression logique du rôle
         role.supprime_le = timezone.now()
         role.supprime_par = supprime_par
         role.est_actif = False
@@ -423,9 +510,13 @@ def supprimer_role(
 
     return {
         "role_supprime": role.code,
+        "mode": "suppression_collaborateurs" if supprimer_collaborateurs else "reassignation",
         "utilisateurs_reassignes": utilisateurs_reassignes,
         "affectations_reassignees": affectations_reassignees,
+        "utilisateurs_supprimes": utilisateurs_supprimes,
+        "affectations_cloturees": affectations_cloturees,
     }
+
 
 def rattacher_collaborateur_a_role(
     *,

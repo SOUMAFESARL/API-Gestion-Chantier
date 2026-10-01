@@ -85,12 +85,23 @@ class HistoriqueDate(ModeleBase):
         related_name="modifications_dates",
         verbose_name=_("auteur"),
     )
+    ecart_jours = models.IntegerField(
+        _("écart en jours"),
+        default=0,
+        help_text=_("Différence en jours entre la nouvelle date et l'ancienne (valeur_après - valeur_avant)."),
+    )
 
     class Meta:
         db_table = "historique_date"
         verbose_name = _("historique de date")
         verbose_name_plural = _("historiques de dates")
         ordering = ["-cree_le"]
+        indexes = [
+            models.Index(fields=["type_objet", "champ"], name="hist_date_type_champ_idx"),
+            models.Index(fields=["projet", "-cree_le"], name="hist_date_projet_idx"),
+            models.Index(fields=["auteur", "-cree_le"], name="hist_date_auteur_idx"),
+            models.Index(fields=["ecart_jours"], name="hist_date_ecart_idx"),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(justification__regex=r"^[\s\S]{30,}$"),
@@ -107,9 +118,28 @@ class HistoriqueDate(ModeleBase):
         if not any([self.projet_id, self.lot_id, self.activite_id]):
             raise ValidationError(_("Au moins un objet lié (projet, lot ou activité) doit être renseigné."))
 
+    def save(self, *args, **kwargs):
+        # 1. Calcul automatique et immuable de l'écart en jours
+        if self.valeur_apres and self.valeur_avant:
+            self.ecart_jours = (self.valeur_apres - self.valeur_avant).days
+        elif not self.ecart_jours:
+            self.ecart_jours = 0
+
+        # 2. Règle RG-07 : Interdiction formelle de modification (append-only)
+        if self.pk and HistoriqueDate.objects.filter(pk=self.pk).exists():
+            raise ValidationError(_("RG-07 : L'historique d'audit des reports est strictement immuable et ne peut pas être modifié."))
+
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Règle RG-07 : Interdiction formelle de suppression
+        raise ValidationError(_("RG-07 : Une entrée du journal d'audit des reports ne peut jamais être supprimée."))
+
     def __str__(self) -> str:
         cible = self.projet or self.lot or self.activite
+        signe = "+" if self.ecart_jours > 0 else ""
         return (
             f"[{self.type_objet}] {cible} — {self.champ} : "
-            f"{self.valeur_avant} -> {self.valeur_apres} ({self.motif.libelle})"
+            f"{self.valeur_avant} -> {self.valeur_apres} ({signe}{self.ecart_jours}j - {self.motif.libelle})"
         )
+

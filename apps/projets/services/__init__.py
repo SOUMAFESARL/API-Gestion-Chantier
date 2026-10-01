@@ -1,4 +1,3 @@
-"""Services du module « projets ».
+from .reprogrammation import reprogrammer_date_instance
 
-Projets, lots, activités, affectations, bordereaux de prix, indice de santé.
-"""
+__all__ = ["reprogrammer_date_instance"]

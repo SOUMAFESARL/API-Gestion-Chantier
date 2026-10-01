@@ -10,9 +10,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import Role
-from apps.core.enums import RoleGlobal
+from apps.core.enums import RoleGlobal, RoleProjet
 from apps.core.permissions import MembreDuProjet
-from apps.projets.models import Projet
+from apps.projets.models import AffectationProjet, Projet
 from apps.projets.services.overrides import (
     get_matrice_permissions_projet,
     set_override_permission_projet,
@@ -89,13 +89,21 @@ class ProjetPermissionsRolesView(APIView):
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
 
-        est_admin = request.user.role_global in (
-            RoleGlobal.ADMIN,
-            RoleGlobal.DIRECTEUR_GENERAL,
-        ) or getattr(request.user, "is_owner", False)
+        est_admin = (
+            request.user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+            or getattr(request.user, "is_owner", False)
+            or getattr(request.user, "is_dg", False)
+            or getattr(request.user, "is_superuser", False)
+        )
         est_chef_projet = (
             projet.chef_projet_id == request.user.id
-            or request.user.role_global == RoleGlobal.CHEF_PROJET
+            or AffectationProjet.objects.filter(
+                projet=projet,
+                utilisateur=request.user,
+                role_projet=RoleProjet.CHEF_PROJET,
+                est_actif=True,
+                supprime_le__isnull=True,
+            ).exists()
         )
 
         if not (est_admin or est_chef_projet):

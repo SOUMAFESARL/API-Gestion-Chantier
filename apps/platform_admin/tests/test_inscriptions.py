@@ -88,9 +88,11 @@ def demande(db):
 
 
 def verifier_email(demande):
-    objet, jeton = demande
-    activer(jeton, nom="Client", prenom="Test", mot_de_passe="MotDePasse1!")
-    objet.refresh_from_db()
+    objet, _ = demande
+    objet.statut = "A_VALIDER"
+    objet.utilise_le = timezone.now()
+    objet.mot_de_passe_transitoire = "pbkdf2_sha256$870000$test$hashed"
+    objet.save(update_fields=["statut", "utilise_le", "mot_de_passe_transitoire"])
     return objet
 
 

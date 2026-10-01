@@ -37,6 +37,7 @@ class CollaborateurResponseSerializer(serializers.Serializer):
     telephone = serializers.CharField(allow_blank=True, default="")
     role_global = serializers.CharField()
     role_global_libelle = serializers.CharField()
+    role_propose = serializers.CharField(source="role_global", read_only=True)
     role_personnalise = RolePersonnaliseCollaborateurSerializer(allow_null=True, default=None)
     statut = serializers.CharField()
     is_owner = serializers.BooleanField(default=False)
@@ -46,14 +47,23 @@ class CollaborateurResponseSerializer(serializers.Serializer):
 
 
 class CollaborateurCreateSerializer(serializers.Serializer):
-    """Données requises pour l'ajout d'un nouveau collaborateur."""
+    """Données requises pour l'ajout d'un nouveau collaborateur ou invitation."""
 
     email = serializers.EmailField(required=True)
     nom = serializers.CharField(max_length=100, required=True)
     prenom = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     telephone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
-    role_global = serializers.ChoiceField(choices=RoleGlobal.choices, required=True)
+    role_global = serializers.ChoiceField(choices=RoleGlobal.choices, required=False)
+    role_propose = serializers.ChoiceField(choices=RoleGlobal.choices, required=False)
     role_personnalise_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs):
+        role = attrs.get("role_global") or attrs.get("role_propose")
+        if not role:
+            raise serializers.ValidationError({"role_global": _("Le rôle global ou proposé est requis.")})
+        attrs["role_global"] = role
+        return attrs
+
 
 class CollaborateurRattacherRoleSerializer(serializers.Serializer):
     """Sérialiseur pour la mise à jour ou le rattachement de rôle d'un collaborateur existant."""

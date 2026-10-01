@@ -37,7 +37,7 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         allow_null=True,
         default=None,
         help_text=(
-            "Facultatif pour la direction. Un collaborateur doit fournir un chef ou l'inviter."
+            "Facultatif. La création de projet est réservée à la direction."
         ),
     )
 

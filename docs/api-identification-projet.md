@@ -5,7 +5,7 @@ La connexion seule ne crée aucun projet automatiquement.
 Le jeton Bearer détermine le créateur et le schéma de l'entreprise ; ne pas
 envoyer d'identifiant d'entreprise. Les permissions du module PROJETS restent requises.
 La direction (propriétaire, DG, administrateur) peut créer sans chef ;
-la création par un collaborateur conserve l'obligation de sélectionner un chef.
+Les collaborateurs ne sont pas autorisés à créer un projet.
 
 ```http
 POST /api/v1/projets/
@@ -40,8 +40,9 @@ Maître d'œuvre facultatif. Un UUID `client` existant peut remplacer le texte
 | Supprimer logiquement | DELETE /api/v1/projets/{id}/ | 204 |
 
 Compléter ensuite par PATCH avec les dates prévues, le budget et
-`chef_projet_id`. Ne pas envoyer `chef_projet_id: null` : omettre ce champ
-tant qu'aucun chef n'est choisi. Les invitations et affectations utilisent
+`chef_projet_id`. `chef_projet_id: null` retire le chef. Les dates initiales
+peuvent être définies via PATCH ; les dates déjà définies nécessitent la route
+POST `/api/v1/projets/{id}/reprogrammer/` avec motif et justification. Les invitations et affectations utilisent
 leurs routes existantes. Les dates doivent être ordonnées si toutes deux renseignées.
 
 Migration additive : `python manage.py migrate_schemas` pour appliquer

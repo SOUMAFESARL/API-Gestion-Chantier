@@ -398,64 +398,15 @@ class ReinitialisationView(APIView):
         )
 
 
-class InvitationListCreateView(APIView):
-    """`GET` et `POST /api/v1/invitations/` — Inviter des collaborateurs (Étape 3 & Paramètres)."""
+class InvitationListCreateView(ParametresCollaborateurListCreateView):
+    """`GET` et `POST /api/v1/invitations/` — Gestion unifiée des invitations et collaborateurs.
 
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
+    - `GET` : Liste unifiée de tous les collaborateurs et invitations avec leurs chantiers associés.
+    - `POST` : Ajout d'un nouveau collaborateur (avec statut INVITE immédiat) et émission d'invitation.
+    """
 
-    @extend_schema(
-        summary="Lister les invitations",
-        responses={200: InvitationSerializer(many=True)},
-    )
-    def get(self, request):
-        invitations = Invitation.objects.all().order_by("-cree_le")
-        serializer = InvitationSerializer(invitations, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    pass
 
-    @extend_schema(
-        summary="Créer et envoyer une invitation",
-        request=InvitationSerializer,
-        responses={201: InvitationSerializer},
-    )
-    def post(self, request):
-        serializer = InvitationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        email = serializer.validated_data["email"]
-        role_propose = serializer.validated_data["role_propose"]
-        nom = serializer.validated_data.get("nom", "")
-        emetteur = request.user if request.user and request.user.is_authenticated else None
-        hote = request.get_host()
-
-        # Règle d'immutabilité absolue du DG : Unique au créateur du tenant, non attribuable
-        if role_propose == RoleGlobal.DIRECTEUR_GENERAL:
-            return Response(
-                {
-                    "erreur": {
-                        "code": "role_dg_non_attribuable",
-                        "message": "Le rôle de Directeur Général est unique et immuable ; il ne peut pas être attribué.",
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Règle R-DEMO-01 : Seul le DG ou le Propriétaire peut inviter un ADMIN.
-        if role_propose == RoleGlobal.ADMIN and (
-            not emetteur
-            or not (getattr(emetteur, "is_dg", False) or getattr(emetteur, "is_owner", False))
-        ):
-            raise ActionInterditeDelegue()
-
-        invitation = creer_invitation(
-            email=email,
-            role_propose=role_propose,
-            nom=nom,
-            emetteur=emetteur,
-            hote=hote,
-        )
-        retour = InvitationSerializer(invitation)
-        return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
 class InvitationVerifierView(APIView):

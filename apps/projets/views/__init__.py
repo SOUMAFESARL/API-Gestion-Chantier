@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces
 from apps.core.permissions import (
+    EstDirection,
     MembreDuProjet,
     PermissionModule,
     filtrer_queryset_par_affectations,
@@ -16,15 +17,41 @@ from apps.core.permissions import (
 from apps.projets.models import Projet
 from apps.projets.serializers import ProjetCreationSerializer, ProjetSerializer
 from apps.projets.serializers.swagger import ProjetPatchSerializer, ProjetPostSerializer
+from apps.projets.views.activite import (
+    ActiviteDetailView,
+    LotActiviteListCreateView,
+)
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
 from apps.projets.views.override import ProjetPermissionsRolesView
+from apps.projets.views.reprogrammation import (
+    ActiviteHistoriqueDatesView,
+    ActiviteReprogrammerView,
+    GlobalJournalReportsView,
+    LotHistoriqueDatesView,
+    LotReprogrammerView,
+    MotifReportListCreateView,
+    ProjetHistoriqueDatesView,
+    ProjetJournalReportsConsolideView,
+    ProjetReprogrammerView,
+)
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
+    "ActiviteDetailView",
+    "ActiviteHistoriqueDatesView",
+    "ActiviteReprogrammerView",
+    "GlobalJournalReportsView",
+    "LotActiviteListCreateView",
+    "LotHistoriqueDatesView",
+    "LotReprogrammerView",
     "MeteoProjetView",
+    "MotifReportListCreateView",
     "ProjetDetailView",
+    "ProjetHistoriqueDatesView",
+    "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
     "ProjetPermissionsRolesView",
+    "ProjetReprogrammerView",
     "ReferentielVillesView",
     "TableauDeBordView",
 ]
@@ -36,7 +63,13 @@ class ProjetListCreateView(APIView):
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if self.request.method == "POST":
+            return [
+                IsAuthenticated(),
+                EstDirection(),
+                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
+            ]
+        if self.request.method in ("PUT", "PATCH", "DELETE"):
             return [
                 IsAuthenticated(),
                 PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
@@ -101,9 +134,9 @@ class ProjetListCreateView(APIView):
             "- Les dates sont facultatives et peuvent être nulles. Si les deux sont définies, "
             "`date_fin_prevue` doit être strictement postérieure au début.\n"
             "- `reference` et les codes des lots sont générés si omis.\n"
-            "- Le chef de projet est facultatif pour la direction à la création ; "
-            "il reste requis pour une création par un collaborateur. "
-            "les autres membres et les lots sont optionnels.\n"
+            "- La création de projet est réservée exclusivement au DG et à l'Administrateur.\n"
+            "- Le chef de projet est facultatif : un chantier peut être créé sans chef de projet.\n"
+            "- Les autres membres et les lots sont optionnels.\n"
             "- Utiliser des membres distincts pour les différents rôles. "
             "Un DG ou propriétaire ne peut pas être chef de projet ou conducteur de travaux.\n"
             "- Les rôles Directeur financier et Bailleur ne font pas partie de ce contrat.\n\n"
@@ -242,7 +275,9 @@ class ProjetDetailView(APIView):
             "Modification partielle des informations générales et des responsables par UUID. "
             "Après une création avec identification seule, renseigner ici les dates, le budget "
             "et chef_projet_id. Omettre ce dernier tant qu'aucun chef n'est choisi ; "
-            "chef_projet_id=null est refusé. "
+            "chef_projet_id=null retire le chef. Les dates initiales peuvent être renseignées ici ; "
+            "les dates déjà définies nécessitent POST /api/v1/projets/{id}/reprogrammer/ "
+            "avec motif et justification. "
             "Les champs absents sont conservés ; conducteur_travaux_id=null retire le conducteur. "
             "lots ajoute des lignes ; lots_supprimer_ids supprime les UUID indiqués. "
             "Les lots non mentionnés restent inchangés. "

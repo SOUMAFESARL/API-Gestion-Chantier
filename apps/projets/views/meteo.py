@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.enums import RoleGlobal
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.referentiels.villes import lister_villes, nom_agglomeration
 from apps.projets.serializers import (
@@ -67,7 +68,17 @@ def _localiser(request, tenant) -> tuple[str, str]:
         else:
             projet = Projet.objects.filter(pk=projet_id, supprime_le__isnull=True).first()
         if projet and projet.ville:
-            return (projet.ville, PORTEE_CHANTIER)
+            from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
+
+            est_direction = (
+                request.user.is_superuser
+                or getattr(request.user, "is_owner", False)
+                or getattr(request.user, "is_dg", False)
+                or getattr(request.user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+            )
+            projets_actifs = obtenir_projets_ids_actifs_utilisateur(request.user, request=request)
+            if est_direction or projet.id in projets_actifs or str(projet.id) in [str(p) for p in projets_actifs]:
+                return (projet.ville, PORTEE_CHANTIER)
 
     # Rôle de chantier : son affectation la plus récente. Quelqu'un qui suit
     # deux chantiers voit celui sur lequel il vient d'être affecté — faute de

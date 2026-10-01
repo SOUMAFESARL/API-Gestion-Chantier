@@ -95,11 +95,24 @@ def affecter_collaborateur_projet(
             projet.conducteur_travaux = utilisateur
             projet.save(update_fields=["conducteur_travaux", "modifie_le"])
 
+        # Synchronisation automatique du champ chef_projet si CHEF_PROJET
+        if role_projet == RoleProjet.CHEF_PROJET:
+            # Désactiver tout autre CP actif éventuel pour préserver l'unicité
+            AffectationProjet.objects.filter(
+                projet=projet,
+                role_projet=RoleProjet.CHEF_PROJET,
+                est_actif=True,
+                supprime_le__isnull=True,
+            ).exclude(utilisateur=utilisateur).update(est_actif=False)
+            if projet.chef_projet_id != utilisateur.id:
+                projet.chef_projet = utilisateur
+                projet.save(update_fields=["chef_projet", "modifie_le"])
+
     return affectation
 
 
 def verifier_invariant_chef_projet(projet: Projet, affectation_a_exclure_id=None):
-    """Vérifie qu'il reste au moins un Chef de Projet actif sur le chantier (US-04)."""
+    """Vérifie la cohérence du Chef de Projet : au maximum un seul CP actif simultanément (0 CP autorisé)."""
     qs = AffectationProjet.objects.filter(
         projet=projet,
         role_projet=RoleProjet.CHEF_PROJET,
@@ -108,9 +121,9 @@ def verifier_invariant_chef_projet(projet: Projet, affectation_a_exclure_id=None
     )
     if affectation_a_exclure_id:
         qs = qs.exclude(id=affectation_a_exclure_id)
-    if not qs.exists():
+    if qs.count() > 1:
         raise ValidationError(
-            _("Impossible de désactiver ou supprimer le dernier Chef de Projet actif du chantier.")
+            _("Un chantier ne peut pas comporter plus d'un Chef de Projet actif simultanément.")
         )
 
 
@@ -120,14 +133,26 @@ def modifier_affectation_projet(
     donnees: dict,
     modifie_par: Utilisateur | None = None,
 ) -> AffectationProjet:
-    """Met à jour le rôle, dates ou statut d'une affectation avec protection de l'invariant CP."""
+    """Met à jour le rôle, dates ou statut d'une affectation avec synchronisation CP."""
     nouveau_actif = donnees.get("est_actif")
     nouveau_role = donnees.get("role_projet")
 
-    # Si on désactive ou change le rôle d'un CP, vérifier l'invariant
-    if affectation.role_projet == RoleProjet.CHEF_PROJET and affectation.est_actif:
+    # Si on désactive ou change le rôle d'un CP, détacher du projet si c'était lui
+    if affectation.role_projet == RoleProjet.CHEF_PROJET:
         if nouveau_actif is False or (nouveau_role and nouveau_role != RoleProjet.CHEF_PROJET):
-            verifier_invariant_chef_projet(affectation.projet, affectation_a_exclure_id=affectation.id)
+            if affectation.projet.chef_projet_id == affectation.utilisateur_id:
+                affectation.projet.chef_projet = None
+                affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
+    elif nouveau_role == RoleProjet.CHEF_PROJET and (nouveau_actif is True or (nouveau_actif is None and affectation.est_actif)):
+        # Promotion en Chef de Projet : désactiver l'ancien CP actif
+        AffectationProjet.objects.filter(
+            projet=affectation.projet,
+            role_projet=RoleProjet.CHEF_PROJET,
+            est_actif=True,
+            supprime_le__isnull=True,
+        ).exclude(id=affectation.id).update(est_actif=False)
+        affectation.projet.chef_projet = affectation.utilisateur
+        affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
 
     champs = ["modifie_le"]
     for c in ["role_projet", "date_debut", "date_fin", "est_actif"]:
@@ -140,6 +165,7 @@ def modifier_affectation_projet(
         champs.append("role")
 
     affectation.save(update_fields=champs)
+    verifier_invariant_chef_projet(affectation.projet)
     return affectation
 
 
@@ -150,8 +176,10 @@ def revoquer_affectation_projet(
     modifie_par: Utilisateur | None = None,
 ):
     """Révoque (soft-delete est_actif=False) ou supprime une affectation."""
-    if affectation.role_projet == RoleProjet.CHEF_PROJET and affectation.est_actif:
-        verifier_invariant_chef_projet(affectation.projet, affectation_a_exclure_id=affectation.id)
+    if affectation.role_projet == RoleProjet.CHEF_PROJET:
+        if affectation.projet.chef_projet_id == affectation.utilisateur_id:
+            affectation.projet.chef_projet = None
+            affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
 
     if suppression_physique:
         affectation.supprimer_definitivement()

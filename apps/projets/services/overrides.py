@@ -1,7 +1,7 @@
 """Service de gestion des surcharges de permissions par projet (Approche Hybride)."""
 
-from apps.accounts.models import Role, RoleModulePermission
-from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.accounts.models import Module, Role, RoleModulePermission
+from apps.core.enums import NiveauAcces
 from apps.projets.models import Projet, ProjetRoleModuleOverride
 
 __all__ = [
@@ -20,26 +20,33 @@ def get_matrice_permissions_projet(projet: Projet) -> list[dict]:
     """
     roles = Role.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("libelle")
     overrides = {
-        (o.role_id, o.module): o.niveau
-        for o in ProjetRoleModuleOverride.objects.filter(projet=projet, supprime_le__isnull=True)
+        (o.role_id, o.module.code): o.niveau
+        for o in ProjetRoleModuleOverride.objects.filter(
+            projet=projet, supprime_le__isnull=True
+        ).select_related("module")
+        if o.module and o.module.est_actif
     }
+    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
 
     resultat = []
     for role in roles:
         matrice_defaut = {
-            p.module: p.niveau
-            for p in RoleModulePermission.objects.filter(role=role, supprime_le__isnull=True)
+            p.module.code: p.niveau
+            for p in RoleModulePermission.objects.filter(
+                role=role, supprime_le__isnull=True
+            ).select_related("module")
+            if p.module and p.module.est_actif
         }
         modules_droits = {}
-        for module in ModuleChoix.values:
-            if (role.id, module) in overrides:
-                modules_droits[module] = {
-                    "niveau": overrides[(role.id, module)],
+        for m in modules_actifs:
+            if (role.id, m.code) in overrides:
+                modules_droits[m.code] = {
+                    "niveau": overrides[(role.id, m.code)],
                     "est_surcharge": True,
                 }
             else:
-                modules_droits[module] = {
-                    "niveau": matrice_defaut.get(module, NiveauAcces.AUCUN),
+                modules_droits[m.code] = {
+                    "niveau": matrice_defaut.get(m.code, NiveauAcces.AUCUN),
                     "est_surcharge": False,
                 }
 
@@ -59,25 +66,34 @@ def get_matrice_permissions_projet(projet: Projet) -> list[dict]:
 def set_override_permission_projet(
     projet: Projet,
     role: Role,
-    module: str,
+    module: str | Module,
     niveau: int,
     modifie_par=None,
 ) -> ProjetRoleModuleOverride:
     """Applique une surcharge de permission sur un module pour un rôle sur ce projet."""
+    if isinstance(module, str):
+        module_obj = Module.objects.get(code=module)
+    else:
+        module_obj = module
+
     override, _ = ProjetRoleModuleOverride.objects.update_or_create(
         projet=projet,
         role=role,
-        module=module,
+        module=module_obj,
         defaults={"niveau": niveau, "supprime_le": None},
     )
     return override
 
 
-def supprimer_override_permission_projet(projet: Projet, role: Role, module: str) -> bool:
+def supprimer_override_permission_projet(projet: Projet, role: Role, module: str | Module) -> bool:
     """Supprime la surcharge d'un rôle pour rétablir le comportement par défaut de l'entreprise."""
-    qs = ProjetRoleModuleOverride.objects.filter(
-        projet=projet, role=role, module=module, supprime_le__isnull=True
-    )
+    filtre = {"projet": projet, "role": role, "supprime_le__isnull": True}
+    if isinstance(module, str):
+        filtre["module__code"] = module
+    else:
+        filtre["module"] = module
+
+    qs = ProjetRoleModuleOverride.objects.filter(**filtre)
     if qs.exists():
         qs.delete()
         return True

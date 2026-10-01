@@ -39,3 +39,10 @@ Thumbs.db
 *.pdf
 Manuels_Apprentissage/
 logo.png
+
+# Postman (collections, environnements et tests)
+*postman*
+*.postman_collection.json
+*.postman_environment.json
+postman/
+

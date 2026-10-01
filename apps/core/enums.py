@@ -253,3 +253,32 @@ class ModuleChoix(models.TextChoices):
     PILOTAGE = "pilotage", "Tableaux de bord & Pilotage"
     TIERS = "tiers", "Parties Prenantes / Tiers"
 
+
+MODULES_DETAILS = {
+    ModuleChoix.PROJETS: {
+        "description": "Fiches projets, lots, activités, jalons et planification des chantiers.",
+        "ordre": 1,
+        "icone": "folder-kanban",
+    },
+    ModuleChoix.CHANTIER: {
+        "description": "Rapports journaliers, avancement des travaux, blocages terrain et pointages.",
+        "ordre": 2,
+        "icone": "hard-hat",
+    },
+    ModuleChoix.GED: {
+        "description": "Classeurs, plans d'exécution, procès-verbaux et traçabilité des pièces jointes.",
+        "ordre": 3,
+        "icone": "file-text",
+    },
+    ModuleChoix.PILOTAGE: {
+        "description": "Indicateurs d'avancement, indice de santé global, météo et aide à la décision.",
+        "ordre": 4,
+        "icone": "bar-chart-3",
+    },
+    ModuleChoix.TIERS: {
+        "description": "Clients, maîtres d'ouvrage, sous-traitants, fournisseurs et partenaires.",
+        "ordre": 5,
+        "icone": "users",
+    },
+}
+

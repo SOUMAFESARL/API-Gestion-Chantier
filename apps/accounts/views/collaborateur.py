@@ -22,7 +22,10 @@ from apps.accounts.serializers.collaborateur import (
     CollaborateurRattacherRoleSerializer,
 )
 from apps.accounts.services.invitations import creer_invitation
-from apps.accounts.services import rattacher_collaborateur_a_role
+from apps.accounts.services import (
+    desactiver_collaborateur_plateforme,
+    rattacher_collaborateur_a_role,
+)
 from apps.billing.services.quota import verifier_quota_avant_invitation
 from apps.core.enums import RoleGlobal, RoleProjet, StatutUtilisateur
 from apps.core.exceptions import ActionInterditeDelegue, ActionReserveeDg
@@ -32,7 +35,10 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ParametresCollaborateurListCreateView"]
+__all__ = [
+    "ParametresCollaborateurDetailView",
+    "ParametresCollaborateurListCreateView",
+]
 
 
 def _autoriser_parametres_collaborateurs(user):
@@ -68,6 +74,20 @@ class ParametresCollaborateurListCreateView(APIView):
         responses={200: CollaborateurResponseSerializer(many=True)},
     )
     def get(self, request):
+        est_direction = (
+            request.user.is_superuser
+            or getattr(request.user, "is_owner", False)
+            or getattr(request.user, "is_dg", False)
+            or getattr(request.user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        )
+        projets_visibles_ids = None
+        if not est_direction:
+            from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
+
+            projets_visibles_ids = set(
+                str(pid) for pid in obtenir_projets_ids_actifs_utilisateur(request.user, request=request)
+            )
+
         # 1. Tous les utilisateurs du tenant
         utilisateurs = list(
             Utilisateur.objects.filter(supprime_le__isnull=True)
@@ -135,6 +155,10 @@ class ParametresCollaborateurListCreateView(APIView):
                     "libelle": u.role_personnalise.libelle,
                 }
 
+            user_projets = list(projets_par_utilisateur[u.id].values())
+            if projets_visibles_ids is not None:
+                user_projets = [p for p in user_projets if str(p["id"]) in projets_visibles_ids]
+
             resultats.append(
                 {
                     "id": u.id,
@@ -149,7 +173,7 @@ class ParametresCollaborateurListCreateView(APIView):
                     "statut": u.statut,
                     "is_owner": u.is_owner,
                     "cree_le": u.cree_le,
-                    "projets": list(projets_par_utilisateur[u.id].values()),
+                    "projets": user_projets,
                     "lien_activation": None,
                 }
             )
@@ -315,14 +339,89 @@ class ParametresCollaborateurListCreateView(APIView):
         serializer_rep = CollaborateurResponseSerializer(reponse_data)
         return Response(serializer_rep.data, status=status.HTTP_201_CREATED)
 
-class ParametresCollaborateurDetailView(APIView):
-    """`GET`, `PATCH` et `POST /api/v1/parametres/collaborateurs/{id}/`.
+def _obtenir_projets_collaborateur(collaborateur):
+    """Charge les chantiers associés à un collaborateur (CP ou affectation active)."""
+    projets_dict = {}
+    labels_role_projet = dict(RoleProjet.choices)
 
-    Permet de consulter le détail d'un collaborateur et de mettre à jour son rôle.
+    for p in Projet.objects.filter(chef_projet=collaborateur, supprime_le__isnull=True):
+        projets_dict[str(p.id)] = {
+            "id": p.id,
+            "reference": p.reference,
+            "nom": p.nom,
+            "role_projet": "CP",
+            "role_projet_libelle": "Chef de projet",
+            "statut_projet": p.statut,
+        }
+
+    for aff in AffectationProjet.objects.filter(
+        utilisateur=collaborateur,
+        est_actif=True,
+        projet__supprime_le__isnull=True,
+    ).select_related("projet"):
+        projets_dict[str(aff.projet_id)] = {
+            "id": aff.projet_id,
+            "reference": aff.projet.reference,
+            "nom": aff.projet.nom,
+            "role_projet": aff.role_projet,
+            "role_projet_libelle": labels_role_projet.get(aff.role_projet, aff.role_projet),
+            "statut_projet": aff.projet.statut,
+        }
+
+    return list(projets_dict.values())
+
+
+class ParametresCollaborateurDetailView(APIView):
+    """`GET`, `PATCH`, `POST` et `DELETE /api/v1/invitations/{id}/` (ou `/parametres/collaborateurs/{id}/`).
+
+    - `GET` : Détail complet du collaborateur avec ses projets associés.
+    - `PATCH` / `POST` : Modification du rôle ou rattachement à un rôle personnalisé.
+    - `DELETE` : Retrait de toute la plateforme (départ entreprise, révocation sessions et chantiers).
     """
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Détail d'un collaborateur",
+        responses={200: CollaborateurResponseSerializer},
+    )
+    def get(self, request, pk):
+        collaborateur = get_object_or_404(
+            Utilisateur.tous_objets,
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+
+        rp_data = None
+        if collaborateur.role_personnalise:
+            rp_data = {
+                "id": collaborateur.role_personnalise.id,
+                "code": collaborateur.role_personnalise.code,
+                "libelle": collaborateur.role_personnalise.libelle,
+            }
+
+        reponse_data = {
+            "id": collaborateur.id,
+            "email": collaborateur.email,
+            "nom": collaborateur.nom,
+            "prenom": collaborateur.prenom,
+            "nom_complet": collaborateur.nom_complet,
+            "telephone": collaborateur.telephone,
+            "role_global": collaborateur.role_global,
+            "role_global_libelle": collaborateur.get_role_global_display(),
+            "role_personnalise": rp_data,
+            "statut": collaborateur.statut,
+            "is_owner": collaborateur.is_owner,
+            "cree_le": collaborateur.cree_le,
+            "projets": _obtenir_projets_collaborateur(collaborateur),
+            "lien_activation": None,
+        }
+
+        return Response(
+            CollaborateurResponseSerializer(reponse_data).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary="Rattacher un rôle à un collaborateur ou modifier ses informations",
@@ -333,7 +432,7 @@ class ParametresCollaborateurDetailView(APIView):
         _autoriser_parametres_collaborateurs(request.user)
 
         collaborateur = get_object_or_404(
-            Utilisateur,
+            Utilisateur.tous_objets,
             pk=pk,
             supprime_le__isnull=True,
         )
@@ -384,7 +483,7 @@ class ParametresCollaborateurDetailView(APIView):
             "statut": collaborateur.statut,
             "is_owner": collaborateur.is_owner,
             "cree_le": collaborateur.cree_le,
-            "projets": [],
+            "projets": _obtenir_projets_collaborateur(collaborateur),
             "lien_activation": None,
         }
 
@@ -395,3 +494,28 @@ class ParametresCollaborateurDetailView(APIView):
 
     def post(self, request, pk):
         return self.patch(request, pk)
+
+    @extend_schema(
+        summary="Retirer un collaborateur de toute la plateforme (départ entreprise)",
+        description="Désactive le compte, révoque tous les accès et clôture toutes les affectations de chantiers.",
+        responses={200: dict},
+    )
+    def delete(self, request, pk):
+        _autoriser_parametres_collaborateurs(request.user)
+
+        collaborateur = get_object_or_404(
+            Utilisateur.tous_objets,
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+
+        try:
+            resultat = desactiver_collaborateur_plateforme(
+                collaborateur=collaborateur,
+                auteur=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise ValidationError({"detail": msg}) from exc
+
+        return Response(resultat, status=status.HTTP_200_OK)

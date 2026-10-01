@@ -139,13 +139,16 @@ def test_rec_s1_05_a_budget_null_accepte(
 
 
 @pytest.mark.django_db
-def test_direction_cp_facultatif_et_conflit_refuse(client_tenant, admin_delegue_user, tiers_client):
-    """La direction peut définir le CP après création ; deux CP restent interdits."""
+def test_rec_s1_05_b_cp_optionnel_et_conflit(client_tenant, admin_delegue_user, tiers_client):
+    """REC-S1-05-B : L'assignation d'un CP est désormais optionnelle.
+    Sans CP, le projet est créé (201) avec chef_projet à null.
+    Si chef_projet_id et chef_projet_invite sont fournis simultanément, rejet (400).
+    """
     cl = auth_client(client_tenant, admin_delegue_user)
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=90)
 
-    # Sans aucun CP
+    # Sans aucun CP : succès 201
     rep_sans_cp = cl.post(
         "/api/v1/projets/",
         {
@@ -159,9 +162,11 @@ def test_direction_cp_facultatif_et_conflit_refuse(client_tenant, admin_delegue_
         format="json",
     )
     assert rep_sans_cp.status_code == status.HTTP_201_CREATED
-    assert rep_sans_cp.json()["chef_projet"] is None
+    data = rep_sans_cp.json()
+    assert data["nom"] == "Projet Sans CP"
+    assert data["chef_projet"] is None
 
-    # Avec les deux spécifiés en conflit
+    # Avec les deux spécifiés en conflit : rejet 400
     rep_deux_cp = cl.post(
         "/api/v1/projets/",
         {

@@ -118,11 +118,14 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         utilisateur.role_personnalise or Role.objects.filter(code=utilisateur.role_global).first()
     )
     if role:
-        for perm in role.permissions_modules.all():
-            habilitations[perm.module] = {
-                "libelle": perm.get_niveau_display(),
-                "niveau": perm.niveau,
-            }
+        rpm_qs = getattr(role, "modules_permissions", None) or getattr(role, "permissions_modules", None)
+        if rpm_qs is not None:
+            for perm in rpm_qs.select_related("module").all():
+                mod_code = perm.module.code if hasattr(perm.module, "code") else str(perm.module)
+                habilitations[mod_code] = {
+                    "libelle": perm.get_niveau_display() if hasattr(perm, "get_niveau_display") else "Personnalisé",
+                    "niveau": perm.niveau if getattr(perm, "niveau", None) is not None else 0,
+                }
 
     # Accès de secours pour DG / Admin / Super Admin ou modules non configurés
     est_plein_droit = (

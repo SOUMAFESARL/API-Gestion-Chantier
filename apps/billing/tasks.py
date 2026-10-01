@@ -107,8 +107,10 @@ def _sujet(seuil: int, raison_sociale: str) -> str:
 
 
 def _lien_abonnement(entreprise) -> str:
-    base_url = "http://localhost:3000"
-    return f"{base_url}/parametres/abonnement"
+    from django.conf import settings
+
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    return f"{frontend_url}/parametres/abonnement"
 
 
 def _clore_essai(abonnement) -> None:

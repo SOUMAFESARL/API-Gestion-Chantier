@@ -27,7 +27,24 @@ from .reinitialisation import (
     VerificationJetonAdminView,
 )
 
+from .modules import (
+    AdminModuleAffecterPermissionsView,
+    AdminModuleDetailUpdateDeleteView,
+    AdminModuleListCreateView,
+)
+from .permissions import (
+    AdminPermissionAffecterModulesView,
+    AdminPermissionDetailUpdateDeleteView,
+    AdminPermissionListCreateView,
+)
+
 __all__ = [
+    "AdminModuleAffecterPermissionsView",
+    "AdminModuleDetailUpdateDeleteView",
+    "AdminModuleListCreateView",
+    "AdminPermissionAffecterModulesView",
+    "AdminPermissionDetailUpdateDeleteView",
+    "AdminPermissionListCreateView",
     "ChangerPlanClientPlateformeView",
     "ClientsPlateformeListView",
     "ConnexionAdminView",

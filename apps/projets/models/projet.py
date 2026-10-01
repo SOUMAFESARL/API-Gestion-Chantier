@@ -56,12 +56,25 @@ class Projet(ModeleBase):
     date_debut_prevue = models.DateField(_("date de début prévue"), null=True, blank=True)
     date_fin_prevue = models.DateField(_("date de fin prévue"), null=True, blank=True)
 
+    date_debut_baseline = models.DateField(
+        _("date de début baseline v0"),
+        null=True,
+        blank=True,
+        help_text=_("Date de début contractuelle initiale (figée, intacte)."),
+    )
+    date_fin_baseline = models.DateField(
+        _("date de fin baseline v0"),
+        null=True,
+        blank=True,
+        help_text=_("Date de fin contractuelle initiale (figée, intacte)."),
+    )
+
     date_debut_reelle = models.DateField(_("date de début réelle"), null=True, blank=True)
     date_fin_reelle = models.DateField(_("date de fin réelle"), null=True, blank=True)
 
     chef_projet = models.ForeignKey(
         "accounts.Utilisateur",
-        on_delete=models.RESTRICT,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="projets_geres",
@@ -131,6 +144,14 @@ class Projet(ModeleBase):
                 name="uq_projet_reference_tenant",
             )
         ]
+
+    def save(self, *args, **kwargs):
+        """Initialise la Baseline v0 à la première sauvegarde si non définie."""
+        if self.date_debut_baseline is None and self.date_debut_prevue:
+            self.date_debut_baseline = self.date_debut_prevue
+        if self.date_fin_baseline is None and self.date_fin_prevue:
+            self.date_fin_baseline = self.date_fin_prevue
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.reference} — {self.nom}"

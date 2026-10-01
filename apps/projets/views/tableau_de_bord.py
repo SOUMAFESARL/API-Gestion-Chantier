@@ -224,13 +224,11 @@ class TableauDeBordView(APIView):
                 "rapport_jour_statut": "SOUMIS" if rapport_soumis else "EN_ATTENTE",
                 "indice_sante": indice_projet,
                 "chef_projet_nom": (
-                    f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip()
-                    or p.chef_projet.email
-                ) if p.chef_projet else "",
+                    f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip() or p.chef_projet.email
+                ) if p.chef_projet else None,
                 "conducteur_travaux_nom": (
-                    f"{p.conducteur_travaux.prenom} {p.conducteur_travaux.nom}".strip()
-                    or p.conducteur_travaux.email
-                ) if p.conducteur_travaux else "",
+                    f"{p.conducteur_travaux.prenom} {p.conducteur_travaux.nom}".strip() or p.conducteur_travaux.email
+                ) if p.conducteur_travaux else None,
             }
             projets_data.append(p_dict)
 

@@ -200,31 +200,28 @@ def test_affecter_consultant_lecture_et_maitres(admin_user, projet_db, visiteur_
 
 
 @pytest.mark.django_db
-def test_protection_invariant_dernier_chef_projet(admin_user, projet_db, cp_user):
-    """Empêche formellement de désactiver ou supprimer le dernier Chef de Projet (US-04)."""
+def test_desactivation_et_suppression_chef_projet_autorisee(admin_user, projet_db, cp_user):
+    """Autorise la désactivation ou suppression du CP et synchronise projet.chef_projet à null."""
     client = _auth(APIClient(), admin_user)
     with schema_context(SCHEMA):
         aff_cp = AffectationProjet.objects.get(projet=projet_db, utilisateur=cp_user)
     url_detail = f"/api/v1/projets/{projet_db.id}/affectations/{aff_cp.id}/"
 
-    # Tentative 1 : Désactivation par PATCH
+    # 1. Désactivation par PATCH autorisée (200 OK) et détachement sur Projet
     rep_desact = client.patch(url_detail, {"est_actif": False}, format="json", HTTP_HOST=HOTE)
-    assert rep_desact.status_code == status.HTTP_400_BAD_REQUEST
-    assert "chef de projet" in str(rep_desact.json()).lower()
+    assert rep_desact.status_code == status.HTTP_200_OK
+    with schema_context(SCHEMA):
+        projet_db.refresh_from_db()
+        assert projet_db.chef_projet is None
+        aff_cp.refresh_from_db()
+        assert aff_cp.est_actif is False
 
-    # Tentative 2 : Changement de rôle par PATCH
-    rep_change = client.patch(
-        url_detail,
-        {"role_projet": RoleProjet.CHEF_CHANTIER},
-        format="json",
-        HTTP_HOST=HOTE,
-    )
-    assert rep_change.status_code == status.HTTP_400_BAD_REQUEST
-
-    # Tentative 3 : Suppression directe par DELETE
+    # 2. Suppression directe par DELETE autorisée (204 No Content)
     rep_del = client.delete(url_detail, HTTP_HOST=HOTE)
-    assert rep_del.status_code == status.HTTP_400_BAD_REQUEST
-    assert "chef de projet" in str(rep_del.json()).lower()
+    assert rep_del.status_code == status.HTTP_204_NO_CONTENT
+    with schema_context(SCHEMA):
+        assert not AffectationProjet.objects.filter(id=aff_cp.id).exists()
+
 
 
 @pytest.mark.django_db

@@ -117,6 +117,7 @@ class LotSimpleSerializer(serializers.ModelSerializer):
 
 
 class ProjetSerializer(serializers.ModelSerializer):
+    maitre_ouvrage = serializers.SerializerMethodField()
     cree_par = ChefProjetEnrichiSerializer(read_only=True)
     entreprise = serializers.SerializerMethodField()
     client = TiersSerializer(read_only=True)
@@ -137,6 +138,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             "type_projet",
             "description",
             "client",
+            "maitre_ouvrage",
             "maitre_oeuvre",
             "ville",
             "quartier",
@@ -157,6 +159,9 @@ class ProjetSerializer(serializers.ModelSerializer):
             "indice_sante",
             "lots",
         ]
+
+    def get_maitre_ouvrage(self, obj) -> str:
+        return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")
 
     @extend_schema_field(ProfilEntrepriseSerializer(allow_null=True))
     def get_entreprise(self, obj):
@@ -230,14 +235,15 @@ class ProjetCreationSerializer(serializers.Serializer):
     statut = serializers.ChoiceField(
         choices=StatutProjet.choices, required=False, default=StatutProjet.EN_ATTENTE
     )
-    client = serializers.PrimaryKeyRelatedField(queryset=Tiers.objects.all())
+    client = serializers.PrimaryKeyRelatedField(queryset=Tiers.objects.all(), required=False)
+    maitre_ouvrage = serializers.CharField(max_length=200, required=False)
     maitre_oeuvre = serializers.CharField(
         max_length=200, required=False, allow_blank=True, default=""
     )
     ville = serializers.CharField(max_length=100)
     quartier = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
-    date_debut_prevue = serializers.DateField()
-    date_fin_prevue = serializers.DateField()
+    date_debut_prevue = serializers.DateField(required=False, allow_null=True)
+    date_fin_prevue = serializers.DateField(required=False, allow_null=True)
     budget_initial_montant = serializers.IntegerField(
         min_value=0, required=False, allow_null=True, default=None
     )
@@ -269,6 +275,16 @@ class ProjetCreationSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
+        if "client" in attrs and "maitre_ouvrage" in attrs:
+            raise serializers.ValidationError(
+                {
+                    "maitre_ouvrage": _(
+                        "Envoyez le nom du maître d'ouvrage ou un client, pas les deux."
+                    )
+                }
+            )
+        if self.instance is None and not attrs.get("maitre_ouvrage") and not attrs.get("client"):
+            raise serializers.ValidationError({"maitre_ouvrage": _("Ce champ est obligatoire.")})
         if self.instance is None and "lots_supprimer_ids" in attrs:
             raise serializers.ValidationError(
                 {"lots_supprimer_ids": _("Disponible uniquement en modification.")}
@@ -284,8 +300,16 @@ class ProjetCreationSerializer(serializers.Serializer):
                     {"date_debut_baseline": _("La Baseline v0 est immuable et ne peut être modifiée.")}
                 )
             if (
-                ("date_debut_prevue" in self.initial_data and attrs.get("date_debut_prevue") != self.instance.date_debut_prevue)
-                or ("date_fin_prevue" in self.initial_data and attrs.get("date_fin_prevue") != self.instance.date_fin_prevue)
+                (
+                    "date_debut_prevue" in self.initial_data
+                    and self.instance.date_debut_prevue is not None
+                    and attrs.get("date_debut_prevue") != self.instance.date_debut_prevue
+                )
+                or (
+                    "date_fin_prevue" in self.initial_data
+                    and self.instance.date_fin_prevue is not None
+                    and attrs.get("date_fin_prevue") != self.instance.date_fin_prevue
+                )
             ):
                 raise serializers.ValidationError(
                     {
@@ -358,12 +382,10 @@ class ProjetCreationSerializer(serializers.Serializer):
                     raise serializers.ValidationError(
                         {champ: _("Ce membre occupe déjà un autre rôle sur le projet.")}
                     )
-        debut = attrs.get("date_debut_prevue") or (
-            self.instance.date_debut_prevue if self.instance else None
+        debut = attrs.get(
+            "date_debut_prevue", self.instance.date_debut_prevue if self.instance else None
         )
-        fin = attrs.get("date_fin_prevue") or (
-            self.instance.date_fin_prevue if self.instance else None
-        )
+        fin = attrs.get("date_fin_prevue", self.instance.date_fin_prevue if self.instance else None)
         if debut and fin and fin <= debut:
             raise serializers.ValidationError(
                 {"date_fin_prevue": _("La date de fin doit être postérieure à la date de début.")}
@@ -739,6 +761,10 @@ class ProjetCreationSerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         # Sérialise les changements de responsables concurrents sur ce projet.
         instance = Projet.objects.select_for_update().get(pk=instance.pk)
+        if "maitre_ouvrage" in validated_data:
+            instance.client = None
+        elif "client" in validated_data:
+            instance.maitre_ouvrage = ""
         user = getattr(self.context.get("request"), "user", None)
         nouveaux_lots = validated_data.pop("lots", [])
         supprimer_ids = set(validated_data.pop("lots_supprimer_ids", []))

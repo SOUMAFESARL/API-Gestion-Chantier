@@ -13,6 +13,44 @@ from apps.tiers.models import Tiers
 pytestmark = pytest.mark.django_db
 
 
+def test_creation_maitre_ouvrage_texte_et_modification(scenario):
+    client, projet, _, cp, *_ = scenario
+    nombre_tiers = Tiers.objects.count()
+    data = {
+        "nom": "Saisie libre",
+        "maitre_ouvrage": "Mon maître d'ouvrage",
+        "maitre_oeuvre": "Cabinet",
+        "ville": "Adjamé",
+        "date_debut_prevue": "2026-10-01",
+        "date_fin_prevue": "2026-12-31",
+        "chef_projet_id": str(cp.pk),
+        "lots": [{"libelle": "Lot 1"}, {"libelle": "Lot 2"}],
+    }
+    response = client.post("/api/v1/projets/", data, format="json")
+    assert response.status_code == 201, response.data
+    assert response.data["maitre_ouvrage"] == data["maitre_ouvrage"]
+    assert response.data["client"] is None
+    assert len(response.data["lots"]) == 2
+    assert Tiers.objects.count() == nombre_tiers
+    url = f"/api/v1/projets/{response.data['id']}/"
+    response = client.patch(url, {"maitre_ouvrage": "Autre nom"}, format="json")
+    assert response.status_code == 200
+    assert client.get(url).data["maitre_ouvrage"] == "Autre nom"
+    ancien = client.get(f"/api/v1/projets/{projet.pk}/")
+    assert ancien.data["maitre_ouvrage"] == projet.client.raison_sociale
+
+
+@pytest.mark.parametrize("valeur", ["", "   ", None])
+def test_maitre_ouvrage_vide_refuse(scenario, valeur):
+    client, projet, *_ = scenario
+    response = client.patch(
+        f"/api/v1/projets/{projet.pk}/",
+        {"maitre_ouvrage": valeur},
+        format="json",
+    )
+    assert response.status_code == 400
+
+
 @pytest.mark.parametrize(
     "lots",
     [

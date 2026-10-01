@@ -54,7 +54,7 @@ class TableauDeBordView(APIView):
 
         projets_base = (
             Projet.objects.filter(supprime_le__isnull=True)
-            .select_related("client", "chef_projet")
+            .select_related("client", "chef_projet", "conducteur_travaux")
             .order_by("-cree_le")
         )
         projets_qs = filtrer_queryset_par_affectations(

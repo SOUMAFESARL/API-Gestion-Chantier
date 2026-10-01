@@ -113,18 +113,26 @@ class ProjetListCreateView(APIView):
         summary="Enregistrer le formulaire Nouveau projet",
         tags=["projets"],
         description=(
-            "À appeler au clic sur **Créer le projet**, après avoir rempli les trois étapes. "
-            "Un seul POST enregistre les informations générales, les lots et l'équipe.\n\n"
+            "À appeler au clic sur **Créer le projet**. La direction peut envoyer uniquement "
+            "l'identification : nom, type_projet, ville, maitre_ouvrage "
+            "et maitre_oeuvre facultatif. "
+            "Planning, budget, lots et responsables peuvent être définis ensuite via PATCH ; "
+            "les autres membres utilisent les routes d'affectations. "
+            "La création complète avec lots et équipe reste disponible.\n\n"
             "**Lignes de lots** : ajouter ou retirer les lignes dans le formulaire, puis envoyer "
             "toutes les lignes restantes dans `lots`. Aucun appel DELETE avant la création. "
             "Chaque ligne exige `libelle`. Les codes automatiques évitent les codes saisis.\n\n"
             "**Avant de commencer** : appeler `GET /api/v1/projets/contexte-creation/` "
-            "pour récupérer les UUID réels des clients et collaborateurs ainsi que les "
+            "pour récupérer les UUID réels des collaborateurs ainsi que les "
             "valeurs autorisées des listes. Les UUID de l'exemple sont fictifs et doivent "
             "être remplacés.\n\n"
-            "- `client` : UUID du tiers maître d'ouvrage, pas son nom.\n"
+            "- `maitre_ouvrage` : nom saisi librement, obligatoire. "
+            "`maitre_oeuvre` : texte facultatif.\n"
+            "- Compatibilité : un UUID `client` existant peut remplacer `maitre_ouvrage`, "
+            "mais ne pas envoyer les deux. Aucun client à créer pour la saisie libre.\n"
             "- `budget_initial_montant` : centimes de FCFA ; **2 000 FCFA = 200000**.\n"
-            "- `date_fin_prevue` doit être strictement postérieure au début.\n"
+            "- Les dates sont facultatives et peuvent être nulles. Si les deux sont définies, "
+            "`date_fin_prevue` doit être strictement postérieure au début.\n"
             "- `reference` et les codes des lots sont générés si omis.\n"
             "- La création de projet est réservée exclusivement au DG et à l'Administrateur.\n"
             "- Le chef de projet est facultatif : un chantier peut être créé sans chef de projet.\n"
@@ -140,7 +148,8 @@ class ProjetListCreateView(APIView):
         request=ProjetPostSerializer,
         responses={
             201: OpenApiResponse(
-                ProjetSerializer, description="Projet créé avec ses lots et son équipe."
+                ProjetSerializer,
+                description="Projet créé ; planning et équipe peuvent être absents.",
             ),
             400: OpenApiResponse(
                 description="Champs invalides, dates incohérentes ou membre indisponible."
@@ -151,12 +160,23 @@ class ProjetListCreateView(APIView):
         },
         examples=[
             OpenApiExample(
+                "Identification seule — entreprise connectée",
+                request_only=True,
+                value={
+                    "nom": "Immeuble Les Palmiers R+5",
+                    "type_projet": "BATIMENT_RESIDENTIEL",
+                    "ville": "Abidjan",
+                    "maitre_ouvrage": "Entreprise cliente",
+                    "maitre_oeuvre": "Cabinet d'études",
+                },
+            ),
+            OpenApiExample(
                 "Formulaire complet — informations, lots et équipe",
                 request_only=True,
                 value={
                     "nom": "ZRAN",
                     "type_projet": "BATIMENT_COMMERCIAL",
-                    "client": "11111111-1111-4111-8111-111111111111",
+                    "maitre_ouvrage": "SOUMAFE BTP",
                     "maitre_oeuvre": "Cabinet d'études",
                     "ville": "Adjamé",
                     "date_debut_prevue": "2026-10-01",
@@ -253,6 +273,11 @@ class ProjetDetailView(APIView):
         tags=["projets"],
         description=(
             "Modification partielle des informations générales et des responsables par UUID. "
+            "Après une création avec identification seule, renseigner ici les dates, le budget "
+            "et chef_projet_id. Omettre ce dernier tant qu'aucun chef n'est choisi ; "
+            "chef_projet_id=null retire le chef. Les dates initiales peuvent être renseignées ici ; "
+            "les dates déjà définies nécessitent POST /api/v1/projets/{id}/reprogrammer/ "
+            "avec motif et justification. "
             "Les champs absents sont conservés ; conducteur_travaux_id=null retire le conducteur. "
             "lots ajoute des lignes ; lots_supprimer_ids supprime les UUID indiqués. "
             "Les lots non mentionnés restent inchangés. "

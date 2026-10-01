@@ -58,9 +58,11 @@ def test_initialiser_roles_par_defaut():
         roles = initialiser_roles_par_defaut()
         assert len(roles) >= 7
 
-        # Vérifie que l'admin a validation sur tous les modules
+        # Vérifie que l'admin a validation sur tous les modules mais n'est plus système
         role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
-        assert role_ad.est_systeme is True
+        assert role_ad.est_systeme is False
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        assert role_dg.est_systeme is True
         perms_ad = RoleModulePermission.objects.filter(role=role_ad)
         assert perms_ad.count() == len(ModuleChoix.values)
         for p in perms_ad:
@@ -86,18 +88,18 @@ def test_interdiction_supprimer_role_systeme():
 
 
 @pytest.mark.django_db
-def test_seuls_dg_et_admin_sont_roles_systeme():
-    """Vérifie que seuls DG et AD possèdent est_systeme=True après initialisation."""
+def test_seul_dg_est_role_systeme():
+    """Vérifie que seul le DG possède est_systeme=True après initialisation (AD devenant supprimable par DG)."""
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
 
-        # DG et AD doivent être système
-        for code in (RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.ADMIN):
-            role = Role.objects.get(code=code)
-            assert role.est_systeme is True, f"{code} devrait être est_systeme=True"
+        # Seul DG doit être système (immuable)
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        assert role_dg.est_systeme is True
 
-        # Tous les autres rôles ne doivent PAS être système
+        # AD et tous les autres rôles ne sont PAS système
         codes_non_systeme = (
+            RoleGlobal.ADMIN,
             RoleGlobal.CHEF_PROJET,
             RoleGlobal.CONDUCTEUR_TRAVAUX,
             RoleGlobal.CHEF_CHANTIER,

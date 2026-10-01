@@ -152,13 +152,13 @@ class RoleDetailUpdateView(APIView):
 
 
 class RoleSupprimerReassignerView(APIView):
-    """`POST /api/v1/roles/{id}/supprimer/` — Suppression d'un rôle avec réassignation."""
+    """`POST /api/v1/roles/{id}/supprimer/` — Suppression d'un rôle (réservée au DG)."""
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
     @extend_schema(
-        summary="Supprimer un rôle avec réassignation des utilisateurs",
+        summary="Supprimer un rôle (avec réassignation ou suppression en cascade des collaborateurs)",
         request=RoleSuppressionSerializer,
         responses={200: dict},
     )
@@ -168,21 +168,26 @@ class RoleSupprimerReassignerView(APIView):
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
-        substitution_id = request.data.get("role_substitution_id") or request.data.get(
-            "reassigner_vers_role_id"
-        )
-        if not substitution_id:
-            raise RoleSubstitutionObligatoire()
-
         serializer = RoleSuppressionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        reassigner_vers_role = get_object_or_404(Role, pk=substitution_id, supprime_le__isnull=True)
+        substitution_id = serializer.validated_data.get("role_substitution_id") or serializer.validated_data.get(
+            "reassigner_vers_role_id"
+        )
+        supprimer_collaborateurs = serializer.validated_data.get("supprimer_collaborateurs", False)
+
+        if not substitution_id and not supprimer_collaborateurs:
+            raise RoleSubstitutionObligatoire()
+
+        reassigner_vers_role = None
+        if substitution_id:
+            reassigner_vers_role = get_object_or_404(Role, pk=substitution_id, supprime_le__isnull=True)
 
         try:
             resultat = supprimer_role(
                 role=role,
                 reassigner_vers_role=reassigner_vers_role,
+                supprimer_collaborateurs=supprimer_collaborateurs,
                 supprime_par=request.user,
             )
         except DjangoValidationError as exc:
@@ -300,13 +305,13 @@ class ParametresRoleDetailUpdateView(APIView):
 
 
 class ParametresRoleSupprimerReassignerView(APIView):
-    """`POST /api/v1/parametres/roles/{id}/supprimer/` — Suppression d'un rôle avec réassignation obligatoire (Paramètres)."""
+    """`POST /api/v1/parametres/roles/{id}/supprimer/` — Suppression d'un rôle avec réassignation ou suppression cascade."""
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
 
     @extend_schema(
-        summary="Supprimer un rôle personnalisé avec réassignation (Paramètres)",
+        summary="Supprimer un rôle personnalisé avec réassignation ou suppression cascade (Paramètres)",
         request=RoleSuppressionSerializer,
         responses={200: dict},
     )
@@ -315,21 +320,36 @@ class ParametresRoleSupprimerReassignerView(APIView):
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
-        substitution_id = request.data.get("role_substitution_id") or request.data.get(
-            "reassigner_vers_role_id"
-        )
-        if not substitution_id:
-            raise RoleSubstitutionObligatoire()
+        # Protection du rôle Administrateur : seul le DG / Propriétaire a autorité pour le supprimer
+        if role.code in (RoleGlobal.ADMIN, "AD"):
+            est_dg_ou_owner = (
+                getattr(request.user, "is_dg", False)
+                or getattr(request.user, "is_owner", False)
+                or getattr(request.user, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+            )
+            if not est_dg_ou_owner:
+                raise ActionReserveeDg()
 
         serializer = RoleSuppressionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        reassigner_vers_role = get_object_or_404(Role, pk=substitution_id, supprime_le__isnull=True)
+        substitution_id = serializer.validated_data.get("role_substitution_id") or serializer.validated_data.get(
+            "reassigner_vers_role_id"
+        )
+        supprimer_collaborateurs = serializer.validated_data.get("supprimer_collaborateurs", False)
+
+        if not substitution_id and not supprimer_collaborateurs:
+            raise RoleSubstitutionObligatoire()
+
+        reassigner_vers_role = None
+        if substitution_id:
+            reassigner_vers_role = get_object_or_404(Role, pk=substitution_id, supprime_le__isnull=True)
 
         try:
             resultat = supprimer_role(
                 role=role,
                 reassigner_vers_role=reassigner_vers_role,
+                supprimer_collaborateurs=supprimer_collaborateurs,
                 supprime_par=request.user,
             )
         except DjangoValidationError as exc:

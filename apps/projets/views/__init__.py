@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces
 from apps.core.permissions import (
+    EstDirection,
     MembreDuProjet,
     PermissionModule,
     filtrer_queryset_par_affectations,
@@ -62,7 +63,13 @@ class ProjetListCreateView(APIView):
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if self.request.method == "POST":
+            return [
+                IsAuthenticated(),
+                EstDirection(),
+                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
+            ]
+        if self.request.method in ("PUT", "PATCH", "DELETE"):
             return [
                 IsAuthenticated(),
                 PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
@@ -119,8 +126,9 @@ class ProjetListCreateView(APIView):
             "- `budget_initial_montant` : centimes de FCFA ; **2 000 FCFA = 200000**.\n"
             "- `date_fin_prevue` doit être strictement postérieure au début.\n"
             "- `reference` et les codes des lots sont générés si omis.\n"
-            "- Le chef de projet est obligatoire ; "
-            "les autres membres et les lots sont optionnels.\n"
+            "- La création de projet est réservée exclusivement au DG et à l'Administrateur.\n"
+            "- Le chef de projet est facultatif : un chantier peut être créé sans chef de projet.\n"
+            "- Les autres membres et les lots sont optionnels.\n"
             "- Utiliser des membres distincts pour les différents rôles. "
             "Un DG ou propriétaire ne peut pas être chef de projet ou conducteur de travaux.\n"
             "- Les rôles Directeur financier et Bailleur ne font pas partie de ce contrat.\n\n"

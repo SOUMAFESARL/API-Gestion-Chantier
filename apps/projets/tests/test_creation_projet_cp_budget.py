@@ -139,15 +139,16 @@ def test_rec_s1_05_a_budget_null_accepte(
 
 
 @pytest.mark.django_db
-def test_rec_s1_05_b_cp_obligatoire(client_tenant, admin_delegue_user, tiers_client):
-    """REC-S1-05-B : L'assignation d'un CP est obligatoire
-    (chef_projet_id ou chef_projet_invite).
+def test_rec_s1_05_b_cp_optionnel_et_conflit(client_tenant, admin_delegue_user, tiers_client):
+    """REC-S1-05-B : L'assignation d'un CP est désormais optionnelle.
+    Sans CP, le projet est créé (201) avec chef_projet à null.
+    Si chef_projet_id et chef_projet_invite sont fournis simultanément, rejet (400).
     """
     cl = auth_client(client_tenant, admin_delegue_user)
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=90)
 
-    # Sans aucun CP
+    # Sans aucun CP : succès 201
     rep_sans_cp = cl.post(
         "/api/v1/projets/",
         {
@@ -160,10 +161,12 @@ def test_rec_s1_05_b_cp_obligatoire(client_tenant, admin_delegue_user, tiers_cli
         },
         format="json",
     )
-    assert rep_sans_cp.status_code == status.HTTP_400_BAD_REQUEST
-    assert rep_sans_cp.json()["erreur"]["code"] == "chef_projet_requis"
+    assert rep_sans_cp.status_code == status.HTTP_201_CREATED
+    data = rep_sans_cp.json()
+    assert data["nom"] == "Projet Sans CP"
+    assert data["chef_projet"] is None
 
-    # Avec les deux spécifiés en conflit
+    # Avec les deux spécifiés en conflit : rejet 400
     rep_deux_cp = cl.post(
         "/api/v1/projets/",
         {

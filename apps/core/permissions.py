@@ -16,6 +16,7 @@ from apps.core.enums import RoleGlobal
 
 
 __all__ = [
+    "EstDirection",
     "LectureSeule",
     "MembreDuProjet",
     "PermissionModule",
@@ -124,6 +125,23 @@ class RoleRequis(permissions.BasePermission):
         if not self.roles_autorises:
             return True
         return utilisateur.role_global in self.roles_autorises
+
+
+class EstDirection(permissions.BasePermission):
+    """Autorise uniquement la Direction : DG, Administrateur, Propriétaire ou Superuser."""
+
+    message = "Seule la Direction (DG / Administrateur) est autorisée à effectuer cette action."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        return bool(
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        )
 
 
 class MembreDuProjet(permissions.BasePermission):

@@ -71,7 +71,9 @@ class Projet(ModeleBase):
 
     chef_projet = models.ForeignKey(
         "accounts.Utilisateur",
-        on_delete=models.RESTRICT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="projets_geres",
         verbose_name=_("chef de projet"),
     )

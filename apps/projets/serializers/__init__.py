@@ -14,11 +14,12 @@ from apps.core.enums import (
     ModeExecution,
     RoleGlobal,
     RoleProjet,
+    StatutProjet,
     StatutUtilisateur,
     TypeBordereau,
     TypeProjet,
 )
-from apps.core.exceptions import ChefProjetRequis, DgNonAssignableCommeCp
+from apps.core.exceptions import DgNonAssignableCommeCp
 from apps.projets.models import AffectationProjet, Lot, Projet
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
 from apps.projets.serializers.meteo import (
@@ -119,8 +120,8 @@ class ProjetSerializer(serializers.ModelSerializer):
     cree_par = ChefProjetEnrichiSerializer(read_only=True)
     entreprise = serializers.SerializerMethodField()
     client = TiersSerializer(read_only=True)
-    chef_projet = ChefProjetEnrichiSerializer(read_only=True)
-    conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True)
+    chef_projet = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
+    conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
     lots = LotSimpleSerializer(many=True, read_only=True)
     duree_jours_ouvres = serializers.IntegerField(read_only=True)
     budget_consomme_montant = serializers.SerializerMethodField()
@@ -226,6 +227,9 @@ class ProjetCreationSerializer(serializers.Serializer):
     type_projet = serializers.ChoiceField(
         choices=TypeProjet.choices, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
     )
+    statut = serializers.ChoiceField(
+        choices=StatutProjet.choices, required=False, default=StatutProjet.EN_ATTENTE
+    )
     client = serializers.PrimaryKeyRelatedField(queryset=Tiers.objects.all())
     maitre_oeuvre = serializers.CharField(
         max_length=200, required=False, allow_blank=True, default=""
@@ -312,15 +316,17 @@ class ProjetCreationSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"reference": _("La référence ne peut être vide.")}
                 )
-            if "chef_projet_id" in attrs and attrs["chef_projet_id"] is None:
-                raise ChefProjetRequis()
             responsables = {
                 "chef_projet_id": attrs.get("chef_projet_id", self.instance.chef_projet_id),
                 "conducteur_travaux_id": attrs.get(
                     "conducteur_travaux_id", self.instance.conducteur_travaux_id
                 ),
             }
-            if responsables["chef_projet_id"] == responsables["conducteur_travaux_id"]:
+            if (
+                responsables["chef_projet_id"]
+                and responsables["conducteur_travaux_id"]
+                and responsables["chef_projet_id"] == responsables["conducteur_travaux_id"]
+            ):
                 raise serializers.ValidationError(
                     {"conducteur_travaux_id": _("Les responsables doivent être distincts.")}
                 )
@@ -402,28 +408,12 @@ class ProjetCreationSerializer(serializers.Serializer):
                     )
                 codes_vus.add(c_clean)
 
-        # Si création d'un projet, assignation Chef de Projet obligatoire et règles DG
+        # Si création d'un projet, assignation Chef de Projet optionnelle et règles DG
         if self.instance is None:
             chef_projet_id = attrs.get("chef_projet_id")
             chef_projet_invite = attrs.get("chef_projet_invite")
             conducteur_travaux_id = attrs.get("conducteur_travaux_id")
             conducteur_travaux_invite = attrs.get("conducteur_travaux_invite")
-
-            # Rétrocompatibilité : si seul conducteur_travaux est spécifié sans chef_projet
-            if not chef_projet_id and not chef_projet_invite:
-                if conducteur_travaux_id:
-                    chef_projet_id = conducteur_travaux_id
-                    attrs["chef_projet_id"] = chef_projet_id
-                    attrs["conducteur_travaux_id"] = None
-                    conducteur_travaux_id = None
-                elif conducteur_travaux_invite:
-                    chef_projet_invite = conducteur_travaux_invite
-                    attrs["chef_projet_invite"] = chef_projet_invite
-                    attrs["conducteur_travaux_invite"] = None
-                    conducteur_travaux_invite = None
-
-            if not chef_projet_id and not chef_projet_invite:
-                raise ChefProjetRequis()
 
             if chef_projet_id and chef_projet_invite:
                 raise serializers.ValidationError(
@@ -586,7 +576,8 @@ class ProjetCreationSerializer(serializers.Serializer):
         else:
             reference = str(reference).strip()
 
-        # 1. Résolution Chef de Projet (responsable obligatoire)
+        # 1. Résolution Chef de Projet (optionnel)
+        chef_projet = None
         if chef_projet_id:
             chef_projet = Utilisateur.objects.get(id=chef_projet_id)
         elif chef_projet_invite:
@@ -601,8 +592,6 @@ class ProjetCreationSerializer(serializers.Serializer):
                     role_global=RoleGlobal.CHEF_PROJET,
                     statut=StatutUtilisateur.INVITE,
                 )
-        else:
-            chef_projet = user_connecte
 
         # 2. Résolution Conducteur de Travaux (optionnel, distinct du CP)
         conducteur_travaux = None
@@ -633,7 +622,7 @@ class ProjetCreationSerializer(serializers.Serializer):
             )
 
             # Invitation du Chef de Projet si invité à la volée
-            if chef_projet_invite:
+            if chef_projet and chef_projet_invite:
                 creer_invitation(
                     email=chef_projet.email,
                     role_propose=RoleGlobal.CHEF_PROJET,
@@ -646,16 +635,17 @@ class ProjetCreationSerializer(serializers.Serializer):
                     projet_id=projet.id,
                 )
 
-            # Affectation du Chef de Projet (rôle CHEF_PROJET)
-            AffectationProjet.objects.get_or_create(
-                utilisateur=chef_projet,
-                projet=projet,
-                defaults={
-                    "role_projet": RoleProjet.CHEF_PROJET,
-                    "est_actif": True,
-                    "cree_par": user_connecte,
-                },
-            )
+            # Affectation du Chef de Projet (rôle CHEF_PROJET) si spécifié
+            if chef_projet:
+                AffectationProjet.objects.get_or_create(
+                    utilisateur=chef_projet,
+                    projet=projet,
+                    defaults={
+                        "role_projet": RoleProjet.CHEF_PROJET,
+                        "est_actif": True,
+                        "cree_par": user_connecte,
+                    },
+                )
 
             # Affectation et invitation éventuelle du Conducteur de Travaux
             if conducteur_travaux:

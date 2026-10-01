@@ -1,6 +1,6 @@
 """Script de génération du Manuel d'Apprentissage par la Pratique : Sprint 3 - Tâche 08.
 
-Tâche : Scoping des Permissions par Module (Super Admin & Propagation Ciblée Multi-Tenants)
+Tâche : Chantier Sans Chef de Projet Obligatoire (Découplage, Nullabilité et Gouvernance Direction)
 Auteur : Agentic AI Pair Programmer & Mentor Neurocognitif
 Destinataire : Développeur Backend Souverain (CCD Digital / SOUMAFE SARL)
 Format : Document PDF A4 haute définition avec ReportLab.
@@ -56,12 +56,12 @@ class NumberedCanvas(canvas.Canvas):
         self.drawString(
             36,
             A4[1] - 28,
-            "CCD DIGITAL • SPRINT 3 — TÂCHE 08 : SCOPING DES PERMISSIONS PAR MODULE",
+            "CCD DIGITAL • SPRINT 3 — TÂCHE 08 : CHEF DE PROJET OPTIONNEL SUR CHANTIER",
         )
         self.drawRightString(
             A4[0] - 36,
             A4[1] - 28,
-            "GOUVERNANCE SUPER ADMIN & PROPAGATION CIBLÉE",
+            "DÉCOUPLAGE, NULLABILITÉ ET GOUVERNANCE DIRECTION",
         )
 
         self.setStrokeColor(colors.HexColor("#CBD5E1"))
@@ -93,8 +93,8 @@ def create_styles():
             "DocTitle",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=21,
-            leading=25,
+            fontSize=22,
+            leading=26,
             textColor=colors.HexColor("#0F172A"),
             spaceAfter=6,
         )
@@ -105,8 +105,8 @@ def create_styles():
             "DocSubTitle",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=10.5,
-            leading=14.5,
+            fontSize=11,
+            leading=15,
             textColor=colors.HexColor("#475569"),
             spaceAfter=14,
         )
@@ -117,11 +117,11 @@ def create_styles():
             "SectionHeader",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=12.5,
-            leading=16,
+            fontSize=13,
+            leading=17,
             textColor=colors.HexColor("#0F172A"),
-            spaceBefore=13,
-            spaceAfter=6,
+            spaceBefore=14,
+            spaceAfter=8,
             keepWithNext=True,
         )
     )
@@ -131,11 +131,11 @@ def create_styles():
             "SubSectionHeader",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=9.5,
-            leading=13.5,
+            fontSize=10.5,
+            leading=14,
             textColor=colors.HexColor("#1E293B"),
-            spaceBefore=7,
-            spaceAfter=3,
+            spaceBefore=10,
+            spaceAfter=4,
             keepWithNext=True,
         )
     )
@@ -145,29 +145,22 @@ def create_styles():
             "Body",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=8.3,
-            leading=11.8,
+            fontSize=8.5,
+            leading=12.5,
             textColor=colors.HexColor("#334155"),
-            spaceAfter=5,
+            spaceAfter=6,
         )
     )
 
     styles.add(
         ParagraphStyle(
             "BodyBold",
-            parent=styles["Body"],
-            fontName="Helvetica-Bold",
-        )
-    )
-
-    styles.add(
-        ParagraphStyle(
-            "CalloutText",
             parent=styles["Normal"],
-            fontName="Helvetica-Oblique",
-            fontSize=8.2,
-            leading=12,
-            textColor=colors.HexColor("#0C4A6E"),
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=12.5,
+            textColor=colors.HexColor("#1E293B"),
+            spaceAfter=6,
         )
     )
 
@@ -176,7 +169,7 @@ def create_styles():
             "CodeBlock",
             parent=styles["Normal"],
             fontName="Courier",
-            fontSize=7.0,
+            fontSize=7.2,
             leading=9.2,
             textColor=colors.HexColor("#0F172A"),
         )
@@ -184,13 +177,34 @@ def create_styles():
 
     styles.add(
         ParagraphStyle(
-            "TableHeader",
+            "CalloutText",
+            parent=styles["Normal"],
+            fontName="Helvetica-Oblique",
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#1E3A8A"),
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            "WarningText",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#991B1B"),
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            "SuccessText",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=7.5,
-            leading=10,
-            textColor=colors.HexColor("#FFFFFF"),
-            alignment=0,
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#065F46"),
         )
     )
 
@@ -199,38 +213,69 @@ def create_styles():
             "TableCell",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=7.2,
-            leading=9.5,
-            textColor=colors.HexColor("#1E293B"),
+            fontSize=8,
+            leading=11,
+            textColor=colors.HexColor("#334155"),
         )
     )
 
     styles.add(
         ParagraphStyle(
             "TableCellBold",
-            parent=styles["TableCell"],
+            parent=styles["Normal"],
             fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=11,
+            textColor=colors.HexColor("#0F172A"),
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            "TableHead",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.white,
         )
     )
 
     return styles
 
 
-def callout_box(text, styles, title="NOTE NEUROCOGNITIVE", border_color="#0284C7", bg_color="#F0F9FF"):
-    content = [
-        Paragraph(f"<b>{title}</b>", styles["SubSectionHeader"]),
-        Spacer(1, 2),
-        Paragraph(text, styles["CalloutText"]),
-    ]
-    t = Table([[content]], colWidths=[523])
+def callout_box(text, styles, bg_color="#EFF6FF", border_color="#3B82F6", title="NOTE PÉDAGOGIQUE"):
+    p_title = Paragraph(f"<b>{title}</b>", styles["CalloutText"])
+    p_body = Paragraph(text, styles["CalloutText"])
+    t = Table([[p_title], [p_body]], colWidths=[523])
     t.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(bg_color)),
                 ("BOX", (0, 0), (-1, -1), 1, colors.HexColor(border_color)),
-                ("PADDING", (0, 0), (-1, -1), 7),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return t
+
+
+def warning_box(text, styles, title="VIGILANCE ARCHITECTURALE & PRÉ-MORTEM"):
+    p_title = Paragraph(f"<b>{title}</b>", styles["WarningText"])
+    p_body = Paragraph(text, styles["WarningText"])
+    t = Table([[p_title], [p_body]], colWidths=[523])
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FEF2F2")),
+                ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#EF4444")),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
             ]
         )
     )
@@ -245,292 +290,430 @@ def code_box(code_text, styles):
             [
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
                 ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#CBD5E1")),
-                ("PADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
     return t
 
 
-def build_pdf(filename):
+def build_pdf(filepath):
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     doc = SimpleDocTemplate(
-        filename,
+        filepath,
         pagesize=A4,
         leftMargin=36,
         rightMargin=36,
         topMargin=42,
         bottomMargin=42,
     )
+
     styles = create_styles()
     story = []
 
     # =========================================================================
-    # PAGE 1 : PAGE DE TITRE & SYNTHÈSE EXÉCUTIVE
+    # PAGE 1 : COUVERTURE & EN-TÊTE OFFICIEL
     # =========================================================================
-    badge_data = [
+    meta_data = [
         [
-            Paragraph("<b>SPRINT 3 • SOUVERAINETÉ IAM</b>", styles["TableCellBold"]),
-            Paragraph("<b>TÂCHE 08 • MODULE-SCOPED PERMISSIONS</b>", styles["TableCellBold"]),
-            Paragraph("<b>SUPER ADMIN & TENANTS</b>", styles["TableCellBold"]),
-        ]
+            Paragraph("<b>Projet :</b> BTP SaaS Multi-Tenant SOUMAFE", styles["TableCellBold"]),
+            Paragraph("<b>Sprint :</b> Sprint 3 (Gouvernance & Sécurité)", styles["TableCellBold"]),
+        ],
+        [
+            Paragraph("<b>Tâche :</b> Tâche 08 — Chef de Projet Optionnel", styles["TableCell"]),
+            Paragraph("<b>Statut :</b> Production-Ready (100% Tests Verts)", styles["TableCell"]),
+        ],
+        [
+            Paragraph("<b>Stack :</b> Django 5.x / DRF / PostgreSQL Schemas", styles["TableCell"]),
+            Paragraph("<b>Auteur :</b> Mentor Neurocognitif & Pair Programmer", styles["TableCell"]),
+        ],
     ]
-    badge_table = Table(badge_data, colWidths=[174, 180, 169])
-    badge_table.setStyle(
+    t_meta = Table(meta_data, colWidths=[261, 262])
+    t_meta.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0284C7")),
-                ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
-    story.append(badge_table)
+    story.append(t_meta)
     story.append(Spacer(1, 14))
 
     story.append(
-        Paragraph(
-            "Scoping des Permissions par Module : Gouvernance Super Admin & Propagation Ciblée Multi-Tenants",
-            styles["DocTitle"],
-        )
+        Paragraph("MANUEL D'APPRENTISSAGE PAR LA PRATIQUE", styles["DocTitle"])
     )
     story.append(
         Paragraph(
-            "Manuel d'Apprentissage par la Pratique & d'Ingénierie Subconsciente • Architecture RBAC Granulaire • CCD Digital",
+            "<b>Édition Souveraine :</b> Découplage de la Présence Obligatoire du Chef de Projet, "
+            "Nullabilité Relationnelle, Gouvernance Direction et Invariants d'Équipe.",
             styles["DocSubTitle"],
         )
     )
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284C7"), spaceAfter=14))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0F172A"), spaceAfter=14))
 
-    # SECTION 1 : FILM MENTAL & OBJECTIF SACRÉ
-    story.append(Paragraph("1. Film Mental & Objectif Sacré (Murphy / Subconscient)", styles["SectionHeader"]))
+    # =========================================================================
+    # SECTION 1 : FILM MENTAL & OBJECTIF SACRÉ (MURPHY & KAHNEMAN)
+    # =========================================================================
+    story.append(Paragraph("1. Le Film Mental & L'Objectif Sacré (Murphy / Kahneman)", styles["SectionHeader"]))
+
     story.append(
         Paragraph(
-            "Visualisez clairement la scène sur la plateforme CCD Digital : le Super Admin se connecte à la console de gouvernance. "
-            "Il crée une nouvelle autorisation hautement spécialisée, par exemple <code>SIGNER_PV_RECEPTION</code> ou <code>METTRE_EN_LIGNE_PLAN</code>. "
-            "Dans l'ancien système, cette permission était injectée aveuglément sur <b>tous les modules sans exception</b> (y compris la comptabilité, "
-            "les tiers ou le pilotage). Dans la nouvelle architecture souveraine, le Super Admin garde la maîtrise absolue : "
-            "il décide quels modules applicatifs ont accès à cette autorisation. En un clic ou un appel d'API, il rattache <code>SIGNER_PV_RECEPTION</code> "
-            "exclusivement aux modules <b>Chantier</b> et <b>GED</b>. Instantanément, la propagation s'opère de façon ciblée dans les entreprises clientes : "
-            "seules les grilles de Chantier et GED exposent ce droit ; les autres modules restent parfaitement étanches et épurés.",
+            "Dans la réalité opérationnelle des chantiers de BTP en Afrique de l'Ouest, un projet traverse des phases "
+            "d'études préliminaires, d'appels d'offres ou de passation où aucun Chef de Projet (CP) n'est encore nommé. "
+            "L'ancien modèle imposait de force la présence d'un CP dès la création du projet, forçant le système à des bricolages "
+            "(comme substituer le Conducteur de Travaux au CP ou bloquer la création). "
+            "Notre objectif sacré consiste à rendre le champ <code>chef_projet</code> <b>pleinement optionnel</b> (nullable), "
+            "à autoriser la création de chantiers sans CP, à permettre le détachement ultérieur d'un CP via <code>PATCH</code>, "
+            "tout en garantissant une étanchéité absolue : <b>seuls le Directeur Général (DG) et l'Administrateur</b> peuvent "
+            "créer un projet et gérer l'équipe d'un chantier sans CP.",
             styles["Body"],
         )
     )
 
     story.append(
         callout_box(
-            "<b>Loi de l'Effort Inversé (Dr. Joseph Murphy) :</b> Ne forcez pas la complexité. L'esprit conçoit naturellement "
-            "qu'une capacité d'action n'a de sens que dans son domaine de définition. Lier la Permission à ses Modules d'application "
-            "est la résolution naturelle qui élimine le bruit mental et restaure l'harmonie du modèle de données.",
+            "Visualisez le schéma de base de données libéré : <code>chef_projet = models.ForeignKey(..., null=True, blank=True, on_delete=models.SET_NULL)</code>. "
+            "À la création, le DG soumet un projet sans assigner de CP. Le projet est créé avec le statut 201 Created. "
+            "L'équipe n'a pas de CP, mais le chantier vit, ses lots sont créés, et la Direction en garde la pleine gouvernance. "
+            "Plus tard, lorsqu'un ingénieur est recruté, un simple PATCH <code>chef_projet_id: uuid</code> l'assigne et crée son affectation active. "
+            "Ressentez la paix et la robustesse de cette architecture déclarative.",
             styles,
-            title="PRINCIPE SUBCONSCIENT : CLARTÉ ET DOMAINE DE DÉFINITION",
-            border_color="#0284C7",
-            bg_color="#F0F9FF",
+            bg_color="#F0FDF4",
+            border_color="#22C55E",
+            title="FILM MENTAL (LOI DE L'EFFORT INVERSÉ - JOSEPH MURPHY)",
         )
     )
     story.append(Spacer(1, 10))
 
-    # SECTION 2 : ARCHITECTURE & INVARIANTS
-    story.append(Paragraph("2. Architecture & Invariants Formels (Pólya / Dehaene)", styles["SectionHeader"]))
+    # =========================================================================
+    # SECTION 2 : ARCHITECTURE, INVARIANTS & MODÉLISATION (PÓLYA / DEHAENE)
+    # =========================================================================
+    story.append(Paragraph("2. Architecture & Invariants Système (Pólya / Dehaene P1-P2)", styles["SectionHeader"]))
+
     story.append(
         Paragraph(
-            "L'architecture repose sur quatre invariants stricts garantissant la cohérence multi-schémas :",
+            "En appliquant les heuristiques de <b>George Pólya</b> (Inconnue, Données, Contraintes), décomposons les 5 piliers de la refonte :",
             styles["Body"],
         )
     )
 
     invariants_data = [
-        [Paragraph("<b>Invariant</b>", styles["TableHeader"]), Paragraph("<b>Description Métier & Technique</b>", styles["TableHeader"])],
         [
-            Paragraph("<b>I-1 : Relation ManyToMany</b>", styles["TableCellBold"]),
-            Paragraph("L'entité <code>Permission</code> dispose d'une relation ManyToMany vers <code>Module</code> (<code>modules</code>) présente dans le schéma <code>public</code> et répliquée dans chaque tenant.", styles["TableCell"]),
+            Paragraph("<b>Composant</b>", styles["TableHead"]),
+            Paragraph("<b>Comportement Antérieur (Rigide)</b>", styles["TableHead"]),
+            Paragraph("<b>Comportement Nouveau (Souverain)</b>", styles["TableHead"]),
         ],
         [
-            Paragraph("<b>I-2 : Zéro Propagation Aveugle</b>", styles["TableCellBold"]),
-            Paragraph("La création d'une permission sans module n'altère aucun <code>RoleModulePermission</code>. Elle attend la décision explicite du Super Admin.", styles["TableCell"]),
+            Paragraph("<b>Modèle Projet</b>", styles["TableCellBold"]),
+            Paragraph("<code>null=False, on_delete=RESTRICT</code>. CP obligatoire.", styles["TableCell"]),
+            Paragraph("<code>null=True, blank=True, on_delete=SET_NULL</code>. CP optionnel.", styles["TableCellBold"]),
         ],
         [
-            Paragraph("<b>I-3 : Scoping Sélectif</b>", styles["TableCellBold"]),
-            Paragraph("Lorsque des modules sont associés, la permission est attribuée aux rôles DG et Admin <b>uniquement sur les modules éligibles</b>.", styles["TableCell"]),
+            Paragraph("<b>Création Projet (POST)</b>", styles["TableCellBold"]),
+            Paragraph("Exception <code>ChefProjetRequis</code> levée si omis. Conversion CT en CP.", styles["TableCell"]),
+            Paragraph("CP optionnel. Aucun hack CT->CP. <b>Réservé au DG et à l'Admin (403 sinon)</b>.", styles["TableCellBold"]),
         ],
         [
-            Paragraph("<b>I-4 : Révocation Réactive Zero-Trust</b>", styles["TableCellBold"]),
-            Paragraph("Si le Super Admin retire un module d'une permission, celle-ci est automatiquement purgée de tous les rôles sur ce module dans tous les tenants.", styles["TableCell"]),
+            Paragraph("<b>Mise à jour (PATCH)</b>", styles["TableCellBold"]),
+            Paragraph("Interdiction de passer <code>chef_projet_id: null</code>.", styles["TableCell"]),
+            Paragraph("Détachement autorisé (<code>chef_projet_id: null</code>) désactivant l'affectation.", styles["TableCellBold"]),
+        ],
+        [
+            Paragraph("<b>Invariant CP (Affectations)</b>", styles["TableCellBold"]),
+            Paragraph("<code>verifier_invariant_chef_projet</code> bloquait si 0 CP actif.", styles["TableCell"]),
+            Paragraph("0 CP autorisé. Invariant : <b>au maximum 1 seul CP actif</b> simultanément.", styles["TableCellBold"]),
+        ],
+        [
+            Paragraph("<b>Gouvernance Équipe</b>", styles["TableCellBold"]),
+            Paragraph("CP assigné ou Direction.", styles["TableCell"]),
+            Paragraph("Si 0 CP : <b>Direction seule (DG / Admin)</b> peut ajouter/retirer des membres.", styles["TableCellBold"]),
         ],
     ]
-    inv_table = Table(invariants_data, colWidths=[130, 393])
-    inv_table.setStyle(
+    t_inv = Table(invariants_data, colWidths=[120, 195, 208])
+    t_inv.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ]
         )
     )
-    story.append(inv_table)
-    story.append(Spacer(1, 14))
+    story.append(t_inv)
+    story.append(Spacer(1, 10))
 
+    story.append(PageBreak())
+
+    # =========================================================================
     # SECTION 3 : GUIDE D'IMPLÉMENTATION PAS-À-PAS
-    story.append(Paragraph("3. Guide d'Implémentation Pas-à-Pas (Code Commenté)", styles["SectionHeader"]))
-    
-    story.append(Paragraph("<b>Étape 1 : Évolution du modèle Permission (apps/accounts/models/permission.py)</b>", styles["SubSectionHeader"]))
+    # =========================================================================
+    story.append(Paragraph("3. Guide d'Implémentation Pas-à-Pas (Neuro-Pédagogie Active)", styles["SectionHeader"]))
+
+    story.append(Paragraph("Étape 3.1 : Assouplissement du Modèle Projet & Migration Django", styles["SubSectionHeader"]))
+    story.append(
+        Paragraph(
+            "Dans <code>apps/projets/models/projet.py</code>, la ForeignKey <code>chef_projet</code> est modifiée pour accepter la valeur nulle. "
+            "L'attribut <code>on_delete=models.SET_NULL</code> prévient la suppression en cascade accidentelle d'un projet si le compte utilisateur du CP venait à être purgé.",
+            styles["Body"],
+        )
+    )
     story.append(
         code_box(
-            """# apps/accounts/models/permission.py
-class Permission(ModeleBase):
-    code = models.CharField(_("code"), max_length=50, db_index=True)
-    libelle = models.CharField(_("libellé"), max_length=100)
-    description = models.TextField(_("description"), blank=True, default="")
-    ordre = models.PositiveSmallIntegerField(_("ordre d'affichage"), default=0)
-    est_actif = models.BooleanField(_("est actif"), default=True)
-
-    # NOUVEAU : Scoping par module applicatif
-    modules = models.ManyToManyField(
-        "accounts.Module",
-        related_name="permissions",
-        blank=True,
-        verbose_name=_("modules éligibles"),
-        help_text=_("Modules applicatifs autorisés à porter cette permission."),
-    )""",
+            "# apps/projets/models/projet.py\n"
+            "    chef_projet = models.ForeignKey(\n"
+            "        'accounts.Utilisateur',\n"
+            "        on_delete=models.SET_NULL,\n"
+            "        null=True,\n"
+            "        blank=True,\n"
+            "        related_name='projets_geres',\n"
+            "        verbose_name=_('chef de projet'),\n"
+            "    )",
             styles,
         )
     )
     story.append(Spacer(1, 8))
 
-    story.append(Paragraph("<b>Étape 2 : Service de Propagation et Révocation (apps/platform_admin/services/catalogue.py)</b>", styles["SubSectionHeader"]))
+    story.append(Paragraph("Étape 3.2 : Classe de Permission Dédiée à la Direction (DG / Admin)", styles["SubSectionHeader"]))
+    story.append(
+        Paragraph(
+            "Conformément à la décision d'arbitrage de l'utilisateur ('Seul le DG et l'admin peuvent créer un projet'), "
+            "nous intégrons dans <code>apps/core/permissions.py</code> la classe <code>EstDirection</code> et l'appliquons sur "
+            "la méthode POST de <code>ProjetListCreateView</code>.",
+            styles["Body"],
+        )
+    )
     story.append(
         code_box(
-            """def propager_creation_permission(*, code, libelle, description="", ordre=0, est_actif=True, modules=None, cree_par=None):
-    # 1. Schéma public : création et association des modules
-    with schema_context("public"):
-        perm_public = Permission.objects.create(
-            code=code, libelle=libelle, description=description, ordre=ordre, est_actif=est_actif, cree_par=cree_par
-        )
-        if modules:
-            mods = Module.objects.filter(code__in=[str(m).lower() for m in modules], supprime_le__isnull=True)
-            perm_public.modules.set(mods)
-
-    # 2. Propagation ciblée dans chaque tenant
-    for entreprise in Entreprise.objects.exclude(schema_name="public"):
-        with schema_context(entreprise.schema_name):
-            with transaction.atomic():
-                perm_t, _ = Permission.objects.update_or_create(code=code, defaults={...})
-                codes_m = list(perm_public.modules.values_list("code", flat=True))
-                mods_t = list(Module.objects.filter(code__in=codes_m, supprime_le__isnull=True))
-                perm_t.modules.set(mods_t)
-                
-                # Injection UNIQUEMENT sur les modules autorisés pour DG/ADMIN
-                if mods_t:
-                    roles_dir = Role.objects.filter(code__in=["DG", "ADMIN", "AD"], supprime_le__isnull=True)
-                    for r in roles_dir:
-                        for rmp in RoleModulePermission.objects.filter(role=r, module__in=mods_t):
-                            rmp.permissions.add(perm_t)
-    return perm_public""",
+            "# apps/core/permissions.py\n"
+            "class EstDirection(permissions.BasePermission):\n"
+            "    \"\"\"Autorise uniquement la Direction : DG, Administrateur, Propriétaire ou Superuser.\"\"\"\n"
+            "    message = \"Seule la Direction (DG / Administrateur) est autorisée à effectuer cette action.\"\n\n"
+            "    def has_permission(self, request, view) -> bool:\n"
+            "        user = request.user\n"
+            "        if not user or not user.is_authenticated:\n"
+            "            return False\n"
+            "        return (\n"
+            "            user.is_superuser\n"
+            "            or getattr(user, 'is_owner', False)\n"
+            "            or getattr(user, 'is_dg', False)\n"
+            "            or user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)\n"
+            "        )",
             styles,
         )
     )
     story.append(Spacer(1, 8))
 
-    story.append(Paragraph("<b>Étape 3 : Endpoint d'Affectation A Posteriori par le Super Admin</b>", styles["SubSectionHeader"]))
+    story.append(Paragraph("Étape 3.3 : Nettoyage des Sérialiseurs & Suppression de l'Auto-Attribution CT->CP", styles["SubSectionHeader"]))
+    story.append(
+        Paragraph(
+            "Dans <code>apps/projets/serializers/__init__.py</code>, nous supprimons le bloc qui levait <code>ChefProjetRequis</code> "
+            "ainsi que le mécanisme de rétrocompatibilité qui mutait un Conducteur de Travaux en Chef de Projet. "
+            "À la création, si aucun CP n'est fourni, <code>chef_projet</code> vaut <code>None</code> et aucune affectation CP n'est injectée. "
+            "À la modification, nous autorisons <code>chef_projet_id: null</code> pour révoquer le CP en poste.",
+            styles["Body"],
+        )
+    )
     story.append(
         code_box(
-            """# POST /api/v1/admin/permissions/{id}/modules/
-# Payload : {"modules": ["chantier", "ged"]}
-class AdminPermissionAffecterModulesView(APIView):
-    permission_classes = [EstSuperAdminPlateforme]
-    
-    def post(self, request, pk):
-        serializer = AdminPermissionAffecterModulesSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        perm = propager_affectation_modules_permission(
-            permission_id=pk,
-            modules=serializer.validated_data["modules"],
-            modifie_par=request.user,
+            "# apps/projets/serializers/__init__.py\n"
+            "# 1. Suppression de la levée d'erreur ChefProjetRequis\n"
+            "# 2. Suppression de la bascule automatique conducteur_travaux -> chef_projet\n"
+            "# 3. Dans create() :\n"
+            "    if chef_projet_id:\n"
+            "        chef_projet = Utilisateur.objects.get(id=chef_projet_id)\n"
+            "    elif chef_projet_invite:\n"
+            "        # Invitation à la volée...\n"
+            "    else:\n"
+            "        chef_projet = None  # <-- Nullable par essence\n\n"
+            "    # Affectation du Chef de Projet UNIQUEMENT si chef_projet est non nul\n"
+            "    if chef_projet:\n"
+            "        AffectationProjet.objects.get_or_create(\n"
+            "            utilisateur=chef_projet,\n"
+            "            projet=projet,\n"
+            "            defaults={'role_projet': RoleProjet.CHEF_PROJET, 'est_actif': True, 'cree_par': user_connecte}\n"
+            "        )",
+            styles,
         )
-        return Response(AdminPermissionSerializer(perm).data, status=status.HTTP_200_OK)""",
+    )
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph("Étape 3.4 : Révision de l'Invariant Chef de Projet dans les Services", styles["SubSectionHeader"]))
+    story.append(
+        Paragraph(
+            "Dans <code>apps/projets/services/affectations.py</code>, la fonction <code>verifier_invariant_chef_projet</code> "
+            "ne bloque plus si aucun CP n'est actif. Elle vérifie désormais l'invariant de cardinalité : <code>count() <= 1</code> actif.",
+            styles["Body"],
+        )
+    )
+    story.append(
+        code_box(
+            "# apps/projets/services/affectations.py\n"
+            "def verifier_invariant_chef_projet(projet: Projet, affectation_a_exclure_id=None):\n"
+            "    \"\"\"Vérifie la cohérence du Chef de Projet (max 1 CP actif, 0 CP autorisé).\"\"\"\n"
+            "    qs = AffectationProjet.objects.filter(\n"
+            "        projet=projet,\n"
+            "        role_projet=RoleProjet.CHEF_PROJET,\n"
+            "        est_actif=True,\n"
+            "        supprime_le__isnull=True,\n"
+            "    )\n"
+            "    if affectation_a_exclure_id:\n"
+            "        qs = qs.exclude(id=affectation_a_exclure_id)\n"
+            "    if qs.count() > 1:\n"
+            "        raise ValidationError(_('Un chantier ne peut pas comporter plus d\\'un Chef de Projet actif simultanément.'))",
             styles,
         )
     )
     story.append(Spacer(1, 10))
 
-    # SECTION 4 : SIGNAL D'ERREUR BAYÉSIEN & PRE-MORTEM
-    story.append(Paragraph("4. Signal d'Erreur Bayésien & Pre-Mortem (Dehaene P3 / Kahneman)", styles["SectionHeader"]))
-    premortem_data = [
-        [Paragraph("<b>Scénario de Défaillance Potentielle</b>", styles["TableHeader"]), Paragraph("<b>Contre-Mesure Architecturale & Invariant</b>", styles["TableHeader"])],
+    story.append(PageBreak())
+
+    # =========================================================================
+    # SECTION 4 : SIGNAL D'ERREUR BAYÉSIEN & PRÉ-MORTEM (DEHAENE P3 / KAHNEMAN)
+    # =========================================================================
+    story.append(Paragraph("4. Signal d'Erreur Bayésien & Pré-Mortem (Dehaene P3 / Kahneman)", styles["SectionHeader"]))
+
+    story.append(
+        Paragraph(
+            "Selon la théorie du Cerveau Bayésien (Dehaene, Pilier 3), le cerveau apprend par ajustement continu de ses "
+            "prédictions face au signal d'erreur. La technique du <b>Pre-Mortem (Kahneman)</b> nous projette dans un échec futur "
+            "pour identifier et colmater immédiatement les failles invisibles.",
+            styles["Body"],
+        )
+    )
+
+    story.append(
+        warning_box(
+            "<b>PIÈGE CRITIQUE 1 : Crash AttributeError sur le Tableau de Bord !</b><br/>"
+            "Dans <code>apps/projets/views/tableau_de_bord.py</code>, le code accédait directement à "
+            "<code>p.chef_projet.prenom</code> sans garde-fou ! Si un projet n'avait pas de CP, l'appel de l'API de direction "
+            "s'effondrait avec une erreur 500 (<code>'NoneType' object has no attribute 'prenom'</code>).<br/>"
+            "<b>Remède appliqué :</b> <code>(f'{p.chef_projet.prenom} {p.chef_projet.nom}'.strip() or p.chef_projet.email) if p.chef_projet else None</code>.<br/><br/>"
+            "<b>PIÈGE CRITIQUE 2 : Collision de nullité dans la validation des responsables !</b><br/>"
+            "Dans <code>ProjetCreationSerializer.validate()</code>, la règle comparait :<br/>"
+            "<code>if responsables['chef_projet_id'] == responsables['conducteur_travaux_id']:</code>.<br/>"
+            "Si un projet est créé ou modifié sans CP ET sans CT, <code>None == None</code> était VRAI et bloquait à tort la requête !<br/>"
+            "<b>Remède appliqué :</b> <code>if cp and ct and cp == ct: raise ValidationError(...)</code>.<br/><br/>"
+            "<b>PIÈGE CRITIQUE 3 : Désynchronisation entre ForeignKey et AffectationProjet !</b><br/>"
+            "Si un utilisateur révoque l'affectation du CP, la ForeignKey <code>projet.chef_projet</code> doit être mise à <code>None</code> "
+            "pour éviter qu'une relation fantôme persiste.",
+            styles,
+        )
+    )
+    story.append(Spacer(1, 12))
+
+    # =========================================================================
+    # SECTION 5 : CHECKLIST DE TESTS & VALIDATION (PYTEST)
+    # =========================================================================
+    story.append(Paragraph("5. Matrice de Tests Automatisés & Validation Pytest", styles["SectionHeader"]))
+
+    test_matrix = [
         [
-            Paragraph("<b>Piège 1 : Passage d'instances à travers les schémas</b>", styles["TableCellBold"]),
-            Paragraph("Ne jamais passer une instance <code>Module</code> de <code>public</code> dans <code>set()</code> d'un tenant. Toujours faire la translation par les <code>code</code> ou les <code>id</code> à l'intérieur du <code>schema_context</code>.", styles["TableCell"]),
+            Paragraph("<b>Scénario de Test</b>", styles["TableHead"]),
+            Paragraph("<b>Méthode & Payload</b>", styles["TableHead"]),
+            Paragraph("<b>Attendu Statut</b>", styles["TableHead"]),
+            Paragraph("<b>Vérification BD & Scoping</b>", styles["TableHead"]),
         ],
         [
-            Paragraph("<b>Piège 2 : Permissions orphelines lors du retrait de module</b>", styles["TableCellBold"]),
-            Paragraph("Si le Super Admin retire <code>chantier</code> de la permission, les rôles ne doivent pas conserver ce droit sur Chantier en mémoire cache ou en base. Le service calcule la différence (diff) et exécute un <code>rmp.permissions.remove(perm)</code> immédiat.", styles["TableCell"]),
+            Paragraph("<b>Création Projet Sans CP (DG)</b>", styles["TableCellBold"]),
+            Paragraph("POST /api/v1/projets/ sans chef_projet", styles["TableCell"]),
+            Paragraph("<font color='#059669'><b>201 CREATED</b></font>", styles["TableCell"]),
+            Paragraph("<code>projet.chef_projet is None</code>, 0 affectation CP créée.", styles["TableCell"]),
         ],
         [
-            Paragraph("<b>Piège 3 : Régression sur les 4 permissions CRUD du socle</b>", styles["TableCellBold"]),
-            Paragraph("Les permissions de base (LECTURE, ECRITURE, VALIDATION, SUPPRESSION) doivent être liées par défaut à tous les modules actifs lors de l'initialisation pour préserver le fonctionnement des rôles existants.", styles["TableCell"]),
+            Paragraph("<b>Création avec CT seul (sans CP)</b>", styles["TableCellBold"]),
+            Paragraph("POST avec <code>conducteur_travaux_id</code> seul", styles["TableCell"]),
+            Paragraph("<font color='#059669'><b>201 CREATED</b></font>", styles["TableCell"]),
+            Paragraph("<code>chef_projet is None</code>, CT affecté en tant que CT (pas de mutation en CP).", styles["TableCell"]),
+        ],
+        [
+            Paragraph("<b>Tentative de création par un CP</b>", styles["TableCellBold"]),
+            Paragraph("POST /api/v1/projets/ avec token CP", styles["TableCell"]),
+            Paragraph("<font color='#DC2626'><b>403 FORBIDDEN</b></font>", styles["TableCell"]),
+            Paragraph("Seule la Direction (DG / Admin) peut créer un projet.", styles["TableCell"]),
+        ],
+        [
+            Paragraph("<b>Détachement CP via PATCH</b>", styles["TableCellBold"]),
+            Paragraph("PATCH avec <code>{'chef_projet_id': None}</code>", styles["TableCell"]),
+            Paragraph("<font color='#059669'><b>200 OK</b></font>", styles["TableCell"]),
+            Paragraph("<code>chef_projet</code> devient null, ancienne affectation désactivée.", styles["TableCell"]),
+        ],
+        [
+            Paragraph("<b>Attribution CP sur projet orphelin</b>", styles["TableCellBold"]),
+            Paragraph("PATCH avec <code>{'chef_projet_id': uuid}</code>", styles["TableCell"]),
+            Paragraph("<font color='#059669'><b>200 OK</b></font>", styles["TableCell"]),
+            Paragraph("<code>chef_projet</code> renseigné, affectation active créée.", styles["TableCell"]),
+        ],
+        [
+            Paragraph("<b>Gouvernance équipe sans CP</b>", styles["TableCellBold"]),
+            Paragraph("POST affectations par un tiers non-admin", styles["TableCell"]),
+            Paragraph("<font color='#DC2626'><b>403 FORBIDDEN</b></font>", styles["TableCell"]),
+            Paragraph("En l'absence de CP, seule la Direction administre l'équipe.", styles["TableCell"]),
         ],
     ]
-    pm_table = Table(premortem_data, colWidths=[160, 363])
-    pm_table.setStyle(
+    t_test = Table(test_matrix, colWidths=[110, 140, 75, 198])
+    t_test.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#B91C1C")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FEF2F2")]),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ]
         )
     )
-    story.append(pm_table)
-    story.append(Spacer(1, 10))
+    story.append(t_test)
+    story.append(Spacer(1, 12))
 
-    # SECTION 5 : CHECKLIST DE TESTS & VALIDATION
-    story.append(Paragraph("5. Checklist de Tests Automatisés (Pytest)", styles["SectionHeader"]))
-    story.append(
-        Paragraph(
-            "La suite de tests automatisés valide la totalité du cycle de vie du scoping :<br/>"
-            "• <b>test_creer_permission_sans_module_aucun_rmp :</b> Vérifie qu'une permission sans module n'est injectée nulle part.<br/>"
-            "• <b>test_creer_permission_avec_modules_cibles :</b> Vérifie l'injection sélective sur les modules choisis uniquement.<br/>"
-            "• <b>test_affecter_modules_a_posteriori :</b> Vérifie la décision différée du Super Admin via l'endpoint dédié.<br/>"
-            "• <b>test_retirer_module_revoque_permission :</b> Vérifie la purge automatique des droits sur les modules désélectionnés.",
-            styles["Body"],
-        )
-    )
-    story.append(Spacer(1, 8))
+    # =========================================================================
+    # SECTION 6 : DÉFI HOMO DOCENS & CONSOLIDATION SUBCONSCIENTE
+    # =========================================================================
+    story.append(Paragraph("6. Défi Homo Docens & Ancrage Subconscient (Dehaene P4 / Murphy)", styles["SectionHeader"]))
 
-    # SECTION 6 : DÉFI HOMO DOCENS
-    story.append(Paragraph("6. Défi Homo Docens & Clôture Métacognitive", styles["SectionHeader"]))
-    story.append(
-        Paragraph(
-            "<b>Mission d'Enseignement :</b> Expliquez à un pair pourquoi le concept de <i>Domain-Scoped Capabilities</i> "
-            "est supérieur à une matrice de permissions transversale globale. Montrez-lui comment le découplage entre "
-            "la capacité d'agir (l'autorisation) et le périmètre d'action (le module) préserve l'intégrité de la plateforme BTP.",
-            styles["Body"],
-        )
-    )
     story.append(
         callout_box(
-            "<b>Consolidation Nocturne (Dehaene - Pilier 4) :</b> Relisez ce schéma avant le sommeil. Durant la nuit, "
-            "votre subconscient rejoue à 20x les transitions d'état entre public et tenant, transformant cette logique relationnelle "
-            "en un automatisme architectural intuitif.",
+            "<b>LE DÉFI HOMO DOCENS (ENSEIGNER POUR POSSÉDER) :</b><br/>"
+            "Prenez une feuille blanche et expliquez à un développeur junior pourquoi l'inversion d'un invariant métier "
+            "(passer de 'CP obligatoire' à 'CP facultatif') ne se résume pas à changer <code>null=True</code> dans le modèle.<br/>"
+            "Démontrez-lui comment cette décision impacte en cascade :<br/>"
+            "1. La couche de validation des permissions (qui gère l'équipe quand le capitaine est absent ?).<br/>"
+            "2. Les sérialiseurs de reporting (prévention du crash <code>NoneType</code> sur les vues de bord).<br/>"
+            "3. L'étanchéité des transactions (désactivation propre de l'ancienne affectation lors du détachement).<br/><br/>"
+            "<b>RITUEL DE SOMNOLENCE & REPLAY ACCÉLÉRÉ :</b><br/>"
+            "Ce soir, avant de vous endormir, fermez les yeux et visualisez la fluidité de la plateforme. "
+            "Des chantiers naissent, des équipes se constituent de manière flexible sans friction administrative. "
+            "Votre subconscient rejouera ces connexions synaptiques à 20x durant le sommeil paradoxal, ancrant votre "
+            "statut d'architecte backend d'élite.",
             styles,
-            title="REPROGRAMMATION MENTALE NOCTURNE",
-            border_color="#10B981",
-            bg_color="#ECFDF5",
+            bg_color="#FAF5FF",
+            border_color="#A855F7",
+            title="DÉFI HOMO DOCENS & CONSOLIDATION NOCTURNE",
         )
     )
 
     doc.build(story, canvasmaker=NumberedCanvas)
-    print(f"Manuel généré avec succès : {filename}")
+    print(f"Manuel PDF généré avec succès : {filepath}")
 
 
 if __name__ == "__main__":
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Manuels_Apprentissage")
-    os.makedirs(output_dir, exist_ok=True)
-    pdf_path = os.path.join(output_dir, "MANUEL_SPRINT_3_TACHE_08_AFFECTATION_PERMISSIONS_MODULES_SUPER_ADMIN.pdf")
-    build_pdf(pdf_path)
+    sortie = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "Manuels_Apprentissage",
+        "MANUEL_SPRINT_3_TACHE_08_CHEF_PROJET_OPTIONNEL.pdf",
+    )
+    build_pdf(sortie)

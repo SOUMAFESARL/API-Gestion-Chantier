@@ -139,9 +139,6 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "apps.core.middleware_tenant.TenantResolutionMiddleware",
     "apps.core.middleware.IdentifiantRequeteMiddleware",
-    # Après le middleware de tenant, qui pose `request.tenant`, et avant
-    # tout le reste : une porte se ferme au plus tôt.
-    "apps.core.middleware.RestrictionIPPlateformeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -272,16 +269,8 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 EMAIL_COMMERCIAL = config("EMAIL_COMMERCIAL", default="commercial@ccd-digital.ci")
 TELEPHONE_COMMERCIAL = config("TELEPHONE_COMMERCIAL", default="+225 27 00 00 00 00")
 
-# Adresses autorisées à atteindre l'authentification du schéma `public` — la
-# porte du personnel de l'éditeur. Matrice des rôles §1.1.
-#
-# **Vide et hors développement, elle interdit tout.** La valeur par défaut d'une
-# porte d'administration doit être fermée : un déploiement qui oublie ce réglage
-# s'en aperçoit à la première connexion, ce qui vaut mieux que de ne jamais s'en
-# apercevoir.
-SUPER_ADMIN_IPS = [
-    ip.strip() for ip in config("SUPER_ADMIN_IPS", default="").split(",") if ip.strip()
-]
+# Restriction d'adresse IP désactivée : l'accès est ouvert sans restriction d'IP.
+SUPER_ADMIN_IPS: list[str] = []
 
 # Socle Commun §2.1 — bcrypt en premier.
 PASSWORD_HASHERS = [

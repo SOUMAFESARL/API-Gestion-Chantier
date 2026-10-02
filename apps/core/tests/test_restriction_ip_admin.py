@@ -1,21 +1,16 @@
-"""Tests de sécurité : verrouillage de l'accès au panneau d'administration par IP.
+"""Tests de sécurité : absence de restriction d'adresse IP sur la plateforme.
 
-US-023 / T-043 :
-- GIVEN /admin/dashboard/ WHEN accessible depuis une IP non autorisée THEN 403
-- GIVEN /admin/ WHEN accessible depuis un sous-domaine client (tenant) THEN 403
-- Support des masques de sous-réseau CIDR
-- Réponses 403 adaptées (HTML pour navigateur, JSON pour API)
-- Traçabilité dans les journaux de sécurité
+Vérifie que :
+- L'administration (/admin/, /admin/dashboard/) n'est pas bloquée par adresse IP
+- L'endpoint de vérification d'accès Super Admin autorise systématiquement
+- La fonction est_ip_autorisee renvoie toujours True
 """
 
-import json
-import logging
-from unittest.mock import patch
-
 import pytest
-from django.test.utils import override_settings
-from django_tenants.utils import get_public_schema_name, schema_context
+from rest_framework import status
 from rest_framework.test import APIClient
+
+from apps.core.ip_restriction import est_ip_autorisee
 
 
 @pytest.fixture(autouse=True)
@@ -28,131 +23,35 @@ def cache_vide():
 
 
 @pytest.mark.django_db
-def test_admin_dashboard_refuse_ip_hors_whitelist():
-    """Critère d'acceptation direct US-023 :
-    GIVEN /admin/dashboard/ WHEN accessible depuis une IP non autorisée THEN 403.
-    """
+def test_admin_dashboard_sans_restriction_ip():
+    """L'accès à /admin/dashboard/ ne subit aucun blocage 403 de restriction IP."""
     client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.25")
-
-    with override_settings(SUPER_ADMIN_IPS=["192.168.1.10"], DEBUG=False):
-        reponse = client.get("/admin/dashboard/")
-
-    assert reponse.status_code == 403
-    assert b"Acc\xc3\xa8s Restreint" in reponse.content or b"acces_refuse" in reponse.content
+    reponse = client.get("/admin/dashboard/")
+    # Ne renvoie pas 403 restriction IP (302 vers login ou 200)
+    assert reponse.status_code in (200, 302)
 
 
 @pytest.mark.django_db
-def test_admin_refuse_ip_hors_whitelist_reponse_html():
-    """Une tentative de consultation Web sur /admin/ depuis une IP non autorisée
-    reçoit une page HTML 403 neutre ne dévoilant aucune information sur l'admin.
-    """
+def test_admin_sans_restriction_ip():
+    """L'accès à /admin/ ne subit aucun blocage 403 de restriction IP."""
     client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.99")
-
-    with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
-        reponse = client.get("/admin/", HTTP_ACCEPT="text/html,application/xhtml+xml")
-
-    assert reponse.status_code == 403
-    assert "text/html" in reponse.headers.get("Content-Type", "")
-    assert "Accès Restreint (403)" in reponse.content.decode("utf-8")
-
-
-@pytest.mark.django_db
-def test_admin_refuse_ip_hors_whitelist_reponse_json():
-    """Une requête API (Accept: application/json) rejetée reçoit un format d'erreur JSON standardisé."""
-    client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.99")
-
-    with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
-        reponse = client.get("/admin/", HTTP_ACCEPT="application/json")
-
-    assert reponse.status_code == 403
-    assert "application/json" in reponse.headers.get("Content-Type", "")
-    donnees = json.loads(reponse.content)
-    assert donnees["erreur"]["code"] == "acces_refuse"
-
-
-@pytest.mark.django_db
-def test_admin_autorise_ip_exacte():
-    """Une adresse IP figurant explicitement dans SUPER_ADMIN_IPS est autorisée."""
-    client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="192.0.2.15")
-
-    with override_settings(SUPER_ADMIN_IPS=["192.0.2.15"], DEBUG=False):
-        reponse = client.get("/admin/")
-
-    # L'accès franchit le middleware et atteint Django admin (302 vers login ou 200)
+    reponse = client.get("/admin/")
     assert reponse.status_code in (200, 302)
-
-
-@pytest.mark.django_db
-def test_admin_autorise_plage_cidr():
-    """Une adresse IP comprise dans un sous-réseau CIDR (ex: 192.168.1.0/24) est autorisée."""
-    client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="192.168.1.42")
-
-    with override_settings(SUPER_ADMIN_IPS=["192.168.1.0/24"], DEBUG=False):
-        reponse = client.get("/admin/")
-
-    assert reponse.status_code in (200, 302)
-
-
-@pytest.mark.django_db
-def test_admin_autorise_avec_x_forwarded_for():
-    """L'IP d'origine transmise dans HTTP_X_FORWARDED_FOR est correctement évaluée."""
-    client = APIClient(
-        headers={"host": "localhost"},
-        REMOTE_ADDR="127.0.0.1",  # IP du reverse proxy local
-        HTTP_X_FORWARDED_FOR="192.168.1.88, 10.0.0.1",
-    )
-
-    with override_settings(SUPER_ADMIN_IPS=["192.168.1.0/24"], DEBUG=False):
-        reponse = client.get("/admin/")
-
-    assert reponse.status_code in (200, 302)
-
-
-@pytest.mark.django_db
-def test_admin_interdit_sur_sous_domaine_tenant():
-    """L'accès à /admin/ est strictement interdit sur les sous-domaines clients (tenants),
-    même si l'adresse IP est dans la liste blanche.
-    """
-    client = APIClient(headers={"host": "demo.localhost"}, REMOTE_ADDR="127.0.0.1")
-
-    with override_settings(SUPER_ADMIN_IPS=["127.0.0.1"], DEBUG=False):
-        reponse = client.get("/admin/")
-
-    assert reponse.status_code == 403
 
 
 @pytest.mark.django_db
 def test_super_admin_verifier_acces_endpoint():
-    """L'endpoint /api/v1/super-admin/verifier-acces/ valide dynamiquement l'autorisation IP."""
+    """L'endpoint /api/v1/super-admin/verifier-acces/ autorise l'accès quelle que soit l'IP."""
     url = "/api/v1/super-admin/verifier-acces/"
-
-    # 1. IP non autorisée
-    client_refuse = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.1")
-    with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
-        rep_refus = client_refuse.get(url)
-    assert rep_refus.status_code == 403
-    assert rep_refus.json()["erreur"]["code"] == "acces_refuse"
-
-    # 2. IP autorisée
-    client_ok = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="10.0.0.1")
-    with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
-        rep_ok = client_ok.get(url)
-    assert rep_ok.status_code == 200
-    assert rep_ok.json()["statut"] == "autorise"
-    assert rep_ok.json()["ip"] == "10.0.0.1"
+    client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.1")
+    reponse = client.get(url)
+    assert reponse.status_code == status.HTTP_200_OK
+    assert reponse.json()["statut"] == "autorise"
 
 
-@pytest.mark.django_db
-def test_journalisation_securite_sur_rejet(caplog):
-    """Toute tentative rejetée émet un avertissement dans le logger securite.super_admin."""
-    client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="203.0.113.77")
+def test_est_ip_autorisee_retourne_toujours_vrai():
+    """est_ip_autorisee autorise toutes les adresses IP sans exception."""
+    assert est_ip_autorisee("127.0.0.1") is True
+    assert est_ip_autorisee("198.51.100.42") is True
+    assert est_ip_autorisee("") is True
 
-    with caplog.at_level(logging.WARNING, logger="securite.super_admin"):
-        with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
-            client.get("/admin/dashboard/")
-
-    assert any(
-        "Tentative d'accès non autorisée au panneau d'administration" in record.message
-        and "203.0.113.77" in record.message
-        for record in caplog.records
-    )

@@ -125,8 +125,7 @@ urlpatterns = [
     # les deux territoires, et c'est le schéma qui dit de qui il s'agit. Un
     # compte de `public` n'apparaît dans aucune liste de collaborateurs, ne
     # consomme aucun siège de quota et n'a aucune affectation de projet.
-    #
-    # La porte est restreinte par adresse IP — `RestrictionIPPlateformeMiddleware`.
+    # La porte d'authentification plateforme (accès ouvert sans restriction d'adresse IP).
     path("api/v1/", include("apps.accounts.urls")),
     # Les règles de mot de passe sont servies aux deux territoires : l'écran
     # d'activation les demande avant qu'aucun tenant n'existe.

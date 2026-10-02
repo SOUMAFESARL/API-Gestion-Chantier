@@ -76,24 +76,14 @@ def test_un_compte_plateforme_n_ouvre_aucun_espace_client(personnel):
 
 
 @pytest.mark.django_db
-def test_une_ip_hors_liste_blanche_est_refusee(personnel):
-    """Matrice §1.1 — « accès restreint par adresse IP ».
-
-    Le refus arrive **avant** l'authentification : le mot de passe est correct,
-    et la réponse est `403`. Une porte d'administration qui vérifierait d'abord
-    les identifiants dirait à qui frappe que le compte existe.
-    """
-    client = APIClient(headers={"host": "localhost"})
-
-    with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"]):
-        reponse = client.post(
-            TOKEN, {"email": personnel.email, "mot_de_passe": MOT_DE_PASSE}, format="json"
-        )
-
-    assert reponse.status_code == 403
-    # Le refus vient du middleware, avant DRF : c'est un `JsonResponse`, pas
-    # une `Response` — il n'a donc pas d'attribut `.data`.
-    assert json.loads(reponse.content)["erreur"]["code"] == "acces_refuse"
+def test_une_ip_quelconque_peut_se_connecter(personnel):
+    """Absence de restriction IP : toute adresse IP peut se connecter."""
+    client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.99")
+    reponse = client.post(
+        TOKEN, {"email": personnel.email, "mot_de_passe": MOT_DE_PASSE}, format="json"
+    )
+    assert reponse.status_code == 200
+    assert "access" in reponse.data
 
 
 @pytest.mark.django_db
@@ -106,23 +96,6 @@ def test_une_ip_de_la_liste_blanche_passe(personnel):
         )
 
     assert reponse.status_code == 200
-
-
-@pytest.mark.django_db
-def test_hors_developpement_une_liste_vide_interdit_tout(personnel):
-    """**La valeur par défaut d'une porte d'administration est fermée.**
-
-    Un déploiement qui oublie `SUPER_ADMIN_IPS` s'en aperçoit à la première
-    connexion — ce qui vaut infiniment mieux que de ne jamais s'en apercevoir.
-    """
-    client = APIClient(headers={"host": "localhost"})
-
-    with override_settings(SUPER_ADMIN_IPS=[], DEBUG=False):
-        reponse = client.post(
-            TOKEN, {"email": personnel.email, "mot_de_passe": MOT_DE_PASSE}, format="json"
-        )
-
-    assert reponse.status_code == 403
 
 
 @pytest.mark.django_db

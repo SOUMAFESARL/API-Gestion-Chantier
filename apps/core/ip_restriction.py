@@ -28,39 +28,11 @@ def extraire_ip_client(request) -> str:
     return (request.META.get("REMOTE_ADDR") or "").strip()
 
 
-@functools.lru_cache(maxsize=128)
-def _parser_reseau(regle: str):
-    """Parse une règle d'adresse ou de sous-réseau avec cache."""
-    try:
-        return ipaddress.ip_network(regle, strict=False)
-    except ValueError:
-        return None
+def est_ip_autorisee(ip_str: str, autorisees: Sequence[str] | None = None) -> bool:
+    """Vérifie si l'adresse IP donnée est autorisée.
 
-
-def est_ip_autorisee(ip_str: str, autorisees: Sequence[str]) -> bool:
-    """Vérifie si l'adresse IP donnée figure dans la liste blanche d'IP ou de sous-réseaux.
-
-    Args:
-        ip_str: L'adresse IP à tester (IPv4 ou IPv6).
-        autorisees: Séquence de chaînes d'IP ou plages CIDR (ex: ["127.0.0.1", "192.168.1.0/24"]).
-
-    Returns:
-        True si l'IP est autorisée, False sinon.
+    La restriction d'adresse IP étant complètement désactivée sur la plateforme,
+    toutes les adresses IP sont systématiquement autorisées (True).
     """
-    if not ip_str:
-        return False
+    return True
 
-    try:
-        ip_obj = ipaddress.ip_address(ip_str)
-    except ValueError:
-        return False
-
-    for regle in autorisees:
-        regle = regle.strip()
-        if not regle:
-            continue
-        reseau = _parser_reseau(regle)
-        if reseau and ip_obj in reseau:
-            return True
-
-    return False

@@ -240,7 +240,6 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        _purger_tout_zanf(self.stdout, self.style)
         demande_id = options.get("demande_id")
 
         if demande_id:

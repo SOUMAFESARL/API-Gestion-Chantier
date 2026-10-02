@@ -134,10 +134,14 @@ class RestrictionIPPlateformeMiddleware:
                     body = json.loads(request.body.decode("utf-8"))
                     email = (body.get("email") or "").strip().lower()
                     if email:
+                        from django.db.models import Q
                         from apps.accounts.models import Utilisateur
+                        from apps.core.enums import RoleGlobal
 
                         est_compte_plateforme = Utilisateur.objects.filter(
                             email__iexact=email
+                        ).filter(
+                            Q(is_superuser=True) | Q(is_staff=True) | Q(role_global=RoleGlobal.ADMIN)
                         ).exists()
                     else:
                         est_compte_plateforme = False

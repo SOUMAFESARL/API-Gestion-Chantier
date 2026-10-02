@@ -43,8 +43,29 @@ def migrer_bd_vue(request):
         return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
 
 
+@csrf_exempt
+def purger_zanf_vue(request):
+    """Exécute la purge intégrale des schémas et références 'zanf' sur commande."""
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    token = request.headers.get("X-Maintenance-Token")
+    if token != "ccd-migration-prod-2026-secure-token":
+        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+
+    out = StringIO()
+    from django.core.management.color import color_style
+    from apps.tenants.management.commands.provisionner_inscriptions import _purger_tout_zanf
+    try:
+        _purger_tout_zanf(stdout=out, style=color_style())
+        return JsonResponse({"statut": "succes", "output": out.getvalue()})
+    except Exception as exc:
+        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+
+
 urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
+    path("api/v1/maintenance/purger-zanf/", purger_zanf_vue, name="maintenance-purger-zanf"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("admin/dashboard/", RedirectView.as_view(url="/admin/", permanent=False), name="admin-dashboard"),
     path("admin/", admin.site.urls),

@@ -114,7 +114,6 @@ def test_wizard_cycle_complet(client, admin_user):
         format="json",
     )
     assert rep_tiers.status_code == status.HTTP_201_CREATED
-    client_id = rep_tiers.data["id"]
 
     # Création du premier projet
     aujourdhui = date.today()
@@ -123,18 +122,13 @@ def test_wizard_cycle_complet(client, admin_user):
         "/api/v1/projets/",
         {
             "nom": "Tour Administrative Plateau",
-            "client": client_id,
+            "maitre_ouvrage": "Client Initial",
+            "type_projet": "BATIMENT_RESIDENTIEL",
             "ville": "Abidjan",
             "budget_initial_montant": 85000000000,  # 850 millions FCFA en centimes
             "date_debut_prevue": str(aujourdhui),
             "date_fin_prevue": str(fin_prevue),
             "description": "Construction d'une tour R+12",
-            "chef_projet_invite": {
-                "nom": "Soro",
-                "prenom": "Mamadou",
-                "email": "m.soro@btp-ci.com",
-                "telephone": "+2250701020304",
-            },
         },
         format="json",
     )
@@ -199,23 +193,18 @@ def test_rejeu_etape2_sans_duplication(client, admin_user):
         "/api/v1/projets/",
         {
             "nom": "Projet Initial",
-            "client": tiers_id,
+            "maitre_ouvrage": "Client Initial",
+            "type_projet": "BATIMENT_RESIDENTIEL",
             "ville": "Bouaké",
             "budget_initial_montant": 5000000000,
             "date_debut_prevue": "2026-06-01",
             "date_fin_prevue": "2026-12-31",
             "description": "Projet initial avant retouche",
-            "chef_projet_invite": {
-                "nom": "Kouadio",
-                "prenom": "Jean",
-                "email": "j.kouadio@btp-ci.com",
-                "telephone": "+2250701020305",
-            },
         },
         format="json",
     )
     assert rep_projet.status_code == status.HTTP_201_CREATED
-    projet_id = rep_projet.data["id"]
+    projet_id = rep_projet["Location"].rstrip("/").split("/")[-1]
     reference = rep_projet.data["reference"]
 
     # Valider étape 2 une première fois
@@ -269,4 +258,5 @@ def test_rejeu_etape2_sans_duplication(client, admin_user):
         projet_db = Projet.objects.get(pk=projet_id)
         assert projet_db.nom == "Projet Modifié et Ajusté"
         assert projet_db.ville == "Yamoussoukro"
-        assert projet_db.client.raison_sociale == "Client Modifié MOA"
+        assert projet_db.client_id is None
+        assert projet_db.maitre_ouvrage == "Client Initial"

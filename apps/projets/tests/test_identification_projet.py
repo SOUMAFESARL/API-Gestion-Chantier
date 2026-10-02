@@ -38,17 +38,17 @@ def test_cycle_identification_sans_planning_ni_equipe(direction):
     client, user = direction
     response = client.post("/api/v1/projets/", formulaire(), format="json")
     assert response.status_code == 201, response.data
-    projet = Projet.objects.get(pk=response.data["id"])
+    projet = Projet.objects.get(reference=response.data["reference"])
     assert projet.cree_par_id == user.pk
     assert projet.chef_projet_id is None
     assert projet.date_debut_prevue is None and projet.date_fin_prevue is None
     assert projet.budget_initial_montant is None
     assert not projet.affectations.exists()
-    assert response.data["entreprise"]["schema_name"] == "demo"
+    assert Projet.objects.get(reference=response.data["reference"]).cree_par_id == user.pk
     assert response.data["reference"].startswith("PRJ-")
     url = f"/api/v1/projets/{projet.pk}/"
     assert client.get(url).status_code == 200
-    assert any(p["id"] == str(projet.pk) for p in client.get("/api/v1/projets/").data)
+    assert any(p["reference"] == projet.reference for p in client.get("/api/v1/projets/").data)
     assert client.patch(url, {"nom": "Phase 2"}, format="json").status_code == 200
     assert (
         client.patch(
@@ -88,7 +88,7 @@ def test_reference_ne_reutilise_pas_projet_supprime(direction):
     client, _ = direction
     premiere = client.post("/api/v1/projets/", formulaire(), format="json")
     assert premiere.status_code == 201
-    assert client.delete(f"/api/v1/projets/{premiere.data['id']}/").status_code == 204
+    assert client.delete(premiere["Location"]).status_code == 204
     seconde = client.post("/api/v1/projets/", formulaire(), format="json")
     assert seconde.status_code == 201
     assert premiere.data["reference"] != seconde.data["reference"]
@@ -110,8 +110,8 @@ def test_connexion_jwt_puis_creation_sur_domaine_public(direction):
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
     response = client.post("/api/v1/projets/", formulaire(), format="json")
     assert response.status_code == 201, response.data
-    assert response.data["entreprise"]["schema_name"] == "demo"
-    assert response.data["cree_par"]["id"] == str(user.pk)
+    assert Projet.objects.get(reference=response.data["reference"]).cree_par_id == user.pk
+    assert "cree_par" not in response.data
 
 
 def test_tableau_de_bord_sans_responsables(direction, monkeypatch):

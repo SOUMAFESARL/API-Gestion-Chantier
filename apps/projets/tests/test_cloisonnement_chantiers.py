@@ -2,14 +2,15 @@
 
 Vérifie l'étanchéité stricte :
 1. DG et Administrateur : vision consolidée universelle de tous les chantiers.
-2. Collaborateurs opérationnels (CP, CT, CC, VI) : vision strictement bornée à leurs chantiers affectés.
+2. Les collaborateurs voient uniquement leurs chantiers affectes.
 3. Tentative d'accès direct GET/PATCH/DELETE /projets/{id}/ sur un chantier tiers : 403 Forbidden.
 4. Tentative de lecture ou gestion d'équipe /affectations/ sur un chantier tiers : 403 Forbidden.
 5. Tentative de création de rapport journalier sur un chantier non affecté : 400 Bad Request.
 6. Scoping automatique du tableau de bord décisionnel (/tableau-de-bord/).
 """
 
-from datetime import date, timedelta
+from datetime import date
+
 import pytest
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
@@ -24,9 +25,7 @@ from apps.core.enums import (
     RoleGlobal,
     RoleProjet,
     StatutProjet,
-    StatutRapport,
     StatutUtilisateur,
-    TypeProjet,
     TypeTiers,
 )
 from apps.projets.models import AffectationProjet, Lot, Projet
@@ -75,11 +74,17 @@ def fixtures_cloisonnement(db):
             u.save()
             return u
 
-        dg = creer_user("dg.clois@demo.ci", "Directeur", "General", RoleGlobal.DIRECTEUR_GENERAL, is_owner=True)
-        admin = creer_user("admin.clois@demo.ci", "Admin", "Delegue", RoleGlobal.ADMIN, is_owner=False)
+        dg = creer_user(
+            "dg.clois@demo.ci", "Directeur", "General", RoleGlobal.DIRECTEUR_GENERAL, is_owner=True
+        )
+        admin = creer_user(
+            "admin.clois@demo.ci", "Admin", "Delegue", RoleGlobal.ADMIN, is_owner=False
+        )
         cp_a = creer_user("cp.a.clois@demo.ci", "Kouassi", "ChefA", RoleGlobal.CHEF_PROJET)
         cp_b = creer_user("cp.b.clois@demo.ci", "Toure", "ChefB", RoleGlobal.CHEF_PROJET)
-        ct_a = creer_user("ct.a.clois@demo.ci", "Diallo", "ConducteurA", RoleGlobal.CONDUCTEUR_TRAVAUX)
+        ct_a = creer_user(
+            "ct.a.clois@demo.ci", "Diallo", "ConducteurA", RoleGlobal.CONDUCTEUR_TRAVAUX
+        )
         cc_b = creer_user("cc.b.clois@demo.ci", "Kone", "ChefChantierB", RoleGlobal.CHEF_CHANTIER)
 
         # 3. Chantier A (Attribué à CP A et CT A)
@@ -159,9 +164,9 @@ def test_dg_et_admin_voient_tous_les_chantiers(fixtures_cloisonnement):
         rep = client.get("/api/v1/projets/", HTTP_HOST=HOTE)
         assert rep.status_code == status.HTTP_200_OK
         data = rep.json()
-        ids = [p["id"] for p in data]
-        assert str(f["projet_a"].id) in ids
-        assert str(f["projet_b"].id) in ids
+        ids = [p["reference"] for p in data]
+        assert f["projet_a"].reference in ids
+        assert f["projet_b"].reference in ids
 
 
 def test_collaborateur_ne_voit_que_ses_chantiers(fixtures_cloisonnement):
@@ -173,17 +178,17 @@ def test_collaborateur_ne_voit_que_ses_chantiers(fixtures_cloisonnement):
     _auth(client, f["cp_a"])
     rep_a = client.get("/api/v1/projets/", HTTP_HOST=HOTE)
     assert rep_a.status_code == status.HTTP_200_OK
-    ids_a = [p["id"] for p in rep_a.json()]
-    assert str(f["projet_a"].id) in ids_a
-    assert str(f["projet_b"].id) not in ids_a
+    ids_a = [p["reference"] for p in rep_a.json()]
+    assert f["projet_a"].reference in ids_a
+    assert f["projet_b"].reference not in ids_a
 
     # CP B voit uniquement Chantier B
     _auth(client, f["cp_b"])
     rep_b = client.get("/api/v1/projets/", HTTP_HOST=HOTE)
     assert rep_b.status_code == status.HTTP_200_OK
-    ids_b = [p["id"] for p in rep_b.json()]
-    assert str(f["projet_b"].id) in ids_b
-    assert str(f["projet_a"].id) not in ids_b
+    ids_b = [p["reference"] for p in rep_b.json()]
+    assert f["projet_b"].reference in ids_b
+    assert f["projet_a"].reference not in ids_b
 
 
 def test_acces_direct_projet_tiers_interdit(fixtures_cloisonnement):
@@ -199,7 +204,9 @@ def test_acces_direct_projet_tiers_interdit(fixtures_cloisonnement):
 
     # PATCH
     assert (
-        client.patch(url_b, {"nom": "Tentative Piratage"}, format="json", HTTP_HOST=HOTE).status_code
+        client.patch(
+            url_b, {"nom": "Tentative Piratage"}, format="json", HTTP_HOST=HOTE
+        ).status_code
         == status.HTTP_403_FORBIDDEN
     )
 
@@ -208,7 +215,7 @@ def test_acces_direct_projet_tiers_interdit(fixtures_cloisonnement):
 
 
 def test_affectations_equipe_chantier_tiers_interdite(fixtures_cloisonnement):
-    """L'accès aux affectations d'un projet tiers (GET et POST) est interdit pour un collaborateur externe."""
+    """Les collaborateurs ne voient pas les equipes et projets tiers."""
     f = fixtures_cloisonnement
     client = APIClient()
 
@@ -309,7 +316,7 @@ def test_tableau_de_bord_scoping_par_affectation(fixtures_cloisonnement):
 
 
 def test_annuaire_collaborateurs_projets_cloisonnes(fixtures_cloisonnement):
-    """Dans l'annuaire des collaborateurs, un collaborateur ne voit pas les chantiers tiers d'autres utilisateurs."""
+    """Les collaborateurs ne voient pas les equipes et projets tiers."""
     f = fixtures_cloisonnement
     client = APIClient()
 

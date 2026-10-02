@@ -1,17 +1,11 @@
-"""Tests complets pour la fonctionnalité : Chef de Projet Optionnel sur un Chantier (Sprint 3 Tâche 08).
+"""Optional project manager: form creation and dedicated team management.
 
-Couvre :
-1. Création sans CP par le DG / Admin (201 CREATED, chef_projet=null, 0 affectation CP).
-2. Création avec seulement un Conducteur de Travaux sans CP (aucun hack de substitution).
-3. Interdiction de création pour les non-DG / non-Admin (403 FORBIDDEN).
-4. Détachement d'un CP existant via PATCH chef_projet_id: null (200 OK, désactivation affectation).
-5. Attribution d'un CP sur un chantier sans CP via PATCH (200 OK, création affectation).
-6. Gouvernance de l'équipe par la Direction seule sur un chantier sans CP (403 pour tiers, 201 pour DG/Admin).
-7. Non-régression du Tableau de Bord (pas d'AttributeError sur chef_projet=None).
-8. Évolution de statut autorisée pour un chantier sans CP (EN_ATTENTE -> EN_COURS -> TERMINE).
+Creation has no team fields. Assignments are managed through their own routes.
+The public CRUD rejects status changes, and dashboards handle missing managers.
 """
 
 from datetime import date, timedelta
+
 import pytest
 from django.contrib.auth.hashers import make_password
 from django_tenants.utils import schema_context
@@ -71,8 +65,12 @@ def env_test(db):
             u.save()
             return u
 
-        dg = creer_user("dg.testcp@demo.ci", "Kouamé", "Patrice", RoleGlobal.DIRECTEUR_GENERAL, is_owner=True)
-        admin = creer_user("admin.testcp@demo.ci", "Kouassi", "Admin", RoleGlobal.ADMIN, is_owner=False)
+        dg = creer_user(
+            "dg.testcp@demo.ci", "Kouamé", "Patrice", RoleGlobal.DIRECTEUR_GENERAL, is_owner=True
+        )
+        admin = creer_user(
+            "admin.testcp@demo.ci", "Kouassi", "Admin", RoleGlobal.ADMIN, is_owner=False
+        )
         cp = creer_user("cp.testcp@demo.ci", "Diallo", "Amadou", RoleGlobal.CHEF_PROJET)
         ct = creer_user("ct.testcp@demo.ci", "Soro", "Mamadou", RoleGlobal.CONDUCTEUR_TRAVAUX)
         collab = creer_user("collab.testcp@demo.ci", "Koné", "Affoué", RoleGlobal.CHEF_CHANTIER)
@@ -123,9 +121,9 @@ def test_creation_projet_sans_chef_projet_succes_dg(client_tenant, env_test):
 
     payload = {
         "nom": "Villa Riviera Sans CP",
-        "client": str(tiers_client.id),
+        "maitre_ouvrage": tiers_client.raison_sociale,
+        "type_projet": "BATIMENT_RESIDENTIEL",
         "ville": "Abidjan",
-        "quartier": "Riviera Golf",
         "date_debut_prevue": str(demain),
         "date_fin_prevue": str(fin),
         "budget_initial_montant": 25_000_000_00,
@@ -135,11 +133,11 @@ def test_creation_projet_sans_chef_projet_succes_dg(client_tenant, env_test):
     rep = cl.post("/api/v1/projets/", payload, format="json", HTTP_HOST=HOTE)
     assert rep.status_code == status.HTTP_201_CREATED
     data = rep.json()
-    projet_id = data["id"]
+    projet_id = rep["Location"].rstrip("/").split("/")[-1]
 
     assert data["nom"] == "Villa Riviera Sans CP"
-    assert data["chef_projet"] is None
-    assert data["conducteur_travaux"] is None
+    assert "chef_projet" not in data
+    assert "conducteur_travaux" not in data
 
     with schema_context(SCHEMA):
         projet = Projet.objects.get(id=projet_id)
@@ -149,45 +147,36 @@ def test_creation_projet_sans_chef_projet_succes_dg(client_tenant, env_test):
         ).exists()
 
 
-def test_creation_projet_avec_conducteur_travaux_seul_sans_hack(client_tenant, env_test):
-    """Créer un projet avec seulement un CT ne promeut plus ce CT en Chef de Projet."""
-    admin = env_test["admin"]
-    ct = env_test["ct"]
-    tiers_client = env_test["client_tiers"]
-    cl = _auth(client_tenant, admin)
-    demain = date.today() + timedelta(days=3)
-    fin = demain + timedelta(days=90)
-
-    payload = {
-        "nom": "Immeuble Indigo CT Seul",
-        "client": str(tiers_client.id),
-        "ville": "San-Pédro",
-        "date_debut_prevue": str(demain),
-        "date_fin_prevue": str(fin),
-        "conducteur_travaux_id": str(ct.id),
-    }
-
-    rep = cl.post("/api/v1/projets/", payload, format="json", HTTP_HOST=HOTE)
-    assert rep.status_code == status.HTTP_201_CREATED
-    data = rep.json()
-    projet_id = data["id"]
-
-    assert data["chef_projet"] is None
-    assert data["conducteur_travaux"]["id"] == str(ct.id)
-
+def test_creation_projet_puis_affectation_ct_sans_cp(client_tenant, env_test):
+    cl = _auth(client_tenant, env_test["admin"])
+    rep = cl.post(
+        "/api/v1/projets/",
+        {
+            "nom": "CT seul",
+            "type_projet": "BATIMENT_RESIDENTIEL",
+            "maitre_ouvrage": "Client",
+            "ville": "Man",
+        },
+        format="json",
+        HTTP_HOST=HOTE,
+    )
+    assert rep.status_code == 201
+    url = rep["Location"]
+    rep_aff = cl.post(
+        url + "affectations/",
+        {
+            "utilisateur_id": str(env_test["ct"].pk),
+            "role_projet": RoleProjet.CONDUCTEUR_TRAVAUX,
+        },
+        format="json",
+        HTTP_HOST=HOTE,
+    )
+    assert rep_aff.status_code == 201, rep_aff.data
     with schema_context(SCHEMA):
-        projet = Projet.objects.get(id=projet_id)
-        assert projet.chef_projet is None
-        assert projet.conducteur_travaux == ct
-        # L'affectation doit être de type CONDUCTEUR_TRAVAUX et non CHEF_PROJET
-        aff_ct = AffectationProjet.objects.filter(
-            projet=projet, utilisateur=ct
-        ).first()
-        assert aff_ct is not None
-        assert aff_ct.role_projet == RoleProjet.CONDUCTEUR_TRAVAUX
-        assert not AffectationProjet.objects.filter(
-            projet=projet, role_projet=RoleProjet.CHEF_PROJET
-        ).exists()
+        projet = Projet.objects.get(reference=rep.data["reference"])
+        assert projet.chef_projet_id is None
+        assert projet.conducteur_travaux_id == env_test["ct"].pk
+        assert not projet.affectations.filter(role_projet=RoleProjet.CHEF_PROJET).exists()
 
 
 def test_creation_projet_interdite_aux_non_dg_non_admin(client_tenant, env_test):
@@ -200,7 +189,8 @@ def test_creation_projet_interdite_aux_non_dg_non_admin(client_tenant, env_test)
 
     payload = {
         "nom": "Projet Tentative CP",
-        "client": str(tiers_client.id),
+        "maitre_ouvrage": tiers_client.raison_sociale,
+        "type_projet": "BATIMENT_RESIDENTIEL",
         "ville": "Abidjan",
         "date_debut_prevue": str(demain),
         "date_fin_prevue": str(fin),
@@ -210,72 +200,53 @@ def test_creation_projet_interdite_aux_non_dg_non_admin(client_tenant, env_test)
     assert rep.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_detachement_chef_projet_via_patch(client_tenant, env_test):
-    """Le PATCH {'chef_projet_id': null} détache le CP et désactive son affectation active."""
-    admin = env_test["admin"]
-    projet_db = env_test["projet"]
-    cp = env_test["cp"]
-    cl = _auth(client_tenant, admin)
-
+def test_detachement_chef_projet_via_affectation(client_tenant, env_test):
+    cl = _auth(client_tenant, env_test["admin"])
     with schema_context(SCHEMA):
-        assert projet_db.chef_projet == cp
-        assert AffectationProjet.objects.filter(
-            projet=projet_db, utilisateur=cp, est_actif=True
-        ).exists()
-
-    url = f"/api/v1/projets/{projet_db.id}/"
-    rep = cl.patch(url, {"chef_projet_id": None}, format="json", HTTP_HOST=HOTE)
-    assert rep.status_code == status.HTTP_200_OK
-    assert rep.json()["chef_projet"] is None
-
+        projet = env_test["projet"]
+        aff = AffectationProjet.objects.get(projet=projet, utilisateur=env_test["cp"])
+    rep = cl.patch(
+        f"/api/v1/projets/{projet.pk}/affectations/{aff.pk}/",
+        {"est_actif": False},
+        format="json",
+        HTTP_HOST=HOTE,
+    )
+    assert rep.status_code == 200, rep.data
     with schema_context(SCHEMA):
-        projet_db.refresh_from_db()
-        assert projet_db.chef_projet is None
-        aff = AffectationProjet.objects.get(projet=projet_db, utilisateur=cp)
-        assert aff.est_actif is False
+        projet.refresh_from_db()
+        aff.refresh_from_db()
+        assert projet.chef_projet_id is None
+        assert not aff.est_actif
 
 
 def test_assignation_nouveau_cp_sur_projet_sans_cp(client_tenant, env_test):
-    """Un projet créé sans CP peut recevoir un CP ultérieurement via PATCH."""
-    admin = env_test["admin"]
-    cp = env_test["cp"]
-    tiers_client = env_test["client_tiers"]
-    cl = _auth(client_tenant, admin)
-    demain = date.today() + timedelta(days=1)
-    fin = demain + timedelta(days=40)
-
-    # 1. Création sans CP
-    rep_create = cl.post(
+    cl = _auth(client_tenant, env_test["admin"])
+    rep = cl.post(
         "/api/v1/projets/",
         {
-            "nom": "Chantier Étape 1 Sans CP",
-            "client": str(tiers_client.id),
-            "ville": "Bouaké",
-            "date_debut_prevue": str(demain),
-            "date_fin_prevue": str(fin),
+            "nom": "Sans CP",
+            "type_projet": "BATIMENT_RESIDENTIEL",
+            "maitre_ouvrage": "Client",
+            "ville": "Man",
         },
         format="json",
         HTTP_HOST=HOTE,
     )
-    assert rep_create.status_code == status.HTTP_201_CREATED
-    projet_id = rep_create.json()["id"]
-
-    # 2. Assignation d'un CP via PATCH
-    url = f"/api/v1/projets/{projet_id}/"
-    rep_patch = cl.patch(url, {"chef_projet_id": str(cp.id)}, format="json", HTTP_HOST=HOTE)
-    assert rep_patch.status_code == status.HTTP_200_OK
-    data = rep_patch.json()
-    assert data["chef_projet"]["id"] == str(cp.id)
-
+    assert rep.status_code == 201
+    assigned = cl.post(
+        rep["Location"] + "affectations/",
+        {
+            "utilisateur_id": str(env_test["cp"].pk),
+            "role_projet": RoleProjet.CHEF_PROJET,
+        },
+        format="json",
+        HTTP_HOST=HOTE,
+    )
+    assert assigned.status_code == 201, assigned.data
     with schema_context(SCHEMA):
-        projet = Projet.objects.get(id=projet_id)
-        assert projet.chef_projet == cp
-        assert AffectationProjet.objects.filter(
-            projet=projet,
-            utilisateur=cp,
-            role_projet=RoleProjet.CHEF_PROJET,
-            est_actif=True,
-        ).exists()
+        projet = Projet.objects.get(reference=rep.data["reference"])
+        assert projet.chef_projet_id == env_test["cp"].pk
+        assert projet.affectations.filter(utilisateur=env_test["cp"], est_actif=True).exists()
 
 
 def test_gouvernance_equipe_sur_projet_sans_cp(client_tenant, env_test):
@@ -294,7 +265,8 @@ def test_gouvernance_equipe_sur_projet_sans_cp(client_tenant, env_test):
         "/api/v1/projets/",
         {
             "nom": "Chantier Gouvernance Direction",
-            "client": str(tiers_client.id),
+            "maitre_ouvrage": tiers_client.raison_sociale,
+            "type_projet": "BATIMENT_RESIDENTIEL",
             "ville": "Yamoussoukro",
             "date_debut_prevue": str(demain),
             "date_fin_prevue": str(fin),
@@ -302,7 +274,7 @@ def test_gouvernance_equipe_sur_projet_sans_cp(client_tenant, env_test):
         format="json",
         HTTP_HOST=HOTE,
     )
-    projet_id = rep.json()["id"]
+    projet_id = rep["Location"].rstrip("/").split("/")[-1]
 
     # 2. Le DG affecte le CT en Conducteur de Travaux
     rep_aff_ct = cl_dg.post(
@@ -316,7 +288,7 @@ def test_gouvernance_equipe_sur_projet_sans_cp(client_tenant, env_test):
     )
     assert rep_aff_ct.status_code == status.HTTP_201_CREATED
 
-    # 3. Le Conducteur de Travaux (non CP, non Direction) tente d'affecter un autre membre -> 403 Forbidden
+    # Un conducteur ne peut pas affecter un autre membre.
     cl_ct = _auth(APIClient(), ct)
     rep_refus = cl_ct.post(
         f"/api/v1/projets/{projet_id}/affectations/",
@@ -343,7 +315,8 @@ def test_tableau_de_bord_direction_avec_chantier_sans_cp(client_tenant, env_test
         "/api/v1/projets/",
         {
             "nom": "Chantier Dashboard Sans CP",
-            "client": str(tiers_client.id),
+            "maitre_ouvrage": tiers_client.raison_sociale,
+            "type_projet": "BATIMENT_RESIDENTIEL",
             "ville": "Man",
             "date_debut_prevue": str(demain),
             "date_fin_prevue": str(fin),
@@ -363,35 +336,24 @@ def test_tableau_de_bord_direction_avec_chantier_sans_cp(client_tenant, env_test
     assert projet_sans_cp_data["chef_projet_nom"] is None
 
 
-def test_evolution_statut_chantier_sans_cp(client_tenant, env_test):
-    """Un chantier sans CP peut passer au statut EN_COURS ou TERMINE sans blocage."""
-    dg = env_test["dg"]
-    tiers_client = env_test["client_tiers"]
-    cl = _auth(client_tenant, dg)
-    demain = date.today() + timedelta(days=1)
-    fin = demain + timedelta(days=30)
-
+def test_statut_hors_formulaire_refuse(client_tenant, env_test):
+    cl = _auth(client_tenant, env_test["dg"])
     rep = cl.post(
         "/api/v1/projets/",
         {
-            "nom": "Chantier Statut Test",
-            "client": str(tiers_client.id),
-            "ville": "Korhogo",
-            "date_debut_prevue": str(demain),
-            "date_fin_prevue": str(fin),
+            "nom": "Sans CP",
+            "type_projet": "BATIMENT_RESIDENTIEL",
+            "maitre_ouvrage": "Client",
+            "ville": "Man",
         },
         format="json",
         HTTP_HOST=HOTE,
     )
-    projet_id = rep.json()["id"]
-
-    # Passage à EN_COURS
-    url = f"/api/v1/projets/{projet_id}/"
-    rep_en_cours = cl.patch(url, {"statut": StatutProjet.EN_COURS}, format="json", HTTP_HOST=HOTE)
-    assert rep_en_cours.status_code == status.HTTP_200_OK
-    assert rep_en_cours.json()["statut"] == StatutProjet.EN_COURS
-
-    # Passage à TERMINE
-    rep_termine = cl.patch(url, {"statut": StatutProjet.TERMINE}, format="json", HTTP_HOST=HOTE)
-    assert rep_termine.status_code == status.HTTP_200_OK
-    assert rep_termine.json()["statut"] == StatutProjet.TERMINE
+    assert rep.status_code == 201
+    for statut in [StatutProjet.EN_COURS, StatutProjet.TERMINE]:
+        refused = cl.patch(rep["Location"], {"statut": statut}, format="json", HTTP_HOST=HOTE)
+        assert refused.status_code == 400
+    with schema_context(SCHEMA):
+        projet = Projet.objects.get(reference=rep.data["reference"])
+        assert projet.statut == StatutProjet.EN_ATTENTE
+        assert projet.chef_projet_id is None

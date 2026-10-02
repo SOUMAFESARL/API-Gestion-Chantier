@@ -461,6 +461,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 CORS_EXPOSE_HEADERS = [
     "x-request-id",
+    "Location",
 ]
 
 # --------------------------------------------------------------------------

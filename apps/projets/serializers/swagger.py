@@ -36,8 +36,11 @@ class ProjetPostSerializer(ProjetCreationSerializer):
     def to_internal_value(self, data):
         if hasattr(data, "keys"):
             errors = dict.fromkeys(
-                data.keys() - self.fields.keys(), "Ce champ n'est pas accepte a la creation."
+                data.keys() - self.fields.keys(), "Ce champ n'est pas accepte dans le formulaire."
             )
+            for name in ("date_debut_baseline", "date_fin_baseline"):
+                if self.instance is not None and name in data:
+                    errors[name] = "La Baseline v0 est immuable et ne peut etre modifiee."
             for name in ("reference", "duree_jours_ouvres"):
                 if name in data:
                     errors[name] = "Ce champ est calcule automatiquement."
@@ -47,7 +50,11 @@ class ProjetPostSerializer(ProjetCreationSerializer):
 
 
 class ProjetCreationResponseSerializer(serializers.ModelSerializer):
+    maitre_ouvrage = serializers.SerializerMethodField()
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
+
+    def get_maitre_ouvrage(self, obj) -> str:
+        return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")
 
     class Meta:
         model = Projet
@@ -62,6 +69,12 @@ class ProjetPatchSerializer(ProjetPostSerializer):
         if self.instance is not None and not self.partial:
             attrs.setdefault("date_debut_prevue", None)
             attrs.setdefault("date_fin_prevue", None)
+            for name in ("date_debut_prevue", "date_fin_prevue"):
+                stored = getattr(self.instance, name)
+                if stored is not None and attrs[name] != stored:
+                    raise serializers.ValidationError(
+                        {name: "RG-11 : utilisez la route de reprogrammation des dates."}
+                    )
         attrs = super().validate(attrs)
         if self.instance is not None and not self.partial:
             for name, default in (

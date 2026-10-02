@@ -1,3 +1,5 @@
+> Le POST de creation utilise maintenant le [formulaire strict](api-creation-formulaire-strict.md). Les exemples historiques avec lots, equipe ou client ne sont plus acceptes en creation.
+
 # Création de projet et contexte connecté
 
 ## Objectif et parcours

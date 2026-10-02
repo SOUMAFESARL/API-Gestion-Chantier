@@ -11,7 +11,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import Module
+from apps.catalogue.models import CatalogueModule as Module
 from apps.platform_admin.permissions import EstSuperAdminPlateforme
 from apps.platform_admin.serializers.modules import (
     AdminModuleAffecterPermissionsSerializer,

@@ -10,6 +10,7 @@ serveur à chaque requête : un utilisateur qui modifie l'URL à la main
 reçoit un 403, sans aucune donnée.
 """
 
+from django.db import models
 from rest_framework import permissions
 
 from apps.core.enums import RoleGlobal
@@ -270,7 +271,9 @@ class PermissionModule(permissions.BasePermission):
             return False
 
         perm = RoleModulePermission.objects.filter(
-            role=role, module__code=self.module, supprime_le__isnull=True
+            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
+            role=role,
+            supprime_le__isnull=True,
         ).first()
 
         if not perm:
@@ -281,13 +284,19 @@ class PermissionModule(permissions.BasePermission):
             request._rbac_module_permissions_cache[cle_cache] = False
             return False
 
-        # Vérification granulaire dans les permissions ManyToMany
-        has_perm = perm.permissions.filter(
-            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-        ).exists()
+        # Vérification granulaire dans les permissions ManyToMany (catalogue prioritaire, puis legacy)
+        has_perm = (
+            perm.permissions_catalogue.filter(
+                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+            ).exists()
+            or perm.permissions.filter(
+                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+            ).exists()
+        )
 
         # Fallback pour compatibilité niveau scalaire UNIQUEMENT si aucune permission M2M n'a été rattachée
-        if not has_perm and not perm.permissions.exists() and perm.niveau is not None and perm.niveau > 0:
+        has_m2m = perm.permissions_catalogue.exists() or perm.permissions.exists()
+        if not has_perm and not has_m2m and perm.niveau is not None and perm.niveau > 0:
             if self.permission_requise == "LECTURE" and perm.niveau >= 1:
                 has_perm = True
             elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
@@ -360,16 +369,25 @@ class PermissionModule(permissions.BasePermission):
             return False
 
         override = ProjetRoleModuleOverride.objects.filter(
-            projet_id=projet_id, role=role, module__code=self.module, supprime_le__isnull=True
+            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
+            projet_id=projet_id,
+            role=role,
+            supprime_le__isnull=True,
         ).first()
         if override:
             if override.niveau == 0:
                 request._rbac_object_permissions_cache[cle_cache] = False
                 return False
-            has_perm = override.permissions.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-            if not has_perm and not override.permissions.exists() and override.niveau is not None and override.niveau > 0:
+            has_perm = (
+                override.permissions_catalogue.filter(
+                    code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                ).exists()
+                or override.permissions.filter(
+                    code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                ).exists()
+            )
+            has_override_m2m = override.permissions_catalogue.exists() or override.permissions.exists()
+            if not has_perm and not has_override_m2m and override.niveau is not None and override.niveau > 0:
                 if self.permission_requise == "LECTURE" and override.niveau >= 1:
                     has_perm = True
                 elif self.permission_requise == "ECRITURE" and override.niveau >= 2:
@@ -380,16 +398,24 @@ class PermissionModule(permissions.BasePermission):
             return has_perm
 
         perm = RoleModulePermission.objects.filter(
-            role=role, module__code=self.module, supprime_le__isnull=True
+            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
+            role=role,
+            supprime_le__isnull=True,
         ).first()
         if not perm or perm.niveau == 0:
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        has_perm = perm.permissions.filter(
-            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-        ).exists()
-        if not has_perm and not perm.permissions.exists() and perm.niveau is not None and perm.niveau > 0:
+        has_perm = (
+            perm.permissions_catalogue.filter(
+                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+            ).exists()
+            or perm.permissions.filter(
+                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+            ).exists()
+        )
+        has_perm_m2m = perm.permissions_catalogue.exists() or perm.permissions.exists()
+        if not has_perm and not has_perm_m2m and perm.niveau is not None and perm.niveau > 0:
             if self.permission_requise == "LECTURE" and perm.niveau >= 1:
                 has_perm = True
             elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:

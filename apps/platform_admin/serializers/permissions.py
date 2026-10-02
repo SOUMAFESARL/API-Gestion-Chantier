@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.accounts.models import Module, Permission
+from apps.catalogue.models import CatalogueModule as Module, CataloguePermission as Permission
 
 __all__ = [
     "AdminModuleSimpleSerializer",

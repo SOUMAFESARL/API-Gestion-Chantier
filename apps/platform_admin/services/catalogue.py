@@ -23,6 +23,7 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import schema_context
 
 from apps.accounts.models import Module, Permission, Role, RoleModulePermission
+from apps.catalogue.models import CatalogueModule, CataloguePermission, EntrepriseModule
 from apps.core.enums import NiveauAcces
 from apps.tenants.models import Entreprise
 
@@ -111,6 +112,33 @@ def propager_creation_module(
             perms_pub = list(Permission.objects.filter(code__in=codes_perms, supprime_le__isnull=True))
             module_public.permissions.set(perms_pub)
 
+        # Synchroniser CatalogueModule dans public
+        cat_mod, _ = CatalogueModule.objects.update_or_create(
+            id=module_public.id,
+            defaults={
+                "code": code,
+                "libelle": libelle.strip(),
+                "description": description.strip(),
+                "ordre": ordre,
+                "icone": icone.strip() or "box",
+                "est_actif": est_actif,
+                "cree_par": cree_par,
+                "supprime_le": None,
+            },
+        )
+        if codes_perms:
+            cat_perms = list(CataloguePermission.objects.filter(code__in=codes_perms, supprime_le__isnull=True))
+            cat_mod.permissions.set(cat_perms)
+        else:
+            cat_perms = []
+
+        for entreprise in Entreprise.objects.exclude(schema_name="public"):
+            EntrepriseModule.objects.update_or_create(
+                entreprise=entreprise,
+                module=cat_mod,
+                defaults={"est_actif": est_actif},
+            )
+
     # 2. Propagation dans tous les tenants clients
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
@@ -146,13 +174,19 @@ def propager_creation_module(
                     rmp, _ = RoleModulePermission.objects.get_or_create(
                         role=role,
                         module=mod,
-                        defaults={"cree_par": None},
+                        defaults={"cree_par": None, "module_catalogue": cat_mod},
                     )
+                    rmp.module_catalogue = cat_mod
                     if role.code in ("DG", "ADMIN", "AD") or role.est_systeme:
                         rmp.permissions.set(perms_direction)
+                        if codes_perms:
+                            rmp.permissions_catalogue.set(cat_perms)
+                        else:
+                            rmp.permissions_catalogue.set(list(CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)))
                         rmp.niveau = NiveauAcces.VALIDATION
                     else:
                         rmp.permissions.clear()
+                        rmp.permissions_catalogue.clear()
                         rmp.niveau = NiveauAcces.AUCUN
                     rmp.save()
 
@@ -194,9 +228,27 @@ def propager_modification_module(
             perms_pub = list(Permission.objects.filter(code__in=codes_perms, supprime_le__isnull=True))
             module_public.permissions.set(perms_pub)
 
-        if modifie_par:
-            module_public.modifie_par = modifie_par
         module_public.save()
+
+        # Synchroniser CatalogueModule dans public
+        cat_mod = CatalogueModule.objects.filter(id=module_public.id).first()
+        if cat_mod:
+            if libelle is not None and libelle.strip():
+                cat_mod.libelle = libelle.strip()
+            if description is not None:
+                cat_mod.description = description.strip()
+            if ordre is not None:
+                cat_mod.ordre = ordre
+            if icone is not None:
+                cat_mod.icone = icone.strip()
+            if est_actif is not None:
+                cat_mod.est_actif = est_actif
+            if modifie_par:
+                cat_mod.modifie_par = modifie_par
+            cat_mod.save()
+            if codes_perms is not None:
+                cat_perms = list(CataloguePermission.objects.filter(code__in=codes_perms, supprime_le__isnull=True))
+                cat_mod.permissions.set(cat_perms)
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
@@ -287,6 +339,12 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
         module_public.est_actif = False
         module_public.save()
 
+        CatalogueModule.objects.filter(id=module_id).update(
+            supprime_le=maintenant,
+            supprime_par=supprime_par,
+            est_actif=False,
+        )
+
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
         with schema_context(entreprise.schema_name):
@@ -304,10 +362,22 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
                     supprime_le=maintenant,
                     supprime_par=None,
                 )
+                RoleModulePermission.objects.filter(
+                    module_catalogue__code=code_supprime, supprime_le__isnull=True
+                ).update(
+                    supprime_le=maintenant,
+                    supprime_par=None,
+                )
                 try:
                     from apps.projets.models import ProjetRoleModuleOverride
                     ProjetRoleModuleOverride.objects.filter(
                         module__code=code_supprime, supprime_le__isnull=True
+                    ).update(
+                        supprime_le=maintenant,
+                        supprime_par=None,
+                    )
+                    ProjetRoleModuleOverride.objects.filter(
+                        module_catalogue__code=code_supprime, supprime_le__isnull=True
                     ).update(
                         supprime_le=maintenant,
                         supprime_par=None,
@@ -387,6 +457,25 @@ def propager_creation_permission(
             mods_public = list(Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True))
             perm_public.modules.set(mods_public)
 
+        # Synchroniser CataloguePermission dans public
+        cat_perm, _ = CataloguePermission.objects.update_or_create(
+            id=perm_public.id,
+            defaults={
+                "code": code,
+                "libelle": libelle.strip(),
+                "description": description.strip(),
+                "ordre": ordre,
+                "est_actif": est_actif,
+                "cree_par": cree_par,
+                "supprime_le": None,
+            },
+        )
+        if codes_modules:
+            cat_mods = list(CatalogueModule.objects.filter(code__in=codes_modules, supprime_le__isnull=True))
+            cat_perm.modules.set(cat_mods)
+        else:
+            cat_mods = []
+
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
         with schema_context(entreprise.schema_name):
@@ -445,6 +534,12 @@ def propager_affectation_modules_permission(
         if modifie_par:
             perm_public.modifie_par = modifie_par
             perm_public.save()
+
+        # Synchroniser CataloguePermission dans public
+        cat_perm = CataloguePermission.objects.filter(id=permission_id).first()
+        if cat_perm:
+            cat_mods = list(CatalogueModule.objects.filter(code__in=codes_modules, supprime_le__isnull=True))
+            cat_perm.modules.set(cat_mods)
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
@@ -515,6 +610,19 @@ def propager_modification_permission(
             perm_public.est_actif = est_actif
         perm_public.save()
 
+        # Synchroniser CataloguePermission dans public
+        cat_perm = CataloguePermission.objects.filter(id=permission_id).first()
+        if cat_perm:
+            if libelle is not None and libelle.strip():
+                cat_perm.libelle = libelle.strip()
+            if description is not None:
+                cat_perm.description = description.strip()
+            if ordre is not None:
+                cat_perm.ordre = ordre
+            if est_actif is not None:
+                cat_perm.est_actif = est_actif
+            cat_perm.save()
+
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
         with schema_context(entreprise.schema_name):
@@ -562,6 +670,12 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
         perm_public.supprime_par = supprime_par
         perm_public.est_actif = False
         perm_public.save()
+
+        CataloguePermission.objects.filter(id=permission_id).update(
+            supprime_le=maintenant,
+            supprime_par=supprime_par,
+            est_actif=False,
+        )
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:

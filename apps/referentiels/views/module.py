@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.catalogue.models import CatalogueModule, EntrepriseModule
 from apps.accounts.models import Module
 from apps.accounts.services.roles import (
     initialiser_modules_par_defaut,
@@ -41,20 +42,50 @@ class ModuleListView(APIView):
             for code, libelle in NiveauAcces.choices
         ]
 
-        modules_qs = (
-            Module.objects.filter(est_actif=True, supprime_le__isnull=True)
-            .prefetch_related("permissions")
-            .order_by("ordre", "code")
-        )
+        tenant = getattr(request, "tenant", None)
+        if tenant and getattr(tenant, "schema_name", "public") != "public":
+            modules_souscrits = EntrepriseModule.objects.filter(
+                entreprise=tenant,
+                est_actif=True,
+                supprime_le__isnull=True,
+            ).values_list("module_id", flat=True)
+
+            modules_qs = (
+                CatalogueModule.objects.filter(
+                    id__in=modules_souscrits,
+                    est_actif=True,
+                    supprime_le__isnull=True,
+                )
+                .prefetch_related("permissions")
+                .order_by("ordre", "code")
+            )
+            if not modules_qs.exists():
+                modules_qs = (
+                    CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+                    .prefetch_related("permissions")
+                    .order_by("ordre", "code")
+                )
+        else:
+            modules_qs = (
+                CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+                .prefetch_related("permissions")
+                .order_by("ordre", "code")
+            )
 
         if not modules_qs.exists():
-            initialiser_modules_par_defaut()
-            initialiser_permissions_par_defaut()
             modules_qs = (
                 Module.objects.filter(est_actif=True, supprime_le__isnull=True)
                 .prefetch_related("permissions")
                 .order_by("ordre", "code")
             )
+            if not modules_qs.exists():
+                initialiser_modules_par_defaut()
+                initialiser_permissions_par_defaut()
+                modules_qs = (
+                    CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+                    .prefetch_related("permissions")
+                    .order_by("ordre", "code")
+                )
 
         modules = []
         for m in modules_qs:

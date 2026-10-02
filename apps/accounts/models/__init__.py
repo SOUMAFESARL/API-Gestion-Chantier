@@ -196,6 +196,11 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         return None
 
     @property
+    def derniere_connexion(self):
+        """Date et heure de dernière connexion (alias lisible pour le frontend)."""
+        return self.last_login
+
+    @property
     def is_dg(self) -> bool:
         return self.role_global == RoleGlobal.DIRECTEUR_GENERAL or self.is_owner
 

@@ -52,7 +52,12 @@ from apps.accounts.throttling import (
 from apps.core.enums import RoleGlobal
 from apps.core.exceptions import ActionInterditeDelegue
 
-from .collaborateur import ParametresCollaborateurListCreateView, ParametresCollaborateurDetailView
+from .collaborateur import (
+    ParametresCollaborateurDetailView,
+    ParametresCollaborateurListCreateView,
+    ParametresCollaborateurReactiverView,
+    ParametresCollaborateurSuspendreView,
+)
 from .profil import AvatarProfilView, ChangerMotDePasseView, ProfilView
 from .role import (
     ParametresRoleDetailUpdateView,
@@ -75,6 +80,8 @@ __all__ = [
     "InvitationVerifierView",
     "ParametresCollaborateurListCreateView",
     "ParametresCollaborateurDetailView",
+    "ParametresCollaborateurReactiverView",
+    "ParametresCollaborateurSuspendreView",
     "ParametresRoleDetailUpdateView",
     "ParametresRoleListCreateView",
     "ParametresRoleSupprimerReassignerView",

@@ -141,6 +141,24 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permiss
     perms_par_code = {p.code.upper(): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
     perms_par_id = {str(p.id): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
 
+    EQUIVALENCES_CODES = {
+        "SAISIE": "ECRITURE",
+        "ECRITURE": "ECRITURE",
+        "LECTURE": "LECTURE",
+        "VALIDATION": "VALIDATION",
+        "SUPPRESSION": "SUPPRESSION",
+    }
+
+    def _resoudre_perm(p_key, mod_code):
+        if not p_key:
+            return None
+        cle = str(p_key).strip().upper()
+        code_canonique = EQUIVALENCES_CODES.get(cle, cle)
+        target = perms_par_code.get(code_canonique) or perms_par_id.get(str(p_key))
+        if target and target.modules.exists() and not target.modules.filter(code=mod_code).exists():
+            return None
+        return target
+
     resultat: dict[str, list[Permission]] = {}
 
     if not permissions_input:
@@ -156,15 +174,8 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permiss
                     resolved = []
                     for p in p_items:
                         p_key = p.get("code") if isinstance(p, dict) else str(p)
-                        target_perm = None
-                        if p_key and p_key.upper() in perms_par_code:
-                            target_perm = perms_par_code[p_key.upper()]
-                        elif p_key and p_key in perms_par_id:
-                            target_perm = perms_par_id[p_key]
-                        if target_perm:
-                            # Vérifier si la permission est éligible pour ce module (ou si aucun module restreint)
-                            if target_perm.modules.exists() and not target_perm.modules.filter(code=m_code_str).exists():
-                                continue
+                        target_perm = _resoudre_perm(p_key, m_code_str)
+                        if target_perm and target_perm not in resolved:
                             resolved.append(target_perm)
                     resultat[m_code_str] = resolved
     elif isinstance(permissions_input, dict):
@@ -183,18 +194,15 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permiss
                         if c in perms_par_code:
                             resolved.append(perms_par_code[c])
                 resultat[m_code_str] = resolved
-            elif isinstance(val, list):
+            elif isinstance(val, str):
+                target_perm = _resoudre_perm(val, m_code_str)
+                resultat[m_code_str] = [target_perm] if target_perm else []
+            elif isinstance(val, (list, tuple, set)):
                 resolved = []
                 for p in val:
                     p_key = p.get("code") if isinstance(p, dict) else str(p)
-                    target_perm = None
-                    if p_key and p_key.upper() in perms_par_code:
-                        target_perm = perms_par_code[p_key.upper()]
-                    elif p_key and p_key in perms_par_id:
-                        target_perm = perms_par_id[p_key]
-                    if target_perm:
-                        if target_perm.modules.exists() and not target_perm.modules.filter(code=m_code_str).exists():
-                            continue
+                    target_perm = _resoudre_perm(p_key, m_code_str)
+                    if target_perm and target_perm not in resolved:
                         resolved.append(target_perm)
                 resultat[m_code_str] = resolved
 

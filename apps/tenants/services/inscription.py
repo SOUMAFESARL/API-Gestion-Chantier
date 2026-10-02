@@ -341,16 +341,18 @@ def verifier(jeton_clair: str) -> DemandeInscription:
 def lancer_provisionnement(demande_id: str) -> None:
     """Déclenche la tâche de provisionnement du tenant de façon asynchrone et non-bloquante.
 
-    Si Celery est en mode Eager (ex: cPanel sans worker Celery dédié), un thread
-    d'arrière-plan est détaché pour exécuter `provisionner_entreprise` sans bloquer
-    la réponse HTTP de l'activation (évitant un 504 Gateway Timeout lors de migrate_schemas).
-    Si un worker Celery est actif, la tâche est déposée dans la file via `.delay()`.
+    1. En environnement de test ou si Celery Eager est actif :
+       Un thread d'arrière-plan exécute la tâche sans bloquer les tests unitaires.
+    2. En production (cPanel / serveur web sous Passenger) :
+       Un processus CLI autonome est détaché via subprocess.Popen (start_new_session=True)
+       pour exécuter `manage.py provisionner_inscriptions --demande-id <id>`.
+       Cela évite tout blocage HTTP, ne dépend d'aucun worker Celery fantôme,
+       et empêche Passenger de geler le thread lors de la fin de la requête HTTP.
     """
-    from apps.tenants.tasks import provisionner_entreprise
-
     if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
         import threading
         from django.db import connection
+        from apps.tenants.tasks import provisionner_entreprise
 
         def _executer():
             try:
@@ -363,7 +365,48 @@ def lancer_provisionnement(demande_id: str) -> None:
         )
         thread.start()
     else:
-        provisionner_entreprise.delay(demande_id)
+        import os
+        import subprocess
+        import sys
+
+        manage_py = settings.BASE_DIR / "manage.py"
+        cmd = [
+            sys.executable,
+            str(manage_py),
+            "provisionner_inscriptions",
+            "--demande-id",
+            str(demande_id),
+        ]
+        env = os.environ.copy()
+        settings_module = getattr(settings, "SETTINGS_MODULE", None) or os.environ.get("DJANGO_SETTINGS_MODULE")
+        if settings_module:
+            env["DJANGO_SETTINGS_MODULE"] = settings_module
+
+        try:
+            if os.name == "nt":
+                subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+            else:
+                subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+        except Exception:
+            logger.exception(
+                "Échec du lancement du sous-processus de provisionnement pour la demande %s",
+                demande_id,
+            )
+            from apps.tenants.tasks import provisionner_entreprise
+
+            provisionner_entreprise.delay(demande_id)
 
 
 # ---------------------------------------------------------------------------

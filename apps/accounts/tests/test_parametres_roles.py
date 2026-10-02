@@ -132,7 +132,8 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
     assert data["code"] == "CHEF_EQUIPE"
     assert data["libelle"] == "Chef d'Équipe Maçonnerie"
     assert "ECRITURE" in data["permissions_modules"][ModuleChoix.CHANTIER]
-    assert data["permissions_modules"][ModuleChoix.GED] == ["LECTURE"]
+    assert "LECTURE" in data["permissions_modules"][ModuleChoix.GED]
+    assert "lecture" in data["permissions_modules"][ModuleChoix.GED]
     assert data["permissions_modules"][ModuleChoix.TIERS] == []
 
 
@@ -189,7 +190,8 @@ def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user):
         format="json",
     )
     assert rep_patch.status_code == status.HTTP_200_OK
-    assert rep_patch.json()["permissions_modules"][ModuleChoix.GED] == ["LECTURE"]
+    assert "LECTURE" in rep_patch.json()["permissions_modules"][ModuleChoix.GED]
+    assert "lecture" in rep_patch.json()["permissions_modules"][ModuleChoix.GED]
 
     # 2. Modification via POST (supporté pour flexibilité frontend)
     rep_post = client.post(

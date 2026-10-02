@@ -3,6 +3,8 @@
 from django.urls import resolve
 from drf_spectacular.generators import SchemaGenerator
 
+from apps.core.enums import StatutProjet
+
 
 def test_schema_contains_only_project_crud():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
@@ -31,3 +33,18 @@ def test_project_id_is_documented_only_in_responses():
     assert response["readOnly"] is True
     assert "id" not in schemas["ProjetPost"]["properties"]
     assert "id" not in schemas["ProjetPatch"]["properties"]
+
+
+def test_status_patch_examples_and_choices():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    components = schema["components"]["schemas"]
+    assert any(set(item.get("enum", [])) == set(StatutProjet.values)
+               for item in components.values())
+    for name in ("ProjetPost", "ProjetPatch", "ProjetCreationResponse"):
+        assert "statut" in components[name]["properties"]
+    operation = schema["paths"]["/api/v1/projets/{id}/"]["patch"]
+    examples = operation["requestBody"]["content"]["application/json"]["examples"]
+    assert {item["value"]["statut"] for item in examples.values()} == {
+        "EN_ATTENTE", "SUSPENDU", "BLOQUE", "DESACTIVE", "RESILIE", "EN_COURS",
+    }
+    assert set(operation["responses"]) == {"200", "400", "401", "403", "404"}

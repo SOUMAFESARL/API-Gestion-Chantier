@@ -5,7 +5,7 @@ from django.urls import reverse
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
-from apps.core.enums import TypeProjet
+from apps.core.enums import StatutProjet, TypeProjet
 from apps.projets.models import Projet, ProjetContrat
 from apps.projets.serializers import ProjetCreationSerializer
 from apps.projets.services.contrats import (
@@ -17,6 +17,7 @@ from apps.projets.services.contrats import (
 
 CHAMPS_FORMULAIRE = (
     "nom",
+    "statut",
     "reference",
     "type_projet",
     "ville",
@@ -41,6 +42,15 @@ class ProjetPostSerializer(ProjetCreationSerializer):
     """Only visible fields; reference and duration are generated."""
 
     reference = serializers.CharField(read_only=True)
+    statut = serializers.ChoiceField(
+        choices=StatutProjet.choices,
+        required=False,
+        default=StatutProjet.EN_ATTENTE,
+        help_text=(
+            "État du projet entier. EN_ATTENTE par défaut à la création. "
+            "Utiliser EN_COURS pour réactiver. Ces états ne bloquent pas les opérations."
+        ),
+    )
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
     type_projet = serializers.ChoiceField(choices=TypeProjet.choices)
     maitre_ouvrage = serializers.CharField(max_length=200)
@@ -131,6 +141,8 @@ class ProjetPatchSerializer(ProjetPostSerializer):
     """Same visible fields for PUT and PATCH."""
 
     def validate(self, attrs):
+        if self.instance is not None and "statut" not in self.initial_data:
+            attrs["statut"] = self.instance.statut
         if self.instance is not None and not self.partial:
             attrs.setdefault("date_debut_prevue", None)
             attrs.setdefault("date_fin_prevue", None)

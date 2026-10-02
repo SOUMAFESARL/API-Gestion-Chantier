@@ -336,7 +336,7 @@ def test_tableau_de_bord_direction_avec_chantier_sans_cp(client_tenant, env_test
     assert projet_sans_cp_data["chef_projet_nom"] is None
 
 
-def test_statut_hors_formulaire_refuse(client_tenant, env_test):
+def test_statut_modifiable_depuis_formulaire(client_tenant, env_test):
     cl = _auth(client_tenant, env_test["dg"])
     rep = cl.post(
         "/api/v1/projets/",
@@ -351,9 +351,10 @@ def test_statut_hors_formulaire_refuse(client_tenant, env_test):
     )
     assert rep.status_code == 201
     for statut in [StatutProjet.EN_COURS, StatutProjet.TERMINE]:
-        refused = cl.patch(rep["Location"], {"statut": statut}, format="json", HTTP_HOST=HOTE)
-        assert refused.status_code == 400
+        updated = cl.patch(rep["Location"], {"statut": statut}, format="json", HTTP_HOST=HOTE)
+        assert updated.status_code == 200
+        assert updated.data["statut"] == statut
     with schema_context(SCHEMA):
         projet = Projet.objects.get(reference=rep.data["reference"])
-        assert projet.statut == StatutProjet.EN_ATTENTE
+        assert projet.statut == StatutProjet.TERMINE
         assert projet.chef_projet_id is None

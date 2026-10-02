@@ -29,6 +29,10 @@ def _auto_migrate():
         django.setup()
         from django.core.management import call_command
         call_command("migrate_schemas", interactive=False)
+        try:
+            call_command("provisionner_inscriptions")
+        except Exception as exc_prov:
+            logger.error("Erreur lors du provisionnement automatique Passenger : %s", exc_prov)
 
         if lock_file:
             try:

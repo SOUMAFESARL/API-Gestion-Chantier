@@ -139,8 +139,10 @@ class RestrictionIPPlateformeMiddleware:
                         est_compte_plateforme = Utilisateur.objects.filter(
                             email__iexact=email
                         ).exists()
+                    else:
+                        est_compte_plateforme = False
                 except Exception:
-                    pass
+                    est_compte_plateforme = False
             elif (
                 path
                 in (
@@ -161,8 +163,10 @@ class RestrictionIPPlateformeMiddleware:
                         schema = payload.get("schema")
                         if schema and schema != schema_public:
                             est_compte_plateforme = False
+                    else:
+                        est_compte_plateforme = False
                 except Exception:
-                    pass
+                    est_compte_plateforme = False
 
             if est_compte_plateforme:
                 autorisees = getattr(settings, "SUPER_ADMIN_IPS", [])

@@ -29,6 +29,7 @@ CHAMPS_FORMULAIRE = (
     "description",
     "contrat",
 )
+CHAMPS_REPONSE = ("id", *CHAMPS_FORMULAIRE)
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
@@ -122,8 +123,8 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Projet
-        fields = CHAMPS_FORMULAIRE
-        read_only_fields = CHAMPS_FORMULAIRE
+        fields = CHAMPS_REPONSE
+        read_only_fields = CHAMPS_REPONSE
 
 
 class ProjetPatchSerializer(ProjetPostSerializer):

@@ -61,7 +61,59 @@ class DepotInscriptionSerializer(serializers.Serializer):
         return code
 
     def validate_email(self, valeur: str) -> str:
-        return valeur.strip().lower()
+        adresse = valeur.strip().lower()
+        from django.utils import timezone
+        from apps.tenants.models import DemandeInscription, Entreprise
+
+        # Si c'est un rejeu exact du même identifiant client (idempotence double-clic), autoriser
+        identifiant = self.initial_data.get("id") if hasattr(self, "initial_data") else None
+        if identifiant and DemandeInscription.objects.filter(pk=identifiant).exists():
+            return adresse
+
+        # 1. Vérifier si une entreprise existe déjà avec cette adresse email
+        if Entreprise.objects.filter(email_contact__iexact=adresse).exists():
+            raise serializers.ValidationError(
+                _("Cette adresse email est déjà associée à un compte. Veuillez vous connecter.")
+            )
+
+        # 2. Vérifier si une demande d'inscription est déjà en attente d'activation, de validation ou de provisionnement
+        demande_en_cours = DemandeInscription.objects.filter(
+            email__iexact=adresse,
+            statut__in=[
+                DemandeInscription.Statut.EN_ATTENTE,
+                DemandeInscription.Statut.A_VALIDER,
+                DemandeInscription.Statut.PROVISIONNEMENT,
+            ],
+        ).first()
+        if demande_en_cours is not None:
+            if (
+                demande_en_cours.statut == DemandeInscription.Statut.EN_ATTENTE
+                and demande_en_cours.expire_le <= timezone.now()
+            ):
+                # Expirée : autoriser (le service la marquera ABANDONNEE)
+                pass
+            elif demande_en_cours.statut == DemandeInscription.Statut.A_VALIDER:
+                raise serializers.ValidationError(
+                    _(
+                        "Une inscription est déjà en cours avec cette adresse email. "
+                        "Votre demande est en cours de validation par un administrateur."
+                    )
+                )
+            elif demande_en_cours.statut == DemandeInscription.Statut.PROVISIONNEMENT:
+                raise serializers.ValidationError(
+                    _(
+                        "Cet espace est en cours de création. Veuillez patienter un instant."
+                    )
+                )
+            else:
+                raise serializers.ValidationError(
+                    _(
+                        "Une inscription est déjà en cours avec cette adresse email. "
+                        "Veuillez consulter votre boîte de réception pour l'activer."
+                    )
+                )
+
+        return adresse
 
     def validate_cgu_acceptees(self, valeur: bool) -> bool:
         # Le refus est explicite : l'acceptation est un engagement, et une case
@@ -176,6 +228,25 @@ class EntrepriseSerializer(serializers.Serializer):
     email_contact = serializers.EmailField(required=False, allow_blank=True)
     telephone_contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
     statut = serializers.CharField(read_only=True)
+
+    def validate_email_contact(self, valeur: str) -> str:
+        if not valeur:
+            return valeur
+        valeur = valeur.strip().lower()
+        from apps.tenants.models import Entreprise
+
+        requete = self.context.get("request")
+        tenant = getattr(requete, "tenant", None) if requete else None
+        if not tenant and getattr(self, "instance", None):
+            tenant = self.instance
+        query = Entreprise.objects.filter(email_contact__iexact=valeur)
+        if tenant and tenant.pk:
+            query = query.exclude(pk=tenant.pk)
+        if query.exists():
+            raise serializers.ValidationError(
+                _("Cette adresse email est déjà associée à une autre entreprise.")
+            )
+        return valeur
 
     def _url(self, cle: str) -> str:
         """Clé de stockage -> URL absolue.

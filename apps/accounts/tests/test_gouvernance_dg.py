@@ -82,13 +82,13 @@ def test_profil_connexion_enrichi_dg_et_owner(dg_owner):
 
 
 @pytest.mark.django_db
-def test_endpoint_utilisateurs_moi(dg_owner, admin_delegue):
-    """REC-S1-01-B : GET /api/v1/utilisateurs/moi/ retourne le profil complet."""
+def test_endpoint_auth_profil(dg_owner, admin_delegue):
+    """REC-S1-01-B : GET /api/v1/auth/profil/ retourne le profil complet."""
     client = APIClient(headers={"host": HOTE})
 
     # 1. Appel par le DG
     client.force_authenticate(user=dg_owner)
-    rep_dg = client.get("/api/v1/utilisateurs/moi/")
+    rep_dg = client.get("/api/v1/auth/profil/")
     assert rep_dg.status_code == status.HTTP_200_OK
     assert rep_dg.data["id"] == str(dg_owner.pk)
     assert rep_dg.data["email"] == "dg.fondateur@demo.ci"
@@ -98,7 +98,7 @@ def test_endpoint_utilisateurs_moi(dg_owner, admin_delegue):
 
     # 2. Appel par l'admin délégué
     client.force_authenticate(user=admin_delegue)
-    rep_admin = client.get("/api/v1/utilisateurs/moi/")
+    rep_admin = client.get("/api/v1/auth/profil/")
     assert rep_admin.status_code == status.HTTP_200_OK
     assert rep_admin.data["id"] == str(admin_delegue.pk)
     assert rep_admin.data["email"] == "admin.delegue@demo.ci"

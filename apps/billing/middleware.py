@@ -43,6 +43,7 @@ CHEMINS_OUVERTS = (
     "/api/health",
     "/api/v1/schema",
     "/api/v1/docs",
+    "/api/v1/inscription",  # inscription publique d'une nouvelle entreprise
 )
 
 

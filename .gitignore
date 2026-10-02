@@ -1,4 +1,4 @@
-﻿# Secrets
+# Secrets
 .env
 .env.*
 !.env.example
@@ -22,6 +22,8 @@ htmlcov/
 *.log
 staticfiles/
 media/
+media_prive/*
+!media_prive/.htaccess
 db.sqlite3
 .postgres-data/
 .postgres-init-password
@@ -34,3 +36,15 @@ passenger.log
 *.swp
 .DS_Store
 Thumbs.db
+
+# Documents PDF et gros medias
+*.pdf
+Manuels_Apprentissage/
+logo.png
+
+# Postman (collections, environnements et tests)
+*postman*
+*.postman_collection.json
+*.postman_environment.json
+postman/
+

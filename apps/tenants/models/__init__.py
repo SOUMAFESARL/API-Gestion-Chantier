@@ -102,9 +102,8 @@ class Entreprise(TenantMixin):
         ordering = ["raison_sociale"]
         constraints = [
             models.UniqueConstraint(
-                models.functions.Lower("raison_sociale"),
                 models.functions.Lower("email_contact"),
-                name="uq_entreprise_nom_email",
+                name="uq_entreprise_email_contact",
             )
         ]
 
@@ -162,6 +161,8 @@ class DemandeInscription(ModeleBase):
         """
 
         EN_ATTENTE = "EN_ATTENTE", _("En attente d'activation")
+        A_VALIDER = "A_VALIDER", _("En attente de validation du super admin")
+        REFUSEE = "REFUSEE", _("Refusee")
         PROVISIONNEMENT = "PROVISIONNEMENT", _("Provisionnement en cours")
         ACTIVEE = "ACTIVEE", _("Activée")
         ECHEC = "ECHEC", _("Provisionnement en échec")
@@ -197,6 +198,9 @@ class DemandeInscription(ModeleBase):
     mot_de_passe_transitoire = models.CharField(
         _("mot de passe transitoire"), max_length=128, blank=True
     )
+    decision_par = models.UUIDField(null=True, blank=True)
+    decision_le = models.DateTimeField(null=True, blank=True)
+    motif_refus = models.TextField(blank=True)
 
     cgu_version = models.CharField(_("version des CGU"), max_length=20)
     cgu_acceptees_le = models.DateTimeField(_("CGU acceptées le"))
@@ -221,16 +225,15 @@ class DemandeInscription(ModeleBase):
             # toujours — MLD §4.8.
             models.UniqueConstraint(
                 fields=["slug_reserve"],
-                condition=models.Q(statut="EN_ATTENTE"),
+                condition=models.Q(statut__in=["EN_ATTENTE", "A_VALIDER", "PROVISIONNEMENT"]),
                 name="uq_demande_slug",
             ),
-            # Deux demandes avec le même nom et le même email ne peuvent
+            # Deux demandes avec le même email ne peuvent
             # pas être simultanément en attente d'activation.
             models.UniqueConstraint(
-                models.functions.Lower("raison_sociale"),
                 models.functions.Lower("email"),
-                condition=models.Q(statut="EN_ATTENTE"),
-                name="uq_demande_nom_email_attente",
+                condition=models.Q(statut__in=["EN_ATTENTE", "A_VALIDER", "PROVISIONNEMENT"]),
+                name="uq_demande_email_attente",
             ),
         ]
 

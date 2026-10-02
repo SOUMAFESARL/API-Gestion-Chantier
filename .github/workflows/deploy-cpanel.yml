@@ -3,11 +3,11 @@ name: Tests et déploiement production cPanel
 on:
   push:
     branches:
-      - main
+      - develop
 
   pull_request:
     branches:
-      - main
+      - develop
 
   workflow_dispatch:
 
@@ -83,7 +83,7 @@ jobs:
     name: Déploiement production sur cPanel
     needs: tests
 
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    if: ${{ github.ref == 'refs/heads/develop' && github.event_name == 'push' }}
 
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -93,6 +93,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Préparer le redémarrage Passenger
+        shell: bash
+        run: |
+          mkdir -p tmp
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > tmp/restart.txt
 
       - name: Déployer sur cPanel par FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -124,6 +130,53 @@ jobs:
             **/media/**
             **/staticfiles/**
             **/*.sqlite3
+
+      - name: Appliquer les migrations Django (SSH)
+        if: ${{ vars.CPANEL_PROJECT_DIR != '' }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.CPANEL_SSH_HOST }}
+          username: ${{ secrets.CPANEL_SSH_USERNAME }}
+          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
+          port: ${{ secrets.CPANEL_SSH_PORT }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+
+            # ── Chemins configurés via les variables GitHub ──
+            PROJECT_DIR="${{ vars.CPANEL_PROJECT_DIR }}"
+            VENV_PYTHON="${{ vars.CPANEL_VENV_PYTHON }}"
+
+            cd "$PROJECT_DIR"
+
+            echo "=== Installation des dependances backend ==="
+            "$VENV_PYTHON" -m pip install -r requirements/base.txt
+
+            echo "=== Migrations en attente AVANT migrate ==="
+            "$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || echo "(aucune migration en attente)"
+
+            echo ""
+            echo "=== Exécution de migrate --noinput ==="
+            "$VENV_PYTHON" manage.py migrate --noinput 2>&1
+
+            echo ""
+            echo "=== Vérification APRÈS migrate ==="
+            PENDING=$("$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || true)
+            if [ -n "$PENDING" ]; then
+              echo "⚠️  ATTENTION : migrations encore en attente :"
+              echo "$PENDING"
+              exit 1
+            fi
+            echo "✅ Toutes les migrations sont appliquées."
+
+            echo ""
+            echo "=== Rattrapage des inscriptions en attente ==="
+            "$VENV_PYTHON" manage.py provisionner_inscriptions 2>&1 || true
+
+            echo ""
+            echo "=== Redémarrage Passenger ==="
+            mkdir -p tmp
+            touch tmp/restart.txt
 
       - name: Vérifier la disponibilité de l’API
         if: ${{ vars.CPANEL_HEALTH_URL != '' }}

@@ -27,7 +27,7 @@ MOT_DE_PASSE = "MotDePasse1!"
 ROLES = [
     RoleGlobal.CONDUCTEUR_TRAVAUX,
     RoleGlobal.CHEF_CHANTIER,
-    RoleGlobal.RESPONSABLE_FINANCIER,
+    RoleGlobal.CHEF_PROJET,
     RoleGlobal.VISITEUR,
 ]
 
@@ -71,28 +71,3 @@ def test_une_personne_invitee_ne_devient_pas_administratrice():
         assert utilisateur.role_global != RoleGlobal.ADMIN
         assert utilisateur.is_dg is False, "un chef de chantier ne dirige pas l'entreprise"
 
-
-@pytest.mark.django_db
-def test_le_profil_porte_le_libelle_du_role():
-    """La barre d'application lit ce libellé — elle ne le devine plus.
-
-    Elle traduisait le code par une cascade de six comparaisons, pour treize
-    rôles : « Responsable Financier » s'y affichait « RF ».
-    """
-    from apps.accounts.services.authentification import profil_de_connexion
-
-    adresse = "libelle.role@exemple.ci"
-    with schema_context(SCHEMA):
-        Utilisateur.tous_objets.filter(email=adresse).delete()
-        utilisateur = Utilisateur.objects.create_user(
-            email=adresse,
-            password=MOT_DE_PASSE,
-            nom="Bah",
-            prenom="Fatou",
-            role_global=RoleGlobal.RESPONSABLE_FINANCIER,
-            statut=StatutUtilisateur.ACTIF,
-        )
-
-        profil = profil_de_connexion(utilisateur)
-        assert profil["role_global"] == "RF"
-        assert profil["role_libelle"] == "Responsable Financier"

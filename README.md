@@ -1,4 +1,4 @@
-﻿# 🏗️ API - Gestion de Chantier (Backend)
+# 🏗️ API - Gestion de Chantier (Backend)
 
 Bienvenue sur le dépôt backend de l'application de gestion de chantier BTP.  
 Ce projet est développé avec **Python 3.12+**, **Django 5.2** et **Django REST Framework**.  
@@ -118,13 +118,14 @@ python manage.py runserver 0.0.0.0:8000
 ```
 
 Le backend est prêt et écoute sur :
-* **API Publique :** `http://localhost:8000`
-* **Espace Client Démo :** `http://demo.localhost:8000`
+* **Point d'accès API (Domaine Unique) :** `http://localhost:8000`
+* **Documentation Swagger :** `http://localhost:8000/api/v1/docs/`
 * **Console d'administration :** `http://localhost:8000/admin/`
 
-> 💡 **Astuce sur les domaines :**  
-> Tous les navigateurs modernes résolvent automatiquement `*.localhost` vers `127.0.0.1`.  
-> Vous n'avez pas besoin de modifier votre fichier hosts pour ouvrir `http://demo.localhost:8000`.
+> 💡 **Architecture Domaine Unique (Option A) :**  
+> Toutes les requêtes (plateforme et tenant) s'adressent à `http://localhost:8000`.  
+> Le schéma PostgreSQL du client est automatiquement résolu par le token JWT (`Authorization: Bearer <token>`).
+
 
 ---
 

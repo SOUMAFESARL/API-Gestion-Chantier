@@ -23,7 +23,6 @@ from apps.accounts.serializers import (
     DemandeReinitialisationSerializer,
     InvitationSerializer,
     JetonsSerializer,
-    ProfilConnexionSerializer,
     ReinitialisationSerializer,
     RenouvellementSerializer,
     ReponseAccepterInvitationSerializer,
@@ -53,26 +52,47 @@ from apps.accounts.throttling import (
 from apps.core.enums import RoleGlobal
 from apps.core.exceptions import ActionInterditeDelegue
 
+from .collaborateur import (
+    ParametresCollaborateurDetailView,
+    ParametresCollaborateurListCreateView,
+    ParametresCollaborateurReactiverView,
+    ParametresCollaborateurSuspendreView,
+)
+from .profil import AvatarProfilView, ChangerMotDePasseView, ProfilView
 from .role import (
+    ParametresRoleDetailUpdateView,
+    ParametresRoleListCreateView,
+    ParametresRoleSupprimerReassignerView,
     RoleDetailUpdateView,
     RoleListCreateView,
     RoleSupprimerReassignerView,
 )
+from .super_admin import VerifierAccesSuperAdminView
 
 __all__ = [
+    "AvatarProfilView",
+    "ChangerMotDePasseView",
     "ConnexionView",
     "DeconnexionView",
     "DemandeReinitialisationView",
     "InvitationAccepterView",
     "InvitationListCreateView",
     "InvitationVerifierView",
+    "ParametresCollaborateurListCreateView",
+    "ParametresCollaborateurDetailView",
+    "ParametresCollaborateurReactiverView",
+    "ParametresCollaborateurSuspendreView",
+    "ParametresRoleDetailUpdateView",
+    "ParametresRoleListCreateView",
+    "ParametresRoleSupprimerReassignerView",
+    "ProfilView",
     "ReinitialisationView",
     "RenouvellementView",
     "RoleDetailUpdateView",
     "RoleListCreateView",
     "RoleSupprimerReassignerView",
-    "UtilisateurMoiView",
     "VerificationJetonView",
+    "VerifierAccesSuperAdminView",
 ]
 
 
@@ -333,34 +353,15 @@ class VerificationJetonView(APIView):
         jeton = verifier(serializer.validated_data["jeton"])
         reste = int((jeton.expire_le - timezone.now()).total_seconds())
 
-        domaine_tenant = None
-        url_connexion = None
-        from django.conf import settings
-        from django.db import connection
-        from django_tenants.utils import get_public_schema_name
-        from apps.tenants.models import Entreprise
-
-        schema_nom = getattr(jeton, "_schema_name", getattr(connection, "schema_name", "public"))
-        if schema_nom and schema_nom != get_public_schema_name():
-            entreprise = Entreprise.objects.filter(schema_name=schema_nom).first()
-            if entreprise:
-                dom = entreprise.domains.filter(is_primary=True).first()
-                if dom:
-                    domaine_tenant = dom.domain
-                    protocole = "https" if not settings.DEBUG else "http"
-                    port = ":3000" if settings.DEBUG else ""
-                    url_connexion = f"{protocole}://{dom.domain}{port}/connexion"
-
-        base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-        if not url_connexion and base_url:
-            url_connexion = f"{base_url}/connexion"
+        base_url = "http://localhost:3000"
+        url_connexion = f"{base_url}/connexion"
 
         return Response(
             {
                 "email": jeton.utilisateur.email,
                 "motif": jeton.motif,
                 "expire_dans": max(0, reste),
-                "domaine": domaine_tenant,
+                "domaine": None,
                 "url_connexion": url_connexion,
             }
         )
@@ -404,64 +405,15 @@ class ReinitialisationView(APIView):
         )
 
 
-class InvitationListCreateView(APIView):
-    """`GET` et `POST /api/v1/invitations/` — Inviter des collaborateurs (Étape 3 & Paramètres)."""
+class InvitationListCreateView(ParametresCollaborateurListCreateView):
+    """`GET` et `POST /api/v1/invitations/` — Gestion unifiée des invitations et collaborateurs.
 
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
+    - `GET` : Liste unifiée de tous les collaborateurs et invitations avec leurs chantiers associés.
+    - `POST` : Ajout d'un nouveau collaborateur (avec statut INVITE immédiat) et émission d'invitation.
+    """
 
-    @extend_schema(
-        summary="Lister les invitations",
-        responses={200: InvitationSerializer(many=True)},
-    )
-    def get(self, request):
-        invitations = Invitation.objects.all().order_by("-cree_le")
-        serializer = InvitationSerializer(invitations, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    pass
 
-    @extend_schema(
-        summary="Créer et envoyer une invitation",
-        request=InvitationSerializer,
-        responses={201: InvitationSerializer},
-    )
-    def post(self, request):
-        serializer = InvitationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        email = serializer.validated_data["email"]
-        role_propose = serializer.validated_data["role_propose"]
-        nom = serializer.validated_data.get("nom", "")
-        emetteur = request.user if request.user and request.user.is_authenticated else None
-        hote = request.get_host()
-
-        # Règle d'immutabilité absolue du DG : Unique au créateur du tenant, non attribuable
-        if role_propose == RoleGlobal.DIRECTEUR_GENERAL:
-            return Response(
-                {
-                    "erreur": {
-                        "code": "role_dg_non_attribuable",
-                        "message": "Le rôle de Directeur Général est unique et immuable ; il ne peut pas être attribué.",
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Règle R-DEMO-01 : Seul le DG ou le Propriétaire peut inviter un ADMIN.
-        if role_propose == RoleGlobal.ADMIN and (
-            not emetteur
-            or not (getattr(emetteur, "is_dg", False) or getattr(emetteur, "is_owner", False))
-        ):
-            raise ActionInterditeDelegue()
-
-        invitation = creer_invitation(
-            email=email,
-            role_propose=role_propose,
-            nom=nom,
-            emetteur=emetteur,
-            hote=hote,
-        )
-        retour = InvitationSerializer(invitation)
-        return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
 class InvitationVerifierView(APIView):
@@ -558,18 +510,3 @@ class InvitationAccepterView(APIView):
         )
         reponse["Cache-Control"] = "no-store"
         return reponse
-
-
-class UtilisateurMoiView(APIView):
-    """Profil de l'utilisateur connecté — contrat d'API §1.1."""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        summary="Profil de l'utilisateur connecté",
-        responses={200: ProfilConnexionSerializer},
-    )
-    def get(self, request):
-        utilisateur = request.user
-        profil = profil_de_connexion(utilisateur)
-        return Response(profil, status=status.HTTP_200_OK)

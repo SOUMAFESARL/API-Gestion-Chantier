@@ -11,35 +11,34 @@ from django.db import models
 
 
 class RoleGlobal(models.TextChoices):
+    # Les 7 rôles clés du projet BTP
     ADMIN = "AD", "Administrateur"
     DIRECTEUR_GENERAL = "DG", "Directeur Général / PDG"
-    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
-    INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
-    RESPONSABLE_FINANCIER = "RF", "Responsable Financier"
-    DIRECTEUR_FINANCIER = "DF", "Directeur Financier"
-    RESPONSABLE_ACHATS = "RA", "Responsable Achats"
-    MAGASINIER = "MAG", "Magasinier"
-    RESPONSABLE_RH = "RH", "Responsable RH"
-    SOUS_TRAITANT = "ST", "Sous-traitant"
-    FOURNISSEUR = "FRN", "Fournisseur"
     MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
-    VISITEUR = "VI", "Visiteur"
+    MAITRE_OEUVRE = "MOE", "Maître d'Œuvre"
+    VISITEUR = "VI", "Consultant lecture"
+
+
+# Alias sémantique conforme US-04
+RoleGlobal.CONSULTANT_LECTURE = RoleGlobal.VISITEUR
 
 
 class RoleProjet(models.TextChoices):
-    DIRECTEUR_PROJET = "DP", "Directeur de Projet"
+    # Les 7 rôles clés du chantier BTP
     CHEF_PROJET = "CP", "Chef de Projet"
     CONDUCTEUR_TRAVAUX = "CT", "Conducteur de Travaux"
     CHEF_CHANTIER = "CC", "Chef de Chantier"
-    INGENIEUR_TECHNICIEN = "IT", "Ingénieur / Technicien"
-    MAGASINIER = "MAG", "Magasinier"
-    SOUS_TRAITANT = "ST", "Sous-traitant"
-    FOURNISSEUR = "FRN", "Fournisseur"
     MAITRE_OUVRAGE = "MOA", "Maître d'Ouvrage (Client)"
-    VISITEUR = "VI", "Visiteur"
+    MAITRE_OEUVRE = "MOE", "Maître d'Œuvre"
+    VISITEUR = "VI", "Consultant lecture"
+
+
+# Alias sémantique conforme US-04
+RoleProjet.CONSULTANT_LECTURE = RoleProjet.VISITEUR
+
 
 
 class StatutUtilisateur(models.TextChoices):
@@ -62,7 +61,19 @@ class StatutProjet(models.TextChoices):
     CRITIQUE = "CRITIQUE", "Critique"
     SUSPENDU = "SUSPENDU", "Suspendu"
     TERMINE = "TERMINE", "Terminé"
+    BLOQUE = "BLOQUE", "Bloqué"
+    DESACTIVE = "DESACTIVE", "Désactivé"
+    RESILIE = "RESILIE", "Résilié"
     ARCHIVE = "ARCHIVE", "Archivé"
+
+
+class TypeProjet(models.TextChoices):
+    BATIMENT_RESIDENTIEL = "BATIMENT_RESIDENTIEL", "Bâtiment — Résidentiel"
+    BATIMENT_COMMERCIAL = "BATIMENT_COMMERCIAL", "Bâtiment — Commercial"
+    TP_ROUTE = "TP_ROUTE", "TP — Route"
+    TP_GENIE_CIVIL = "TP_GENIE_CIVIL", "TP — Génie civil"
+    VRD = "VRD", "VRD"
+    INFRASTRUCTURE_INDUSTRIELLE = "INFRASTRUCTURE_INDUSTRIELLE", "Infrastructure industrielle"
 
 
 class ModeExecution(models.TextChoices):
@@ -157,6 +168,7 @@ class ActionAudit(models.TextChoices):
     EXPORT = "EXPORT", "Export"
     VALIDATION = "VALIDATION", "Validation"
     SIGNATURE = "SIGNATURE", "Signature"
+    ASSISTANCE = "ASSISTANCE", "Assistance Super Admin"
 
 
 class TypeTiers(models.TextChoices):
@@ -236,17 +248,40 @@ class NiveauAcces(models.IntegerChoices):
 
 
 class ModuleChoix(models.TextChoices):
-    """Les 12 modules applicatifs de CCD Digital."""
+    """Les 5 modules applicatifs souverains de CCD Digital."""
 
     PROJETS = "projets", "Gestion des Projets"
     CHANTIER = "chantier", "Suivi Technique / Chantier"
-    FINANCE = "finance", "Gestion Financière"
-    ACHATS = "achats", "Achats & Approvisionnements"
-    STOCKS = "stocks", "Gestion des Stocks"
-    RH = "rh", "Ressources Humaines"
-    EQUIPEMENTS = "equipements", "Matériel & Équipements"
-    QHSE = "qhse", "QHSE"
-    CONTRATS = "contrats", "Contrats & Sous-traitance"
-    TIERS = "tiers", "Parties Prenantes / Tiers"
     GED = "ged", "Gestion Documentaire (GED)"
-    PILOTAGE = "pilotage", "Pilotage & Tableaux de bord"
+    PILOTAGE = "pilotage", "Tableaux de bord & Pilotage"
+    TIERS = "tiers", "Parties Prenantes / Tiers"
+
+
+MODULES_DETAILS = {
+    ModuleChoix.PROJETS: {
+        "description": "Fiches projets, lots, activités, jalons et planification des chantiers.",
+        "ordre": 1,
+        "icone": "folder-kanban",
+    },
+    ModuleChoix.CHANTIER: {
+        "description": "Rapports journaliers, avancement des travaux, blocages terrain et pointages.",
+        "ordre": 2,
+        "icone": "hard-hat",
+    },
+    ModuleChoix.GED: {
+        "description": "Classeurs, plans d'exécution, procès-verbaux et traçabilité des pièces jointes.",
+        "ordre": 3,
+        "icone": "file-text",
+    },
+    ModuleChoix.PILOTAGE: {
+        "description": "Indicateurs d'avancement, indice de santé global, météo et aide à la décision.",
+        "ordre": 4,
+        "icone": "bar-chart-3",
+    },
+    ModuleChoix.TIERS: {
+        "description": "Clients, maîtres d'ouvrage, sous-traitants, fournisseurs et partenaires.",
+        "ordre": 5,
+        "icone": "users",
+    },
+}
+

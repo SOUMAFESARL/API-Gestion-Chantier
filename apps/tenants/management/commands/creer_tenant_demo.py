@@ -206,20 +206,16 @@ class Command(BaseCommand):
         from decimal import Decimal
         from django.utils import timezone
 
-        from apps.achats.models import ReceptionMateriau
         from apps.chantier.models import RapportJournalier
         from apps.core.enums import (
             Meteo,
             ModeExecution,
-            ModePaiement,
             RoleProjet,
             RoleTiersChoix,
-            StatutBonPaiement,
             StatutProjet,
             StatutRapport,
             TypeTiers,
         )
-        from apps.finance.models import BonPaiement
         from apps.projets.models import AffectationProjet, Lot, Projet
         from apps.tiers.models import RoleTiers, Tiers
 
@@ -460,110 +456,6 @@ class Command(BaseCommand):
                 "observations": "Pose des huisseries extérieures en cours.",
                 "blocages_critiques": 0,
                 "statut": StatutRapport.SOUMIS,
-            },
-        )
-
-        # 5. Bons de paiement (dont 3 en attente pour un total net de 8.4 M FCFA)
-        BonPaiement.objects.get_or_create(
-            numero="BDP-2026-001",
-            defaults={
-                "projet": p1,
-                "lot": lot1_p1,
-                "beneficiaire": t_tacheron1,
-                "corps_etat": "Maçonnerie RDC & 1er étage",
-                "montant_brut": 4_500_000_00,
-                "deduction_avance": 500_000_00,
-                "deduction_penalite": 0,
-                "montant_net": 4_000_000_00,  # 4.0 M FCFA
-                "statut": StatutBonPaiement.A_SIGNER,
-                "mode_paiement": ModePaiement.VIREMENT,
-            },
-        )
-
-        BonPaiement.objects.get_or_create(
-            numero="BDP-2026-002",
-            defaults={
-                "projet": p2,
-                "lot": lot1_p2,
-                "beneficiaire": t_tacheron2,
-                "corps_etat": "Passage des gaines techniques et coffrets",
-                "montant_brut": 2_800_000_00,
-                "deduction_avance": 0,
-                "deduction_penalite": 0,
-                "montant_net": 2_800_000_00,  # 2.8 M FCFA
-                "statut": StatutBonPaiement.A_SIGNER,
-                "mode_paiement": ModePaiement.CASH,
-            },
-        )
-
-        BonPaiement.objects.get_or_create(
-            numero="BDP-2026-003",
-            defaults={
-                "projet": p3,
-                "lot": lot1_p3,
-                "beneficiaire": t_tacheron1,
-                "corps_etat": "Menuiserie alu RDC",
-                "montant_brut": 1_600_000_00,
-                "deduction_avance": 0,
-                "deduction_penalite": 0,
-                "montant_net": 1_600_000_00,  # 1.6 M FCFA
-                "statut": StatutBonPaiement.A_SIGNER,
-                "mode_paiement": ModePaiement.VIREMENT,
-            },
-        )
-
-        BonPaiement.objects.get_or_create(
-            numero="BDP-2026-000",
-            defaults={
-                "projet": p1,
-                "lot": lot1_p1,
-                "beneficiaire": t_tacheron1,
-                "corps_etat": "Fouilles et semelles de fondation",
-                "montant_brut": 5_000_000_00,
-                "montant_net": 5_000_000_00,
-                "statut": StatutBonPaiement.PAYE,
-                "mode_paiement": ModePaiement.VIREMENT,
-                "paye_le": timezone.now(),
-            },
-        )
-
-        # 6. Réceptions de Matériaux
-        ReceptionMateriau.objects.get_or_create(
-            projet=p1,
-            designation="400 sacs ciment CPJ 42.5 livrés & contrôlés",
-            date_reception=today,
-            defaults={
-                "fournisseur": t_fourn1,
-                "quantite": Decimal("400"),
-                "unite": "Sacs",
-                "conforme": True,
-                "receptionne_par": admin_user,
-            },
-        )
-
-        ReceptionMateriau.objects.get_or_create(
-            projet=p2,
-            designation="25 barres fer à béton HA 12 & HA 14",
-            date_reception=today,
-            defaults={
-                "fournisseur": t_fourn2,
-                "quantite": Decimal("25"),
-                "unite": "Barres",
-                "conforme": True,
-                "receptionne_par": admin_user,
-            },
-        )
-
-        ReceptionMateriau.objects.get_or_create(
-            projet=p1,
-            designation="12 m³ de sable lagunaire lavé",
-            date_reception=today,
-            defaults={
-                "fournisseur": t_fourn1,
-                "quantite": Decimal("12"),
-                "unite": "m³",
-                "conforme": True,
-                "receptionne_par": admin_user,
             },
         )
 

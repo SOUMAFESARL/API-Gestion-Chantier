@@ -4,30 +4,61 @@ import re
 
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.accounts.models import Utilisateur
+from apps.accounts.serializers.profil import ProfilEntrepriseSerializer
 from apps.accounts.services.invitations import creer_invitation
-from apps.core.enums import RoleGlobal, RoleProjet, StatutUtilisateur
-from apps.core.exceptions import ChefProjetRequis, DgNonAssignableCommeCp
-from apps.projets.models import AffectationProjet, Projet
-from apps.projets.services.references import generer_reference_projet
-from apps.tiers.models import Tiers
-from apps.tiers.serializers import TiersSerializer
-
+from apps.core.enums import (
+    ModeExecution,
+    RoleGlobal,
+    RoleProjet,
+    StatutProjet,
+    StatutUtilisateur,
+    TypeBordereau,
+    TypeProjet,
+)
+from apps.core.exceptions import DgNonAssignableCommeCp
+from apps.projets.models import AffectationProjet, Lot, Projet
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
 from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
     ReferentielVillesResponseSerializer,
 )
+from apps.projets.services.affectations import affecter_collaborateur_projet
+from apps.projets.services.references import generer_reference_projet
+from apps.projets.serializers.activite import (
+    ActiviteCreationSerializer,
+    ActiviteSerializer,
+)
+from apps.projets.serializers.reprogrammation import (
+    HistoriqueDateSerializer,
+    MotifReportCreationSerializer,
+    MotifReportSerializer,
+    ReprogrammationRequestSerializer,
+    ReprogrammationResponseSerializer,
+)
+from apps.tiers.models import Tiers
+from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
+    "ActiviteCreationSerializer",
+    "ActiviteSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
+    "EquipeCreationSerializer",
+    "HistoriqueDateSerializer",
+    "LotCreationProjetSerializer",
+    "LotSimpleSerializer",
     "MeteoResponseSerializer",
+    "MotifReportCreationSerializer",
+    "MotifReportSerializer",
     "ProjetCreationSerializer",
     "ProjetSerializer",
     "ReferentielVillesResponseSerializer",
+    "ReprogrammationRequestSerializer",
+    "ReprogrammationResponseSerializer",
     "TableauDeBordResponseSerializer",
 ]
 
@@ -66,26 +97,58 @@ class ChefProjetInviteSerializer(serializers.Serializer):
     telephone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
 
 
+@extend_schema_serializer(component_name="LotProjet")
+class LotSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lot
+        fields = [
+            "id",
+            "code",
+            "libelle",
+            "mode_execution",
+            "type_bordereau",
+            "date_debut_prevue",
+            "date_fin_prevue",
+            "date_debut_baseline",
+            "date_fin_baseline",
+            "avancement",
+            "premier_rapport_soumis",
+        ]
+
+
 class ProjetSerializer(serializers.ModelSerializer):
+    maitre_ouvrage = serializers.SerializerMethodField()
+    cree_par = ChefProjetEnrichiSerializer(read_only=True)
+    entreprise = serializers.SerializerMethodField()
     client = TiersSerializer(read_only=True)
-    chef_projet = ChefProjetEnrichiSerializer(read_only=True)
-    conducteur_travaux = ChefProjetEnrichiSerializer(source="chef_projet", read_only=True)
+    chef_projet = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
+    conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
+    lots = LotSimpleSerializer(many=True, read_only=True)
+    duree_jours_ouvres = serializers.IntegerField(read_only=True)
     budget_consomme_montant = serializers.SerializerMethodField()
 
     class Meta:
         model = Projet
         fields = [
             "id",
+            "cree_par",
+            "entreprise",
             "reference",
             "nom",
+            "type_projet",
             "description",
             "client",
+            "maitre_ouvrage",
+            "maitre_oeuvre",
             "ville",
             "quartier",
             "budget_initial_montant",
             "budget_consomme_montant",
             "date_debut_prevue",
             "date_fin_prevue",
+            "date_debut_baseline",
+            "date_fin_baseline",
+            "duree_jours_ouvres",
             "date_debut_reelle",
             "date_fin_reelle",
             "chef_projet",
@@ -94,7 +157,25 @@ class ProjetSerializer(serializers.ModelSerializer):
             "avancement_reel",
             "avancement_theorique",
             "indice_sante",
+            "lots",
         ]
+
+    def get_maitre_ouvrage(self, obj) -> str:
+        return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")
+
+    @extend_schema_field(ProfilEntrepriseSerializer(allow_null=True))
+    def get_entreprise(self, obj):
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None)
+        if tenant is None or tenant.schema_name == "public":
+            return None
+        logo_url = request.build_absolute_uri(tenant.logo.url) if tenant.logo else None
+        return {
+            "id": str(tenant.pk),
+            "raison_sociale": tenant.raison_sociale,
+            "schema_name": tenant.schema_name,
+            "logo_url": logo_url,
+        }
 
     def get_budget_consomme_montant(self, obj: Projet) -> int:
         if not obj.budget_initial_montant:
@@ -103,54 +184,258 @@ class ProjetSerializer(serializers.ModelSerializer):
         return int(obj.budget_initial_montant * ratio)
 
 
-class ProjetCreationSerializer(serializers.Serializer):
-    id = serializers.UUIDField(read_only=True)
-    reference = serializers.CharField(read_only=True)
-    nom = serializers.CharField(max_length=200)
-    client = serializers.PrimaryKeyRelatedField(queryset=Tiers.objects.all())
-    ville = serializers.CharField(max_length=100)
-    quartier = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
-    date_debut_prevue = serializers.DateField()
-    date_fin_prevue = serializers.DateField()
-    budget_initial_montant = serializers.IntegerField(
-        min_value=0, required=False, allow_null=True, default=None
+class LotCreationProjetSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    libelle = serializers.CharField(max_length=200)
+    mode_execution = serializers.ChoiceField(
+        choices=ModeExecution.choices, default=ModeExecution.REGIE
     )
-    description = serializers.CharField(required=False, allow_blank=True, default="")
+    type_bordereau = serializers.ChoiceField(
+        choices=TypeBordereau.choices, default=TypeBordereau.FORFAIT
+    )
+    date_debut_prevue = serializers.DateField(required=False, allow_null=True, default=None)
+    date_fin_prevue = serializers.DateField(required=False, allow_null=True, default=None)
 
+    def validate(self, attrs):
+        debut = attrs.get("date_debut_prevue")
+        fin = attrs.get("date_fin_prevue")
+        if debut and fin and fin < debut:
+            raise serializers.ValidationError(
+                {
+                    "date_fin_prevue": _(
+                        "La date de fin du lot ne peut pas précéder sa date de début."
+                    )
+                }
+            )
+        return attrs
+
+
+class EquipeCreationSerializer(serializers.Serializer):
     chef_projet_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     chef_projet_invite = ChefProjetInviteSerializer(required=False, allow_null=True, default=None)
     conducteur_travaux_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     conducteur_travaux_invite = ChefProjetInviteSerializer(
         required=False, allow_null=True, default=None
     )
+    chefs_chantier_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
+    visiteurs_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
+
+
+class ProjetCreationSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    reference = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
+    nom = serializers.CharField(max_length=200)
+    type_projet = serializers.ChoiceField(
+        choices=TypeProjet.choices, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
+    )
+    statut = serializers.ChoiceField(
+        choices=StatutProjet.choices, required=False, default=StatutProjet.EN_ATTENTE
+    )
+    client = serializers.PrimaryKeyRelatedField(queryset=Tiers.objects.all(), required=False)
+    maitre_ouvrage = serializers.CharField(max_length=200, required=False)
+    maitre_oeuvre = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, default=""
+    )
+    ville = serializers.CharField(max_length=100)
+    quartier = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+    date_debut_prevue = serializers.DateField(required=False, allow_null=True)
+    date_fin_prevue = serializers.DateField(required=False, allow_null=True)
+    budget_initial_montant = serializers.IntegerField(
+        min_value=0, required=False, allow_null=True, default=None
+    )
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+    # Lots (Étape 2) — 0 à N lots acceptés
+    lots = LotCreationProjetSerializer(many=True, required=False, default=list)
+    lots_supprimer_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        help_text="UUID des lots à supprimer logiquement, uniquement en PATCH.",
+    )
+
+    # Équipe (Étape 3) — groupée ou à plat
+    equipe = EquipeCreationSerializer(required=False, allow_null=True, default=None)
+
+    # Champs à plat pour rétrocompatibilité
+    chef_projet_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    chef_projet_invite = ChefProjetInviteSerializer(required=False, allow_null=True, default=None)
+    conducteur_travaux_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    conducteur_travaux_invite = ChefProjetInviteSerializer(
+        required=False, allow_null=True, default=None
+    )
+    chefs_chantier_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
+    visiteurs_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
 
     def validate(self, attrs):
-        debut = attrs.get("date_debut_prevue") or (
-            self.instance.date_debut_prevue if self.instance else None
+        if "client" in attrs and "maitre_ouvrage" in attrs:
+            raise serializers.ValidationError(
+                {
+                    "maitre_ouvrage": _(
+                        "Envoyez le nom du maître d'ouvrage ou un client, pas les deux."
+                    )
+                }
+            )
+        if self.instance is None and not attrs.get("maitre_ouvrage") and not attrs.get("client"):
+            raise serializers.ValidationError({"maitre_ouvrage": _("Ce champ est obligatoire.")})
+        if self.instance is None and "lots_supprimer_ids" in attrs:
+            raise serializers.ValidationError(
+                {"lots_supprimer_ids": _("Disponible uniquement en modification.")}
+            )
+        if self.instance is not None and "lots" in attrs:
+            # Le PATCH du parent ne rend pas facultatifs les champs des nouveaux lots.
+            nouveaux = LotCreationProjetSerializer(data=self.initial_data["lots"], many=True)
+            nouveaux.is_valid(raise_exception=True)
+            attrs["lots"] = nouveaux.validated_data
+        if self.instance is not None:
+            if "date_debut_baseline" in self.initial_data or "date_fin_baseline" in self.initial_data:
+                raise serializers.ValidationError(
+                    {"date_debut_baseline": _("La Baseline v0 est immuable et ne peut être modifiée.")}
+                )
+            if (
+                (
+                    "date_debut_prevue" in self.initial_data
+                    and self.instance.date_debut_prevue is not None
+                    and attrs.get("date_debut_prevue") != self.instance.date_debut_prevue
+                )
+                or (
+                    "date_fin_prevue" in self.initial_data
+                    and self.instance.date_fin_prevue is not None
+                    and attrs.get("date_fin_prevue") != self.instance.date_fin_prevue
+                )
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "date_fin_prevue": _(
+                            "La modification des dates prévisionnelles requiert un motif et une justification (RG-11). "
+                            "Veuillez utiliser la route dédiée : POST /api/v1/projets/{id}/reprogrammer/."
+                        )
+                    }
+                )
+            non_modifiables = {
+                "equipe",
+                "chefs_chantier_ids",
+                "visiteurs_ids",
+                "chef_projet_invite",
+                "conducteur_travaux_invite",
+            }
+            erreurs = {
+                champ: _(
+                    "Champ réservé à la création. "
+                    "Pour l'équipe, utilisez les routes d'affectations."
+                )
+                for champ in non_modifiables
+                if champ in self.initial_data
+            }
+            if erreurs:
+                raise serializers.ValidationError(erreurs)
+            if "reference" in attrs and not attrs["reference"].strip():
+                raise serializers.ValidationError(
+                    {"reference": _("La référence ne peut être vide.")}
+                )
+            responsables = {
+                "chef_projet_id": attrs.get("chef_projet_id", self.instance.chef_projet_id),
+                "conducteur_travaux_id": attrs.get(
+                    "conducteur_travaux_id", self.instance.conducteur_travaux_id
+                ),
+            }
+            if (
+                responsables["chef_projet_id"]
+                and responsables["conducteur_travaux_id"]
+                and responsables["chef_projet_id"] == responsables["conducteur_travaux_id"]
+            ):
+                raise serializers.ValidationError(
+                    {"conducteur_travaux_id": _("Les responsables doivent être distincts.")}
+                )
+            for champ, pk in responsables.items():
+                if champ not in attrs or pk is None:
+                    continue
+                if not Utilisateur.objects.filter(
+                    pk=pk,
+                    is_active=True,
+                    statut__in=[StatutUtilisateur.ACTIF, StatutUtilisateur.INVITE],
+                ).exists():
+                    raise serializers.ValidationError(
+                        {champ: _("Utilisateur introuvable ou inactif.")}
+                    )
+                role = (
+                    RoleProjet.CHEF_PROJET
+                    if champ == "chef_projet_id"
+                    else RoleProjet.CONDUCTEUR_TRAVAUX
+                )
+                if (
+                    AffectationProjet.objects.filter(
+                        projet=self.instance,
+                        utilisateur_id=pk,
+                        est_actif=True,
+                    )
+                    .exclude(role_projet=role)
+                    .exists()
+                ):
+                    raise serializers.ValidationError(
+                        {champ: _("Ce membre occupe déjà un autre rôle sur le projet.")}
+                    )
+        debut = attrs.get(
+            "date_debut_prevue", self.instance.date_debut_prevue if self.instance else None
         )
-        fin = attrs.get("date_fin_prevue") or (
-            self.instance.date_fin_prevue if self.instance else None
-        )
+        fin = attrs.get("date_fin_prevue", self.instance.date_fin_prevue if self.instance else None)
         if debut and fin and fin <= debut:
             raise serializers.ValidationError(
                 {"date_fin_prevue": _("La date de fin doit être postérieure à la date de début.")}
             )
 
-        # Harmonisation conducteur_travaux / chef_projet
-        chef_projet_id = attrs.get("conducteur_travaux_id") or attrs.get("chef_projet_id")
-        chef_projet_invite = attrs.get("conducteur_travaux_invite") or attrs.get(
-            "chef_projet_invite"
-        )
-        attrs["chef_projet_id"] = chef_projet_id
-        attrs["chef_projet_invite"] = chef_projet_invite
+        # Contrôle d'unicité de la référence si fournie
+        ref = attrs.get("reference")
+        if ref and str(ref).strip():
+            ref_clean = str(ref).strip()
+            qs_ref = Projet.objects.filter(reference=ref_clean)
+            if self.instance:
+                qs_ref = qs_ref.exclude(pk=self.instance.pk)
+            if qs_ref.exists():
+                raise serializers.ValidationError(
+                    {"reference": _("Cette référence de projet est déjà utilisée.")}
+                )
 
-        # Si création d'un projet, assignation Conducteur de Travaux obligatoire et règles DG
+        # Fusion de l'objet equipe s'il est spécifié
+        equipe = attrs.get("equipe")
+        if equipe:
+            for cle in [
+                "chef_projet_id",
+                "chef_projet_invite",
+                "conducteur_travaux_id",
+                "conducteur_travaux_invite",
+                "chefs_chantier_ids",
+                "visiteurs_ids",
+            ]:
+                if equipe.get(cle) is not None and not attrs.get(cle):
+                    attrs[cle] = equipe[cle]
+
+        # Validation de l'unicité des codes de lots si fournis
+        lots = attrs.get("lots", [])
+        codes_vus = set()
+        for lot in lots:
+            c = lot.get("code")
+            if c and str(c).strip():
+                c_clean = str(c).strip().upper()
+                if c_clean in codes_vus:
+                    raise serializers.ValidationError(
+                        {"lots": _(f"Le code de lot '{c_clean}' est présent en doublon.")}
+                    )
+                codes_vus.add(c_clean)
+
+        # Si création d'un projet, assignation Chef de Projet optionnelle et règles DG
         if self.instance is None:
             chef_projet_id = attrs.get("chef_projet_id")
             chef_projet_invite = attrs.get("chef_projet_invite")
-
-            if not chef_projet_id and not chef_projet_invite:
-                raise ChefProjetRequis()
+            conducteur_travaux_id = attrs.get("conducteur_travaux_id")
+            conducteur_travaux_invite = attrs.get("conducteur_travaux_invite")
 
             if chef_projet_id and chef_projet_invite:
                 raise serializers.ValidationError(
@@ -165,6 +450,7 @@ class ProjetCreationSerializer(serializers.Serializer):
             request = self.context.get("request")
             user_connecte = getattr(request, "user", None)
 
+            # Vérification du Chef de Projet
             if chef_projet_id:
                 try:
                     target_cp = Utilisateur.objects.get(id=chef_projet_id, supprime_le__isnull=True)
@@ -205,6 +491,28 @@ class ProjetCreationSerializer(serializers.Serializer):
                 if existing and (existing.is_dg or getattr(existing, "is_owner", False)):
                     raise DgNonAssignableCommeCp()
 
+            # Vérification du Conducteur de Travaux (s'il est spécifié)
+            if conducteur_travaux_id:
+                try:
+                    target_ct = Utilisateur.objects.get(
+                        id=conducteur_travaux_id, supprime_le__isnull=True
+                    )
+                except Utilisateur.DoesNotExist:
+                    raise serializers.ValidationError(
+                        {"conducteur_travaux_id": _("Conducteur de travaux introuvable.")}
+                    ) from None
+
+                if target_ct.is_dg or getattr(target_ct, "is_owner", False):
+                    raise DgNonAssignableCommeCp()
+
+            if conducteur_travaux_invite:
+                email_invite_ct = conducteur_travaux_invite.get("email", "").strip().lower()
+                existing_ct = Utilisateur.objects.filter(
+                    email__iexact=email_invite_ct, supprime_le__isnull=True
+                ).first()
+                if existing_ct and (existing_ct.is_dg or getattr(existing_ct, "is_owner", False)):
+                    raise DgNonAssignableCommeCp()
+
         else:
             # En cas de modification (PATCH)
             chef_projet_id = attrs.get("chef_projet_id")
@@ -219,19 +527,79 @@ class ProjetCreationSerializer(serializers.Serializer):
                 if target_cp.is_dg or getattr(target_cp, "is_owner", False):
                     raise DgNonAssignableCommeCp()
 
+            conducteur_travaux_id = attrs.get("conducteur_travaux_id")
+            if conducteur_travaux_id:
+                try:
+                    target_ct = Utilisateur.objects.get(
+                        id=conducteur_travaux_id, supprime_le__isnull=True
+                    )
+                except Utilisateur.DoesNotExist:
+                    raise serializers.ValidationError(
+                        {"conducteur_travaux_id": _("Conducteur de travaux introuvable.")}
+                    ) from None
+
+                if target_ct.is_dg or getattr(target_ct, "is_owner", False):
+                    raise DgNonAssignableCommeCp()
+
+        if self.instance is None:
+            # Tous les UUID sont résolus dans le schéma de l'entreprise courante.
+            membres = {
+                "chef_projet_id": [attrs["chef_projet_id"]] if attrs.get("chef_projet_id") else [],
+                "conducteur_travaux_id": (
+                    [attrs["conducteur_travaux_id"]] if attrs.get("conducteur_travaux_id") else []
+                ),
+                "chefs_chantier_ids": attrs.get("chefs_chantier_ids", []),
+                "visiteurs_ids": attrs.get("visiteurs_ids", []),
+            }
+            ids = {pk for valeurs in membres.values() for pk in valeurs}
+            disponibles = set(
+                Utilisateur.objects.filter(
+                    pk__in=ids,
+                    is_active=True,
+                    statut__in=[StatutUtilisateur.ACTIF, StatutUtilisateur.INVITE],
+                ).values_list("pk", flat=True)
+            )
+            erreurs = {
+                champ: _("Un membre est introuvable ou inactif dans cette entreprise.")
+                for champ, valeurs in membres.items()
+                if set(valeurs) - disponibles
+            }
+            if erreurs:
+                raise serializers.ValidationError(erreurs)
+            vus = set()
+            for champ, valeurs in membres.items():
+                if vus.intersection(valeurs):
+                    raise serializers.ValidationError(
+                        {champ: _("Un utilisateur ne peut occuper qu'un rôle par projet.")}
+                    )
+                vus.update(valeurs)
+
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
         request = self.context.get("request")
         user_connecte = getattr(request, "user", None)
 
+        validated_data.pop("equipe", None)
+        lots_data = validated_data.pop("lots", [])
+        chefs_chantier_ids = validated_data.pop("chefs_chantier_ids", [])
+        visiteurs_ids = validated_data.pop("visiteurs_ids", [])
+
         conducteur_travaux_id = validated_data.pop("conducteur_travaux_id", None)
         conducteur_travaux_invite = validated_data.pop("conducteur_travaux_invite", None)
-        chef_projet_id = validated_data.pop("chef_projet_id", None) or conducteur_travaux_id
-        chef_projet_invite = (
-            validated_data.pop("chef_projet_invite", None) or conducteur_travaux_invite
-        )
+        chef_projet_id = validated_data.pop("chef_projet_id", None)
+        chef_projet_invite = validated_data.pop("chef_projet_invite", None)
 
+        # Référence automatique si non renseignée
+        reference = validated_data.pop("reference", None)
+        if not reference or not str(reference).strip():
+            reference = generer_reference_projet()
+        else:
+            reference = str(reference).strip()
+
+        # 1. Résolution Chef de Projet (optionnel)
+        chef_projet = None
         if chef_projet_id:
             chef_projet = Utilisateur.objects.get(id=chef_projet_id)
         elif chef_projet_invite:
@@ -243,27 +611,43 @@ class ProjetCreationSerializer(serializers.Serializer):
                     nom=chef_projet_invite["nom"].strip(),
                     prenom=chef_projet_invite["prenom"].strip(),
                     telephone=chef_projet_invite.get("telephone", "").strip(),
+                    role_global=RoleGlobal.CHEF_PROJET,
+                    statut=StatutUtilisateur.INVITE,
+                )
+
+        # 2. Résolution Conducteur de Travaux (optionnel, distinct du CP)
+        conducteur_travaux = None
+        if conducteur_travaux_id:
+            conducteur_travaux = Utilisateur.objects.get(id=conducteur_travaux_id)
+        elif conducteur_travaux_invite:
+            email_invite_ct = conducteur_travaux_invite["email"].strip().lower()
+            conducteur_travaux = Utilisateur.objects.filter(email__iexact=email_invite_ct).first()
+            if not conducteur_travaux:
+                conducteur_travaux = Utilisateur.objects.create(
+                    email=email_invite_ct,
+                    nom=conducteur_travaux_invite["nom"].strip(),
+                    prenom=conducteur_travaux_invite["prenom"].strip(),
+                    telephone=conducteur_travaux_invite.get("telephone", "").strip(),
                     role_global=RoleGlobal.CONDUCTEUR_TRAVAUX,
                     statut=StatutUtilisateur.INVITE,
                 )
-        else:
-            chef_projet = user_connecte
 
-        reference = generer_reference_projet()
+        hote = request.get_host() if request else None
 
         with transaction.atomic():
             projet = Projet.objects.create(
                 reference=reference,
+                cree_par=user_connecte,
                 chef_projet=chef_projet,
+                conducteur_travaux=conducteur_travaux,
                 **validated_data,
             )
 
-            # Si invité à la volée, déclencher l'invitation liée au projet avec le rôle Conducteur de Travaux
-            if chef_projet_invite:
-                hote = request.get_host() if request else None
+            # Invitation du Chef de Projet si invité à la volée
+            if chef_projet and chef_projet_invite:
                 creer_invitation(
                     email=chef_projet.email,
-                    role_propose=RoleGlobal.CONDUCTEUR_TRAVAUX,
+                    role_propose=RoleGlobal.CHEF_PROJET,
                     nom=f"{chef_projet.prenom} {chef_projet.nom}".strip(),
                     emetteur=(
                         user_connecte if user_connecte and user_connecte.is_authenticated else None
@@ -273,30 +657,175 @@ class ProjetCreationSerializer(serializers.Serializer):
                     projet_id=projet.id,
                 )
 
-            # Affectation automatique comme Conducteur de Travaux responsable
+            # Affectation du Chef de Projet (rôle CHEF_PROJET) si spécifié
             if chef_projet:
                 AffectationProjet.objects.get_or_create(
                     utilisateur=chef_projet,
                     projet=projet,
-                    defaults={"role_projet": RoleProjet.CONDUCTEUR_TRAVAUX, "est_actif": True},
+                    defaults={
+                        "role_projet": RoleProjet.CHEF_PROJET,
+                        "est_actif": True,
+                        "cree_par": user_connecte,
+                    },
+                )
+
+            # Affectation et invitation éventuelle du Conducteur de Travaux
+            if conducteur_travaux:
+                if conducteur_travaux_invite:
+                    creer_invitation(
+                        email=conducteur_travaux.email,
+                        role_propose=RoleGlobal.CONDUCTEUR_TRAVAUX,
+                        nom=f"{conducteur_travaux.prenom} {conducteur_travaux.nom}".strip(),
+                        emetteur=(
+                            user_connecte
+                            if user_connecte and user_connecte.is_authenticated
+                            else None
+                        ),
+                        hote=hote,
+                        nom_projet=projet.nom,
+                        projet_id=projet.id,
+                    )
+
+                AffectationProjet.objects.get_or_create(
+                    utilisateur=conducteur_travaux,
+                    projet=projet,
+                    defaults={
+                        "role_projet": RoleProjet.CONDUCTEUR_TRAVAUX,
+                        "est_actif": True,
+                        "cree_par": user_connecte,
+                    },
+                )
+
+            # Affectation des Chefs de Chantier
+            for cc_id in chefs_chantier_ids:
+                try:
+                    cc_user = Utilisateur.objects.get(id=cc_id)
+                    AffectationProjet.objects.get_or_create(
+                        utilisateur=cc_user,
+                        projet=projet,
+                        defaults={
+                            "role_projet": RoleProjet.CHEF_CHANTIER,
+                            "est_actif": True,
+                            "cree_par": user_connecte,
+                        },
+                    )
+                except Utilisateur.DoesNotExist:
+                    pass
+
+            # Affectation des Visiteurs
+            for vis_id in visiteurs_ids:
+                try:
+                    vis_user = Utilisateur.objects.get(id=vis_id)
+                    AffectationProjet.objects.get_or_create(
+                        utilisateur=vis_user,
+                        projet=projet,
+                        defaults={
+                            "role_projet": RoleProjet.VISITEUR,
+                            "est_actif": True,
+                            "cree_par": user_connecte,
+                        },
+                    )
+                except Utilisateur.DoesNotExist:
+                    pass
+
+            # Création des lots initiaux (0 à N lots)
+            codes_reserves = {
+                str(lot.get("code", "")).strip().upper()
+                for lot in lots_data
+                if lot.get("code", "").strip()
+            }
+            for idx, ldata in enumerate(lots_data, start=1):
+                code = ldata.get("code")
+                if not code or not str(code).strip():
+                    numero = idx
+                    while f"L-{numero:02d}" in codes_reserves:
+                        numero += 1
+                    code = f"L-{numero:02d}"
+                code = str(code).strip().upper()
+                codes_reserves.add(code)
+                Lot.objects.create(
+                    projet=projet,
+                    cree_par=user_connecte,
+                    code=str(code).strip(),
+                    libelle=ldata["libelle"].strip(),
+                    mode_execution=ldata.get("mode_execution", ModeExecution.REGIE),
+                    type_bordereau=ldata.get("type_bordereau", TypeBordereau.FORFAIT),
+                    date_debut_prevue=ldata.get("date_debut_prevue"),
+                    date_fin_prevue=ldata.get("date_fin_prevue"),
+                    ordre=idx,
                 )
 
         return projet
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        conducteur_travaux_id = validated_data.pop("conducteur_travaux_id", None)
-        validated_data.pop("conducteur_travaux_invite", None)
-        chef_projet_id = validated_data.pop("chef_projet_id", None) or conducteur_travaux_id
-        validated_data.pop("chef_projet_invite", None)
-
-        if chef_projet_id:
-            instance.chef_projet = Utilisateur.objects.get(id=chef_projet_id)
-            AffectationProjet.objects.get_or_create(
-                utilisateur=instance.chef_projet,
-                projet=instance,
-                defaults={"role_projet": RoleProjet.CONDUCTEUR_TRAVAUX, "est_actif": True},
+        # Sérialise les changements de responsables concurrents sur ce projet.
+        instance = Projet.objects.select_for_update().get(pk=instance.pk)
+        if "maitre_ouvrage" in validated_data:
+            instance.client = None
+        elif "client" in validated_data:
+            instance.maitre_ouvrage = ""
+        user = getattr(self.context.get("request"), "user", None)
+        nouveaux_lots = validated_data.pop("lots", [])
+        supprimer_ids = set(validated_data.pop("lots_supprimer_ids", []))
+        lots_actifs = list(Lot.objects.filter(projet=instance).select_for_update())
+        if supprimer_ids - {lot.pk for lot in lots_actifs}:
+            raise serializers.ValidationError(
+                {"lots_supprimer_ids": _("Lot introuvable ou extérieur à ce projet.")}
             )
-
+        codes = {lot.code.upper() for lot in lots_actifs if lot.pk not in supprimer_ids}
+        # Réserver tous les codes explicites avant de générer les codes automatiques.
+        for lot in nouveaux_lots:
+            code = lot.get("code", "").strip().upper()
+            if code:
+                if code in codes:
+                    raise serializers.ValidationError({"lots": _("Code de lot déjà utilisé.")})
+                codes.add(code)
+        ordre = max((lot.ordre for lot in lots_actifs), default=0)
+        for lot in lots_actifs:
+            if lot.pk in supprimer_ids:
+                lot.est_actif = False
+                lot.save(update_fields=["est_actif"])
+                lot.delete(utilisateur=user)
+        for donnees in nouveaux_lots:
+            donnees = dict(donnees)
+            code = donnees.pop("code", "").strip().upper()
+            if not code:
+                numero = 1
+                while f"L-{numero:02d}" in codes:
+                    numero += 1
+                code = f"L-{numero:02d}"
+                codes.add(code)
+            ordre += 1
+            Lot.objects.create(
+                projet=instance,
+                cree_par=user,
+                code=code,
+                ordre=ordre,
+                **donnees,
+            )
+        for champ, role in (
+            ("chef_projet_id", RoleProjet.CHEF_PROJET),
+            ("conducteur_travaux_id", RoleProjet.CONDUCTEUR_TRAVAUX),
+        ):
+            if champ not in validated_data:
+                continue
+            nouveau_id = validated_data.pop(champ)
+            ancien_id = getattr(instance, champ)
+            if ancien_id != nouveau_id and ancien_id:
+                AffectationProjet.objects.filter(
+                    projet=instance,
+                    utilisateur_id=ancien_id,
+                    role_projet=role,
+                ).update(est_actif=False)
+            setattr(instance, champ, nouveau_id)
+            if nouveau_id:
+                affecter_collaborateur_projet(
+                    projet=instance,
+                    utilisateur=Utilisateur.objects.get(pk=nouveau_id),
+                    role_projet=role,
+                    modifie_par=user,
+                )
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
         instance.save()

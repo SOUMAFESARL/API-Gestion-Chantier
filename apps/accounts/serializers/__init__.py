@@ -5,6 +5,13 @@ Utilisateurs, rôles, invitations, appareils.
 
 from .appareil import AppareilSerializer
 from .authentification import InscriptionSerializer
+from .collaborateur import (
+    CollaborateurCreateSerializer,
+    CollaborateurResponseSerializer,
+    ProjetAssocieCollaborateurSerializer,
+    RolePersonnaliseCollaborateurSerializer,
+    CollaborateurRattacherRoleSerializer,
+)
 from .connexion import (
     ConnexionSerializer,
     DeconnexionSerializer,
@@ -25,6 +32,14 @@ from .reinitialisation import (
     ReinitialisationSerializer,
     VerificationJetonSerializer,
 )
+from .profil import (
+    AvatarReponseSerializer,
+    AvatarUploadSerializer,
+    ChangerMotDePasseReponseSerializer,
+    ChangerMotDePasseSerializer,
+    ProfilDetailResponseSerializer,
+    ProfilUpdateSerializer,
+)
 from .role import (
     RoleCreationSerializer,
     RoleDetailSerializer,
@@ -38,6 +53,12 @@ from .utilisateur import UtilisateurSerializer
 __all__ = [
     "AccepterInvitationSerializer",
     "AppareilSerializer",
+    "AvatarReponseSerializer",
+    "AvatarUploadSerializer",
+    "ChangerMotDePasseReponseSerializer",
+    "ChangerMotDePasseSerializer",
+    "CollaborateurCreateSerializer",
+    "CollaborateurResponseSerializer",
     "ConnexionSerializer",
     "ContenuInvitationSerializer",
     "ContenuJetonSerializer",
@@ -47,6 +68,9 @@ __all__ = [
     "InvitationSerializer",
     "JetonsSerializer",
     "ProfilConnexionSerializer",
+    "ProfilDetailResponseSerializer",
+    "ProfilUpdateSerializer",
+    "ProjetAssocieCollaborateurSerializer",
     "ReinitialisationSerializer",
     "RenouvellementSerializer",
     "ReponseAccepterInvitationSerializer",
@@ -54,9 +78,11 @@ __all__ = [
     "RoleDetailSerializer",
     "RoleModificationSerializer",
     "RoleModulePermissionSerializer",
+    "RolePersonnaliseCollaborateurSerializer",
     "RoleSerializer",
     "RoleSuppressionSerializer",
     "UtilisateurSerializer",
     "VerificationInvitationSerializer",
     "VerificationJetonSerializer",
+    "CollaborateurRattacherRoleSerializer",
 ]

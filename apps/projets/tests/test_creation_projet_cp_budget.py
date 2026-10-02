@@ -1,5 +1,7 @@
-"""Tests pour la création de chantier avec CP obligatoire,
-budget optionnel et règles DG (T-S1-05 & T-S1-08).
+"""Internal orchestration: optional budget and manager, invitations and DG rules.
+
+These scenarios exercise ProjetCreationSerializer directly. Public form inputs,
+authorization, and minimal JSON responses are covered by the strict CRUD tests.
 """
 
 from datetime import date, timedelta
@@ -13,6 +15,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Invitation, Utilisateur
 from apps.core.enums import RoleGlobal, RoleProjet, RoleTiersChoix, StatutUtilisateur, TypeTiers
 from apps.projets.models import AffectationProjet, Projet
+from apps.projets.tests.service_helpers import creer_projet_via_service
 from apps.tiers.models import RoleTiers, Tiers
 
 SCHEMA = "demo"
@@ -104,6 +107,7 @@ def auth_client(client, user):
         format="json",
     )
     token = rep.data["access"]
+    client.utilisateur_service = user
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     return client
 
@@ -112,12 +116,13 @@ def auth_client(client, user):
 def test_rec_s1_05_a_budget_null_accepte(
     client_tenant, admin_delegue_user, tiers_client, cp_existant
 ):
-    """REC-S1-05-A : POST /api/v1/projets/ accepte budget_initial_montant: null."""
+    """REC-S1-05-A : le serializer interne accepte un budget null."""
     cl = auth_client(client_tenant, admin_delegue_user)
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=90)
 
-    rep = cl.post(
+    rep = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Projet Sans Budget Initial",
@@ -139,16 +144,18 @@ def test_rec_s1_05_a_budget_null_accepte(
 
 
 @pytest.mark.django_db
-def test_rec_s1_05_b_cp_obligatoire(client_tenant, admin_delegue_user, tiers_client):
-    """REC-S1-05-B : L'assignation d'un CP est obligatoire
-    (chef_projet_id ou chef_projet_invite).
+def test_rec_s1_05_b_cp_optionnel_et_conflit(client_tenant, admin_delegue_user, tiers_client):
+    """REC-S1-05-B : L'assignation d'un CP est désormais optionnelle.
+    Sans CP, le projet est créé (201) avec chef_projet à null.
+    Si chef_projet_id et chef_projet_invite sont fournis simultanément, rejet (400).
     """
     cl = auth_client(client_tenant, admin_delegue_user)
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=90)
 
-    # Sans aucun CP
-    rep_sans_cp = cl.post(
+    # Sans aucun CP : succès 201
+    rep_sans_cp = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Projet Sans CP",
@@ -160,11 +167,14 @@ def test_rec_s1_05_b_cp_obligatoire(client_tenant, admin_delegue_user, tiers_cli
         },
         format="json",
     )
-    assert rep_sans_cp.status_code == status.HTTP_400_BAD_REQUEST
-    assert rep_sans_cp.json()["erreur"]["code"] == "chef_projet_requis"
+    assert rep_sans_cp.status_code == status.HTTP_201_CREATED
+    data = rep_sans_cp.json()
+    assert data["nom"] == "Projet Sans CP"
+    assert data["chef_projet"] is None
 
-    # Avec les deux spécifiés en conflit
-    rep_deux_cp = cl.post(
+    # Avec les deux spécifiés en conflit : rejet 400
+    rep_deux_cp = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Projet CP Conflit",
@@ -193,7 +203,8 @@ def test_rec_s1_05_c_et_08_a_invitation_cp_et_mail_contextuel(client_tenant, dg_
 
     mail.outbox = []
 
-    rep = cl.post(
+    rep = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Résidence Les Merveilles",
@@ -232,7 +243,7 @@ def test_rec_s1_05_c_et_08_a_invitation_cp_et_mail_contextuel(client_tenant, dg_
         user_cp = Utilisateur.objects.get(email="m.soro@btp-ci.com")
         assert user_cp.statut == StatutUtilisateur.INVITE
         assert AffectationProjet.objects.filter(
-            projet_id=projet_id, utilisateur=user_cp, role_projet=RoleProjet.CONDUCTEUR_TRAVAUX
+            projet_id=projet_id, utilisateur=user_cp, role_projet=RoleProjet.CHEF_PROJET
         ).exists()
 
         invitation = Invitation.objects.get(email="m.soro@btp-ci.com")
@@ -258,7 +269,8 @@ def test_rec_s1_05_d_dg_interdit_comme_cp(client_tenant, dg_user, admin_delegue_
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=30)
 
-    rep1 = cl_dg.post(
+    rep1 = creer_projet_via_service(
+        cl_dg,
         "/api/v1/projets/",
         {
             "nom": "Tentative DG Auto-Assign",
@@ -274,7 +286,8 @@ def test_rec_s1_05_d_dg_interdit_comme_cp(client_tenant, dg_user, admin_delegue_
     assert rep1.json()["erreur"]["code"] == "dg_non_assignable_comme_cp"
 
     # 2. Le DG essaie de s'auto-inviter via son email
-    rep2 = cl_dg.post(
+    rep2 = creer_projet_via_service(
+        cl_dg,
         "/api/v1/projets/",
         {
             "nom": "Tentative DG Auto-Invite",
@@ -296,7 +309,8 @@ def test_rec_s1_05_d_dg_interdit_comme_cp(client_tenant, dg_user, admin_delegue_
 
     # 3. Un admin délégué tente de nommer le DG comme CP sur un chantier
     cl_admin = auth_client(client_tenant, admin_delegue_user)
-    rep3 = cl_admin.post(
+    rep3 = creer_projet_via_service(
+        cl_admin,
         "/api/v1/projets/",
         {
             "nom": "Tentative Admin Nomme DG",

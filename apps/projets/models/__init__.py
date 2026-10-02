@@ -8,8 +8,22 @@ Entités MCD  : Projet, Lot, Activite, AffectationProjet, BordereauPrix, LigneBo
                HistoriqueDate, SanteHistorique
 """
 
+from .activite import Activite
+from .contrat import ProjetContrat
+from .historique_date import HistoriqueDate, TypeObjetHistorique
 from .lot import Lot
+from .motif_report import MotifReport
 from .override import ProjetRoleModuleOverride
 from .projet import AffectationProjet, Projet
 
-__all__ = ["AffectationProjet", "Lot", "Projet", "ProjetRoleModuleOverride"]
+__all__ = [
+    "Activite",
+    "AffectationProjet",
+    "HistoriqueDate",
+    "Lot",
+    "MotifReport",
+    "Projet",
+    "ProjetContrat",
+    "ProjetRoleModuleOverride",
+    "TypeObjetHistorique",
+]

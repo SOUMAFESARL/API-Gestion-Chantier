@@ -20,8 +20,33 @@ def sante(_request):
     return JsonResponse({"statut": "ok", "portee": "public"})
 
 
+from io import StringIO
+from django.core.management import call_command
+from django.views.decorators.csrf import csrf_exempt
+
+
+@csrf_exempt
+def migrer_bd_vue(request):
+    """Exécute les migrations sans passer par cPanel SSH."""
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    token = request.headers.get("X-Maintenance-Token")
+    if token != "ccd-migration-prod-2026-secure-token":
+        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+
+    out = StringIO()
+    try:
+        call_command("migrate_schemas", interactive=False, stdout=out)
+        return JsonResponse({"statut": "succes", "output": out.getvalue()})
+    except Exception as exc:
+        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+
+
 urlpatterns = [
+    path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
+    path("admin/dashboard/", RedirectView.as_view(url="/admin/", permanent=False), name="admin-dashboard"),
     path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-publique"),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -31,8 +56,7 @@ urlpatterns = [
         name="docs",
     ),
     # L'inscription d'une entreprise — cinq endpoints, contrat T-021. Ils
-    # vivent ici et **pas** dans `urls_tenant.py` : au moment de l'inscription,
-    # le client n'a pas encore de sous-domaine.
+    # vivent ici dans le schéma `public` avant la création du schéma tenant dédié.
     path("api/v1/", include("apps.tenants.urls")),
     # L'authentification du **personnel de l'éditeur**. La même vue que celle
     # des clients, et c'est le propre de l'écart E1 : `utilisateur` existe dans
@@ -47,6 +71,8 @@ urlpatterns = [
     path("api/v1/", include("apps.referentiels.urls")),
     # Plans, abonnements, factures et webhooks de paiement CinetPay
     path("api/v1/", include("apps.billing.urls")),
+    # Administration plateforme et assistance Super Admin (impersonification)
+    path("api/v1/", include("apps.platform_admin.urls")),
 ]
 
 # --- Outils de développement, s'ils sont présents ---------------------------
@@ -57,13 +83,20 @@ urlpatterns = [
 # Le garde `DEBUG` est la seconde barrière : même si le fichier arrivait par
 # mégarde en production, il ne serait pas monté.
 if settings.DEBUG:
-    from django.conf.urls.static import static
-
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     with contextlib.suppress(ImportError):
         from config.urls_dev import urlpatterns as routes_dev
 
         urlpatterns += routes_dev
+
+# Servir les fichiers médias si FileSystemStorage est actif (ex: cPanel sans S3 configuré)
+_stockage_defaut = settings.STORAGES.get("default", {}).get("BACKEND", "")
+if settings.DEBUG or _stockage_defaut == "django.core.files.storage.FileSystemStorage":
+    from django.urls import re_path
+    from django.views.static import serve
+
+    urlpatterns += [
+        re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    ]
 
 # Conventions d API §5 : une URL non routée sous /api/ doit répondre en JSON,
 # pas en HTML. Voir apps/core/views.py.

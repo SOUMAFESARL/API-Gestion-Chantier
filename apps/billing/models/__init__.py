@@ -16,8 +16,9 @@ from apps.core.models import ModeleBase
 
 from .facture import Facture
 from .paiement import PaiementAbonnement
+from .rappel_expiration import RappelExpiration
 
-__all__ = ["Abonnement", "Facture", "PaiementAbonnement", "Plan", "RelanceEssai"]
+__all__ = ["Abonnement", "Facture", "PaiementAbonnement", "Plan", "RelanceEssai", "RappelExpiration"]
 
 # Durée de l'essai gratuit — 14 jours en plan Maître d'Œuvre, MLD §4.4 et parcours T-025.
 JOURS_ESSAI = 14

@@ -6,7 +6,7 @@ Schéma : tenant.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import ModeExecution
+from apps.core.enums import ModeExecution, TypeBordereau
 from apps.core.models import ModeleBase
 
 from .projet import Projet
@@ -32,6 +32,12 @@ class Lot(ModeleBase):
         choices=ModeExecution.choices,
         default=ModeExecution.REGIE,
     )
+    type_bordereau = models.CharField(
+        _("type de bordereau"),
+        max_length=20,
+        choices=TypeBordereau.choices,
+        default=TypeBordereau.FORFAIT,
+    )
     premier_rapport_soumis = models.BooleanField(
         _("premier rapport soumis"),
         default=False,
@@ -54,6 +60,18 @@ class Lot(ModeleBase):
         _("date de fin prévue"),
         null=True,
         blank=True,
+    )
+    date_debut_baseline = models.DateField(
+        _("date de début baseline v0"),
+        null=True,
+        blank=True,
+        help_text=_("Date de début contractuelle initiale (figée, intacte)."),
+    )
+    date_fin_baseline = models.DateField(
+        _("date de fin baseline v0"),
+        null=True,
+        blank=True,
+        help_text=_("Date de fin contractuelle initiale (figée, intacte)."),
     )
     date_debut_reelle = models.DateField(
         _("date de début réelle"),
@@ -85,6 +103,14 @@ class Lot(ModeleBase):
                 name="uq_lot_code",
             )
         ]
+
+    def save(self, *args, **kwargs):
+        """Initialise la Baseline v0 à la première sauvegarde si non définie."""
+        if self.date_debut_baseline is None and self.date_debut_prevue:
+            self.date_debut_baseline = self.date_debut_prevue
+        if self.date_fin_baseline is None and self.date_fin_prevue:
+            self.date_fin_baseline = self.date_fin_prevue
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.projet.reference} - {self.code} : {self.libelle}"

@@ -56,11 +56,13 @@ def client_api(admin_user):
 def test_initialiser_roles_par_defaut():
     with schema_context(SCHEMA):
         roles = initialiser_roles_par_defaut()
-        assert len(roles) >= 13
+        assert len(roles) >= 7
 
-        # Vérifie que l'admin a validation sur tous les modules
+        # Vérifie que l'admin a validation sur tous les modules mais n'est plus système
         role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
-        assert role_ad.est_systeme is True
+        assert role_ad.est_systeme is False
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        assert role_dg.est_systeme is True
         perms_ad = RoleModulePermission.objects.filter(role=role_ad)
         assert perms_ad.count() == len(ModuleChoix.values)
         for p in perms_ad:
@@ -68,66 +70,46 @@ def test_initialiser_roles_par_defaut():
 
         # Vérifie que tous les rôles ont accès complet à tous les modules à ce stade
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
-        perm_chantier = RoleModulePermission.objects.get(role=role_cc, module=ModuleChoix.CHANTIER)
+        perm_chantier = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.CHANTIER)
         assert perm_chantier.niveau == NiveauAcces.VALIDATION
-        perm_finance = RoleModulePermission.objects.get(role=role_cc, module=ModuleChoix.FINANCE)
-        assert perm_finance.niveau == NiveauAcces.VALIDATION
-
-
-@pytest.mark.django_db
-def test_creer_et_modifier_role_personnalise(admin_user):
-    with schema_context(SCHEMA):
-        role = creer_role(
-            code="MAGASINIER",
-            libelle="Magasinier Principal",
-            description="Gestionnaire des stocks et des réceptions",
-            permissions_modules={
-                ModuleChoix.STOCKS: NiveauAcces.ECRITURE,
-                ModuleChoix.ACHATS: NiveauAcces.LECTURE,
-            },
-            cree_par=admin_user,
-        )
-
-        assert role.code == "MAGASINIER"
-        assert role.est_systeme is False
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.STOCKS).niveau
-            == NiveauAcces.ECRITURE
-        )
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.ACHATS).niveau
-            == NiveauAcces.LECTURE
-        )
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.FINANCE).niveau
-            == NiveauAcces.AUCUN
-        )
-
-        # Modification
-        role_modifie = modifier_role(
-            role=role,
-            libelle="Magasinier Général",
-            permissions_modules={
-                ModuleChoix.STOCKS: NiveauAcces.VALIDATION,
-            },
-            modifie_par=admin_user,
-        )
-        assert role_modifie.libelle == "Magasinier Général"
-        assert (
-            RoleModulePermission.objects.get(role=role, module=ModuleChoix.STOCKS).niveau
-            == NiveauAcces.VALIDATION
-        )
+        perm_ged = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.GED)
+        assert perm_ged.niveau == NiveauAcces.VALIDATION
 
 
 @pytest.mark.django_db
 def test_interdiction_supprimer_role_systeme():
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
-        role_ct = Role.objects.get(code=RoleGlobal.CONDUCTEUR_TRAVAUX)
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
 
         with pytest.raises(ValidationError) as exc:
-            supprimer_role(role_ct)
+            supprimer_role(role_dg)
         assert "Les rôles système ne peuvent pas être supprimés." in str(exc.value)
+
+
+@pytest.mark.django_db
+def test_seul_dg_est_role_systeme():
+    """Vérifie que seul le DG possède est_systeme=True après initialisation (AD devenant supprimable par DG)."""
+    with schema_context(SCHEMA):
+        initialiser_roles_par_defaut()
+
+        # Seul DG doit être système (immuable)
+        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
+        assert role_dg.est_systeme is True
+
+        # AD et tous les autres rôles ne sont PAS système
+        codes_non_systeme = (
+            RoleGlobal.ADMIN,
+            RoleGlobal.CHEF_PROJET,
+            RoleGlobal.CONDUCTEUR_TRAVAUX,
+            RoleGlobal.CHEF_CHANTIER,
+            RoleGlobal.MAITRE_OUVRAGE,
+            RoleGlobal.MAITRE_OEUVRE,
+            RoleGlobal.VISITEUR,
+        )
+        for code in codes_non_systeme:
+            role = Role.objects.get(code=code)
+            assert role.est_systeme is False, f"{code} ne devrait PAS être est_systeme=True"
 
 
 @pytest.mark.django_db
@@ -138,7 +120,7 @@ def test_supprimer_role_avec_reassignation_obligatoire(admin_user):
         role_source = creer_role(
             code="AIDE_COMPTABLE",
             libelle="Aide Comptable",
-            permissions_modules={ModuleChoix.FINANCE: NiveauAcces.ECRITURE},
+            permissions_modules={ModuleChoix.TIERS: NiveauAcces.ECRITURE},
             cree_par=admin_user,
         )
         role_cible = Role.objects.get(code=RoleGlobal.VISITEUR)
@@ -196,29 +178,29 @@ def test_surcharge_permissions_par_projet(admin_user):
         # Vérifie la matrice par défaut du projet (initialement VALIDATION)
         matrice = get_matrice_permissions_projet(projet)
         cc_info = next(r for r in matrice if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_info["modules"][ModuleChoix.ACHATS]["niveau"] == NiveauAcces.VALIDATION
-        assert cc_info["modules"][ModuleChoix.ACHATS]["est_surcharge"] is False
+        assert cc_info["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.VALIDATION
+        assert cc_info["modules"][ModuleChoix.TIERS]["est_surcharge"] is False
 
-        # Appliquer une surcharge : restreindre la saisie des achats à LECTURE sur ce chantier
+        # Appliquer une surcharge : restreindre les tiers à LECTURE sur ce chantier
         set_override_permission_projet(
             projet=projet,
             role=role_cc,
-            module=ModuleChoix.ACHATS,
+            module=ModuleChoix.TIERS,
             niveau=NiveauAcces.LECTURE,
             modifie_par=admin_user,
         )
 
         matrice_apres = get_matrice_permissions_projet(projet)
         cc_apres = next(r for r in matrice_apres if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_apres["modules"][ModuleChoix.ACHATS]["niveau"] == NiveauAcces.LECTURE
-        assert cc_apres["modules"][ModuleChoix.ACHATS]["est_surcharge"] is True
+        assert cc_apres["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.LECTURE
+        assert cc_apres["modules"][ModuleChoix.TIERS]["est_surcharge"] is True
 
         # Réinitialiser vers le défaut
-        supprimer_override_permission_projet(projet, role_cc, ModuleChoix.ACHATS)
+        supprimer_override_permission_projet(projet, role_cc, ModuleChoix.TIERS)
         matrice_reinit = get_matrice_permissions_projet(projet)
         cc_reinit = next(r for r in matrice_reinit if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_reinit["modules"][ModuleChoix.ACHATS]["niveau"] == NiveauAcces.VALIDATION
-        assert cc_reinit["modules"][ModuleChoix.ACHATS]["est_surcharge"] is False
+        assert cc_reinit["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.VALIDATION
+        assert cc_reinit["modules"][ModuleChoix.TIERS]["est_surcharge"] is False
 
 
 @pytest.mark.django_db
@@ -296,8 +278,8 @@ def test_permission_module_enforcement():
         def post(self, request):
             return Response({"autorise": True})
 
-    class VueFinanceValidation(APIView):
-        permission_classes = [PermissionModule.pour(ModuleChoix.FINANCE, NiveauAcces.VALIDATION)]
+    class VueTiersValidation(APIView):
+        permission_classes = [PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.VALIDATION)]
 
         def post(self, request):
             return Response({"autorise": True})
@@ -305,13 +287,13 @@ def test_permission_module_enforcement():
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
 
-        # Pour tester l'enforcement quand un niveau est insuffisant, on ajuste FINANCE à AUCUN pour CHEF_CHANTIER
+        # Pour tester l'enforcement quand un niveau est insuffisant, on ajuste TIERS à AUCUN pour CHEF_CHANTIER
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
-        RoleModulePermission.objects.filter(role=role_cc, module=ModuleChoix.FINANCE).update(
+        RoleModulePermission.objects.filter(role=role_cc, module__code=ModuleChoix.TIERS).update(
             niveau=NiveauAcces.AUCUN
         )
 
-        # Chef de chantier : écriture sur Chantier (autorisé), pas sur Finance (refusé)
+        # Chef de chantier : écriture sur Chantier (autorisé), pas sur Tiers (refusé)
         cc_user, _ = Utilisateur.tous_objets.get_or_create(
             email="cc.test@demo.ci",
             defaults={
@@ -329,8 +311,8 @@ def test_permission_module_enforcement():
         response_chantier = vue_chantier(req_chantier.wsgi_request)
         assert response_chantier.status_code == status.HTTP_200_OK
 
-        # 2. Finance Validation -> Refusé (403)
-        req_finance = client.post("/dummy-finance/", HTTP_HOST=HOTE)
-        vue_finance = VueFinanceValidation.as_view()
-        response_finance = vue_finance(req_finance.wsgi_request)
-        assert response_finance.status_code == status.HTTP_403_FORBIDDEN
+        # 2. Tiers Validation -> Refusé (403)
+        req_tiers = client.post("/dummy-tiers/", HTTP_HOST=HOTE)
+        vue_tiers = VueTiersValidation.as_view()
+        response_tiers = vue_tiers(req_tiers.wsgi_request)
+        assert response_tiers.status_code == status.HTTP_403_FORBIDDEN

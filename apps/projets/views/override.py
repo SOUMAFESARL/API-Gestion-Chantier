@@ -10,8 +10,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import Role
-from apps.core.enums import RoleGlobal
-from apps.projets.models import Projet
+from apps.core.enums import RoleGlobal, RoleProjet
+from apps.core.permissions import MembreDuProjet
+from apps.projets.models import AffectationProjet, Projet
 from apps.projets.services.overrides import (
     get_matrice_permissions_projet,
     set_override_permission_projet,
@@ -31,6 +32,13 @@ class OverrideInputSerializer(serializers.Serializer):
         allow_null=True,
         help_text="Niveau d'accès (0: AUCUN, 1: LECTURE, 2: ECRITURE, 3: ADMIN, null: réinitialiser au défaut)",
     )
+    acces = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Liste des droits normalisés (ex: ['lecture', 'saisie'], null pour réinitialiser)",
+    )
 
 
 class SurchargeMatriceInputSerializer(serializers.Serializer):
@@ -40,6 +48,11 @@ class SurchargeMatriceInputSerializer(serializers.Serializer):
 class ModuleDroitSerializer(serializers.Serializer):
     niveau = serializers.IntegerField(
         help_text="Niveau d'accès (0: AUCUN, 1: LECTURE, 2: ECRITURE, 3: ADMIN)"
+    )
+    acces = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        help_text="Liste des droits effectifs (ex: ['lecture', 'saisie', 'validation'])",
     )
     est_surcharge = serializers.BooleanField(
         help_text="True si le droit découle d'une surcharge propre au chantier"
@@ -62,7 +75,7 @@ class MatricePermissionProjetRoleSerializer(serializers.Serializer):
 class ProjetPermissionsRolesView(APIView):
     """`GET` et `PUT /api/v1/projets/{id}/permissions-roles/` — Matrice des droits par chantier."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, MembreDuProjet]
     parser_classes = [JSONParser]
     serializer_class = SurchargeMatriceInputSerializer
 
@@ -73,6 +86,7 @@ class ProjetPermissionsRolesView(APIView):
     )
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
         matrice = get_matrice_permissions_projet(projet)
         return Response(matrice, status=status.HTTP_200_OK)
 
@@ -85,14 +99,23 @@ class ProjetPermissionsRolesView(APIView):
     def put(self, request, pk):
         # Seul l'administrateur ou le chef de projet assigné peut modifier les droits du chantier
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
 
-        est_admin = request.user.role_global in (
-            RoleGlobal.ADMIN,
-            RoleGlobal.DIRECTEUR_GENERAL,
-        ) or getattr(request.user, "is_owner", False)
+        est_admin = (
+            request.user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+            or getattr(request.user, "is_owner", False)
+            or getattr(request.user, "is_dg", False)
+            or getattr(request.user, "is_superuser", False)
+        )
         est_chef_projet = (
             projet.chef_projet_id == request.user.id
-            or request.user.role_global == RoleGlobal.CHEF_PROJET
+            or AffectationProjet.objects.filter(
+                projet=projet,
+                utilisateur=request.user,
+                role_projet=RoleProjet.CHEF_PROJET,
+                est_actif=True,
+                supprime_le__isnull=True,
+            ).exists()
         )
 
         if not (est_admin or est_chef_projet):
@@ -113,8 +136,22 @@ class ProjetPermissionsRolesView(APIView):
             role = get_object_or_404(Role, pk=item["role_id"], supprime_le__isnull=True)
             module = item["module"]
             niveau = item.get("niveau")
+            acces = item.get("acces")
 
-            if niveau is None:
+            # Conversion de 'acces' (format Next.js) vers niveau si fourni
+            if niveau is None and acces is not None:
+                if not acces:
+                    niveau = 0
+                elif any(str(a).lower() == "validation" for a in acces):
+                    niveau = 3
+                elif any(str(a).lower() in ("saisie", "ecriture") for a in acces):
+                    niveau = 2
+                elif any(str(a).lower() == "lecture" for a in acces):
+                    niveau = 1
+                else:
+                    niveau = 0
+
+            if niveau is None and acces is None:
                 # Réinitialisation vers le comportement d'entreprise par défaut
                 supprimer_override_permission_projet(projet, role, module)
             else:
@@ -122,7 +159,7 @@ class ProjetPermissionsRolesView(APIView):
                     projet=projet,
                     role=role,
                     module=module,
-                    niveau=niveau,
+                    niveau=niveau or 0,
                     modifie_par=request.user,
                 )
 

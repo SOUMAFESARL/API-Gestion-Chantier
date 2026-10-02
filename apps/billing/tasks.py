@@ -15,6 +15,13 @@ SEUILS = (7, 3, 1, 0)
 
 
 @shared_task
+def relancer_abonnements():
+    from apps.billing.services.expiration import envoyer_rappels_expiration
+
+    return envoyer_rappels_expiration()
+
+
+@shared_task
 def relancer_essais() -> int:
     """Les quatre relances de l'essai — parcours §2, US-016.
 
@@ -102,11 +109,8 @@ def _sujet(seuil: int, raison_sociale: str) -> str:
 def _lien_abonnement(entreprise) -> str:
     from django.conf import settings
 
-    domaine = entreprise.domains.filter(is_primary=True).first()
-    hote = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
-    protocole = "http" if settings.DEBUG else "https"
-    port = ":3000" if settings.DEBUG else ""
-    return f"{protocole}://{hote}{port}/parametres/abonnement"
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    return f"{frontend_url}/parametres/abonnement"
 
 
 def _clore_essai(abonnement) -> None:

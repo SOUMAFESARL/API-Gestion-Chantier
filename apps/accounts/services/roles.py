@@ -12,11 +12,16 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.models import Role, RoleModulePermission, Utilisateur
-from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal
+from apps.accounts.models import Module, Permission, Role, RoleModulePermission, Utilisateur
+from apps.core.enums import (
+    MODULES_DETAILS,
+    ModuleChoix,
+    NiveauAcces,
+    RoleGlobal,
+    StatutUtilisateur,
+)
+from apps.core.exceptions import ActionReserveeDg, RoleSubstitutionObligatoire
 
-# À ce stade de cadrage, tous les rôles disposent temporairement d'un accès complet
-# (NiveauAcces.VALIDATION = 3) sur l'intégralité des 12 modules CCD Digital.
 MATRICE_DEFAUT = {
     code: dict.fromkeys(ModuleChoix.values, NiveauAcces.VALIDATION) for code in RoleGlobal.values
 }
@@ -30,7 +35,7 @@ ROLES_SYSTEME_INFOS = {
         "Administrateur",
         "Paramétrage de l'organisation, administration technique et gestion des utilisateurs",
     ),
-    RoleGlobal.DIRECTEUR_PROJET: (
+    RoleGlobal.CHEF_PROJET: (
         "Directeur de Projet",
         "Pilotage opérationnel des projets qui lui sont confiés et accès complet à ses chantiers",
     ),
@@ -42,51 +47,190 @@ ROLES_SYSTEME_INFOS = {
         "Chef de Chantier",
         "Saisie terrain : avancement, incidents, photos, pointage (interface mobile simplifiée)",
     ),
-    RoleGlobal.INGENIEUR_TECHNICIEN: (
-        "Ingénieur / Technicien",
-        "Contrôle qualité, suivi des non-conformités et vérification des documents techniques",
-    ),
-    RoleGlobal.RESPONSABLE_FINANCIER: (
-        "Responsable Financier",
-        "Suivi des budgets, dépenses, situations de paiement et rentabilité",
-    ),
-    RoleGlobal.DIRECTEUR_FINANCIER: (
-        "Directeur Financier",
-        "Gestion et validation financière et achats (alias rétrocompatible)",
-    ),
-    RoleGlobal.RESPONSABLE_ACHATS: (
-        "Responsable Achats",
-        "Gestion des demandes d'achat, commandes, fournisseurs et livraisons",
-    ),
-    RoleGlobal.MAGASINIER: (
-        "Magasinier",
-        "Gestion physique des stocks sur chantier, entrées, sorties et inventaires",
-    ),
-    RoleGlobal.RESPONSABLE_RH: (
-        "Responsable RH",
-        "Gestion du personnel, présences, pointages ouvriers, habilitations et incidents",
-    ),
-    RoleGlobal.SOUS_TRAITANT: (
-        "Sous-traitant",
-        "Consultation de ses tâches assignées et déclaration d'avancement des travaux",
-    ),
-    RoleGlobal.FOURNISSEUR: (
-        "Fournisseur",
-        "Consultation des bons de commande et confirmation des livraisons de matériaux",
-    ),
     RoleGlobal.MAITRE_OUVRAGE: (
         "Maître d'Ouvrage (Client)",
         "Suivi de l'avancement global du chantier et consultation des rapports d'activité",
     ),
+    RoleGlobal.MAITRE_OEUVRE: (
+        "Maître d'Œuvre",
+        "Supervision technique, coordination architecturale et validation des avancements",
+    ),
     RoleGlobal.VISITEUR: (
-        "Visiteur",
-        "Consultation ponctuelle des chantiers en lecture seule",
+        "Consultant lecture",
+        "Consultation de l'avancement et des données du chantier en lecture seule",
     ),
 }
 
 
+# Seul le Directeur Général est un rôle système
+# immuable (non supprimable). Les autres rôles par défaut (AD, CP, CT, CC,
+# MOA, MOE, VI) sont pré-configurés mais restent supprimables par le DG.
+CODES_ROLES_SYSTEME = frozenset({RoleGlobal.DIRECTEUR_GENERAL})
+
+
+def initialiser_modules_par_defaut() -> list[Module]:
+    """Initialise ou met à jour le catalogue des 5 modules souverains BTP dans le schéma courant."""
+    modules_crees = []
+    with transaction.atomic():
+        for code, details in MODULES_DETAILS.items():
+            libelle = dict(ModuleChoix.choices).get(code, code)
+            mod, _ = Module.objects.update_or_create(
+                code=code,
+                defaults={
+                    "libelle": libelle,
+                    "description": details.get("description", ""),
+                    "ordre": details.get("ordre", 0),
+                    "icone": details.get("icone", "box"),
+                    "est_actif": True,
+                },
+            )
+            modules_crees.append(mod)
+    return modules_crees
+
+
+PERMISSIONS_FONDAMENTALES = [
+    {
+        "code": "LECTURE",
+        "libelle": "Lecture / Consultation",
+        "description": "Permet de consulter et visualiser les données du module.",
+        "ordre": 1,
+        "est_actif": True,
+    },
+    {
+        "code": "ECRITURE",
+        "libelle": "Écriture / Saisie",
+        "description": "Permet de créer, éditer et modifier les données du module.",
+        "ordre": 2,
+        "est_actif": True,
+    },
+    {
+        "code": "VALIDATION",
+        "libelle": "Validation / Approbation",
+        "description": "Permet de valider, approuver, signer ou rejeter les éléments du module.",
+        "ordre": 3,
+        "est_actif": True,
+    },
+    {
+        "code": "SUPPRESSION",
+        "libelle": "Suppression / Archivage",
+        "description": "Permet de supprimer ou archiver les éléments du module.",
+        "ordre": 4,
+        "est_actif": True,
+    },
+]
+
+
+def initialiser_permissions_par_defaut() -> list[Permission]:
+    """Initialise le catalogue des 4 permissions fondamentales dans le schéma courant."""
+    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+    perms_creees = []
+    with transaction.atomic():
+        for data in PERMISSIONS_FONDAMENTALES:
+            perm, _ = Permission.objects.update_or_create(
+                code=data["code"],
+                defaults=data,
+            )
+            if modules_actifs:
+                perm.modules.add(*modules_actifs)
+            perms_creees.append(perm)
+    return perms_creees
+
+
+def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permission]]:
+    """Normalise les permissions reçues sous forme de dict ou de list vers un dict {module_code: [Permission, ...]}."""
+    perms_par_code = {p.code.upper(): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
+    perms_par_id = {str(p.id): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
+
+    EQUIVALENCES_CODES = {
+        "SAISIE": "ECRITURE",
+        "ECRITURE": "ECRITURE",
+        "LECTURE": "LECTURE",
+        "VALIDATION": "VALIDATION",
+        "SUPPRESSION": "SUPPRESSION",
+    }
+
+    def _resoudre_perm(p_key, mod_code):
+        if not p_key:
+            return None
+        cle = str(p_key).strip().upper()
+        code_canonique = EQUIVALENCES_CODES.get(cle, cle)
+        target = perms_par_code.get(code_canonique) or perms_par_id.get(str(p_key))
+        if target and target.modules.exists() and not target.modules.filter(code=mod_code).exists():
+            return None
+        return target
+
+    resultat: dict[str, list[Permission]] = {}
+
+    if not permissions_input:
+        return resultat
+
+    if isinstance(permissions_input, list):
+        for item in permissions_input:
+            if isinstance(item, dict):
+                m_code = item.get("module") or item.get("module_code")
+                p_items = item.get("permissions") or []
+                if m_code:
+                    m_code_str = str(m_code).lower()
+                    resolved = []
+                    for p in p_items:
+                        p_key = p.get("code") if isinstance(p, dict) else str(p)
+                        target_perm = _resoudre_perm(p_key, m_code_str)
+                        if target_perm and target_perm not in resolved:
+                            resolved.append(target_perm)
+                    resultat[m_code_str] = resolved
+    elif isinstance(permissions_input, dict):
+        for m_code, val in permissions_input.items():
+            m_code_str = str(m_code).lower()
+            if isinstance(val, int):
+                resolved = []
+                if val == 1 and "LECTURE" in perms_par_code:
+                    resolved.append(perms_par_code["LECTURE"])
+                elif val == 2:
+                    for c in ["LECTURE", "ECRITURE"]:
+                        if c in perms_par_code:
+                            resolved.append(perms_par_code[c])
+                elif val >= 3:
+                    for c in ["LECTURE", "ECRITURE", "VALIDATION"]:
+                        if c in perms_par_code:
+                            resolved.append(perms_par_code[c])
+                resultat[m_code_str] = resolved
+            elif isinstance(val, str):
+                target_perm = _resoudre_perm(val, m_code_str)
+                resultat[m_code_str] = [target_perm] if target_perm else []
+            elif isinstance(val, (list, tuple, set)):
+                resolved = []
+                for p in val:
+                    p_key = p.get("code") if isinstance(p, dict) else str(p)
+                    target_perm = _resoudre_perm(p_key, m_code_str)
+                    if target_perm and target_perm not in resolved:
+                        resolved.append(target_perm)
+                resultat[m_code_str] = resolved
+
+    return resultat
+
+
+def _calculer_niveau_scalaire(permissions_list: list[Permission]) -> int:
+    codes = {p.code for p in permissions_list}
+    if "VALIDATION" in codes:
+        return NiveauAcces.VALIDATION
+    if "ECRITURE" in codes:
+        return NiveauAcces.ECRITURE
+    if "LECTURE" in codes:
+        return NiveauAcces.LECTURE
+    return NiveauAcces.AUCUN
+
+
 def initialiser_roles_par_defaut() -> list[Role]:
-    """Initialise les rôles système avec leurs permissions par défaut dans le schéma courant."""
+    """Initialise les rôles par défaut avec leurs permissions dans le schéma courant.
+
+    Seul DG reçoit ``est_systeme=True`` (non supprimable).
+    Les autres rôles (dont AD) sont modifiables et supprimables (AD uniquement par le DG).
+    """
+    initialiser_modules_par_defaut()
+    initialiser_permissions_par_defaut()
+    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+    all_perms = list(Permission.objects.filter(est_actif=True, supprime_le__isnull=True))
+
     roles_crees = []
     with transaction.atomic():
         for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
@@ -95,19 +239,23 @@ def initialiser_roles_par_defaut() -> list[Role]:
                 defaults={
                     "libelle": libelle,
                     "description": description,
-                    "est_systeme": True,
+                    "est_systeme": code in CODES_ROLES_SYSTEME,
                     "est_actif": True,
                 },
             )
-            # Met à jour ou crée les permissions de chaque module
-            matrice = MATRICE_DEFAUT.get(code, {})
-            for module in ModuleChoix.values:
-                niveau = matrice.get(module, NiveauAcces.VALIDATION)
-                RoleModulePermission.objects.update_or_create(
+            # Met à jour ou crée les permissions de chaque module actif
+            for mod in modules_actifs:
+                rmp, _ = RoleModulePermission.objects.update_or_create(
                     role=role,
-                    module=module,
-                    defaults={"niveau": niveau},
+                    module=mod,
+                    defaults={"niveau": NiveauAcces.VALIDATION},
                 )
+                rmp.permissions.set(all_perms)
+                rmp.niveau = NiveauAcces.VALIDATION
+                rmp.save()
+            RoleModulePermission.objects.filter(role=role).exclude(
+                module__in=modules_actifs
+            ).delete()
             roles_crees.append(role)
     return roles_crees
 
@@ -116,10 +264,10 @@ def creer_role(
     code: str,
     libelle: str,
     description: str = "",
-    permissions_modules: dict[str, int] | None = None,
+    permissions_modules=None,
     cree_par=None,
 ) -> Role:
-    """Crée un nouveau rôle personnalisé avec sa matrice de permissions."""
+    """Crée un nouveau rôle personnalisé obligatoirement lié à TOUS les modules actifs."""
     code = code.strip().upper()
     if not code:
         raise ValidationError(_("Le code du rôle est obligatoire."))
@@ -144,15 +292,20 @@ def creer_role(
             cree_par=cree_par,
         )
 
-        permissions_modules = permissions_modules or {}
-        for module in ModuleChoix.values:
-            niveau = permissions_modules.get(module, NiveauAcces.AUCUN)
-            RoleModulePermission.objects.create(
+        norm_perms = _normaliser_permissions_modules(permissions_modules)
+        modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+
+        # Invariant de complétude : Tout rôle est obligatoirement lié à TOUS les modules actifs
+        for mod in modules_actifs:
+            perms_for_mod = norm_perms.get(mod.code.lower(), [])
+            rmp = RoleModulePermission.objects.create(
                 role=role,
-                module=module,
-                niveau=niveau,
+                module=mod,
+                niveau=_calculer_niveau_scalaire(perms_for_mod),
                 cree_par=cree_par,
             )
+            if perms_for_mod:
+                rmp.permissions.set(perms_for_mod)
 
     return role
 
@@ -161,7 +314,7 @@ def modifier_role(
     role: Role,
     libelle: str | None = None,
     description: str | None = None,
-    permissions_modules: dict[str, int] | None = None,
+    permissions_modules=None,
     modifie_par=None,
 ) -> Role:
     """Modifie un rôle existant et met à jour sa matrice de permissions."""
@@ -172,24 +325,47 @@ def modifier_role(
             role.description = description.strip()
         role.save()
 
+        modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+        modules_map = {m.code.lower(): m for m in modules_actifs}
+
+        # Garantir l'invariant de liaison à tous les modules
+        for mod in modules_actifs:
+            RoleModulePermission.objects.get_or_create(
+                role=role,
+                module=mod,
+                defaults={"cree_par": modifie_par, "niveau": NiveauAcces.AUCUN},
+            )
+
         if permissions_modules is not None:
-            for module, niveau in permissions_modules.items():
-                if module in ModuleChoix.values:
-                    RoleModulePermission.objects.update_or_create(
+            norm_perms = _normaliser_permissions_modules(permissions_modules)
+            for mod_code, perms_list in norm_perms.items():
+                if mod_code in modules_map:
+                    rmp, _ = RoleModulePermission.objects.get_or_create(
                         role=role,
-                        module=module,
-                        defaults={"niveau": niveau},
+                        module=modules_map[mod_code],
+                        defaults={"cree_par": modifie_par},
                     )
+                    rmp.permissions.set(perms_list)
+                    rmp.niveau = _calculer_niveau_scalaire(perms_list)
+                    rmp.save()
 
     return role
 
 
 def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
-    """Compte le nombre d'utilisateurs et d'affectations actives portant ce rôle."""
-    # Nombre d'utilisateurs ayant ce rôle comme rôle personnalisé ou rôle global
+    """Compte le nombre d'utilisateurs actifs et d'affectations actives portant ce rôle."""
+    # Nombre d'utilisateurs actifs ayant ce rôle comme rôle personnalisé ou rôle global
     nb_utilisateurs = (
-        Utilisateur.objects.filter(role_personnalise=role).count()
-        + Utilisateur.objects.filter(role_global=role.code, role_personnalise__isnull=True).count()
+        Utilisateur.objects.filter(role_personnalise=role, supprime_le__isnull=True)
+        .exclude(statut=StatutUtilisateur.DESACTIVE)
+        .count()
+        + Utilisateur.objects.filter(
+            role_global=role.code,
+            role_personnalise__isnull=True,
+            supprime_le__isnull=True,
+        )
+        .exclude(statut=StatutUtilisateur.DESACTIVE)
+        .count()
     )
 
     from apps.projets.models import AffectationProjet
@@ -211,27 +387,52 @@ def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
 def supprimer_role(
     role: Role,
     reassigner_vers_role: Role | None = None,
+    supprimer_collaborateurs: bool = False,
     supprime_par=None,
 ) -> dict:
-    """Supprime logiquement un rôle avec réassignation obligatoire (Option B).
+    """Supprime logiquement un rôle selon deux modes au choix :
+    - Option A (Réassignation) : réassigne collaborateurs et affectations vers un autre rôle.
+    - Option B (Désactivation en cascade) : désactive logiquement tous les collaborateurs portant ce rôle.
 
-    Règles :
-    - Un rôle système ne peut jamais être supprimé.
-    - Si des collaborateurs ou affectations portent ce rôle, reassigner_vers_role est obligatoire.
-    - La réassignation et la suppression sont effectuées dans une transaction atomique.
+    Règles de sécurité souveraines :
+    - Un rôle système (DG) ne peut jamais être supprimé.
+    - Le rôle Administrateur (AD) ne peut être supprimé que par le Directeur Général / Propriétaire.
+    - Le compte Propriétaire / Fondateur (is_owner=True) et le DG racine ne sont JAMAIS désactivés en cascade.
+    - Si le rôle est attribué, l'une des deux options (reassigner_vers_role ou supprimer_collaborateurs) est obligatoire.
+    - La suppression et les opérations associées sont exécutées dans une transaction atomique.
     """
+    from apps.accounts.services.utilisateurs import desactiver_collaborateur_plateforme
+    from django.db.models import Q
+
+    # 1. Rôle système immuable (DG)
     if role.est_systeme:
         raise ValidationError(_("Les rôles système ne peuvent pas être supprimés."))
+
+    # 2. Protection du rôle Administrateur (AD) : seul le DG/Propriétaire peut le supprimer
+    if role.code in (RoleGlobal.ADMIN, "AD"):
+        est_dg_ou_owner = bool(
+            supprime_par
+            and (
+                getattr(supprime_par, "is_dg", False)
+                or getattr(supprime_par, "is_owner", False)
+                or getattr(supprime_par, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+            )
+        )
+        if not est_dg_ou_owner:
+            raise ActionReserveeDg(
+                _("Seul le Directeur Général a autorité pour supprimer le rôle Administrateur.")
+            )
 
     counts = compter_utilisateurs_et_affectations(role)
     total_impacte = counts["total"]
 
-    if total_impacte > 0 and not reassigner_vers_role:
+    # 3. Validation des options
+    if total_impacte > 0 and not reassigner_vers_role and not supprimer_collaborateurs:
         raise ValidationError(
             _(
                 f"Ce rôle est actuellement attribué à {counts['utilisateurs']} utilisateur(s) "
                 f"et {counts['affectations']} affectation(s). "
-                "Veuillez spécifier un rôle de remplacement."
+                "Veuillez spécifier un rôle de remplacement ou confirmer la suppression des collaborateurs."
             )
         )
 
@@ -241,13 +442,61 @@ def supprimer_role(
     with transaction.atomic():
         utilisateurs_reassignes = 0
         affectations_reassignees = 0
+        utilisateurs_supprimes = 0
+        affectations_cloturees = 0
 
-        if reassigner_vers_role:
-            # 1. Réassignation des utilisateurs
+        if supprimer_collaborateurs:
+            # Option B : Désactivation logique des collaborateurs portant ce rôle
+            users_to_deactivate = list(
+                Utilisateur.objects.filter(
+                    Q(role_personnalise=role)
+                    | (Q(role_global=role.code) & Q(role_personnalise__isnull=True))
+                )
+                .filter(supprime_le__isnull=True)
+                .exclude(statut=StatutUtilisateur.DESACTIVE)
+            )
+
+            for collab in users_to_deactivate:
+                # Garde-fou souverain : on ne désactive JAMAIS le propriétaire racine ni le DG ni l'auteur lui-même
+                if (
+                    getattr(collab, "is_owner", False)
+                    or getattr(collab, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+                    or (supprime_par and collab.pk == supprime_par.pk)
+                ):
+                    if collab.role_personnalise_id == role.id:
+                        collab.role_personnalise = None
+                        collab.save(update_fields=["role_personnalise", "modifie_le"])
+                    continue
+
+                desactiver_collaborateur_plateforme(
+                    collaborateur=collab,
+                    auteur=supprime_par,
+                )
+                utilisateurs_supprimes += 1
+
+            # Clôture des affectations de projets associées à ce rôle
+            from apps.projets.models import AffectationProjet
+
+            affectations_cloturees = (
+                AffectationProjet.objects.filter(role=role).update(
+                    est_actif=False,
+                    supprime_le=timezone.now(),
+                    supprime_par=supprime_par,
+                )
+                + AffectationProjet.objects.filter(
+                    role_projet=role.code, role__isnull=True
+                ).update(
+                    est_actif=False,
+                    supprime_le=timezone.now(),
+                    supprime_par=supprime_par,
+                )
+            )
+
+        elif reassigner_vers_role:
+            # Option A : Réassignation des utilisateurs et affectations
             qs_users = Utilisateur.objects.filter(role_personnalise=role)
             utilisateurs_reassignes = qs_users.update(role_personnalise=reassigner_vers_role)
 
-            # S'il y a des utilisateurs avec role_global == role.code
             qs_global = Utilisateur.objects.filter(
                 role_global=role.code, role_personnalise__isnull=True
             )
@@ -256,13 +505,12 @@ def supprimer_role(
             else:
                 qs_global.update(role_personnalise=reassigner_vers_role)
 
-            # 2. Réassignation des affectations projet
             from apps.projets.models import AffectationProjet
 
             qs_aff = AffectationProjet.objects.filter(role=role)
             affectations_reassignees = qs_aff.update(role=reassigner_vers_role)
 
-        # 3. Suppression logique du rôle
+        # Suppression logique du rôle
         role.supprime_le = timezone.now()
         role.supprime_par = supprime_par
         role.est_actif = False
@@ -270,6 +518,68 @@ def supprimer_role(
 
     return {
         "role_supprime": role.code,
+        "mode": "suppression_collaborateurs" if supprimer_collaborateurs else "reassignation",
         "utilisateurs_reassignes": utilisateurs_reassignes,
         "affectations_reassignees": affectations_reassignees,
+        "utilisateurs_supprimes": utilisateurs_supprimes,
+        "affectations_cloturees": affectations_cloturees,
     }
+
+
+def rattacher_collaborateur_a_role(
+    *,
+    collaborateur: Utilisateur,
+    role: Role | None = None,
+    role_global: str | None = None,
+    modifie_par: Utilisateur | None = None,
+) -> Utilisateur:
+    """Rattache un collaborateur à un rôle personnalisé ou met à jour son rôle global.
+
+    Règles d'intégrité et de sécurité :
+    - Le Propriétaire/Fondateur (is_owner=True) a un rôle immuable : interdiction de modification.
+    - Le rôle de Directeur Général ne peut pas être attribué à un collaborateur standard.
+    - Si un 'role' personnalisé est fourni, il doit être actif et non supprimé.
+    - Seul le DG ou un Admin peut conférer le rôle ADMIN.
+    """
+    from django.core.exceptions import ValidationError
+    from apps.core.enums import RoleGlobal, StatutUtilisateur
+
+    # Règle 1 : Immutabilité du compte Propriétaire
+    if collaborateur.is_owner:
+        raise ValidationError(
+            _("Le rôle et le statut du Propriétaire / Fondateur sont immuables.")
+        )
+
+    # Règle 2 : Interdiction d'attribuer le rôle DG
+    if role_global == RoleGlobal.DIRECTEUR_GENERAL:
+        raise ValidationError(
+            _("Le rôle de Directeur Général est unique et ne peut pas être attribué.")
+        )
+
+    # Règle 3 : Validation de l'existence et de l'état du rôle personnalisé
+    if role is not None:
+        if role.supprime_le is not None or not role.est_actif:
+            raise ValidationError(
+                _("Le rôle spécifié est inactif ou a été supprimé.")
+            )
+
+    with transaction.atomic():
+        champs_a_mettre_a_jour = ["modifie_le"]
+
+        if role is not None:
+            collaborateur.role_personnalise = role
+            champs_a_mettre_a_jour.append("role_personnalise")
+
+            # Si le code du rôle personnalisé correspond à un rôle global connu, synchroniser
+            if role.code in RoleGlobal.values:
+                collaborateur.role_global = role.code
+                champs_a_mettre_a_jour.append("role_global")
+
+        if role_global is not None and role_global in RoleGlobal.values:
+            collaborateur.role_global = role_global
+            if "role_global" not in champs_a_mettre_a_jour:
+                champs_a_mettre_a_jour.append("role_global")
+
+        collaborateur.save(update_fields=champs_a_mettre_a_jour)
+
+    return collaborateur

@@ -146,21 +146,7 @@ def _envoyer_lien(
     il n'atteint ni les journaux Nginx, ni l'en-tête `Referer` d'une page
     ouverte depuis le lien.
     """
-    schema_courant = getattr(connection, "schema_name", "public")
-    public_schema = get_public_schema_name()
-
-    if entreprise is None and schema_courant != public_schema:
-        entreprise = Entreprise.objects.filter(schema_name=schema_courant).first()
-
-    if entreprise is not None:
-        domaine = entreprise.domains.filter(is_primary=True).first()
-        hote = domaine.domain if domaine else entreprise.schema_name
-        protocole = "https" if not settings.DEBUG else "http"
-        port = ":3000" if settings.DEBUG else ""
-        base_frontend = f"{protocole}://{hote}{port}"
-    else:
-        base_frontend = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
-
+    base_frontend = "http://localhost:3000"
     lien = f"{base_frontend}/mot-de-passe/definir#jeton={jeton}"
     bloque = motif == JetonReinitialisation.Motif.BLOCAGE
 

@@ -1,0 +1,48 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}Alerte Dérive de Planning — Décalage supérieur à 30 jours{% endblock %}
+{% block preheader %}Le {{ type_objet_libelle }} « {{ objet_nom }} » accuse un décalage de {{ jours_derive }} jours par rapport à sa Baseline initiale.{% endblock %}
+{% block titre %}Alerte Dérive de Planning{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+<p style="margin:0 0 14px 0;">Une reprogrammation de date prévisionnelle a entraîné un dépassement critique sur le <strong>{{ type_objet_libelle }}</strong> suivant :</p>
+<table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="margin:14px 0;border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;font-size:14px;">
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;width:35%;"><strong>Projet :</strong></td>
+        <td>{{ projet_nom }}</td>
+    </tr>
+    {% if lot_nom %}
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Lot :</strong></td>
+        <td>{{ lot_nom }}</td>
+    </tr>
+    {% endif %}
+    {% if activite_nom %}
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Activité :</strong></td>
+        <td>{{ activite_nom }}</td>
+    </tr>
+    {% endif %}
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Date Fin Baseline v0 :</strong></td>
+        <td>{{ date_fin_baseline|date:"d/m/Y" }}</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Nouvelle Date Fin :</strong></td>
+        <td style="color:#D4652A;font-weight:bold;">{{ nouvelle_date_fin|date:"d/m/Y" }}</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Dérive totale :</strong></td>
+        <td style="color:#D4652A;font-weight:bold;">+{{ jours_derive }} jours</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Motif :</strong></td>
+        <td>{{ motif_libelle }}</td>
+    </tr>
+    <tr>
+        <td style="color:#666;"><strong>Justification :</strong></td>
+        <td><em>« {{ justification }} »</em></td>
+    </tr>
+</table>
+<p style="margin:14px 0;">Cette alerte vous est adressée automatiquement conformément aux règles de gouvernance des délais du chantier.</p>
+{% endblock %}

@@ -16,8 +16,9 @@ from apps.referentiels.serializers import (
     EnumerationsResponseSerializer,
     ReglesMotDePasseResponseSerializer,
 )
+from apps.referentiels.views.module import ModuleListView
 
-__all__ = ["EnumerationsView", "ReglesMotDePasseView"]
+__all__ = ["EnumerationsView", "ModuleListView", "ReglesMotDePasseView"]
 
 
 def _libelles() -> dict[str, list[dict[str, str]]]:

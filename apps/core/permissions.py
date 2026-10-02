@@ -15,6 +15,90 @@ from rest_framework import permissions
 from apps.core.enums import RoleGlobal
 
 
+__all__ = [
+    "EstDirection",
+    "LectureSeule",
+    "MembreDuProjet",
+    "PermissionModule",
+    "RoleRequis",
+    "ScopedProjetQuerySetMixin",
+    "filtrer_queryset_par_affectations",
+    "obtenir_projets_ids_actifs_utilisateur",
+]
+
+
+def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
+    """Récupère et met en cache sur request la liste des IDs de projets affectés ou gérés."""
+    if not user or not user.is_authenticated:
+        return []
+    if request and hasattr(request, "_rbac_projets_ids_actifs"):
+        return request._rbac_projets_ids_actifs
+
+    from django.apps import apps as registre
+    from django.db.models import Q
+
+    try:
+        AffectationProjet = registre.get_model("projets", "AffectationProjet")
+        Projet = registre.get_model("projets", "Projet")
+    except LookupError:
+        return []
+
+    # 1. Projets issus d'affectations actives
+    projets_ids = set(
+        AffectationProjet.objects.filter(
+            utilisateur=user, est_actif=True, supprime_le__isnull=True
+        ).values_list("projet_id", flat=True)
+    )
+
+    # 2. Projets où l'utilisateur est désigné comme chef de projet ou conducteur de travaux direct
+    projets_geres = set(
+        Projet.objects.filter(
+            Q(chef_projet=user) | Q(conducteur_travaux=user),
+            supprime_le__isnull=True,
+        ).values_list("id", flat=True)
+    )
+
+    projets_ids = list(projets_ids.union(projets_geres))
+    if request:
+        request._rbac_projets_ids_actifs = projets_ids
+    return projets_ids
+
+
+def filtrer_queryset_par_affectations(qs, user, champ_projet="id", request=None):
+    """Restreint un QuerySet aux seuls chantiers où l'utilisateur est affecté.
+
+    Pour la Direction (DG, Admin, Propriétaire, Superuser) : vision consolidée sans restriction.
+    Pour les collaborateurs opérationnels : vision bornée aux chantiers affectés.
+    """
+    if not user or not user.is_authenticated:
+        return qs.none()
+
+    est_direction = (
+        user.is_superuser
+        or getattr(user, "is_owner", False)
+        or getattr(user, "is_dg", False)
+        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+    )
+    if est_direction:
+        return qs
+
+    projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+    filtre = {f"{champ_projet}__in": projets_ids}
+    return qs.filter(**filtre)
+
+
+class ScopedProjetQuerySetMixin:
+    """Mixin DRF appliquant le scoping automatique par affectation sur get_queryset()."""
+
+    champ_projet_scoping: str = "id"
+
+    def filtrer_par_affectation(self, qs, champ_projet=None):
+        champ = champ_projet or getattr(self, "champ_projet_scoping", "id")
+        return filtrer_queryset_par_affectations(
+            qs, self.request.user, champ_projet=champ, request=self.request
+        )
+
+
 class RoleRequis(permissions.BasePermission):
     """Niveau 1 — restreint une vue à une liste de rôles globaux.
 
@@ -43,8 +127,25 @@ class RoleRequis(permissions.BasePermission):
         return utilisateur.role_global in self.roles_autorises
 
 
+class EstDirection(permissions.BasePermission):
+    """Autorise uniquement la Direction : DG, Administrateur, Propriétaire ou Superuser."""
+
+    message = "Seule la Direction (DG / Administrateur) est autorisée à effectuer cette action."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        return bool(
+            user.is_superuser
+            or getattr(user, "is_owner", False)
+            or getattr(user, "is_dg", False)
+            or user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        )
+
+
 class MembreDuProjet(permissions.BasePermission):
-    """Niveau 2 — l'utilisateur doit être affecté au projet visé.
+    """Niveau 2 — l'utilisateur doit être affecté au projet visé avec mémoïsation O(1).
 
     L'objet doit exposer un `projet_id`, un `projet`, ou être un projet.
     """
@@ -56,22 +157,29 @@ class MembreDuProjet(permissions.BasePermission):
         if not utilisateur or not utilisateur.is_authenticated:
             return False
 
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
+
         projet_id = self._extraire_projet_id(obj)
         if projet_id is None:
             return False
 
-        # Résolution tardive : `core` est la couche la plus basse et ne doit
-        # pas importer un module métier (règle R1 de la structure de projet).
-        from django.apps import apps as registre
+        if not hasattr(request, "_rbac_membre_projet_cache"):
+            request._rbac_membre_projet_cache = {}
 
-        try:
-            AffectationProjet = registre.get_model("projets", "AffectationProjet")
-        except LookupError:  # pragma: no cover — tant que le module 1 n'existe pas
-            return False
+        cle = (str(utilisateur.id), str(projet_id))
+        if cle in request._rbac_membre_projet_cache:
+            return request._rbac_membre_projet_cache[cle]
 
-        return AffectationProjet.objects.filter(
-            utilisateur=utilisateur, projet_id=projet_id, est_actif=True
-        ).exists()
+        projets_ids = obtenir_projets_ids_actifs_utilisateur(utilisateur, request=request)
+        est_membre = (projet_id in projets_ids) or (str(projet_id) in [str(pid) for pid in projets_ids])
+        request._rbac_membre_projet_cache[cle] = est_membre
+        return est_membre
 
     @staticmethod
     def _extraire_projet_id(obj):
@@ -92,24 +200,37 @@ class LectureSeule(permissions.BasePermission):
 
 
 class PermissionModule(permissions.BasePermission):
-    """Contrôle d'accès dynamique basé sur la matrice des modules et le niveau requis.
-
-    Usage :
-        class VueRapport(APIView):
-            permission_classes = [PermissionModule.pour("chantier", NiveauAcces.ECRITURE)]
-    """
+    """Contrôle d'accès dynamique granulaire avec mémoïsation O(1) par requête HTTP."""
 
     module: str = ""
+    permission_requise: str = "LECTURE"
     niveau_requis: int = 1
     message = "Vos habilitations ne permettent pas d'effectuer cette action sur ce module."
 
     @classmethod
-    def pour(cls, module: str, niveau_requis: int = 1):
-        return type(
-            "PermissionModuleSpecifique",
-            (cls,),
-            {"module": module, "niveau_requis": int(niveau_requis)},
-        )
+    def pour(cls, module: str, permission_ou_niveau=1):
+        if isinstance(permission_ou_niveau, int):
+            mapping = {1: "LECTURE", 2: "ECRITURE", 3: "VALIDATION"}
+            perm_code = mapping.get(permission_ou_niveau, "LECTURE")
+            return type(
+                "PermissionModuleSpecifique",
+                (cls,),
+                {
+                    "module": str(module).lower(),
+                    "permission_requise": perm_code,
+                    "niveau_requis": int(permission_ou_niveau),
+                },
+            )
+        else:
+            return type(
+                "PermissionModuleSpecifique",
+                (cls,),
+                {
+                    "module": str(module).lower(),
+                    "permission_requise": str(permission_ou_niveau).upper(),
+                    "niveau_requis": 1,
+                },
+            )
 
     def has_permission(self, request, view) -> bool:
         utilisateur = request.user
@@ -122,6 +243,13 @@ class PermissionModule(permissions.BasePermission):
             or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
         ):
             return True
+
+        if not hasattr(request, "_rbac_module_permissions_cache"):
+            request._rbac_module_permissions_cache = {}
+
+        cle_cache = (self.module, self.permission_requise)
+        if cle_cache in request._rbac_module_permissions_cache:
+            return request._rbac_module_permissions_cache[cle_cache]
 
         from django.apps import apps as registre
 
@@ -138,15 +266,37 @@ class PermissionModule(permissions.BasePermission):
             ).first()
 
         if not role:
+            request._rbac_module_permissions_cache[cle_cache] = False
             return False
 
         perm = RoleModulePermission.objects.filter(
-            role=role, module=self.module, supprime_le__isnull=True
+            role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
+
         if not perm:
+            request._rbac_module_permissions_cache[cle_cache] = False
             return False
 
-        return perm.niveau >= self.niveau_requis
+        if perm.niveau == 0:
+            request._rbac_module_permissions_cache[cle_cache] = False
+            return False
+
+        # Vérification granulaire dans les permissions ManyToMany
+        has_perm = perm.permissions.filter(
+            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+        ).exists()
+
+        # Fallback pour compatibilité niveau scalaire UNIQUEMENT si aucune permission M2M n'a été rattachée
+        if not has_perm and not perm.permissions.exists() and perm.niveau is not None and perm.niveau > 0:
+            if self.permission_requise == "LECTURE" and perm.niveau >= 1:
+                has_perm = True
+            elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
+                has_perm = True
+            elif self.permission_requise == "VALIDATION" and perm.niveau >= 3:
+                has_perm = True
+
+        request._rbac_module_permissions_cache[cle_cache] = has_perm
+        return has_perm
 
     def has_object_permission(self, request, view, obj) -> bool:
         utilisateur = request.user
@@ -164,6 +314,13 @@ class PermissionModule(permissions.BasePermission):
         if not projet_id:
             return self.has_permission(request, view)
 
+        cle_cache = (str(utilisateur.id), self.module, self.permission_requise, str(projet_id))
+        if not hasattr(request, "_rbac_object_permissions_cache"):
+            request._rbac_object_permissions_cache = {}
+
+        if cle_cache in request._rbac_object_permissions_cache:
+            return request._rbac_object_permissions_cache[cle_cache]
+
         from django.apps import apps as registre
 
         try:
@@ -174,24 +331,22 @@ class PermissionModule(permissions.BasePermission):
         except LookupError:
             return True
 
-        est_direction = utilisateur.role_global in (
-            RoleGlobal.DIRECTEUR_GENERAL,
-            RoleGlobal.DIRECTEUR_FINANCIER,
-        )
         affectation = AffectationProjet.objects.filter(
-            utilisateur=utilisateur, projet_id=projet_id, est_actif=True
+            utilisateur=utilisateur,
+            projet_id=projet_id,
+            est_actif=True,
+            supprime_le__isnull=True,
         ).first()
 
-        if not affectation and not est_direction:
+        if not affectation:
+            request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        role = None
-        if affectation:
-            role = affectation.role
-            if not role:
-                role = Role.objects.filter(
-                    code=affectation.role_projet, supprime_le__isnull=True
-                ).first()
+        role = affectation.role
+        if not role:
+            role = Role.objects.filter(
+                code=affectation.role_projet, supprime_le__isnull=True
+            ).first()
         if not role:
             role = (
                 utilisateur.role_personnalise
@@ -201,18 +356,47 @@ class PermissionModule(permissions.BasePermission):
             )
 
         if not role:
+            request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
         override = ProjetRoleModuleOverride.objects.filter(
-            projet_id=projet_id, role=role, module=self.module, supprime_le__isnull=True
+            projet_id=projet_id, role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
         if override:
-            return override.niveau >= self.niveau_requis
+            if override.niveau == 0:
+                request._rbac_object_permissions_cache[cle_cache] = False
+                return False
+            has_perm = override.permissions.filter(
+                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+            ).exists()
+            if not has_perm and not override.permissions.exists() and override.niveau is not None and override.niveau > 0:
+                if self.permission_requise == "LECTURE" and override.niveau >= 1:
+                    has_perm = True
+                elif self.permission_requise == "ECRITURE" and override.niveau >= 2:
+                    has_perm = True
+                elif self.permission_requise == "VALIDATION" and override.niveau >= 3:
+                    has_perm = True
+            request._rbac_object_permissions_cache[cle_cache] = has_perm
+            return has_perm
 
         perm = RoleModulePermission.objects.filter(
-            role=role, module=self.module, supprime_le__isnull=True
+            role=role, module__code=self.module, supprime_le__isnull=True
         ).first()
-        if not perm:
+        if not perm or perm.niveau == 0:
+            request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        return perm.niveau >= self.niveau_requis
+        has_perm = perm.permissions.filter(
+            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+        ).exists()
+        if not has_perm and not perm.permissions.exists() and perm.niveau is not None and perm.niveau > 0:
+            if self.permission_requise == "LECTURE" and perm.niveau >= 1:
+                has_perm = True
+            elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
+                has_perm = True
+            elif self.permission_requise == "VALIDATION" and perm.niveau >= 3:
+                has_perm = True
+
+        request._rbac_object_permissions_cache[cle_cache] = has_perm
+        return has_perm
+

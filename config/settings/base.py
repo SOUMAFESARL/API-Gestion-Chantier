@@ -31,6 +31,14 @@ else:
 
 config = Config(RepositoryEnv(_fichier_env)) if _fichier_env.exists() else env_config
 
+FACTURATION_EMETTEUR = {
+    champ: config(f"FACTURATION_{champ.upper()}", default="")
+    for champ in (
+        "raison_sociale", "forme_juridique", "capital", "adresse", "ville", "pays",
+        "rccm", "nif", "centre_fiscal", "email", "telephone", "banque", "iban", "bic",
+    )
+}
+
 # --------------------------------------------------------------------------
 # Sécurité
 # --------------------------------------------------------------------------
@@ -90,21 +98,14 @@ TENANT_APPS = [
     "apps.notifications",
     "apps.tiers",
     "apps.onboarding",
-    # modules métier — niveau B
-    "apps.projets",  # module 1
-    "apps.chantier",  # module 2
-    "apps.finance",  # module 3
-    # modules métier — niveau A, squelettes en attente de leur MLD
-    "apps.achats",  # module 4
-    "apps.stocks",  # module 5
-    "apps.rh",  # module 6
-    "apps.equipements",  # module 7
-    "apps.qhse",  # module 8
-    "apps.contrats",  # module 9
-    "apps.parties_prenantes",  # module 10
-    "apps.ged",  # module 11
-    "apps.pilotage",  # module 12
+    # modules métier souverains (5 modules cibles)
+    "apps.projets",  # module 1 : projets et affectations
+    "apps.chantier",  # module 2 : suivi technique et rapports
+    "apps.ged",  # module 3 : gestion documentaire
+    "apps.pilotage",  # module 4 : tableaux de bord et pilotage
 ]
+
+
 
 TIERCES_APPS = [
     "rest_framework",
@@ -147,6 +148,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Verrou absolu R-128 : refuse toute mutation sous jeton d'assistance Super Admin
+    "apps.platform_admin.middleware.LectureSeuleAssistanceMiddleware",
     # En dernier : il a besoin de `request.tenant`, et il ne doit refuser
     # l'écriture qu'après que tout le reste a laissé passer la requête.
     "apps.billing.middleware.LectureSeuleAbonnementMiddleware",
@@ -233,10 +236,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # déploiement §6 interdit — décision J5 du contrat de réinitialisation.
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
-# Domaine sous lequel vivent les sous-domaines clients : `<slug>.<domaine>`.
-# En développement, `.localhost` est résolu vers 127.0.0.1 par les navigateurs
-# modernes — c'est ce qui permet d'atteindre un tenant sans toucher au fichier
-# hosts. En production, le domaine de l'éditeur.
+# Domaine principal de la plateforme (Architecture Domaine Unique - Option A).
+# L'API et le frontend partagent un point d'accès unifié sans sous-domaines clients.
 DOMAINE_PRINCIPAL = config("DOMAINE_PRINCIPAL", default="localhost")
 
 # --------------------------------------------------------------------------
@@ -355,15 +356,29 @@ SPECTACULAR_SETTINGS = {
         "# Guide d'intégration Frontend — API CCD Digital\n\n"
         "Bienvenue sur la documentation interactive de l'API de gestion "
         "de chantiers BTP **CCD Digital**.\n\n"
-        "### 1. Architecture Multi-Tenancy (Isolation des données)\n"
-        "- **Schéma Public (`urls_public.py`)** : Domaine principal de la plateforme "
-        "(ex: `api.ccd-digital.ci`). Utilisé pour l'inscription d'une nouvelle entreprise "
-        "(`/api/v1/inscription/`), l'activation d'espace, la consultation des forfaits "
-        "(`/api/v1/plans/`) et les webhooks de paiement CinetPay.\n"
-        "- **Schéma Tenant (`urls_tenant.py`)** : Sous-domaine spécifique de chaque entreprise "
-        "(ex: `mon-entreprise.ccd-digital.ci` ou `mon-entreprise.localhost:8000` en local). "
-        "Toutes les requêtes de gestion de chantier, finances, tiers, utilisateurs et rôles "
-        "doivent obligatoirement être adressées sur le sous-domaine de l'entreprise.\n\n"
+        "### Démarrage rapide — Projets\n"
+        "**GET récupère des données ; POST envoie des données pour créer.**\n\n"
+        "1. Se connecter avec `POST /api/v1/auth/token/`, puis copier `access` dans "
+        "**Authorize** (champ JWT, sans ajouter le mot Bearer).\n"
+        "2. Mon profil et mon entreprise : `GET /api/v1/auth/profil/`.\n"
+        "3. Page Projets : `GET /api/v1/projets/` (tableau non paginé).\n"
+        "4. Ouvrir Nouveau projet : `GET /api/v1/projets/contexte-creation/` "
+        "pour charger les collaborateurs, clients et listes de choix.\n"
+        "5. Cliquer Créer : `POST /api/v1/projets/` avec informations, lots et équipe. "
+        "Un exemple JSON complet figure dans cette opération.\n"
+        "6. Ouvrir la fiche : `GET /api/v1/projets/{id}/`.\n\n"
+        "Pour essayer une opération, ouvrir son bloc puis utiliser **Try it out** et "
+        "**Execute**. Le POST crée réellement un projet : remplacer les UUID fictifs "
+        "de l'exemple par ceux du contexte.\n\n"
+        "### 1. Architecture Multi-Tenancy à Domaine Unique (Option A)\n"
+        "- **Point d'accès unifié** : Toutes les requêtes (publiques et tenant) "
+        "sont adressées au même domaine d'API (ex: `https://api.ccd-digital.ci` ou `http://localhost:8000`).\n"
+        "- **Résolution automatique par JWT** : Pour les routes protégées des tenants "
+        "(chantiers, finances, tiers, utilisateurs, etc.), le middleware résout automatiquement le schéma PostgreSQL "
+        "de l'entreprise à partir du claim `schema` dans le jeton JWT Bearer, ou via l'en-tête `X-Tenant`.\n"
+        "- **Routes Publiques** : L'inscription (`/api/v1/inscription/`), l'authentification "
+        "(`/api/v1/auth/token/`), la santé (`/api/health/`) et les forfaits (`/api/v1/plans/`) "
+        "s'exécutent sur le schéma public sans sous-domaine.\n\n"
         "### 2. Authentification JWT\n"
         "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
         "`Authorization: Bearer <access_token>`.\n"
@@ -390,17 +405,17 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",
+    "PREPROCESSING_HOOKS": ["config.schema.limiter_projets_au_crud"],
     "ENUM_NAME_OVERRIDES": {
+        "StatutRapportEnum": "apps.core.enums.StatutRapport",
         "PlanCodeEnum": "apps.billing.models.Plan.Code",
         "RoleGlobalEnum": "apps.core.enums.RoleGlobal",
         "RoleTiersChoixEnum": "apps.core.enums.RoleTiersChoix",
     },
 }
 
-# Socle Commun §2.2 — 15 min pour l'accès, 8 h pour le renouvellement web.
-# Le cas mobile (24 h) est traité par une vue dédiée, pas par ce réglage global.
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1440),
     "REFRESH_TOKEN_LIFETIME": timedelta(hours=8),
     # Ces deux réglages sont volontairement à False : la rotation n'est plus
     # faite par SimpleJWT mais par `apps.accounts.services.renouvellement`,
@@ -421,7 +436,8 @@ SIMPLE_JWT = {
 # origine web. Les permissions applicatives restent contrôlées par le JWT.
 from corsheaders.defaults import default_headers
 
-CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=_liste)
 
 for _origine in [
@@ -445,6 +461,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 CORS_EXPOSE_HEADERS = [
     "x-request-id",
+    "Location",
 ]
 
 # --------------------------------------------------------------------------
@@ -469,6 +486,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # application dont toutes les pages sont à des profondeurs différentes.
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+PROJET_CONTRATS_ROOT = config("PROJET_CONTRATS_ROOT", default=str(BASE_DIR / "media_prive"))
 
 TAILLE_MAX_FICHIER_MO = 50  # US-006 : refus 413 au-delà
 PHOTOS_MAX_PAR_RAPPORT = 5  # RG-14

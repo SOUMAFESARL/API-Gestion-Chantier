@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='affectationprojet',
             name='role_projet',
-            field=models.CharField(choices=[('DP', 'Directeur de Projet'), ('CP', 'Chef de Projet'), ('CT', 'Conducteur de Travaux'), ('CC', 'Chef de Chantier'), ('IT', 'Ingénieur / Technicien'), ('MAG', 'Magasinier'), ('ST', 'Sous-traitant'), ('FRN', 'Fournisseur'), ('MOA', "Maître d'Ouvrage (Client)"), ('VI', 'Visiteur')], default='CP', max_length=5, verbose_name='rôle sur le projet'),
+            field=models.CharField(choices=[('DP', 'Directeur de Projet'), ('CP', 'Chef de Projet'), ('CT', 'Conducteur de Travaux'), ('CC', 'Chef de Chantier'), ('MOA', "Maître d'Ouvrage (Client)"), ('VI', 'Visiteur')], default='CP', max_length=5, verbose_name='rôle sur le projet'),
         ),
     ]

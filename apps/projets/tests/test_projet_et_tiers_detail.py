@@ -80,23 +80,18 @@ def test_tiers_et_projet_detail_patch(client, admin_user):
         "/api/v1/projets/",
         {
             "nom": "Chantier Initial",
-            "client": tiers_id,
+            "maitre_ouvrage": "Client Initial",
+            "type_projet": "BATIMENT_RESIDENTIEL",
             "ville": "Abidjan",
             "date_debut_prevue": str(demain),
             "date_fin_prevue": str(fin),
             "budget_initial_montant": 5000000000,
             "description": "Description originale",
-            "chef_projet_invite": {
-                "nom": "Kouassi",
-                "prenom": "Yves",
-                "email": "cp.initial@demo.ci",
-                "telephone": "+2250700000000",
-            },
         },
         format="json",
     )
     assert rep_projet.status_code == status.HTTP_201_CREATED
-    projet_id = rep_projet.data["id"]
+    projet_url = rep_projet["Location"]
     reference = rep_projet.data["reference"]
 
     # 3. Modification partielle du tiers (PATCH)
@@ -111,7 +106,7 @@ def test_tiers_et_projet_detail_patch(client, admin_user):
 
     # 4. Modification partielle du projet (PATCH)
     rep_patch_projet = cl.patch(
-        f"/api/v1/projets/{projet_id}/",
+        projet_url,
         {"nom": "Chantier Modifié", "ville": "Bouaké"},
         format="json",
     )

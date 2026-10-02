@@ -62,6 +62,25 @@ class InscriptionDejaActivee(ErreurMetier):
     default_detail = _("Cet espace est déjà actif. Connectez-vous.")
 
 
+class EmailDejaUtilise(ErreurMetier):
+    """L'email est déjà associé à une entreprise existante — 409 CONFLICT."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code_metier = "email_deja_utilise"
+    default_detail = _("Cette adresse email est déjà associée à un compte. Veuillez vous connecter.")
+
+
+class InscriptionEnCours(ErreurMetier):
+    """Une inscription est déjà en attente d'activation pour cet email — 409 CONFLICT."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code_metier = "inscription_en_cours"
+    default_detail = _(
+        "Une inscription est déjà en cours avec cette adresse email. "
+        "Veuillez consulter votre boîte de réception pour l'activer."
+    )
+
+
 class SlugIndisponible(ErreurMetier):
     """Dix suffixes essayés sans succès — T-020 §2.3.
 
@@ -89,7 +108,8 @@ def _slug_libre(base: str) -> str:
         pris = (
             Entreprise.objects.filter(schema_name=candidat).exists()
             or DemandeInscription.objects.filter(
-                slug_reserve=candidat, statut=DemandeInscription.Statut.EN_ATTENTE
+                slug_reserve=candidat,
+                statut__in=["EN_ATTENTE", "A_VALIDER", "PROVISIONNEMENT"],
             ).exists()
         )
         if not pris:
@@ -133,62 +153,35 @@ def deposer(
 
     slug_base = deriver_slug(nom_propre)
 
-    # Cas 2 — Entreprise déjà existante avec ce nom et cet email (T-021 §2.4)
+    # Cas 2 — Entreprise déjà existante avec cet email (règle : une entreprise = un email unique)
     entreprise_existante = Entreprise.objects.filter(
-        models.Q(raison_sociale__iexact=nom_propre) | models.Q(schema_name=slug_base),
         email_contact__iexact=adresse,
     ).first()
     if entreprise_existante is not None:
-        transaction.on_commit(lambda: _envoyer_espace_existant(entreprise_existante, adresse))
-        derniere_demande = (
-            DemandeInscription.objects.filter(
-                models.Q(entreprise=entreprise_existante)
-                | (models.Q(raison_sociale__iexact=nom_propre) & models.Q(email__iexact=adresse))
-            )
-            .order_by("-cree_le")
-            .first()
-        )
-        if derniere_demande is not None:
-            return derniere_demande
+        raise EmailDejaUtilise()
 
-        class _DemandeNeutre:
-            pk = identifiant
-            email = adresse
-            statut = DemandeInscription.Statut.EN_ATTENTE
-            expire_le = maintenant + DUREE_LIEN_ACTIVATION
-
-        return _DemandeNeutre()  # type: ignore
-
-    # Cas 3 — Demande déjà en attente d'activation pour ce nom et cet email
+    # Cas 3 — Demande déjà en attente d'activation pour cet email
+    if DemandeInscription.objects.filter(email__iexact=adresse, statut="A_VALIDER").exists():
+        raise InscriptionEnCours()
     demande_en_attente = DemandeInscription.objects.filter(
-        models.Q(raison_sociale__iexact=nom_propre) | models.Q(slug_reserve=slug_base),
         email__iexact=adresse,
         statut=DemandeInscription.Statut.EN_ATTENTE,
     ).first()
     if demande_en_attente is not None:
         if demande_en_attente.expire_le > maintenant:
-            # Demande toujours en cours : renouveler le jeton sans créer de doublon
-            jeton = uuid.uuid4()
-            demande_en_attente.empreinte = DemandeInscription.empreinte_de(jeton)
-            demande_en_attente.expire_le = maintenant + DUREE_LIEN_ACTIVATION
-            demande_en_attente.save(update_fields=["empreinte", "expire_le", "modifie_le"])
-            transaction.on_commit(
-                lambda: _envoyer_activation(demande_en_attente, jeton, regenere=True)
-            )
-            return demande_en_attente
+            raise InscriptionEnCours()
         else:
             # Expirée : libérer la place
             demande_en_attente.statut = DemandeInscription.Statut.ABANDONNEE
             demande_en_attente.save(update_fields=["statut", "modifie_le"])
 
-    # Cas 4 — Demande en cours de provisionnement
+    # Cas 4 — Demande en cours de provisionnement pour cet email
     demande_prov = DemandeInscription.objects.filter(
-        models.Q(raison_sociale__iexact=nom_propre) | models.Q(slug_reserve=slug_base),
         email__iexact=adresse,
         statut=DemandeInscription.Statut.PROVISIONNEMENT,
     ).first()
     if demande_prov is not None:
-        return demande_prov
+        raise InscriptionDejaActivee()
 
     slug = _slug_libre(slug_base)
     jeton = uuid.uuid4()
@@ -218,9 +211,6 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
     la date, le contact commercial »* — n'avait jamais eu de code : les deux
     branches partageaient un seul email. Le statut les sépare désormais.
     """
-    domaine = entreprise.domains.filter(is_primary=True).first()
-    nom_domaine = domaine.domain if domaine else settings.DOMAINE_PRINCIPAL
-
     if entreprise.statut in (StatutEntreprise.SUSPENDU, StatutEntreprise.RESILIE):
         # **La date vient de l'abonnement, pas de l'entreprise.**
         #
@@ -247,12 +237,7 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
         )
         return
 
-    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_url:
-        protocole = "http" if settings.DEBUG else "https"
-        port = ":3000" if settings.DEBUG else ""
-        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-        base_url = f"{protocole}://{nom_domaine}{port}"
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
     envoyer(
         "espace_existant",
@@ -260,8 +245,8 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
         destinataire,
         {
             "raison_sociale": entreprise.raison_sociale,
-            "lien_connexion": f"{base_url}/connexion",
-            "lien_reinitialisation": f"{base_url}/mot-de-passe/oublie",
+            "lien_connexion": f"{frontend_url}/connexion",
+            "lien_reinitialisation": f"{frontend_url}/mot-de-passe/oublie",
         },
     )
 
@@ -272,14 +257,12 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
     Aucun mot de passe n'y figure : il a été choisi par la personne elle-même à
     l'activation, et nous ne le connaissons pas.
     """
-    base_url = getattr(settings, "FRONTEND_URL", "").rstrip("/")
-    if not base_url:
-        protocole = "http" if settings.DEBUG else "https"
-        port = ":3000" if settings.DEBUG else ""
-        nom_domaine = getattr(settings, "DOMAINE_PRINCIPAL", "localhost")
-        base_url = f"{protocole}://{nom_domaine}{port}"
-
-    adresse_espace = base_url
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    adresse_espace = (
+        f"https://{entreprise.schema_name.replace('_', '-')}.{settings.DOMAINE_PRINCIPAL}"
+        if not settings.DEBUG
+        else f"http://{entreprise.schema_name.replace('_', '-')}.localhost:3000"
+    )
     envoyer(
         "espace_pret",
         f"Votre espace {entreprise.raison_sociale} est prêt",
@@ -300,13 +283,14 @@ def _envoyer_activation(demande: DemandeInscription, jeton, regenere: bool = Fal
     jeton vient d'être remplacé, et **l'ancien lien ne marche plus**. Le dire
     évite qu'on s'acharne sur le premier message reçu.
     """
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     envoyer(
         "activation",
         "Activez votre espace CCD Digital",
         demande.email,
         {
             "raison_sociale": demande.raison_sociale,
-            "lien": f"{settings.FRONTEND_URL}/activation#jeton={jeton}",
+            "lien": f"{frontend_url}/activation#jeton={jeton}",
             "regenere": regenere,
         },
     )
@@ -354,20 +338,84 @@ def verifier(jeton_clair: str) -> DemandeInscription:
     return demande
 
 
+def lancer_provisionnement(demande_id: str) -> None:
+    """Déclenche la tâche de provisionnement du tenant de façon asynchrone et non-bloquante.
+
+    1. En environnement de test ou si Celery Eager est actif :
+       Un thread d'arrière-plan exécute la tâche sans bloquer les tests unitaires.
+    2. En production (cPanel / serveur web sous Passenger) :
+       Un processus CLI autonome est détaché via subprocess.Popen (start_new_session=True)
+       pour exécuter `manage.py provisionner_inscriptions --demande-id <id>`.
+       Cela évite tout blocage HTTP, ne dépend d'aucun worker Celery fantôme,
+       et empêche Passenger de geler le thread lors de la fin de la requête HTTP.
+    """
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        import threading
+        from django.db import connection
+        from apps.tenants.tasks import provisionner_entreprise
+
+        def _executer():
+            try:
+                provisionner_entreprise(demande_id)
+            finally:
+                connection.close()
+
+        thread = threading.Thread(
+            target=_executer, name=f"provisionner-{demande_id}", daemon=True
+        )
+        thread.start()
+    else:
+        import os
+        import subprocess
+        import sys
+
+        manage_py = settings.BASE_DIR / "manage.py"
+        cmd = [
+            sys.executable,
+            str(manage_py),
+            "provisionner_inscriptions",
+            "--demande-id",
+            str(demande_id),
+        ]
+        env = os.environ.copy()
+        settings_module = getattr(settings, "SETTINGS_MODULE", None) or os.environ.get("DJANGO_SETTINGS_MODULE")
+        if settings_module:
+            env["DJANGO_SETTINGS_MODULE"] = settings_module
+
+        try:
+            if os.name == "nt":
+                subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+            else:
+                subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+        except Exception:
+            logger.exception(
+                "Échec du lancement du sous-processus de provisionnement pour la demande %s",
+                demande_id,
+            )
+            from apps.tenants.tasks import provisionner_entreprise
+
+            provisionner_entreprise.delay(demande_id)
+
+
 # ---------------------------------------------------------------------------
 # §5 — activer
 # ---------------------------------------------------------------------------
+@transaction.atomic
 def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> DemandeInscription:
-    """Consomme le jeton et lance le provisionnement — les effets 1 à 4.
-
-    **T1 est une transaction courte, dans `public` seulement.** Elle marque le
-    jeton consommé, pose le nom et le mot de passe **haché** sur la demande, et
-    passe le statut à `PROVISIONNEMENT`. Le reste — schéma, migrations,
-    administrateur, domaine — se fait après, et hors transaction : la promesse
-    « une seule transaction » du MLD §7.5 n'était pas tenable, `migrate_schemas`
-    validant et fermant la connexion.
-    """
-    demande = DemandeInscription.objects.filter(
+    """Vérifie l'email, définit le mot de passe et lance le provisionnement automatique du tenant."""
+    demande = DemandeInscription.objects.select_for_update().filter(
         empreinte=DemandeInscription.empreinte_de(jeton_clair)
     ).first()
 
@@ -403,13 +451,8 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
             ]
         )
 
-    # **Après le `commit`, jamais dedans.** Une tâche mise en file à l'intérieur
-    # peut être consommée avant la validation : le worker lit alors une demande
-    # qui n'existe pas encore et échoue sur un `DoesNotExist` incompréhensible,
-    # une fois sur cinquante, sur une machine chargée.
-    from apps.tenants.tasks import provisionner_entreprise
-
-    transaction.on_commit(lambda: provisionner_entreprise.delay(str(demande.pk)))
+    # Après commit de la transaction : lancement non-bloquant du provisionnement
+    transaction.on_commit(lambda: lancer_provisionnement(str(demande.pk)))
     return demande
 
 
@@ -435,13 +478,15 @@ def provisionner(identifiant) -> None:
 
     try:
         # --- T2 : l'entreprise, et son schéma avec ses migrations ------------
-        entreprise = Entreprise.objects.create(
-            schema_name=demande.slug_reserve,
-            raison_sociale=demande.raison_sociale,
-            pays=demande.pays,
-            email_contact=demande.email,
-            statut=StatutEntreprise.ESSAI,
-        )
+        entreprise = Entreprise.objects.filter(schema_name=demande.slug_reserve).first()
+        if entreprise is None:
+            entreprise = Entreprise.objects.create(
+                schema_name=demande.slug_reserve,
+                raison_sociale=demande.raison_sociale,
+                pays=demande.pays,
+                email_contact=demande.email,
+                statut=StatutEntreprise.ESSAI,
+            )
 
         Domaine.objects.get_or_create(
             domain=f"{demande.slug_reserve.replace('_', '-')}.{settings.DOMAINE_PRINCIPAL}",
@@ -459,18 +504,21 @@ def provisionner(identifiant) -> None:
 
             # D-DEMO-01 / T-S1-01 : Le premier inscrit est Directeur Général
             # et Propriétaire immuable du tenant.
-            administrateur = Utilisateur.objects.create_user(
-                email=demande.email,
-                password=None,
-                nom=demande.nom or demande.email.split("@")[0],
-                prenom=demande.prenom,
-                role_global=RoleGlobal.DIRECTEUR_GENERAL,
-                statut=StatutUtilisateur.ACTIF,
-            )
+            administrateur = Utilisateur.objects.filter(email=demande.email).first()
+            if administrateur is None:
+                administrateur = Utilisateur.objects.create_user(
+                    email=demande.email,
+                    password=None,
+                    nom=demande.nom or demande.email.split("@")[0],
+                    prenom=demande.prenom,
+                    role_global=RoleGlobal.DIRECTEUR_GENERAL,
+                    statut=StatutUtilisateur.ACTIF,
+                )
             administrateur.is_owner = True
             # Le mot de passe est déjà haché : le repasser par `set_password`
             # le hacherait deux fois.
-            administrateur.password = demande.mot_de_passe_transitoire
+            if demande.mot_de_passe_transitoire:
+                administrateur.password = demande.mot_de_passe_transitoire
             administrateur.save(update_fields=["is_owner", "password", "modifie_le"])
 
             # --- La matrice des rôles, dès la création de l'entreprise -------

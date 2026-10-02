@@ -153,6 +153,10 @@ class ProjetPatchSerializer(ProjetPostSerializer):
                         {name: "RG-11 : utilisez la route de reprogrammation des dates."}
                     )
         attrs = super().validate(attrs)
+        nouveau_statut = attrs.get("statut")
+        if self.instance is not None and nouveau_statut in (StatutProjet.RECEPTIONNE, StatutProjet.TERMINE):
+            from apps.projets.services.machine_etats import valider_transition_reception
+            valider_transition_reception(self.instance)
         if self.instance is not None and not self.partial:
             for name, default in (
                 ("maitre_oeuvre", ""),

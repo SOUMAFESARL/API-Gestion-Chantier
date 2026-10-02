@@ -238,7 +238,14 @@ def reprogrammer_date_instance(
     # 7. Sauvegarde des nouvelles dates prévisionnelles (Baseline v0 INTACTE)
     instance.date_debut_prevue = debut_cible
     instance.date_fin_prevue = fin_cible
-    instance.save(update_fields=["date_debut_prevue", "date_fin_prevue", "modifie_le"])
+    champs_maj = ["date_debut_prevue", "date_fin_prevue", "modifie_le"]
+
+    from apps.projets.services.machine_etats import retablir_statut_apres_decalage_si_necessaire
+    statut_retabli = retablir_statut_apres_decalage_si_necessaire(instance, nouvelle_date_fin=fin_cible)
+    if statut_retabli:
+        champs_maj.append("statut")
+
+    instance.save(update_fields=champs_maj)
 
     # 8. Mesure de la dérive par rapport à la Baseline v0 & Alerte Celery
     baseline_fin = instance.date_fin_baseline or ancienne_fin
@@ -265,5 +272,7 @@ def reprogrammer_date_instance(
         "date_fin_baseline": instance.date_fin_baseline,
         "jours_derive_baseline": jours_derive,
         "alerte_dg_declenchee": alerte_declenchee,
+        "statut_retabli": statut_retabli,
+        "statut": getattr(instance, "statut", None),
         "historiques": historiques_crees,
     }

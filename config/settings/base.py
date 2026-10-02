@@ -512,6 +512,15 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
 CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
 
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "evaluation_quotidienne_statuts_chantiers": {
+        "task": "apps.projets.tasks.evaluer_statuts_quotidiens_tous_tenants",
+        "schedule": crontab(hour=0, minute=5),
+    },
+}
+
 # --------------------------------------------------------------------------
 # Journalisation
 # --------------------------------------------------------------------------

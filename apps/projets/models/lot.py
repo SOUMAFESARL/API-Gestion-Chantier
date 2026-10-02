@@ -6,7 +6,7 @@ Schéma : tenant.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import ModeExecution, TypeBordereau
+from apps.core.enums import ModeExecution, StatutLot, TypeBordereau
 from apps.core.models import ModeleBase
 
 from .projet import Projet
@@ -88,6 +88,13 @@ class Lot(ModeleBase):
         max_digits=5,
         decimal_places=2,
         default=0,
+    )
+    statut = models.CharField(
+        _("statut"),
+        max_length=20,
+        choices=StatutLot.choices,
+        default=StatutLot.PLANIFIE,
+        db_index=True,
     )
     est_actif = models.BooleanField(_("est actif"), default=True)
 

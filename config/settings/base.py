@@ -75,6 +75,7 @@ SHARED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "apps.core",
+    "apps.catalogue",  # Catalogue souverain partagé dans public uniquement (Modules, Permissions, Droit d'usage)
     "apps.accounts",  # écart E1 — voir README §Écarts
     # Même raison que `accounts`, et c'est l'écart E1 qui l'impose : le journal
     # d'audit suit les utilisateurs, qui existent dans `public` **et** dans

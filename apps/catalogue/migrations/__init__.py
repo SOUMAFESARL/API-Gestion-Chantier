@@ -1,0 +1,1 @@
+"""Migrations pour apps.catalogue."""

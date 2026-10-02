@@ -34,12 +34,18 @@ class ProjetLotListCreateView(APIView):
     @extend_schema(
         tags=["lots"],
         summary="Lister les lots d'un projet",
+        description=(
+            "Chaque lot expose son UUID et le UUID parent dans projet, le compteur "
+            "activites_count et l'avancement réalisé calculé de 0 à 100."
+        ),
         responses={200: LotResponseSerializer(many=True), **ERREURS_LOTS},
     )
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
-        return Response(LotResponseSerializer(projet.lots.all(), many=True).data)
+        return Response(
+            LotResponseSerializer(projet.lots.prefetch_related("activites"), many=True).data
+        )
 
     @extend_schema(
         tags=["lots"],
@@ -47,7 +53,9 @@ class ProjetLotListCreateView(APIView):
         description=(
             "Tout utilisateur connecté ayant accès au projet peut créer plusieurs lots. "
             "Nom, mode d'exécution et bordereau obligatoires ; budget et dates facultatifs. "
-            "Code et ordre générés automatiquement. Budget en centimes de FCFA."
+            "Code et ordre générés automatiquement. Budget en centimes de FCFA. "
+            "Le projet est celui de l'URL ; ne pas envoyer projet ni id_projet. "
+            "Avancement automatique à 0 tant qu'aucune activité n'est réalisée."
         ),
         request=LotCreationSerializer,
         responses={

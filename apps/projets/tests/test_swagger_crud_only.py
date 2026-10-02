@@ -10,9 +10,17 @@ def test_schema_contains_project_crud_and_lot_workflow():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
     paths = {path: value for path, value in schema["paths"].items() if "/projets/" in path}
     assert set(paths) == {
-        "/api/v1/projets/", "/api/v1/projets/{id}/",
-        "/api/v1/projets/{id}/lots/", "/api/v1/projets/{id}/lots/import/",
+        "/api/v1/projets/",
+        "/api/v1/projets/{id}/",
+        "/api/v1/projets/{id}/lots/",
+        "/api/v1/projets/{id}/lots/import/",
         "/api/v1/projets/{id}/lots/modele/",
+        "/api/v1/projets/{id}/statistiques/",
+        "/api/v1/projets/{id}/equipes/",
+        "/api/v1/projets/{id}/equipes/statistiques/",
+        "/api/v1/projets/{id}/equipes/affectations/",
+        "/api/v1/projets/{id}/equipes/affectations/{affectation_id}/",
+        "/api/v1/projets/{id}/equipes/{equipe_id}/",
     }
     assert set(paths["/api/v1/projets/"]) == {"get", "post"}
     assert set(paths["/api/v1/projets/{id}/"]) == {"get", "put", "patch", "delete"}
@@ -42,14 +50,20 @@ def test_project_id_is_documented_only_in_responses():
 def test_status_patch_examples_and_choices():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
     components = schema["components"]["schemas"]
-    assert any(set(item.get("enum", [])) == set(StatutProjet.values)
-               for item in components.values())
+    assert any(
+        set(item.get("enum", [])) == set(StatutProjet.values) for item in components.values()
+    )
     for name in ("ProjetPost", "ProjetPatch", "ProjetCreationResponse"):
         assert "statut" in components[name]["properties"]
     operation = schema["paths"]["/api/v1/projets/{id}/"]["patch"]
     examples = operation["requestBody"]["content"]["application/json"]["examples"]
     assert {item["value"]["statut"] for item in examples.values()} == {
-        "EN_ATTENTE", "SUSPENDU", "BLOQUE", "DESACTIVE", "RESILIE", "EN_COURS",
+        "EN_ATTENTE",
+        "SUSPENDU",
+        "BLOQUE",
+        "DESACTIVE",
+        "RESILIE",
+        "EN_COURS",
     }
     assert set(operation["responses"]) == {"200", "400", "401", "403", "404"}
 
@@ -68,3 +82,37 @@ def test_optional_real_dates_and_read_only_metrics():
     for field in ("avancement_reel", "indice_sante"):
         assert components["ProjetCreationResponse"]["properties"][field]["readOnly"] is True
     assert components["ProjetCreationResponse"]["properties"]["indice_sante"]["nullable"] is True
+
+
+def test_activity_form_and_statistics_documented():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    operation = schema["paths"]["/api/v1/lots/{lot_id}/activites/"]["post"]
+    body = operation["requestBody"]["content"]["application/json"]
+    component = body["schema"]["$ref"].rsplit("/", 1)[-1]
+    definition = schema["components"]["schemas"][component]
+    assert definition["required"] == ["libelle"]
+    for field in ("date_debut_prevue", "date_fin_prevue", "dependance"):
+        assert definition["properties"][field]["nullable"] is True
+    assert "equipe_ids" in definition["properties"]
+    assert len(body["examples"]) == 2
+    assert set(operation["responses"]) == {"201", "400", "401", "403", "404"}
+    stats = schema["paths"]["/api/v1/projets/{id}/statistiques/"]["get"]
+    assert set(stats["responses"]) == {"200", "401", "403", "404"}
+
+
+def test_team_errors_and_assignment_dates_documented():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    paths = schema["paths"]
+    for path, methods in paths.items():
+        if "/equipes/" in path:
+            for operation in methods.values():
+                assert {"401", "403", "404"} <= set(operation["responses"])
+    teams = paths["/api/v1/projets/{id}/equipes/"]["post"]
+    assert "400" in teams["responses"]
+    assignments = paths["/api/v1/projets/{id}/equipes/affectations/"]
+    assert "400" in assignments["get"]["responses"]
+    assert "400" in assignments["post"]["responses"]
+    fields = schema["components"]["schemas"]["AffectationEquipeResponse"]["properties"]
+    for name in ("date_debut", "date_fin"):
+        assert fields[name]["nullable"] is True
+        assert fields[name]["readOnly"] is True

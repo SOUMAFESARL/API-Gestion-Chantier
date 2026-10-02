@@ -229,6 +229,11 @@ class EtatProvisionnementView(APIView):
         responses={200: EtatProvisionnementResponseSerializer, 404: dict},
     )
     def get(self, request, suivi):
+        from django.db import connection
+
+        if not connection.in_atomic_block:
+            connection.commit()
+
         demande = DemandeInscription.objects.filter(pk=suivi).first()
         if demande is None:
             return Response(
@@ -239,8 +244,15 @@ class EtatProvisionnementView(APIView):
         if demande.statut == DemandeInscription.Statut.ACTIVEE and demande.entreprise_id:
             from django.conf import settings
 
-            frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            url_connexion = f"{frontend_url}/connexion"
+            origine = request.headers.get("Origin") or request.headers.get("Referer") or ""
+            if "localhost" in origine or "127.0.0.1" in origine:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(origine)
+                base_url = f"{parsed.scheme}://{parsed.netloc}"
+            else:
+                base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+            url_connexion = f"{base_url}/connexion"
 
             return Response(
                 {"statut": "PRET", "url_connexion": url_connexion}
@@ -258,15 +270,20 @@ class EtatProvisionnementView(APIView):
         }:
             return Response({"statut": demande.statut})
 
+        # Filet de sécurité en cas de panne du sous-processus initial :
+        # Ne relancer que si la demande stagne en PROVISIONNEMENT depuis plus de 45 secondes
         if demande.statut == DemandeInscription.Statut.PROVISIONNEMENT:
-            from django.core.cache import cache
+            from django.utils import timezone
+            ecoulet_secondes = (timezone.now() - demande.modifie_le).total_seconds()
+            if ecoulet_secondes > 45:
+                from django.core.cache import cache
 
-            cle_cache = f"prov_relance_{demande.pk}"
-            if not cache.get(cle_cache):
-                cache.set(cle_cache, True, timeout=20)
-                from apps.tenants.services.inscription import lancer_provisionnement
+                cle_cache = f"prov_relance_{demande.pk}"
+                if not cache.get(cle_cache):
+                    cache.set(cle_cache, True, timeout=30)
+                    from apps.tenants.services.inscription import lancer_provisionnement
 
-                lancer_provisionnement(str(demande.pk))
+                    lancer_provisionnement(str(demande.pk))
 
         return Response({"statut": "PROVISIONNEMENT"})
 

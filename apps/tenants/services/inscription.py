@@ -258,7 +258,7 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
     l'activation, et nous ne le connaissons pas.
     """
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
-    adresse_espace = frontend_url
+    adresse_espace = f"{frontend_url}/connexion"
     envoyer(
         "espace_pret",
         f"Votre espace {entreprise.raison_sociale} est prêt",
@@ -576,6 +576,9 @@ def provisionner(identifiant) -> None:
             demande.save(
                 update_fields=["statut", "entreprise", "mot_de_passe_transitoire", "modifie_le"]
             )
+
+        from django.db import connection
+        connection.commit()
 
         # Branche 6 du §2.4 — l'espace est prêt, et il faut le dire.
         #

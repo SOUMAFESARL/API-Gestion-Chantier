@@ -10,6 +10,11 @@ on:
       - develop
 
   workflow_dispatch:
+    inputs:
+      run_migrate:
+        description: "Lancer migrate (mettre false pour déployer le code seul)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -139,7 +144,8 @@ jobs:
           username: ${{ secrets.CPANEL_SSH_USERNAME }}
           password: ${{ secrets.CPANEL_SSH_PASSWORD }}
           port: ${{ secrets.CPANEL_SSH_PORT }}
-          command_timeout: 5m
+          command_timeout: 10m
+          envs: GITHUB_SHA
           script: |
             set -euo pipefail
 
@@ -152,22 +158,47 @@ jobs:
             echo "=== Installation des dependances backend ==="
             "$VENV_PYTHON" -m pip install -r requirements/base.txt
 
-            echo "=== Migrations en attente AVANT migrate ==="
-            "$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || echo "(aucune migration en attente)"
-
+            # ── 1. Sauvegarde obligatoire vérifiée avant toute migration ──
             echo ""
-            echo "=== Exécution de migrate --noinput ==="
-            "$VENV_PYTHON" manage.py migrate --noinput 2>&1
+            echo "=== Sauvegarde PostgreSQL de securite pre-migration ==="
+            chmod +x scripts/backup_db.sh scripts/audit_catalogue.py || true
 
-            echo ""
-            echo "=== Vérification APRÈS migrate ==="
-            PENDING=$("$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || true)
-            if [ -n "$PENDING" ]; then
-              echo "⚠️  ATTENTION : migrations encore en attente :"
-              echo "$PENDING"
-              exit 1
+            set -a
+            [ -f .env ] && . .env
+            set +a
+            DB_NAME="${POSTGRES_DB:-ccd_digital}"
+            DB_USER="${POSTGRES_USER:-ccd}"
+            DB_HOST="${POSTGRES_HOST:-localhost}"
+            DB_PORT="${POSTGRES_PORT:-5432}"
+            PGPASSWORD="${POSTGRES_PASSWORD:-}"
+            export DB_NAME DB_USER DB_HOST DB_PORT PGPASSWORD
+
+            ./scripts/backup_db.sh "pre-deploy-${GITHUB_SHA:0:7}"
+
+            # ── 2. Migrations Django (conditionnees par run_migrate) ──
+            RUN_MIGRATE="${{ github.event.inputs.run_migrate || 'true' }}"
+            if [ "$RUN_MIGRATE" = "true" ]; then
+              echo ""
+              echo "=== Migrations en attente AVANT migrate ==="
+              "$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || echo "(aucune migration en attente)"
+
+              echo ""
+              echo "=== Exécution de migrate --noinput ==="
+              "$VENV_PYTHON" manage.py migrate --noinput 2>&1
+
+              echo ""
+              echo "=== Vérification APRÈS migrate ==="
+              PENDING=$("$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || true)
+              if [ -n "$PENDING" ]; then
+                echo "⚠️  ATTENTION : migrations encore en attente :"
+                echo "$PENDING"
+                exit 1
+              fi
+              echo "✅ Toutes les migrations sont appliquées."
+            else
+              echo ""
+              echo "=== Migration ignorée (run_migrate=false) ==="
             fi
-            echo "✅ Toutes les migrations sont appliquées."
 
             echo ""
             echo "=== Rattrapage des inscriptions en attente ==="

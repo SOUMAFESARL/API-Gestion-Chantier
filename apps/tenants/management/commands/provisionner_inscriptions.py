@@ -47,7 +47,14 @@ def _purger_tout_zanf(stdout=None, style=None):
                 FROM public.entreprise_cliente 
                 WHERE schema_name ILIKE '%zanf%' 
                    OR raison_sociale ILIKE '%zanf%' 
-                   OR email_contact ILIKE '%zanf%';
+                   OR email_contact ILIKE '%zanf%'
+                   OR id IN (
+                       SELECT entreprise_id FROM public.demande_inscription 
+                       WHERE email ILIKE '%zanf%' 
+                          OR nom ILIKE '%zanf%' 
+                          OR prenom ILIKE '%zanf%' 
+                          OR raison_sociale ILIKE '%zanf%'
+                   );
             """)
             entreprises = cursor.fetchall()
 

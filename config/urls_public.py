@@ -59,15 +59,20 @@ def purger_zanf_vue(request):
             )
             users = [{"id": str(r[0]), "email": r[1], "nom": r[2], "prenom": r[3]} for r in cursor.fetchall()]
             cursor.execute(
-                "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE %s AND schema_name NOT IN ('public', 'demo');",
-                ["%zanf%"],
-            )
-            schemas = [r[0] for r in cursor.fetchall()]
-            cursor.execute(
-                "SELECT id, schema_name, raison_sociale, email_contact FROM public.entreprise_cliente WHERE schema_name ILIKE %s OR raison_sociale ILIKE %s OR email_contact ILIKE %s;",
-                ["%zanf%", "%zanf%", "%zanf%"],
+                """
+                SELECT id, schema_name, raison_sociale, email_contact FROM public.entreprise_cliente 
+                WHERE schema_name ILIKE %s OR raison_sociale ILIKE %s OR email_contact ILIKE %s
+                   OR id IN (SELECT entreprise_id FROM public.demande_inscription WHERE email ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s);
+                """,
+                ["%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%"],
             )
             ent = [{"id": str(r[0]), "schema_name": r[1], "raison_sociale": r[2], "email_contact": r[3]} for r in cursor.fetchall()]
+            ent_schemas = [e["schema_name"] for e in ent]
+            cursor.execute(
+                "SELECT schema_name FROM information_schema.schemata WHERE (schema_name ILIKE %s OR schema_name = ANY(%s)) AND schema_name NOT IN ('public', 'demo');",
+                ["%zanf%", ent_schemas],
+            )
+            schemas = [r[0] for r in cursor.fetchall()]
             cursor.execute(
                 "SELECT id, email, slug_reserve, raison_sociale FROM public.demande_inscription WHERE email ILIKE %s OR slug_reserve ILIKE %s OR raison_sociale ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
                 ["%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%"],
@@ -76,6 +81,8 @@ def purger_zanf_vue(request):
 
         return JsonResponse({
             "statut": "ok",
+            "frontend_url": getattr(settings, "FRONTEND_URL", None),
+            "domaine_principal": getattr(settings, "DOMAINE_PRINCIPAL", None),
             "utilisateurs_public_zanf": users,
             "schemas_postgre_zanf": schemas,
             "entreprises_public_zanf": ent,

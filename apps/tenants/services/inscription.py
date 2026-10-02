@@ -258,11 +258,7 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
     l'activation, et nous ne le connaissons pas.
     """
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
-    adresse_espace = (
-        f"https://{entreprise.schema_name.replace('_', '-')}.{settings.DOMAINE_PRINCIPAL}"
-        if not settings.DEBUG
-        else f"http://{entreprise.schema_name.replace('_', '-')}.localhost:3000"
-    )
+    adresse_espace = frontend_url
     envoyer(
         "espace_pret",
         f"Votre espace {entreprise.raison_sociale} est prêt",
@@ -270,7 +266,7 @@ def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) ->
         {
             "raison_sociale": entreprise.raison_sociale,
             "adresse_espace": adresse_espace,
-            "lien_connexion": f"{adresse_espace}/connexion",
+            "lien_connexion": f"{frontend_url}/connexion",
             "email_admin": email_admin,
         },
     )

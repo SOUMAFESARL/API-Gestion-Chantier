@@ -1,3 +1,5 @@
+> Evolution : le CRUD accepte aussi le champ optionnel [contrat multi-fichiers](api-projets-contrats.md), avec upload multipart et telechargement authentifie.
+
 # Swagger projets : uniquement le CRUD
 
 Objectif : ne montrer dans Swagger que GET et POST /api/v1/projets/,

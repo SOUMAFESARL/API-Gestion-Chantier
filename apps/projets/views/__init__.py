@@ -1,9 +1,17 @@
 from django.db import transaction
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
-from rest_framework import status
-from rest_framework.parsers import JSONParser
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    OpenApiTypes,
+    extend_schema,
+)
+from rest_framework import serializers, status
+from rest_framework.exceptions import NotFound
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +23,7 @@ from apps.core.permissions import (
     PermissionModule,
     filtrer_queryset_par_affectations,
 )
-from apps.projets.models import Projet
+from apps.projets.models import Projet, ProjetContrat
 from apps.projets.serializers.swagger import (
     ProjetCreationResponseSerializer,
     ProjetPatchSerializer,
@@ -64,7 +72,7 @@ __all__ = [
 class ProjetListCreateView(APIView):
     """`GET` et `POST /api/v1/projets/`."""
 
-    parser_classes = [JSONParser]
+    parser_classes = [JSONParser, MultiPartParser]
 
     def get_permissions(self):
         if self.request.method == "POST":
@@ -87,7 +95,7 @@ class ProjetListCreateView(APIView):
         summary="Afficher la liste des projets accessibles",
         tags=["projets"],
         description=(
-            "Liste des projets accessibles, limitee aux onze champs du formulaire. "
+            "Liste des projets accessibles : champs du formulaire et contrats. "
             "La reference identifie chaque projet dans la liste. "
             "Le POST retourne son URL dans l'entete Location."
         ),
@@ -101,10 +109,10 @@ class ProjetListCreateView(APIView):
         qs = (
             Projet.objects.all()
             .select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
-            .prefetch_related("lots")
+            .prefetch_related("contrats")
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
-        serializer = ProjetCreationResponseSerializer(qs, many=True)
+        serializer = ProjetCreationResponseSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -117,6 +125,9 @@ class ProjetListCreateView(APIView):
             "Budget en centimes FCFA. Fin strictement apres debut. "
             "Les champs hors formulaire sont refuses ; lots et equipe "
             "s'ajoutent ensuite depuis le projet."
+            " Contrat facultatif : envoyer les fichiers dans multipart/form-data, "
+            "en repetant la cle contrat. Formats PDF/JPG/JPEG/PNG ; JEPG accepte. "
+            "Maximum 10 fichiers, 10 Mo chacun et 50 Mo au total."
         ),
         request=ProjetPostSerializer,
         responses={201: ProjetCreationResponseSerializer},
@@ -142,7 +153,7 @@ class ProjetListCreateView(APIView):
         serializer = ProjetPostSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
-        retour = ProjetCreationResponseSerializer(projet)
+        retour = ProjetCreationResponseSerializer(projet, context={"request": request})
         return Response(
             retour.data,
             status=status.HTTP_201_CREATED,
@@ -157,7 +168,7 @@ class ProjetListCreateView(APIView):
 class ProjetDetailView(APIView):
     """Lecture, modification partielle et suppression logique d'un projet."""
 
-    parser_classes = [JSONParser]
+    parser_classes = [JSONParser, MultiPartParser]
 
     def get_permissions(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -174,16 +185,27 @@ class ProjetDetailView(APIView):
 
     @extend_schema(
         summary="Détail d'un projet",
+        parameters=[
+            OpenApiParameter(
+                "contrat",
+                OpenApiTypes.UUID,
+                OpenApiParameter.QUERY,
+                description="UUID d'un contrat du projet a telecharger avec authentification.",
+            )
+        ],
         tags=["projets"],
         description=(
             "À appeler lorsqu'un utilisateur ouvre un projet depuis la liste. "
-            "Remplacer `{id}` dans l'URL par l'UUID `id` renvoyé par la liste ou la création. "
+            "L'URL du projet est fournie dans l'entete Location lors de sa creation. "
             "La lecture du module et l'accès à ce projet sont contrôlés côté serveur. "
-            "Pour consulter toutes les affectations de l'équipe, utiliser "
-            "`GET /api/v1/projets/{id}/affectations/`."
+            "La liste contrat contient les liens de telechargement authentifie. "
+            "Avec ?contrat=UUID, renvoie le document binaire en piece jointe."
         ),
         responses={
-            200: ProjetCreationResponseSerializer,
+            (200, "application/json"): ProjetCreationResponseSerializer,
+            (200, "application/pdf"): OpenApiTypes.BINARY,
+            (200, "image/jpeg"): OpenApiTypes.BINARY,
+            (200, "image/png"): OpenApiTypes.BINARY,
             401: OpenApiResponse(description="Authentification requise."),
             403: OpenApiResponse(description="Accès au projet refusé."),
             404: OpenApiResponse(description="Projet absent ou supprimé."),
@@ -193,12 +215,27 @@ class ProjetDetailView(APIView):
         projet = get_object_or_404(
             Projet.objects.select_related(
                 "client", "chef_projet", "conducteur_travaux", "cree_par"
-            ).prefetch_related("lots"),
+            ).prefetch_related("contrats"),
             pk=pk,
         )
         self.check_object_permissions(request, projet)
+        if "contrat" in request.query_params:
+            contrat_id = serializers.UUIDField().run_validation(request.query_params["contrat"])
+            document = get_object_or_404(ProjetContrat, pk=contrat_id, projet=projet)
+            try:
+                fichier = document.fichier.open("rb")
+            except FileNotFoundError as exc:
+                raise NotFound("Le fichier contrat est indisponible.") from exc
+            response = FileResponse(
+                fichier,
+                as_attachment=True,
+                filename=document.nom,
+                content_type=document.type_contenu,
+            )
+            response["Cache-Control"] = "private, no-store"
+            return response
         return Response(
-            ProjetCreationResponseSerializer(projet).data,
+            ProjetCreationResponseSerializer(projet, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
 
@@ -210,10 +247,13 @@ class ProjetDetailView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
-        return Response(ProjetCreationResponseSerializer(projet).data)
+        return Response(ProjetCreationResponseSerializer(projet, context={"request": request}).data)
 
     @extend_schema(
         summary="Modifier partiellement les champs du formulaire",
+        description=(
+            "Contrat : en multipart, les nouveaux fichiers s'ajoutent aux contrats existants."
+        ),
         tags=["projets"],
         request=ProjetPatchSerializer,
         responses={200: ProjetCreationResponseSerializer},
@@ -227,6 +267,7 @@ class ProjetDetailView(APIView):
         description=(
             "Les quatre champs obligatoires sont requis. "
             "Les facultatifs omis sont reinitialises."
+            " Contrat : les nouveaux fichiers s'ajoutent ; les contrats existants sont conserves."
         ),
         tags=["projets"],
         request=ProjetPatchSerializer,

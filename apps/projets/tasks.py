@@ -9,7 +9,7 @@ from apps.core.enums import RoleGlobal
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["notifier_dg_derive_delai"]
+__all__ = ["evaluer_statuts_quotidiens_tous_tenants", "notifier_dg_derive_delai"]
 
 
 @shared_task
@@ -101,3 +101,39 @@ def notifier_dg_derive_delai(
         with schema_context(schema_name):
             return _traiter()
     return _traiter()
+
+
+@shared_task
+def evaluer_statuts_quotidiens_tous_tenants() -> dict:
+    """Tâche nocturne Celery Beat : évalue les statuts calendaires sur chaque schéma tenant actif."""
+    from apps.core.enums import StatutEntreprise
+    from apps.projets.services.machine_etats import executer_evaluation_quotidienne_schema
+    from apps.tenants.models import Entreprise
+
+    entreprises = Entreprise.objects.exclude(schema_name="public").filter(
+        statut__in=[StatutEntreprise.ACTIF, StatutEntreprise.ESSAI]
+    )
+    rapport_global = {}
+
+    for ent in entreprises:
+        if not ent.schema_name:
+            continue
+        try:
+            with schema_context(ent.schema_name):
+                rapport = executer_evaluation_quotidienne_schema()
+                rapport_global[ent.schema_name] = rapport
+                logger.info(
+                    "Évaluation quotidienne réussie pour tenant '%s' : %s",
+                    ent.schema_name,
+                    rapport,
+                )
+        except Exception as e:
+            logger.error(
+                "Erreur lors de l'évaluation quotidienne pour tenant '%s' : %s",
+                ent.schema_name,
+                e,
+                exc_info=True,
+            )
+            rapport_global[ent.schema_name] = {"erreur": str(e)}
+
+    return rapport_global

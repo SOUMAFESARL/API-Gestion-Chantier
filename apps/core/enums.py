@@ -60,11 +60,28 @@ class StatutProjet(models.TextChoices):
     EN_RETARD = "EN_RETARD", "En retard"
     CRITIQUE = "CRITIQUE", "Critique"
     SUSPENDU = "SUSPENDU", "Suspendu"
+    RECEPTIONNE = "RECEPTIONNE", "Réceptionné"
     TERMINE = "TERMINE", "Terminé"
     BLOQUE = "BLOQUE", "Bloqué"
     DESACTIVE = "DESACTIVE", "Désactivé"
     RESILIE = "RESILIE", "Résilié"
     ARCHIVE = "ARCHIVE", "Archivé"
+
+
+class StatutLot(models.TextChoices):
+    PLANIFIE = "PLANIFIE", "Planifié"
+    EN_COURS = "EN_COURS", "En cours"
+    EN_RETARD = "EN_RETARD", "En retard"
+    SUSPENDU = "SUSPENDU", "Suspendu"
+    CLOTURE = "CLOTURE", "Clôturé"
+
+
+class StatutActivite(models.TextChoices):
+    PLANIFIE = "PLANIFIE", "Planifiée"
+    EN_COURS = "EN_COURS", "En cours"
+    EN_RETARD = "EN_RETARD", "En retard"
+    SUSPENDU = "SUSPENDU", "Suspendu"
+    CLOTURE = "CLOTURE", "Clôturée"
 
 
 class TypeProjet(models.TextChoices):

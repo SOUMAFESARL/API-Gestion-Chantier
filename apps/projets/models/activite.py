@@ -10,7 +10,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import UniteMesure
+from apps.core.enums import StatutActivite, UniteMesure
 from apps.core.models import ModeleBase
 
 from .lot import Lot
@@ -86,6 +86,13 @@ class Activite(ModeleBase):
     ordre = models.IntegerField(
         _("ordre"),
         default=1,
+    )
+    statut = models.CharField(
+        _("statut"),
+        max_length=20,
+        choices=StatutActivite.choices,
+        default=StatutActivite.PLANIFIE,
+        db_index=True,
     )
     est_actif = models.BooleanField(
         _("est actif"),

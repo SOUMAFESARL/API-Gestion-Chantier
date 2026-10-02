@@ -112,6 +112,7 @@ class LotSimpleSerializer(serializers.ModelSerializer):
             "date_debut_baseline",
             "date_fin_baseline",
             "avancement",
+            "statut",
             "premier_rapport_soumis",
         ]
 

@@ -1,6 +1,9 @@
 """Service de gestion des surcharges de permissions par projet (Approche Hybride)."""
 
+from django.db import models
+
 from apps.accounts.models import Module, Role, RoleModulePermission
+from apps.catalogue.models import CatalogueModule
 from apps.core.enums import NiveauAcces
 from apps.projets.models import Projet, ProjetRoleModuleOverride
 
@@ -93,12 +96,17 @@ def set_override_permission_projet(
     else:
         module_obj = module
 
+    cat_mod = CatalogueModule.objects.filter(code__iexact=module_obj.code, supprime_le__isnull=True).first()
+
     override, _ = ProjetRoleModuleOverride.objects.update_or_create(
         projet=projet,
         role=role,
         module=module_obj,
-        defaults={"niveau": niveau, "supprime_le": None},
+        defaults={"niveau": niveau, "supprime_le": None, "module_catalogue": cat_mod},
     )
+    if cat_mod and override.module_catalogue_id != cat_mod.id:
+        override.module_catalogue = cat_mod
+        override.save(update_fields=["module_catalogue"])
     return override
 
 

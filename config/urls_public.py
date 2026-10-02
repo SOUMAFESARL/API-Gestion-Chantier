@@ -74,13 +74,27 @@ def purger_zanf_vue(request):
             )
             schemas = [r[0] for r in cursor.fetchall()]
             cursor.execute(
-                "SELECT id, email, slug_reserve, raison_sociale FROM public.demande_inscription WHERE email ILIKE %s OR slug_reserve ILIKE %s OR raison_sociale ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
+                "SELECT id, email, slug_reserve, raison_sociale, statut, cree_le, modifie_le FROM public.demande_inscription WHERE email ILIKE %s OR slug_reserve ILIKE %s OR raison_sociale ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
                 ["%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%"],
             )
-            dem = [{"id": str(r[0]), "email": r[1], "slug_reserve": r[2], "raison_sociale": r[3]} for r in cursor.fetchall()]
+            dem = [
+                {
+                    "id": str(r[0]),
+                    "email": r[1],
+                    "slug_reserve": r[2],
+                    "raison_sociale": r[3],
+                    "statut": r[4],
+                    "cree_le": str(r[5]),
+                    "modifie_le": str(r[6]),
+                }
+                for r in cursor.fetchall()
+            ]
 
+        import sys, os
         return JsonResponse({
             "statut": "ok",
+            "sys_executable": sys.executable,
+            "virtual_env": os.environ.get("VIRTUAL_ENV"),
             "frontend_url": getattr(settings, "FRONTEND_URL", None),
             "domaine_principal": getattr(settings, "DOMAINE_PRINCIPAL", None),
             "utilisateurs_public_zanf": users,

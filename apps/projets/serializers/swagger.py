@@ -1,56 +1,79 @@
-"""Contrats OpenAPI distincts ; validation métier dans ProjetCreationSerializer."""
+"""Creation form and update contracts."""
 
-from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
+from apps.core.enums import TypeProjet
+from apps.projets.models import Projet
 from apps.projets.serializers import ProjetCreationSerializer
 
-
-@extend_schema_serializer(exclude_fields=["id", "lots_supprimer_ids"])
-class ProjetPostSerializer(ProjetCreationSerializer):
-    """Identification initiale, avec planning et équipe facultatifs pour la direction."""
-
-    maitre_ouvrage = serializers.CharField(
-        max_length=200,
-        required=False,
-        help_text="Nom de l'entreprise ou du particulier. Requis sauf si client est fourni.",
-    )
-    reference = serializers.CharField(
-        max_length=30,
-        required=False,
-        allow_blank=True,
-        default="",
-        help_text="Générée automatiquement au format PRJ-AAAA-NNN si omise ou vide.",
-    )
-    date_debut_prevue = serializers.DateField(
-        required=False,
-        allow_null=True,
-        help_text="Facultative : le planning peut être défini après création via PATCH.",
-    )
-    date_fin_prevue = serializers.DateField(
-        required=False,
-        allow_null=True,
-        help_text="Facultative. Strictement après le début lorsque les deux dates sont définies.",
-    )
-    chef_projet_id = serializers.UUIDField(
-        required=False,
-        allow_null=True,
-        default=None,
-        help_text=(
-            "Facultatif. La création de projet est réservée à la direction."
-        ),
-    )
-
-
-@extend_schema_serializer(
-    exclude_fields=[
-        "id",
-        "equipe",
-        "chef_projet_invite",
-        "conducteur_travaux_invite",
-        "chefs_chantier_ids",
-        "visiteurs_ids",
-    ]
+CHAMPS_FORMULAIRE = (
+    "nom",
+    "reference",
+    "type_projet",
+    "ville",
+    "maitre_ouvrage",
+    "maitre_oeuvre",
+    "date_debut_prevue",
+    "date_fin_prevue",
+    "duree_jours_ouvres",
+    "budget_initial_montant",
+    "description",
 )
-class ProjetPatchSerializer(ProjetCreationSerializer):
-    """Champs modifiables et opérations groupées sur les lots."""
+
+
+class ProjetPostSerializer(ProjetCreationSerializer):
+    """Only visible fields; reference and duration are generated."""
+
+    reference = serializers.CharField(read_only=True)
+    duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
+    type_projet = serializers.ChoiceField(choices=TypeProjet.choices)
+    maitre_ouvrage = serializers.CharField(max_length=200)
+
+    def get_fields(self):
+        fields = super().get_fields()
+        return {name: fields[name] for name in CHAMPS_FORMULAIRE}
+
+    def to_internal_value(self, data):
+        if hasattr(data, "keys"):
+            errors = dict.fromkeys(
+                data.keys() - self.fields.keys(), "Ce champ n'est pas accepte a la creation."
+            )
+            for name in ("reference", "duree_jours_ouvres"):
+                if name in data:
+                    errors[name] = "Ce champ est calcule automatiquement."
+            if errors:
+                raise serializers.ValidationError(errors)
+        return super().to_internal_value(data)
+
+
+class ProjetCreationResponseSerializer(serializers.ModelSerializer):
+    duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Projet
+        fields = CHAMPS_FORMULAIRE
+        read_only_fields = CHAMPS_FORMULAIRE
+
+
+class ProjetPatchSerializer(ProjetPostSerializer):
+    """Same visible fields for PUT and PATCH."""
+
+    def validate(self, attrs):
+        if self.instance is not None and not self.partial:
+            attrs.setdefault("date_debut_prevue", None)
+            attrs.setdefault("date_fin_prevue", None)
+        attrs = super().validate(attrs)
+        if self.instance is not None and not self.partial:
+            for name, default in (
+                ("maitre_oeuvre", ""),
+                ("description", ""),
+                ("budget_initial_montant", None),
+                ("date_debut_prevue", None),
+                ("date_fin_prevue", None),
+            ):
+                attrs.setdefault(name, default)
+            debut = attrs["date_debut_prevue"]
+            fin = attrs["date_fin_prevue"]
+            if debut and fin and fin <= debut:
+                raise serializers.ValidationError({"date_fin_prevue": "Fin apres debut requise."})
+        return attrs

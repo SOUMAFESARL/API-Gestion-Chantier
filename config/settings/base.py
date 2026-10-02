@@ -405,6 +405,7 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",
+    "PREPROCESSING_HOOKS": ["config.schema.limiter_projets_au_crud"],
     "ENUM_NAME_OVERRIDES": {
         "StatutRapportEnum": "apps.core.enums.StatutRapport",
         "PlanCodeEnum": "apps.billing.models.Plan.Code",

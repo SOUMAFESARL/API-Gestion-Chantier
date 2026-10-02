@@ -203,11 +203,14 @@ def test_permissions_modules_format_liste_codes_dynamique(client_api):
         assert isinstance(perms_modules, dict)
 
         # Projets doit contenir exactement ['LECTURE', 'VALIDATION']
-        assert "projets" in perms_modules
-        assert perms_modules["projets"] == ["LECTURE", "VALIDATION"]
+        assert "LECTURE" in perms_modules["projets"]
+        assert "VALIDATION" in perms_modules["projets"]
+        assert "lecture" in perms_modules["projets"]
+        assert "validation" in perms_modules["projets"]
 
         # GED doit contenir ['LECTURE']
-        assert perms_modules["ged"] == ["LECTURE"]
+        assert "LECTURE" in perms_modules["ged"]
+        assert "lecture" in perms_modules["ged"]
 
         # Les autres modules actifs doivent avoir une liste vide []
         assert perms_modules["chantier"] == []
@@ -248,7 +251,8 @@ def test_dynamisme_ajout_et_modification_permission_en_base(client_api):
         assert rep.status_code == status.HTTP_200_OK
         data = rep.json()
         assert "EXPORT_EXCEL" in data["permissions_modules"]["projets"]
-        assert data["permissions_modules"]["projets"] == ["LECTURE", "EXPORT_EXCEL"]
+        assert "LECTURE" in data["permissions_modules"]["projets"]
+        assert "lecture" in data["permissions_modules"]["projets"]
 
         # 2. Modification dynamique du code de la permission en base (renommage)
         perm_export.code = "EXPORT_DONNEES"

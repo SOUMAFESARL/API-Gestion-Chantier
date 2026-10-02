@@ -30,11 +30,19 @@ class PermissionItemSerializer(serializers.Serializer):
 class ModuleItemSerializer(serializers.Serializer):
     """Description détaillée d'un module applicatif souverain de CCD Digital."""
 
+    id = serializers.CharField(required=False, help_text="Identifiant unique du module")
     code = serializers.CharField(help_text="Code technique unique du module (ex: projets, chantier)")
     libelle = serializers.CharField(help_text="Libellé officiel du module")
     description = serializers.CharField(help_text="Description du périmètre métier du module")
     ordre = serializers.IntegerField(help_text="Position ordonnée d'affichage dans la navigation")
     icone = serializers.CharField(help_text="Identifiant d'icône recommandé pour le client frontend")
+    statut = serializers.CharField(required=False, default="ACTIF", help_text="Statut d'activation du module (ACTIF/INACTIF)")
+    acces_par_defaut = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+        help_text="Liste des accès standards du frontend Next.js (lecture, saisie, validation)",
+    )
     permissions = PermissionItemSerializer(
         many=True,
         required=False,

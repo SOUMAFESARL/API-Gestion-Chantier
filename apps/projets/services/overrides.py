@@ -11,12 +11,23 @@ __all__ = [
 ]
 
 
+def _niveau_vers_acces(niveau: int) -> list[str]:
+    if niveau == 1:
+        return ["lecture"]
+    elif niveau == 2:
+        return ["lecture", "saisie"]
+    elif niveau >= 3:
+        return ["lecture", "saisie", "validation"]
+    return []
+
+
 def get_matrice_permissions_projet(projet: Projet) -> list[dict]:
     """Renvoie la matrice complète des rôles actifs et de leurs droits effectifs sur ce projet.
 
     Pour chaque rôle et chaque module :
     - Si une surcharge existe sur ce projet : niveau = niveau de surcharge, est_surcharge = True
     - Sinon : niveau = niveau par défaut de l'entreprise, est_surcharge = False
+    Fournit le champ 'acces' (['lecture', 'saisie', 'validation']) pour l'affichage Next.js.
     """
     roles = Role.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("libelle")
     overrides = {
@@ -40,13 +51,17 @@ def get_matrice_permissions_projet(projet: Projet) -> list[dict]:
         modules_droits = {}
         for m in modules_actifs:
             if (role.id, m.code) in overrides:
+                niv = overrides[(role.id, m.code)]
                 modules_droits[m.code] = {
-                    "niveau": overrides[(role.id, m.code)],
+                    "niveau": niv,
+                    "acces": _niveau_vers_acces(niv),
                     "est_surcharge": True,
                 }
             else:
+                niv = matrice_defaut.get(m.code, NiveauAcces.AUCUN)
                 modules_droits[m.code] = {
-                    "niveau": matrice_defaut.get(m.code, NiveauAcces.AUCUN),
+                    "niveau": niv,
+                    "acces": _niveau_vers_acces(niv),
                     "est_surcharge": False,
                 }
 
@@ -72,7 +87,9 @@ def set_override_permission_projet(
 ) -> ProjetRoleModuleOverride:
     """Applique une surcharge de permission sur un module pour un rôle sur ce projet."""
     if isinstance(module, str):
-        module_obj = Module.objects.get(code=module)
+        module_obj = Module.objects.filter(code__iexact=module, supprime_le__isnull=True).first()
+        if not module_obj:
+            module_obj = Module.objects.get(code=module)
     else:
         module_obj = module
 

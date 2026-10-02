@@ -32,6 +32,13 @@ class OverrideInputSerializer(serializers.Serializer):
         allow_null=True,
         help_text="Niveau d'accès (0: AUCUN, 1: LECTURE, 2: ECRITURE, 3: ADMIN, null: réinitialiser au défaut)",
     )
+    acces = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Liste des droits normalisés (ex: ['lecture', 'saisie'], null pour réinitialiser)",
+    )
 
 
 class SurchargeMatriceInputSerializer(serializers.Serializer):
@@ -41,6 +48,11 @@ class SurchargeMatriceInputSerializer(serializers.Serializer):
 class ModuleDroitSerializer(serializers.Serializer):
     niveau = serializers.IntegerField(
         help_text="Niveau d'accès (0: AUCUN, 1: LECTURE, 2: ECRITURE, 3: ADMIN)"
+    )
+    acces = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        help_text="Liste des droits effectifs (ex: ['lecture', 'saisie', 'validation'])",
     )
     est_surcharge = serializers.BooleanField(
         help_text="True si le droit découle d'une surcharge propre au chantier"
@@ -124,8 +136,22 @@ class ProjetPermissionsRolesView(APIView):
             role = get_object_or_404(Role, pk=item["role_id"], supprime_le__isnull=True)
             module = item["module"]
             niveau = item.get("niveau")
+            acces = item.get("acces")
 
-            if niveau is None:
+            # Conversion de 'acces' (format Next.js) vers niveau si fourni
+            if niveau is None and acces is not None:
+                if not acces:
+                    niveau = 0
+                elif any(str(a).lower() == "validation" for a in acces):
+                    niveau = 3
+                elif any(str(a).lower() in ("saisie", "ecriture") for a in acces):
+                    niveau = 2
+                elif any(str(a).lower() == "lecture" for a in acces):
+                    niveau = 1
+                else:
+                    niveau = 0
+
+            if niveau is None and acces is None:
                 # Réinitialisation vers le comportement d'entreprise par défaut
                 supprimer_override_permission_projet(projet, role, module)
             else:
@@ -133,7 +159,7 @@ class ProjetPermissionsRolesView(APIView):
                     projet=projet,
                     role=role,
                     module=module,
-                    niveau=niveau,
+                    niveau=niveau or 0,
                     modifie_par=request.user,
                 )
 

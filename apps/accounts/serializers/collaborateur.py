@@ -44,6 +44,8 @@ class CollaborateurResponseSerializer(serializers.Serializer):
     cree_le = serializers.DateTimeField()
     projets = ProjetAssocieCollaborateurSerializer(many=True, default=[])
     lien_activation = serializers.CharField(required=False, allow_null=True, default=None)
+    avatar_url = serializers.CharField(required=False, allow_null=True, default=None)
+    derniere_connexion = serializers.DateTimeField(required=False, allow_null=True, default=None)
 
 
 class CollaborateurCreateSerializer(serializers.Serializer):

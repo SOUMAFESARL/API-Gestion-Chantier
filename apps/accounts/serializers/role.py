@@ -144,6 +144,8 @@ class RoleSerializer(serializers.ModelSerializer):
 
         Zéro hardcodage : interroge directement les relations M2M en base de données.
         Garantit que tous les modules actifs du catalogue apparaissent (liste vide [] si aucune permission).
+        Fournit à la fois les codes majuscules (ex: 'LECTURE') et les minuscules normalisées Next.js
+        ('lecture', 'saisie', 'validation') pour garantir la compatibilité totale frontend & backend.
         """
         modules_actifs = list(
             Module.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
@@ -163,11 +165,22 @@ class RoleSerializer(serializers.ModelSerializer):
         for mod in modules_actifs:
             rmp = rpm_par_module_id.get(mod.id)
             if rmp:
-                perms = list(
+                raw_perms = list(
                     rmp.permissions.filter(est_actif=True, supprime_le__isnull=True)
                     .order_by("ordre", "code")
                     .values_list("code", flat=True)
                 )
+                perms = []
+                for p in raw_perms:
+                    if p not in perms:
+                        perms.append(p)
+                    p_up = p.upper()
+                    if p_up == "LECTURE" and "lecture" not in perms:
+                        perms.append("lecture")
+                    elif p_up == "ECRITURE" and "saisie" not in perms:
+                        perms.append("saisie")
+                    elif p_up == "VALIDATION" and "validation" not in perms:
+                        perms.append("validation")
                 resultat[mod.code] = perms
             else:
                 resultat[mod.code] = []

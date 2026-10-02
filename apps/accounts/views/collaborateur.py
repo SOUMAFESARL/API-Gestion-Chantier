@@ -38,6 +38,8 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ParametresCollaborateurDetailView",
     "ParametresCollaborateurListCreateView",
+    "ParametresCollaborateurReactiverView",
+    "ParametresCollaborateurSuspendreView",
 ]
 
 
@@ -159,6 +161,13 @@ class ParametresCollaborateurListCreateView(APIView):
             if projets_visibles_ids is not None:
                 user_projets = [p for p in user_projets if str(p["id"]) in projets_visibles_ids]
 
+            avatar_url = None
+            if u.avatar and hasattr(u.avatar, "url"):
+                try:
+                    avatar_url = request.build_absolute_uri(u.avatar.url) if request else u.avatar.url
+                except Exception:
+                    avatar_url = u.avatar.url
+
             resultats.append(
                 {
                     "id": u.id,
@@ -175,6 +184,8 @@ class ParametresCollaborateurListCreateView(APIView):
                     "cree_le": u.cree_le,
                     "projets": user_projets,
                     "lien_activation": None,
+                    "avatar_url": avatar_url,
+                    "derniere_connexion": getattr(u, "derniere_connexion", getattr(u, "last_login", None)),
                 }
             )
 
@@ -203,6 +214,8 @@ class ParametresCollaborateurListCreateView(APIView):
                         "cree_le": inv.cree_le,
                         "projets": [],
                         "lien_activation": None,
+                        "avatar_url": None,
+                        "derniere_connexion": None,
                     }
                 )
 
@@ -334,6 +347,8 @@ class ParametresCollaborateurListCreateView(APIView):
             "cree_le": collaborateur.cree_le,
             "projets": [],
             "lien_activation": lien_activation,
+            "avatar_url": None,
+            "derniere_connexion": None,
         }
 
         serializer_rep = CollaborateurResponseSerializer(reponse_data)
@@ -401,6 +416,13 @@ class ParametresCollaborateurDetailView(APIView):
                 "libelle": collaborateur.role_personnalise.libelle,
             }
 
+        avatar_url = None
+        if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
+            try:
+                avatar_url = request.build_absolute_uri(collaborateur.avatar.url) if request else collaborateur.avatar.url
+            except Exception:
+                avatar_url = collaborateur.avatar.url
+
         reponse_data = {
             "id": collaborateur.id,
             "email": collaborateur.email,
@@ -416,6 +438,8 @@ class ParametresCollaborateurDetailView(APIView):
             "cree_le": collaborateur.cree_le,
             "projets": _obtenir_projets_collaborateur(collaborateur),
             "lien_activation": None,
+            "avatar_url": avatar_url,
+            "derniere_connexion": getattr(collaborateur, "derniere_connexion", getattr(collaborateur, "last_login", None)),
         }
 
         return Response(
@@ -470,6 +494,13 @@ class ParametresCollaborateurDetailView(APIView):
                 "libelle": collaborateur.role_personnalise.libelle,
             }
 
+        avatar_url = None
+        if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
+            try:
+                avatar_url = request.build_absolute_uri(collaborateur.avatar.url) if request else collaborateur.avatar.url
+            except Exception:
+                avatar_url = collaborateur.avatar.url
+
         reponse_data = {
             "id": collaborateur.id,
             "email": collaborateur.email,
@@ -485,6 +516,8 @@ class ParametresCollaborateurDetailView(APIView):
             "cree_le": collaborateur.cree_le,
             "projets": _obtenir_projets_collaborateur(collaborateur),
             "lien_activation": None,
+            "avatar_url": avatar_url,
+            "derniere_connexion": getattr(collaborateur, "derniere_connexion", getattr(collaborateur, "last_login", None)),
         }
 
         return Response(
@@ -518,4 +551,148 @@ class ParametresCollaborateurDetailView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        return Response(resultat, status=status.HTTP_200_OK)
+        return Response(resultat, status=status.HTTP_200_OK)
+
+
+class ParametresCollaborateurSuspendreView(APIView):
+    """`POST /api/v1/parametres/collaborateurs/{id}/suspendre/` — Suspendre un collaborateur."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Suspendre un collaborateur",
+        description="Coupe l'accès d'un compte actif sans effacer ses données ni ses affectations.",
+        responses={200: CollaborateurResponseSerializer},
+    )
+    def post(self, request, pk):
+        _autoriser_parametres_collaborateurs(request.user)
+
+        collaborateur = get_object_or_404(
+            Utilisateur.tous_objets,
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+
+        if collaborateur.pk == request.user.pk:
+            return Response(
+                {"detail": _("Vous ne pouvez pas suspendre votre propre compte.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if getattr(collaborateur, "is_owner", False) or getattr(collaborateur, "is_dg", False):
+            return Response(
+                {"detail": _("Le compte du Directeur Général / Propriétaire ne peut pas être suspendu.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if collaborateur.statut == StatutUtilisateur.DESACTIVE:
+            return Response(
+                {"detail": _("Ce collaborateur est déjà suspendu / désactivé.")},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        collaborateur.statut = StatutUtilisateur.DESACTIVE
+        collaborateur.is_active = False
+        collaborateur.save(update_fields=["statut", "is_active"])
+
+        avatar_url = None
+        if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
+            try:
+                avatar_url = request.build_absolute_uri(collaborateur.avatar.url) if request else collaborateur.avatar.url
+            except Exception:
+                avatar_url = collaborateur.avatar.url
+
+        rp_data = None
+        if collaborateur.role_personnalise:
+            rp_data = {
+                "id": collaborateur.role_personnalise.id,
+                "code": collaborateur.role_personnalise.code,
+                "libelle": collaborateur.role_personnalise.libelle,
+            }
+
+        reponse_data = {
+            "id": collaborateur.id,
+            "email": collaborateur.email,
+            "nom": collaborateur.nom,
+            "prenom": collaborateur.prenom,
+            "nom_complet": collaborateur.nom_complet,
+            "telephone": collaborateur.telephone,
+            "role_global": collaborateur.role_global,
+            "role_global_libelle": collaborateur.get_role_global_display(),
+            "role_personnalise": rp_data,
+            "statut": collaborateur.statut,
+            "is_owner": collaborateur.is_owner,
+            "cree_le": collaborateur.cree_le,
+            "projets": _obtenir_projets_collaborateur(collaborateur),
+            "lien_activation": None,
+            "avatar_url": avatar_url,
+            "derniere_connexion": getattr(collaborateur, "derniere_connexion", getattr(collaborateur, "last_login", None)),
+        }
+        return Response(CollaborateurResponseSerializer(reponse_data).data, status=status.HTTP_200_OK)
+
+
+class ParametresCollaborateurReactiverView(APIView):
+    """`POST /api/v1/parametres/collaborateurs/{id}/reactiver/` — Réactiver un collaborateur."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        summary="Réactiver un collaborateur",
+        description="Rétablit l'accès d'un compte collaborateur précédemment suspendu.",
+        responses={200: CollaborateurResponseSerializer},
+    )
+    def post(self, request, pk):
+        _autoriser_parametres_collaborateurs(request.user)
+
+        collaborateur = get_object_or_404(
+            Utilisateur.tous_objets,
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+
+        if collaborateur.statut == StatutUtilisateur.ACTIF:
+            return Response(
+                {"detail": _("Ce collaborateur est déjà actif.")},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        collaborateur.statut = StatutUtilisateur.ACTIF
+        collaborateur.is_active = True
+        collaborateur.save(update_fields=["statut", "is_active"])
+
+        avatar_url = None
+        if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
+            try:
+                avatar_url = request.build_absolute_uri(collaborateur.avatar.url) if request else collaborateur.avatar.url
+            except Exception:
+                avatar_url = collaborateur.avatar.url
+
+        rp_data = None
+        if collaborateur.role_personnalise:
+            rp_data = {
+                "id": collaborateur.role_personnalise.id,
+                "code": collaborateur.role_personnalise.code,
+                "libelle": collaborateur.role_personnalise.libelle,
+            }
+
+        reponse_data = {
+            "id": collaborateur.id,
+            "email": collaborateur.email,
+            "nom": collaborateur.nom,
+            "prenom": collaborateur.prenom,
+            "nom_complet": collaborateur.nom_complet,
+            "telephone": collaborateur.telephone,
+            "role_global": collaborateur.role_global,
+            "role_global_libelle": collaborateur.get_role_global_display(),
+            "role_personnalise": rp_data,
+            "statut": collaborateur.statut,
+            "is_owner": collaborateur.is_owner,
+            "cree_le": collaborateur.cree_le,
+            "projets": _obtenir_projets_collaborateur(collaborateur),
+            "lien_activation": None,
+            "avatar_url": avatar_url,
+            "derniere_connexion": getattr(collaborateur, "derniere_connexion", getattr(collaborateur, "last_login", None)),
+        }
+        return Response(CollaborateurResponseSerializer(reponse_data).data, status=status.HTTP_200_OK)

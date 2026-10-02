@@ -208,9 +208,21 @@ def _purger_tout_zanf(stdout=None, style=None):
                 DELETE FROM public.utilisateur 
                 WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%';
             """)
-            nb_users = cursor.rowcount
-            if nb_users > 0:
-                _log(f"[PURGE] {nb_users} utilisateur(s) purgé(s) du schéma public.")
+            # ── 6. Rapport d'état final ──────────────────────────────────────
+            cursor.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE '%zanf%' AND schema_name NOT IN ('public', 'demo');")
+            rest_schemas = [r[0] for r in cursor.fetchall()]
+            cursor.execute("SELECT schema_name FROM public.entreprise_cliente WHERE schema_name ILIKE '%zanf%' OR raison_sociale ILIKE '%zanf%' OR email_contact ILIKE '%zanf%';")
+            rest_ent = [r[0] for r in cursor.fetchall()]
+            cursor.execute("SELECT email, slug_reserve FROM public.demande_inscription WHERE email ILIKE '%zanf%' OR slug_reserve ILIKE '%zanf%' OR raison_sociale ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%';")
+            rest_dem = [f"{r[0]} ({r[1]})" for r in cursor.fetchall()]
+            cursor.execute("SELECT email FROM public.utilisateur WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%';")
+            rest_usr = [r[0] for r in cursor.fetchall()]
+
+            _log(f"[RAPPORT] Purge terminée avec succès.")
+            _log(f"  - Schémas PostgreSQL zanf restants : {len(rest_schemas)} {rest_schemas}")
+            _log(f"  - Entreprises zanf restantes : {len(rest_ent)} {rest_ent}")
+            _log(f"  - Demandes d'inscription zanf restantes : {len(rest_dem)} {rest_dem}")
+            _log(f"  - Utilisateurs zanf restants dans public : {len(rest_usr)} {rest_usr}")
 
     except Exception as exc:
         _log(f"[PURGE] Erreur globale lors de la purge zanf : {exc}", "error")

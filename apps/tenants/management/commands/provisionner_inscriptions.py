@@ -215,6 +215,7 @@ def _purger_tout_zanf(stdout=None, style=None):
                 DELETE FROM public.utilisateur 
                 WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%';
             """)
+            connection.commit()
             # ── 6. Rapport d'état final ──────────────────────────────────────
             cursor.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE '%zanf%' AND schema_name NOT IN ('public', 'demo');")
             rest_schemas = [r[0] for r in cursor.fetchall()]

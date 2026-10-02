@@ -95,8 +95,10 @@ def purger_zanf_vue(request):
     out = StringIO()
     from django.core.management.color import color_style
     from apps.tenants.management.commands.provisionner_inscriptions import _purger_tout_zanf
+    from django.db import connection
     try:
         _purger_tout_zanf(stdout=out, style=color_style())
+        connection.commit()
         return JsonResponse({"statut": "succes", "output": out.getvalue()})
     except Exception as exc:
         return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)

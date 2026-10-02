@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('accounts', '0019_rolemodulepermission_module_catalogue_and_more'),
         ('catalogue', '0002_peupler_catalogue_depuis_public'),
-        ('projets', '0019_merge_lots_budget_statuts'),
+        ('projets', '0021_equipechantier_membreequipechantier_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

@@ -73,7 +73,7 @@ def annuler_reparentage(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("projets", "0020_projetrolemoduleoverride_module_catalogue_and_more"),
+        ("projets", "0022_projetrolemoduleoverride_module_catalogue_and_more"),
         ("accounts", "0020_repointer_rolemodulepermission_vers_catalogue"),
         ("catalogue", "0002_peupler_catalogue_depuis_public"),
     ]

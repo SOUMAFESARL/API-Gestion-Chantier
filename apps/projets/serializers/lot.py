@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.core.enums import ModeExecution, TypeBordereau
 from apps.projets.models import Lot
+from apps.projets.services.statistiques import statistiques_lots
 
 
 class LotCreationSerializer(serializers.Serializer):
@@ -36,6 +37,14 @@ class LotCreationSerializer(serializers.Serializer):
 
 class LotResponseSerializer(serializers.ModelSerializer):
     nom = serializers.CharField(source="libelle", read_only=True)
+    avancement = serializers.SerializerMethodField()
+    activites_count = serializers.SerializerMethodField()
+
+    def get_avancement(self, obj) -> float:
+        return statistiques_lots([obj])["avancement_pondere"]
+
+    def get_activites_count(self, obj) -> int:
+        return statistiques_lots([obj])["activites_count"]
 
     class Meta:
         model = Lot
@@ -50,6 +59,7 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "date_debut_prevue",
             "date_fin_prevue",
             "avancement",
+            "activites_count",
             "ordre",
             "est_actif",
         )

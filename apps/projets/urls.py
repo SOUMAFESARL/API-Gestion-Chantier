@@ -19,6 +19,13 @@ from apps.projets.views.affectation import (
     ProjetAffectationListCreateView,
 )
 from apps.projets.views.contexte_creation import ContexteCreationProjetView
+from apps.projets.views.equipe import (
+    ProjetEquipeAffectationDetailView,
+    ProjetEquipeAffectationView,
+    ProjetEquipeDetailView,
+    ProjetEquipeListCreateView,
+    ProjetEquipeStatistiquesView,
+)
 from apps.projets.views.lot import (
     ProjetLotImportView,
     ProjetLotListCreateView,
@@ -35,6 +42,7 @@ from apps.projets.views.reprogrammation import (
     ProjetJournalReportsConsolideView,
     ProjetReprogrammerView,
 )
+from apps.projets.views.statistiques import ProjetStatistiquesView
 
 app_name = "projets"
 
@@ -47,6 +55,32 @@ urlpatterns = [
     ),
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path("projets/<uuid:pk>/equipes/", ProjetEquipeListCreateView.as_view(), name="projet-equipes"),
+    path(
+        "projets/<uuid:pk>/equipes/statistiques/",
+        ProjetEquipeStatistiquesView.as_view(),
+        name="projet-equipes-statistiques",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/affectations/",
+        ProjetEquipeAffectationView.as_view(),
+        name="projet-equipes-affectations",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/affectations/<uuid:affectation_id>/",
+        ProjetEquipeAffectationDetailView.as_view(),
+        name="projet-equipe-affectation-detail",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/<uuid:equipe_id>/",
+        ProjetEquipeDetailView.as_view(),
+        name="projet-equipe-detail",
+    ),
+    path(
+        "projets/<uuid:pk>/statistiques/",
+        ProjetStatistiquesView.as_view(),
+        name="projet-statistiques",
+    ),
     path("projets/<uuid:pk>/lots/", ProjetLotListCreateView.as_view(), name="projet-lots"),
     path(
         "projets/<uuid:pk>/lots/import/", ProjetLotImportView.as_view(), name="projet-lots-import"

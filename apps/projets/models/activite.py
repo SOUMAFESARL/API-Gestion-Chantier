@@ -67,9 +67,31 @@ class Activite(ModeleBase):
     )
     date_debut_prevue = models.DateField(
         _("date de début prévue"),
+        null=True,
+        blank=True,
     )
     date_fin_prevue = models.DateField(
         _("date de fin prévue"),
+        null=True,
+        blank=True,
+    )
+    budget_initial_montant = models.BigIntegerField(
+        _("budget initial (centimes FCFA)"),
+        null=True,
+        blank=True,
+    )
+    dependance = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="successeurs",
+        verbose_name=_("commence après"),
+    )
+    equipe = models.ManyToManyField(
+        "accounts.Utilisateur",
+        blank=True,
+        related_name="activites_affectees",
     )
     date_debut_baseline = models.DateField(
         _("date de début baseline v0"),

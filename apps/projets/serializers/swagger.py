@@ -8,13 +8,15 @@ from rest_framework import serializers
 from apps.core.enums import StatutProjet, TypeProjet
 from apps.projets.models import Projet, ProjetContrat
 from apps.projets.serializers import ProjetCreationSerializer
+from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.contrats import (
     MAX_LOT,
     ajouter_contrats,
     nettoyer_contrats,
     valider_fichier_contrat,
 )
-from apps.projets.services.indicateurs import avancement_restant, calculer_sante
+from apps.projets.services.indicateurs import calculer_sante
+from apps.projets.services.statistiques import statistiques_lots
 
 CHAMPS_FORMULAIRE = (
     "nom",
@@ -33,7 +35,13 @@ CHAMPS_FORMULAIRE = (
     "description",
     "contrat",
 )
-CHAMPS_REPONSE = ("id", *CHAMPS_FORMULAIRE, "avancement_reel", "indice_sante")
+CHAMPS_REPONSE = (
+    "id",
+    *CHAMPS_FORMULAIRE,
+    "avancement_reel",
+    "indice_sante",
+    "statistiques",
+)
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
@@ -46,12 +54,14 @@ class ProjetPostSerializer(ProjetCreationSerializer):
 
     reference = serializers.CharField(read_only=True)
     date_debut_reelle = serializers.DateField(
-        required=False, allow_null=True,
-        help_text="Début réel facultatif (YYYY-MM-DD). Omission : conserver ; null : effacer."
+        required=False,
+        allow_null=True,
+        help_text="Début réel facultatif (YYYY-MM-DD). Omission : conserver ; null : effacer.",
     )
     date_fin_reelle = serializers.DateField(
-        required=False, allow_null=True,
-        help_text="Fin réelle facultative, au plus tôt le jour du début réel. null : effacer."
+        required=False,
+        allow_null=True,
+        help_text="Fin réelle facultative, au plus tôt le jour du début réel. null : effacer.",
     )
     statut = serializers.ChoiceField(
         choices=StatutProjet.choices,
@@ -77,9 +87,9 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         debut = attrs.get("date_debut_reelle", getattr(self.instance, "date_debut_reelle", None))
         fin = attrs.get("date_fin_reelle", getattr(self.instance, "date_fin_reelle", None))
         if debut is not None and fin is not None and fin < debut:
-            raise serializers.ValidationError({
-                "date_fin_reelle": "La fin réelle ne peut pas précéder le début réel."
-            })
+            raise serializers.ValidationError(
+                {"date_fin_reelle": "La fin réelle ne peut pas précéder le début réel."}
+            )
         return attrs
 
     def validate_contrat(self, fichiers):
@@ -145,8 +155,19 @@ class ContratProjetSerializer(serializers.ModelSerializer):
 
 
 class ProjetCreationResponseSerializer(serializers.ModelSerializer):
+    statistiques = serializers.SerializerMethodField(
+        help_text="Compteurs et avancement des lots et activités actifs du projet."
+    )
+
+    @extend_schema_field(StatistiquesProjetSerializer)
+    def get_statistiques(self, obj) -> dict:
+        return statistiques_lots(obj.lots.all())
+
     avancement_reel = serializers.SerializerMethodField(
-        help_text="Pourcentage restant : 100 à la création, 0 lorsque les travaux sont terminés."
+        help_text=(
+            "Pourcentage réalisé automatique : 0 à la création, jusqu'à 100 selon les activités. "
+            "Pondéré par les budgets complets des activités, sinon moyenne simple."
+        )
     )
     indice_sante = serializers.SerializerMethodField(
         help_text="Note sur 100 comparant réalisation et budget consommé ; null si non calculable."
@@ -156,11 +177,11 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
 
     def get_avancement_reel(self, obj) -> float:
-        return avancement_restant(obj)
+        return statistiques_lots(obj.lots.all())["avancement_pondere"]
 
     def get_indice_sante(self, obj) -> int | None:
         # Aucun registre de dépenses réelles n'est encore relié aux projets.
-        return calculer_sante(avancement_restant(obj), obj.budget_initial_montant, None)
+        return calculer_sante(100 - self.get_avancement_reel(obj), obj.budget_initial_montant, None)
 
     def get_maitre_ouvrage(self, obj) -> str:
         return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")
@@ -190,6 +211,7 @@ class ProjetPatchSerializer(ProjetPostSerializer):
         nouveau_statut = attrs.get("statut")
         if self.instance is not None and nouveau_statut == StatutProjet.RECEPTIONNE:
             from apps.projets.services.machine_etats import valider_transition_reception
+
             valider_transition_reception(self.instance)
         if self.instance is not None and not self.partial:
             for name, default in (

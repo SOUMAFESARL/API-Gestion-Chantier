@@ -61,6 +61,9 @@ class StatutProjet(models.TextChoices):
     CRITIQUE = "CRITIQUE", "Critique"
     SUSPENDU = "SUSPENDU", "Suspendu"
     TERMINE = "TERMINE", "Terminé"
+    BLOQUE = "BLOQUE", "Bloqué"
+    DESACTIVE = "DESACTIVE", "Désactivé"
+    RESILIE = "RESILIE", "Résilié"
     ARCHIVE = "ARCHIVE", "Archivé"
 
 

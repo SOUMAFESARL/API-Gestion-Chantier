@@ -122,6 +122,7 @@ class ProjetListCreateView(APIView):
             "Nom, type, ville et maitre_ouvrage sont obligatoires. "
             "Maitre_oeuvre, dates, budget et description sont facultatifs. "
             "Reference et duree sont calculees automatiquement. "
+            "Statut facultatif, EN_ATTENTE par defaut. "
             "Budget en centimes FCFA. Fin strictement apres debut. "
             "Les champs hors formulaire sont refuses ; lots et equipe "
             "s'ajoutent ensuite depuis le projet."
@@ -171,6 +172,9 @@ class ProjetDetailView(APIView):
     parser_classes = [JSONParser, MultiPartParser]
 
     def get_permissions(self):
+        # Seul le changement de statut bénéficie du droit accordé à tout membre.
+        if self.request.method == "PATCH" and set(self.request.data.keys()) == {"statut"}:
+            return [IsAuthenticated(), MembreDuProjet()]
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return [
                 IsAuthenticated(),
@@ -250,13 +254,38 @@ class ProjetDetailView(APIView):
         return Response(ProjetCreationResponseSerializer(projet, context={"request": request}).data)
 
     @extend_schema(
-        summary="Modifier partiellement les champs du formulaire",
+        summary="Modifier partiellement un projet ou son statut",
         description=(
+            "PATCH avec uniquement statut : tout utilisateur authentifie ayant acces "
+            "au projet peut changer son etat. EN_COURS reactive le projet. "
+            "Les etats n'interdisent pas les operations. Les autres modifications "
+            "exigent toujours le droit d'ecriture du module projets. "
             "Contrat : en multipart, les nouveaux fichiers s'ajoutent aux contrats existants."
         ),
         tags=["projets"],
         request=ProjetPatchSerializer,
-        responses={200: ProjetCreationResponseSerializer},
+        responses={
+            200: ProjetCreationResponseSerializer,
+            400: OpenApiResponse(description="Statut inconnu ou champs invalides."),
+            401: OpenApiResponse(description="Authentification requise."),
+            403: OpenApiResponse(
+                description=(
+                    "Accès au projet refusé ou droit d'écriture requis pour les autres champs."
+                )
+            ),
+            404: OpenApiResponse(description="Projet absent ou supprimé."),
+        },
+        examples=[
+            OpenApiExample(label, request_only=True, value={"statut": value})
+            for label, value in (
+                ("Mettre en attente", "EN_ATTENTE"),
+                ("Suspendre le projet", "SUSPENDU"),
+                ("Bloquer le projet", "BLOQUE"),
+                ("Désactiver le projet", "DESACTIVE"),
+                ("Résilier le projet", "RESILIE"),
+                ("Réactiver le projet", "EN_COURS"),
+            )
+        ],
     )
     @transaction.atomic
     def patch(self, request, pk):
@@ -267,6 +296,7 @@ class ProjetDetailView(APIView):
         description=(
             "Les quatre champs obligatoires sont requis. "
             "Les facultatifs omis sont reinitialises."
+            " Le statut omis conserve l'état existant."
             " Contrat : les nouveaux fichiers s'ajoutent ; les contrats existants sont conserves."
         ),
         tags=["projets"],

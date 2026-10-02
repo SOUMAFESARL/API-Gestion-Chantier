@@ -78,7 +78,7 @@ def test_required_fields(formulaire_client, field):
         ("equipe", {}),
         ("client", None),
         ("quartier", "Centre"),
-        ("statut", "EN_ATTENTE"),
+        ("statut", "INVALIDE"),
         ("chef_projet_id", None),
         ("inconnu", True),
         ("reference", "PRJ-2026-010"),

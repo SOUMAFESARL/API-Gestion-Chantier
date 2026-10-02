@@ -27,10 +27,20 @@ from .reinitialisation import (
     VerificationJetonAdminView,
 )
 
+from .comptes import (
+    AdminChangerMotDePasseMoiView,
+    AdminPhotoMoiView,
+    AdminProfilMoiView,
+    ComptesAdministrateursListCreateView,
+    ReactiverCompteAdministrateurView,
+    SuspendreCompteAdministrateurView,
+)
 from .modules import (
     AdminModuleAffecterPermissionsView,
+    AdminModuleDesactiverView,
     AdminModuleDetailUpdateDeleteView,
     AdminModuleListCreateView,
+    AdminModuleReactiverView,
 )
 from .permissions import (
     AdminPermissionAffecterModulesView,
@@ -39,12 +49,20 @@ from .permissions import (
 )
 
 __all__ = [
+    "AdminChangerMotDePasseMoiView",
     "AdminModuleAffecterPermissionsView",
+    "AdminModuleDesactiverView",
     "AdminModuleDetailUpdateDeleteView",
     "AdminModuleListCreateView",
+    "AdminModuleReactiverView",
     "AdminPermissionAffecterModulesView",
     "AdminPermissionDetailUpdateDeleteView",
     "AdminPermissionListCreateView",
+    "AdminPhotoMoiView",
+    "AdminProfilMoiView",
+    "ComptesAdministrateursListCreateView",
+    "ReactiverCompteAdministrateurView",
+    "SuspendreCompteAdministrateurView",
     "ChangerPlanClientPlateformeView",
     "ClientsPlateformeListView",
     "ConnexionAdminView",

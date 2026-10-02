@@ -1,14 +1,20 @@
 from django.urls import path
 
 from apps.platform_admin.views import (
+    AdminChangerMotDePasseMoiView,
     AdminModuleAffecterPermissionsView,
+    AdminModuleDesactiverView,
     AdminModuleDetailUpdateDeleteView,
     AdminModuleListCreateView,
+    AdminModuleReactiverView,
     AdminPermissionAffecterModulesView,
     AdminPermissionDetailUpdateDeleteView,
     AdminPermissionListCreateView,
+    AdminPhotoMoiView,
+    AdminProfilMoiView,
     ChangerPlanClientPlateformeView,
     ClientsPlateformeListView,
+    ComptesAdministrateursListCreateView,
     ConnexionAdminView,
     DeconnexionAdminView,
     DeconnexionAssistanceView,
@@ -20,9 +26,11 @@ from apps.platform_admin.views import (
     JournalPlateformeListView,
     ListerUtilisateursEntrepriseView,
     ReactiverClientPlateformeView,
+    ReactiverCompteAdministrateurView,
     ReinitialisationAdminView,
     RenouvellementAdminView,
     SuspendreClientPlateformeView,
+    SuspendreCompteAdministrateurView,
     TendancesIndicateursView,
     VerificationJetonAdminView,
 )
@@ -152,9 +160,13 @@ urlpatterns = [
     path("admin/modules/", AdminModuleListCreateView.as_view(), name="admin-modules-liste-creer"),
     path("admin/modules/<uuid:pk>/", AdminModuleDetailUpdateDeleteView.as_view(), name="admin-modules-detail-modifier-supprimer"),
     path("admin/modules/<uuid:pk>/permissions/", AdminModuleAffecterPermissionsView.as_view(), name="admin-modules-affecter-permissions"),
+    path("admin/modules/<uuid:pk>/desactiver/", AdminModuleDesactiverView.as_view(), name="admin-modules-desactiver"),
+    path("admin/modules/<uuid:pk>/reactiver/", AdminModuleReactiverView.as_view(), name="admin-modules-reactiver"),
     path("admins/modules/", AdminModuleListCreateView.as_view(), name="admins-modules-liste-creer"),
     path("admins/modules/<uuid:pk>/", AdminModuleDetailUpdateDeleteView.as_view(), name="admins-modules-detail-modifier-supprimer"),
     path("admins/modules/<uuid:pk>/permissions/", AdminModuleAffecterPermissionsView.as_view(), name="admins-modules-affecter-permissions"),
+    path("admins/modules/<uuid:pk>/desactiver/", AdminModuleDesactiverView.as_view(), name="admins-modules-desactiver"),
+    path("admins/modules/<uuid:pk>/reactiver/", AdminModuleReactiverView.as_view(), name="admins-modules-reactiver"),
     # Gestion Dynamique des Permissions (Super Admin)
     path("admin/permissions/", AdminPermissionListCreateView.as_view(), name="admin-permissions-liste-creer"),
     path("admin/permissions/<uuid:pk>/", AdminPermissionDetailUpdateDeleteView.as_view(), name="admin-permissions-detail-modifier-supprimer"),
@@ -162,4 +174,19 @@ urlpatterns = [
     path("admins/permissions/", AdminPermissionListCreateView.as_view(), name="admins-permissions-liste-creer"),
     path("admins/permissions/<uuid:pk>/", AdminPermissionDetailUpdateDeleteView.as_view(), name="admins-permissions-detail-modifier-supprimer"),
     path("admins/permissions/<uuid:pk>/modules/", AdminPermissionAffecterModulesView.as_view(), name="admins-permissions-affecter-modules"),
+    # Gestion des Comptes Administrateurs (Super Admin)
+    path("admins/comptes/", ComptesAdministrateursListCreateView.as_view(), name="admins-comptes-liste-creer"),
+    path("admins/comptes/<uuid:pk>/suspendre/", SuspendreCompteAdministrateurView.as_view(), name="admins-comptes-suspendre"),
+    path("admins/comptes/<uuid:pk>/reactiver/", ReactiverCompteAdministrateurView.as_view(), name="admins-comptes-reactiver"),
+    # Profil Super Admin connecté
+    path("admins/moi/", AdminProfilMoiView.as_view(), name="admins-moi"),
+    path("admins/moi/photo/", AdminPhotoMoiView.as_view(), name="admins-moi-photo"),
+    path("admins/moi/mot-de-passe/", AdminChangerMotDePasseMoiView.as_view(), name="admins-moi-mot-de-passe"),
+    # Alias compatibles Frontend Direct
+    path("clients/<uuid:client_id>/suspendre/", SuspendreClientPlateformeView.as_view(), name="clients-plateforme-suspendre-alias"),
+    path("clients/<uuid:client_id>/reactiver/", ReactiverClientPlateformeView.as_view(), name="clients-plateforme-reactiver-alias"),
+    path("clients/<uuid:client_id>/abonnement/", ChangerPlanClientPlateformeView.as_view(), name="clients-plateforme-abonnement-alias"),
+    path("indicateurs/", IndicateursPlateformeView.as_view(), name="indicateurs-plateforme-alias"),
+    path("indicateurs/tendances/", TendancesIndicateursView.as_view(), name="indicateurs-tendances-alias"),
+    path("indicateurs/evolution/", EvolutionAbonnementsView.as_view(), name="indicateurs-evolution-alias"),
 ]

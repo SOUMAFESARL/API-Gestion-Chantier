@@ -29,8 +29,10 @@ from apps.platform_admin.services.catalogue import (
 
 __all__ = [
     "AdminModuleAffecterPermissionsView",
+    "AdminModuleDesactiverView",
     "AdminModuleDetailUpdateDeleteView",
     "AdminModuleListCreateView",
+    "AdminModuleReactiverView",
 ]
 
 
@@ -192,3 +194,52 @@ class AdminModuleAffecterPermissionsView(APIView):
             mod_complet = Module.objects.prefetch_related("permissions").get(id=mod.id)
             retour = AdminModuleDetailSerializer(mod_complet)
             return Response(retour.data, status=status.HTTP_200_OK)
+
+
+class AdminModuleDesactiverView(APIView):
+    """`POST /api/v1/admins/modules/{id}/desactiver/` — Désactive un module pour la plateforme."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+
+    @extend_schema(
+        summary="Désactiver un module (Super Admin)",
+        description="Désactive le module dans le schéma public et tous les tenants.",
+        responses={200: AdminModuleDetailSerializer, 409: dict},
+    )
+    def post(self, request, pk):
+        with schema_context("public"):
+            module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
+            if not module.est_actif:
+                return Response(
+                    {"erreur": {"code": "conflit", "message": _("Ce module est déjà désactivé.")}},
+                    status=status.HTTP_409_CONFLICT,
+                )
+        mod_maj = propager_modification_module(module_id=pk, est_actif=False, modifie_par=request.user)
+        with schema_context("public"):
+            module_complet = Module.objects.prefetch_related("permissions").get(id=mod_maj.id)
+            return Response(AdminModuleDetailSerializer(module_complet).data, status=status.HTTP_200_OK)
+
+
+class AdminModuleReactiverView(APIView):
+    """`POST /api/v1/admins/modules/{id}/reactiver/` — Réactive un module pour la plateforme."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+
+    @extend_schema(
+        summary="Réactiver un module (Super Admin)",
+        description="Réactive le module dans le schéma public et tous les tenants.",
+        responses={200: AdminModuleDetailSerializer, 409: dict},
+    )
+    def post(self, request, pk):
+        with schema_context("public"):
+            module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
+            if module.est_actif:
+                return Response(
+                    {"erreur": {"code": "conflit", "message": _("Ce module est déjà actif.")}},
+                    status=status.HTTP_409_CONFLICT,
+                )
+        mod_maj = propager_modification_module(module_id=pk, est_actif=True, modifie_par=request.user)
+        with schema_context("public"):
+            module_complet = Module.objects.prefetch_related("permissions").get(id=mod_maj.id)
+            return Response(AdminModuleDetailSerializer(module_complet).data, status=status.HTTP_200_OK)
+

@@ -258,6 +258,16 @@ class EtatProvisionnementView(APIView):
         }:
             return Response({"statut": demande.statut})
 
+        if demande.statut == DemandeInscription.Statut.PROVISIONNEMENT:
+            from django.core.cache import cache
+
+            cle_cache = f"prov_relance_{demande.pk}"
+            if not cache.get(cle_cache):
+                cache.set(cle_cache, True, timeout=20)
+                from apps.tenants.services.inscription import lancer_provisionnement
+
+                lancer_provisionnement(str(demande.pk))
+
         return Response({"statut": "PROVISIONNEMENT"})
 
 

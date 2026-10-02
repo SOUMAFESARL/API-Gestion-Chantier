@@ -478,13 +478,15 @@ def provisionner(identifiant) -> None:
 
     try:
         # --- T2 : l'entreprise, et son schéma avec ses migrations ------------
-        entreprise = Entreprise.objects.create(
-            schema_name=demande.slug_reserve,
-            raison_sociale=demande.raison_sociale,
-            pays=demande.pays,
-            email_contact=demande.email,
-            statut=StatutEntreprise.ESSAI,
-        )
+        entreprise = Entreprise.objects.filter(schema_name=demande.slug_reserve).first()
+        if entreprise is None:
+            entreprise = Entreprise.objects.create(
+                schema_name=demande.slug_reserve,
+                raison_sociale=demande.raison_sociale,
+                pays=demande.pays,
+                email_contact=demande.email,
+                statut=StatutEntreprise.ESSAI,
+            )
 
         Domaine.objects.get_or_create(
             domain=f"{demande.slug_reserve.replace('_', '-')}.{settings.DOMAINE_PRINCIPAL}",
@@ -502,18 +504,21 @@ def provisionner(identifiant) -> None:
 
             # D-DEMO-01 / T-S1-01 : Le premier inscrit est Directeur Général
             # et Propriétaire immuable du tenant.
-            administrateur = Utilisateur.objects.create_user(
-                email=demande.email,
-                password=None,
-                nom=demande.nom or demande.email.split("@")[0],
-                prenom=demande.prenom,
-                role_global=RoleGlobal.DIRECTEUR_GENERAL,
-                statut=StatutUtilisateur.ACTIF,
-            )
+            administrateur = Utilisateur.objects.filter(email=demande.email).first()
+            if administrateur is None:
+                administrateur = Utilisateur.objects.create_user(
+                    email=demande.email,
+                    password=None,
+                    nom=demande.nom or demande.email.split("@")[0],
+                    prenom=demande.prenom,
+                    role_global=RoleGlobal.DIRECTEUR_GENERAL,
+                    statut=StatutUtilisateur.ACTIF,
+                )
             administrateur.is_owner = True
             # Le mot de passe est déjà haché : le repasser par `set_password`
             # le hacherait deux fois.
-            administrateur.password = demande.mot_de_passe_transitoire
+            if demande.mot_de_passe_transitoire:
+                administrateur.password = demande.mot_de_passe_transitoire
             administrateur.save(update_fields=["is_owner", "password", "modifie_le"])
 
             # --- La matrice des rôles, dès la création de l'entreprise -------

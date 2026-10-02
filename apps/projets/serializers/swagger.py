@@ -1,10 +1,19 @@
 """Creation form and update contracts."""
 
+from django.db import transaction
+from django.urls import reverse
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from apps.core.enums import TypeProjet
-from apps.projets.models import Projet
+from apps.projets.models import Projet, ProjetContrat
 from apps.projets.serializers import ProjetCreationSerializer
+from apps.projets.services.contrats import (
+    MAX_LOT,
+    ajouter_contrats,
+    nettoyer_contrats,
+    valider_fichier_contrat,
+)
 
 CHAMPS_FORMULAIRE = (
     "nom",
@@ -18,7 +27,14 @@ CHAMPS_FORMULAIRE = (
     "duree_jours_ouvres",
     "budget_initial_montant",
     "description",
+    "contrat",
 )
+CHAMPS_REPONSE = ("id", *CHAMPS_FORMULAIRE)
+
+
+@extend_schema_field(OpenApiTypes.BINARY)
+class FichierContratField(serializers.FileField):
+    """An uploaded binary file, not a URL in the OpenAPI request body."""
 
 
 class ProjetPostSerializer(ProjetCreationSerializer):
@@ -28,6 +44,39 @@ class ProjetPostSerializer(ProjetCreationSerializer):
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
     type_projet = serializers.ChoiceField(choices=TypeProjet.choices)
     maitre_ouvrage = serializers.CharField(max_length=200)
+    contrat = serializers.ListField(
+        child=FichierContratField(validators=[valider_fichier_contrat]),
+        required=False,
+        max_length=10,
+        help_text="Un ou plusieurs PDF/JPG/JPEG/PNG. Repeter contrat en multipart. 10 Mo/fichier.",
+    )
+
+    def validate_contrat(self, fichiers):
+        if sum(fichier.size for fichier in fichiers) > MAX_LOT:
+            raise serializers.ValidationError("La taille totale des contrats depasse 50 Mo.")
+        return fichiers
+
+    def _avec_contrats(self, validated_data, operation):
+        fichiers = validated_data.pop("contrat", [])
+        stockes = []
+        try:
+            with transaction.atomic():
+                projet = operation(validated_data)
+                user = getattr(self.context.get("request"), "user", None)
+                ajouter_contrats(projet, fichiers, user, stockes)
+                return projet
+        except Exception:
+            nettoyer_contrats(stockes)
+            raise
+
+    def create(self, validated_data):
+        return self._avec_contrats(validated_data, super().create)
+
+    def update(self, instance, validated_data):
+        return self._avec_contrats(
+            validated_data,
+            lambda donnees: super(ProjetPostSerializer, self).update(instance, donnees),
+        )
 
     def get_fields(self):
         fields = super().get_fields()
@@ -49,17 +98,33 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         return super().to_internal_value(data)
 
 
+class ContratProjetSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjetContrat
+        fields = ["id", "nom", "taille", "type_contenu", "url"]
+        read_only_fields = fields
+
+    def get_url(self, obj) -> str:
+        path = reverse("projets:projet-detail", kwargs={"pk": obj.projet_id})
+        path = f"{path}?contrat={obj.pk}"
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
+
+
 class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     maitre_ouvrage = serializers.SerializerMethodField()
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
+    contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
 
     def get_maitre_ouvrage(self, obj) -> str:
         return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")
 
     class Meta:
         model = Projet
-        fields = CHAMPS_FORMULAIRE
-        read_only_fields = CHAMPS_FORMULAIRE
+        fields = CHAMPS_REPONSE
+        read_only_fields = CHAMPS_REPONSE
 
 
 class ProjetPatchSerializer(ProjetPostSerializer):

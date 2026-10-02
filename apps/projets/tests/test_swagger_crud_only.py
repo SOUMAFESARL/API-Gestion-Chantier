@@ -20,3 +20,14 @@ def test_hidden_business_routes_remain_available():
         "/api/v1/projets/00000000-0000-0000-0000-000000000001/affectations/",
     ):
         assert resolve(path, urlconf="config.urls_tenant")
+
+
+def test_project_id_is_documented_only_in_responses():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    schemas = schema["components"]["schemas"]
+    response = schemas["ProjetCreationResponse"]["properties"]["id"]
+    assert response["type"] == "string"
+    assert response["format"] == "uuid"
+    assert response["readOnly"] is True
+    assert "id" not in schemas["ProjetPost"]["properties"]
+    assert "id" not in schemas["ProjetPatch"]["properties"]

@@ -486,6 +486,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # application dont toutes les pages sont à des profondeurs différentes.
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+PROJET_CONTRATS_ROOT = config("PROJET_CONTRATS_ROOT", default=str(BASE_DIR / "media_prive"))
 
 TAILLE_MAX_FICHIER_MO = 50  # US-006 : refus 413 au-delà
 PHOTOS_MAX_PAR_RAPPORT = 5  # RG-14

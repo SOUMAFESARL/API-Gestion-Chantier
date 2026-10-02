@@ -109,7 +109,7 @@ class ProjetListCreateView(APIView):
         qs = (
             Projet.objects.all()
             .select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
-            .prefetch_related("contrats")
+            .prefetch_related("contrats", "lots__activites")
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         serializer = ProjetCreationResponseSerializer(qs, many=True, context={"request": request})
@@ -123,6 +123,8 @@ class ProjetListCreateView(APIView):
             "Maitre_oeuvre, dates, budget et description sont facultatifs. "
             "Reference et duree sont calculees automatiquement. "
             "Statut facultatif, EN_ATTENTE par defaut. "
+            "La reponse expose avancement_reel (pourcentage restant, 100 au depart) "
+            "et indice_sante (null sans depenses reelles disponibles). "
             "Budget en centimes FCFA. Fin strictement apres debut. "
             "Les champs hors formulaire sont refuses ; lots et equipe "
             "s'ajoutent ensuite depuis le projet."
@@ -219,7 +221,7 @@ class ProjetDetailView(APIView):
         projet = get_object_or_404(
             Projet.objects.select_related(
                 "client", "chef_projet", "conducteur_travaux", "cree_par"
-            ).prefetch_related("contrats"),
+            ).prefetch_related("contrats", "lots__activites"),
             pk=pk,
         )
         self.check_object_permissions(request, projet)

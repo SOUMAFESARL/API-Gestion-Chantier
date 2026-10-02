@@ -14,6 +14,7 @@ from apps.projets.services.contrats import (
     nettoyer_contrats,
     valider_fichier_contrat,
 )
+from apps.projets.services.indicateurs import avancement_restant, calculer_sante
 
 CHAMPS_FORMULAIRE = (
     "nom",
@@ -25,12 +26,14 @@ CHAMPS_FORMULAIRE = (
     "maitre_oeuvre",
     "date_debut_prevue",
     "date_fin_prevue",
+    "date_debut_reelle",
+    "date_fin_reelle",
     "duree_jours_ouvres",
     "budget_initial_montant",
     "description",
     "contrat",
 )
-CHAMPS_REPONSE = ("id", *CHAMPS_FORMULAIRE)
+CHAMPS_REPONSE = ("id", *CHAMPS_FORMULAIRE, "avancement_reel", "indice_sante")
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
@@ -42,6 +45,14 @@ class ProjetPostSerializer(ProjetCreationSerializer):
     """Only visible fields; reference and duration are generated."""
 
     reference = serializers.CharField(read_only=True)
+    date_debut_reelle = serializers.DateField(
+        required=False, allow_null=True,
+        help_text="Début réel facultatif (YYYY-MM-DD). Omission : conserver ; null : effacer."
+    )
+    date_fin_reelle = serializers.DateField(
+        required=False, allow_null=True,
+        help_text="Fin réelle facultative, au plus tôt le jour du début réel. null : effacer."
+    )
     statut = serializers.ChoiceField(
         choices=StatutProjet.choices,
         required=False,
@@ -60,6 +71,16 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         max_length=10,
         help_text="Un ou plusieurs PDF/JPG/JPEG/PNG. Repeter contrat en multipart. 10 Mo/fichier.",
     )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        debut = attrs.get("date_debut_reelle", getattr(self.instance, "date_debut_reelle", None))
+        fin = attrs.get("date_fin_reelle", getattr(self.instance, "date_fin_reelle", None))
+        if debut is not None and fin is not None and fin < debut:
+            raise serializers.ValidationError({
+                "date_fin_reelle": "La fin réelle ne peut pas précéder le début réel."
+            })
+        return attrs
 
     def validate_contrat(self, fichiers):
         if sum(fichier.size for fichier in fichiers) > MAX_LOT:
@@ -124,9 +145,22 @@ class ContratProjetSerializer(serializers.ModelSerializer):
 
 
 class ProjetCreationResponseSerializer(serializers.ModelSerializer):
+    avancement_reel = serializers.SerializerMethodField(
+        help_text="Pourcentage restant : 100 à la création, 0 lorsque les travaux sont terminés."
+    )
+    indice_sante = serializers.SerializerMethodField(
+        help_text="Note sur 100 comparant réalisation et budget consommé ; null si non calculable."
+    )
     maitre_ouvrage = serializers.SerializerMethodField()
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
     contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
+
+    def get_avancement_reel(self, obj) -> float:
+        return avancement_restant(obj)
+
+    def get_indice_sante(self, obj) -> int | None:
+        # Aucun registre de dépenses réelles n'est encore relié aux projets.
+        return calculer_sante(avancement_restant(obj), obj.budget_initial_montant, None)
 
     def get_maitre_ouvrage(self, obj) -> str:
         return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")

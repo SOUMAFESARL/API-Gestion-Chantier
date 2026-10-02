@@ -48,3 +48,19 @@ def test_status_patch_examples_and_choices():
         "EN_ATTENTE", "SUSPENDU", "BLOQUE", "DESACTIVE", "RESILIE", "EN_COURS",
     }
     assert set(operation["responses"]) == {"200", "400", "401", "403", "404"}
+
+
+def test_optional_real_dates_and_read_only_metrics():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    components = schema["components"]["schemas"]
+    for name in ("ProjetPost", "ProjetPatch"):
+        for field in ("date_debut_reelle", "date_fin_reelle"):
+            prop = components[name]["properties"][field]
+            assert prop["format"] == "date"
+            assert prop["nullable"] is True
+            assert field not in components[name].get("required", [])
+        for field in ("avancement_reel", "indice_sante"):
+            assert field not in components[name]["properties"]
+    for field in ("avancement_reel", "indice_sante"):
+        assert components["ProjetCreationResponse"]["properties"][field]["readOnly"] is True
+    assert components["ProjetCreationResponse"]["properties"]["indice_sante"]["nullable"] is True

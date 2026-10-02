@@ -35,7 +35,7 @@ class ProjetLotListCreateView(APIView):
         tags=["lots"],
         summary="Lister les lots d'un projet",
         description=(
-            "Chaque lot expose son UUID et le UUID parent dans projet, le compteur "
+            "Chaque lot expose son UUID et le UUID parent dans projet_id, le compteur "
             "activites_count et l'avancement réalisé calculé de 0 à 100."
         ),
         responses={200: LotResponseSerializer(many=True), **ERREURS_LOTS},
@@ -52,7 +52,8 @@ class ProjetLotListCreateView(APIView):
         summary="Créer un lot dans un projet existant",
         description=(
             "Tout utilisateur connecté ayant accès au projet peut créer plusieurs lots. "
-            "Nom, mode d'exécution et bordereau obligatoires ; budget et dates facultatifs. "
+            "Nom, mode d'exécution et bordereau obligatoires ; budget et dates "
+            "prévues et réelles facultatifs (YYYY-MM-DD ou null). "
             "Code et ordre générés automatiquement. Budget en centimes de FCFA. "
             "Le projet est celui de l'URL ; ne pas envoyer projet ni id_projet. "
             "Avancement automatique à 0 tant qu'aucune activité n'est réalisée."
@@ -74,6 +75,8 @@ class ProjetLotListCreateView(APIView):
                     "budget_initial_montant": None,
                     "date_debut_prevue": None,
                     "date_fin_prevue": None,
+                    "date_debut_reelle": None,
+                    "date_fin_reelle": None,
                 },
             )
         ],

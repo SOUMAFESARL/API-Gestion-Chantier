@@ -58,7 +58,10 @@ def test_multiple_manual_lots(contexte):
         )
         assert response.status_code == 201, response.data
         assert response.data["code"] == f"L-{numero:02d}"
-        assert response.data["projet"] == projet.pk
+        assert response.data["projet_id"] == str(projet.pk)
+        assert "projet" not in response.data
+        assert response.data["date_debut_reelle"] is None
+        assert response.data["date_fin_reelle"] is None
         assert response.data["budget_initial_montant"] is None
         assert response.data["date_debut_prevue"] is None
     assert len(client.get(url).data) == 2
@@ -73,6 +76,8 @@ def test_multiple_manual_lots(contexte):
         {"type_bordereau": "INCONNU"},
         {"projet": "INCONNU"},
         {"date_debut_prevue": "2026-10-03", "date_fin_prevue": "2026-10-02"},
+        {"date_debut_reelle": "2026-10-03", "date_fin_reelle": "2026-10-02"},
+        {"date_debut_reelle": "invalide"},
     ],
 )
 def test_invalid_manual_lot(contexte, extra):
@@ -89,6 +94,38 @@ def test_invalid_manual_lot(contexte, extra):
     )
     assert response.status_code == 400
     assert not projet.lots.exists()
+
+
+def test_real_dates_persist_in_manual_and_excel_lots(contexte):
+    client, projet, _ = contexte
+    url = f"/api/v1/projets/{projet.pk}/lots/"
+    dates = {"date_debut_reelle": "2026-10-02", "date_fin_reelle": "2026-10-03"}
+    result = client.post(
+        url,
+        {"nom": "Lot réel", "mode_execution": "REGIE", "type_bordereau": "FORFAIT", **dates},
+        format="json",
+    )
+    assert result.status_code == 201, result.data
+    lot = Lot.objects.get(pk=result.data["id"])
+    assert lot.date_debut_reelle.isoformat() == dates["date_debut_reelle"]
+    assert lot.date_fin_reelle.isoformat() == dates["date_fin_reelle"]
+    imported = client.post(
+        url + "import/",
+        {
+            "fichier": upload(
+                [
+                    ["nom", "date_debut_reelle", "date_fin_reelle"],
+                    ["Lot importé", "2026-10-02", "2026-10-03"],
+                ]
+            )
+        },
+        format="multipart",
+    )
+    assert imported.status_code == 201, imported.data
+    for item in client.get(url).data:
+        assert item["projet_id"] == str(projet.pk)
+        for champ, valeur in dates.items():
+            assert item[champ] == valeur
 
 
 def test_excel_import_and_atomic_validation(contexte):

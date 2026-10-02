@@ -116,3 +116,17 @@ def test_team_errors_and_assignment_dates_documented():
     for name in ("date_debut", "date_fin"):
         assert fields[name]["nullable"] is True
         assert fields[name]["readOnly"] is True
+
+
+def test_lot_real_dates_and_project_id_documented():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    components = schema["components"]["schemas"]
+    response = components["LotResponse"]["properties"]
+    assert "projet" not in response
+    assert response["projet_id"]["format"] == "uuid"
+    assert response["projet_id"]["readOnly"] is True
+    creation = components["LotCreation"]
+    for champ in ("date_debut_reelle", "date_fin_reelle"):
+        assert creation["properties"][champ]["nullable"] is True
+        assert champ not in creation.get("required", [])
+        assert response[champ]["nullable"] is True

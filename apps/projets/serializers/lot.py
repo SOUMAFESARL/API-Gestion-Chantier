@@ -20,6 +20,8 @@ class LotCreationSerializer(serializers.Serializer):
     )
     date_debut_prevue = serializers.DateField(required=False, allow_null=True)
     date_fin_prevue = serializers.DateField(required=False, allow_null=True)
+    date_debut_reelle = serializers.DateField(required=False, allow_null=True)
+    date_fin_reelle = serializers.DateField(required=False, allow_null=True)
 
     def to_internal_value(self, data):
         inconnus = set(data.keys()) - set(self.fields)
@@ -32,10 +34,15 @@ class LotCreationSerializer(serializers.Serializer):
         fin = attrs.get("date_fin_prevue")
         if debut and fin and fin < debut:
             raise serializers.ValidationError({"date_fin_prevue": "Fin avant début interdite."})
+        debut_reel = attrs.get("date_debut_reelle")
+        fin_reelle = attrs.get("date_fin_reelle")
+        if debut_reel and fin_reelle and fin_reelle < debut_reel:
+            raise serializers.ValidationError({"date_fin_reelle": "Fin avant début interdite."})
         return attrs
 
 
 class LotResponseSerializer(serializers.ModelSerializer):
+    projet_id = serializers.UUIDField(read_only=True)
     nom = serializers.CharField(source="libelle", read_only=True)
     avancement = serializers.SerializerMethodField()
     activites_count = serializers.SerializerMethodField()
@@ -50,7 +57,7 @@ class LotResponseSerializer(serializers.ModelSerializer):
         model = Lot
         fields = (
             "id",
-            "projet",
+            "projet_id",
             "code",
             "nom",
             "mode_execution",
@@ -58,6 +65,8 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "budget_initial_montant",
             "date_debut_prevue",
             "date_fin_prevue",
+            "date_debut_reelle",
+            "date_fin_reelle",
             "avancement",
             "activites_count",
             "ordre",

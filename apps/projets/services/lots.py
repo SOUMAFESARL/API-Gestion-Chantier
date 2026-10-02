@@ -21,6 +21,8 @@ COLONNES = (
     "budget_fcfa",
     "date_debut_prevue",
     "date_fin_prevue",
+    "date_debut_reelle",
+    "date_fin_reelle",
 )
 
 
@@ -108,7 +110,12 @@ def lire_excel(fichier):
             data.setdefault("type_bordereau", "FORFAIT")
             for champ in ("mode_execution", "type_bordereau"):
                 data[champ] = str(data[champ]).strip().upper()
-            for champ in ("date_debut_prevue", "date_fin_prevue"):
+            for champ in (
+                "date_debut_prevue",
+                "date_fin_prevue",
+                "date_debut_reelle",
+                "date_fin_reelle",
+            ):
                 valeur = data.get(champ)
                 if isinstance(valeur, datetime):
                     data[champ] = valeur.date().isoformat()

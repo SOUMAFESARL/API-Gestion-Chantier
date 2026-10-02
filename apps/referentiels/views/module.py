@@ -6,8 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import Module, Permission
-from apps.accounts.services.roles import initialiser_modules_par_defaut
+from apps.accounts.models import Module
+from apps.accounts.services.roles import (
+    initialiser_modules_par_defaut,
+    initialiser_permissions_par_defaut,
+)
 from apps.core.enums import NiveauAcces
 from apps.referentiels.serializers.module import ModuleItemSerializer
 
@@ -46,6 +49,7 @@ class ModuleListView(APIView):
 
         if not modules_qs.exists():
             initialiser_modules_par_defaut()
+            initialiser_permissions_par_defaut()
             modules_qs = (
                 Module.objects.filter(est_actif=True, supprime_le__isnull=True)
                 .prefetch_related("permissions")
@@ -55,8 +59,6 @@ class ModuleListView(APIView):
         modules = []
         for m in modules_qs:
             perms_qs = m.permissions.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
-            if not perms_qs.exists():
-                perms_qs = Permission.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
 
             perms_data = [
                 {

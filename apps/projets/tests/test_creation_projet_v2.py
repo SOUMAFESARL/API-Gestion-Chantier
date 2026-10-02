@@ -1,4 +1,4 @@
-"""Tests complets pour l'API de création de projet V2 (Wizard 3 étapes).
+"""Tests du service interne de création de projet V2 (Wizard 3 étapes).
 
 Couvre :
 - Étape 1 : Informations générales, type de projet, maître d'œuvre, durée calculée
@@ -30,6 +30,7 @@ from apps.core.enums import (
     TypeTiers,
 )
 from apps.projets.models import AffectationProjet, Lot, Projet
+from apps.projets.tests.service_helpers import creer_projet_via_service
 from apps.tiers.models import RoleTiers, Tiers
 
 SCHEMA = "demo"
@@ -162,6 +163,7 @@ def auth_client(client, user):
         format="json",
     )
     token = rep.data["access"]
+    client.utilisateur_service = user
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     return client
 
@@ -187,7 +189,7 @@ def test_creation_projet_simple_sans_lot(client_tenant, admin_user, tiers_client
         "chef_projet_id": str(cp_user.id),
     }
 
-    rep = cl.post("/api/v1/projets/", payload, format="json")
+    rep = creer_projet_via_service(cl, "/api/v1/projets/", payload, format="json")
     assert rep.status_code == status.HTTP_201_CREATED
     data = rep.json()
 
@@ -260,7 +262,7 @@ def test_creation_projet_complete_3_etapes(
         },
     }
 
-    rep = cl.post("/api/v1/projets/", payload, format="json")
+    rep = creer_projet_via_service(cl, "/api/v1/projets/", payload, format="json")
     assert rep.status_code == status.HTTP_201_CREATED
     data = rep.json()
     projet_id = data["id"]
@@ -299,16 +301,15 @@ def test_creation_projet_complete_3_etapes(
 
 
 @pytest.mark.django_db
-def test_reference_personnalisee_et_unicite(
-    client_tenant, admin_user, tiers_client, cp_user
-):
+def test_reference_personnalisee_et_unicite(client_tenant, admin_user, tiers_client, cp_user):
     """Vérifie que la référence est modifiable mais unique par tenant."""
     cl = auth_client(client_tenant, admin_user)
     demain = date.today() + timedelta(days=1)
     fin = demain + timedelta(days=30)
 
     # 1. Premier projet avec référence personnalisée
-    rep1 = cl.post(
+    rep1 = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Chantier Unique 1",
@@ -325,7 +326,8 @@ def test_reference_personnalisee_et_unicite(
     assert rep1.json()["reference"] == "PRJ-CUSTOM-999"
 
     # 2. Deuxième projet tentant d'utiliser la même référence -> 400
-    rep2 = cl.post(
+    rep2 = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Chantier Doublon Référence",
@@ -340,10 +342,7 @@ def test_reference_personnalisee_et_unicite(
     )
     assert rep2.status_code == status.HTTP_400_BAD_REQUEST
     err_json = rep2.json()
-    assert (
-        "reference" in err_json
-        or "reference" in err_json.get("erreur", {}).get("details", {})
-    )
+    assert "reference" in err_json or "reference" in err_json.get("erreur", {}).get("details", {})
 
 
 @pytest.mark.django_db
@@ -354,7 +353,8 @@ def test_invitation_cp_et_ct_a_la_volee(client_tenant, admin_user, tiers_client)
     fin = demain + timedelta(days=60)
     mail.outbox = []
 
-    rep = cl.post(
+    rep = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Chantier avec CP et CT Invités",
@@ -412,7 +412,8 @@ def test_dg_interdit_comme_cp_ou_ct(client_tenant, dg_user, admin_user, tiers_cl
     fin = demain + timedelta(days=30)
 
     # 1. DG comme CP
-    rep1 = cl.post(
+    rep1 = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Test DG CP",
@@ -428,7 +429,8 @@ def test_dg_interdit_comme_cp_ou_ct(client_tenant, dg_user, admin_user, tiers_cl
     assert rep1.json()["erreur"]["code"] == "dg_non_assignable_comme_cp"
 
     # 2. DG comme CT
-    rep2 = cl.post(
+    rep2 = creer_projet_via_service(
+        cl,
         "/api/v1/projets/",
         {
             "nom": "Test DG CT",
@@ -473,7 +475,7 @@ def test_atomicite_rollback_si_erreur_sur_lot(client_tenant, admin_user, tiers_c
         ],
     }
 
-    rep = cl.post("/api/v1/projets/", payload, format="json")
+    rep = creer_projet_via_service(cl, "/api/v1/projets/", payload, format="json")
     assert rep.status_code == status.HTTP_400_BAD_REQUEST
 
     # Vérification que le projet n'a PAS été créé en base

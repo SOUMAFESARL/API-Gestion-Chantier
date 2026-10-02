@@ -43,3 +43,6 @@ avec champs hors formulaire correspondent au contrat abandonne.
 
 Validation actuelle : 27 tests du contrat CRUD strict reussis.
 Exercice : predire la difference entre PUT et PATCH avant de les executer.
+
+Planning deja defini : PUT ne peut pas le modifier ou l effacer en omettant
+les dates. Utiliser la route de reprogrammation (RG-11). Baseline v0 immuable.

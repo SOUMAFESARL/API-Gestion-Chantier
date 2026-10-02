@@ -146,3 +146,63 @@ def test_update_rejects_extra_fields(formulaire_client, method, field, value):
     )
     assert response.status_code == 400
     assert client.get(created["Location"]).data == created.data
+
+
+@pytest.mark.parametrize("method", ["put", "patch"])
+@pytest.mark.parametrize("field", ["date_debut_baseline", "date_fin_baseline"])
+def test_baseline_message_and_immutability(formulaire_client, method, field):
+    client = formulaire_client
+    created = client.post(
+        "/api/v1/projets/",
+        {
+            **payload(),
+            "date_debut_prevue": "2026-10-05",
+            "date_fin_prevue": "2026-10-09",
+        },
+        format="json",
+    )
+    assert created.status_code == 201
+    refused = getattr(client, method)(
+        created["Location"],
+        {
+            **payload(),
+            field: "2027-01-01",
+        },
+        format="json",
+    )
+    assert refused.status_code == 400
+    assert "Baseline v0" in str(refused.data)
+    projet = Projet.objects.get(reference=created.data["reference"])
+    assert projet.date_debut_baseline.isoformat() == "2026-10-05"
+    assert projet.date_fin_baseline.isoformat() == "2026-10-09"
+    assert client.get(created["Location"]).data == created.data
+
+
+def test_put_cannot_clear_existing_planning_without_reprogramming(formulaire_client):
+    client = formulaire_client
+    created = client.post(
+        "/api/v1/projets/",
+        {
+            **payload(),
+            "date_debut_prevue": "2026-10-05",
+            "date_fin_prevue": "2026-10-09",
+        },
+        format="json",
+    )
+    assert created.status_code == 201
+    refused = client.put(created["Location"], payload(), format="json")
+    assert refused.status_code == 400
+    assert "RG-11" in str(refused.data)
+    assert client.get(created["Location"]).data == created.data
+
+
+def test_created_url_is_readable_by_browser_client(formulaire_client):
+    created = formulaire_client.post(
+        "/api/v1/projets/", payload(), format="json", HTTP_ORIGIN="https://frontend.example"
+    )
+    assert created.status_code == 201
+    exposed = {
+        header.strip().lower() for header in created["Access-Control-Expose-Headers"].split(",")
+    }
+    assert "location" in exposed
+    assert formulaire_client.get(created["Location"]).status_code == 200

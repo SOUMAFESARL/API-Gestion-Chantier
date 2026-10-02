@@ -8,13 +8,14 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, RoleProjet, StatutUtilisateur
 from apps.projets.models import AffectationProjet, Lot, Projet
+from apps.projets.tests.service_helpers import creer_projet_via_service, modifier_projet_via_service
 from apps.tiers.models import Tiers
 
 pytestmark = pytest.mark.django_db
 
 
 def test_creation_maitre_ouvrage_texte_et_modification(scenario):
-    client, projet, _, cp, *_ = scenario
+    client, projet, _, _cp, *_ = scenario
     nombre_tiers = Tiers.objects.count()
     data = {
         "nom": "Saisie libre",
@@ -23,16 +24,16 @@ def test_creation_maitre_ouvrage_texte_et_modification(scenario):
         "ville": "Adjamé",
         "date_debut_prevue": "2026-10-01",
         "date_fin_prevue": "2026-12-31",
-        "chef_projet_id": str(cp.pk),
-        "lots": [{"libelle": "Lot 1"}, {"libelle": "Lot 2"}],
+        "type_projet": "BATIMENT_RESIDENTIEL",
     }
     response = client.post("/api/v1/projets/", data, format="json")
     assert response.status_code == 201, response.data
     assert response.data["maitre_ouvrage"] == data["maitre_ouvrage"]
-    assert response.data["client"] is None
-    assert len(response.data["lots"]) == 2
+    created = Projet.objects.get(reference=response.data["reference"])
+    assert created.client_id is None
+    assert not created.lots.exists()
     assert Tiers.objects.count() == nombre_tiers
-    url = f"/api/v1/projets/{response.data['id']}/"
+    url = response["Location"]
     response = client.patch(url, {"maitre_ouvrage": "Autre nom"}, format="json")
     assert response.status_code == 200
     assert client.get(url).data["maitre_ouvrage"] == "Autre nom"
@@ -58,7 +59,7 @@ def test_maitre_ouvrage_vide_refuse(scenario, valeur):
         [{"libelle": "Explicite", "code": "L-02"}, {"libelle": "Automatique"}],
     ],
 )
-def test_creation_codes_mixtes_sans_collision(scenario, lots):
+def test_creation_codes_mixtes_sans_collision_service(scenario, lots):
     client, projet, admin, cp, *_ = scenario
     client.force_authenticate(None)
     connexion = client.post(
@@ -72,7 +73,8 @@ def test_creation_codes_mixtes_sans_collision(scenario, lots):
     )
     assert connexion.status_code == 200
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {connexion.data['access']}")
-    response = client.post(
+    response = creer_projet_via_service(
+        client,
         "/api/v1/projets/",
         {
             "nom": "Formulaire plusieurs lots",
@@ -108,6 +110,7 @@ def scenario(schema_demo):
     autre = user("autre", RoleGlobal.CHEF_PROJET)
     client = APIClient(headers={"host": "demo.localhost"})
     client.force_authenticate(admin)
+    client.utilisateur_service = admin
     tiers = Tiers.objects.create(raison_sociale="Client CRUD", type_tiers="ENTREPRISE")
     projet = Projet.objects.create(
         reference="CRUD-001",
@@ -141,10 +144,11 @@ def test_suppression_logique_et_routes_inaccessibles(scenario):
     assert client.delete(url).status_code == 404
 
 
-def test_remplacement_cp_et_retrait_ct(scenario):
+def test_remplacement_cp_et_retrait_ct_service(scenario):
     client, projet, _, cp, ct, autre = scenario
     url = f"/api/v1/projets/{projet.pk}/"
-    response = client.patch(
+    response = modifier_projet_via_service(
+        client,
         url,
         {
             "chef_projet_id": str(autre.pk),
@@ -163,7 +167,12 @@ def test_remplacement_cp_et_retrait_ct(scenario):
     ).exists()
     assert AffectationProjet.objects.get(projet=projet, utilisateur=autre).est_actif
     # Réactiver l'affectation historique respecte sa contrainte d'unicité.
-    assert client.patch(url, {"chef_projet_id": str(cp.pk)}, format="json").status_code == 200
+    assert (
+        modifier_projet_via_service(
+            client, url, {"chef_projet_id": str(cp.pk)}, format="json"
+        ).status_code
+        == 200
+    )
     assert AffectationProjet.objects.get(projet=projet, utilisateur=cp).est_actif
 
 
@@ -184,13 +193,23 @@ def test_patch_invalide_ne_modifie_pas(scenario, data):
     assert projet.reference == "CRUD-001"
 
 
-def test_responsable_inactif_ou_deja_affecte_refuse(scenario):
+def test_responsable_inactif_ou_deja_affecte_refuse_service(scenario):
     client, projet, _, cp, ct, autre = scenario
     url = f"/api/v1/projets/{projet.pk}/"
-    assert client.patch(url, {"chef_projet_id": str(ct.pk)}, format="json").status_code == 400
+    assert (
+        modifier_projet_via_service(
+            client, url, {"chef_projet_id": str(ct.pk)}, format="json"
+        ).status_code
+        == 400
+    )
     autre.is_active = False
     autre.save()
-    assert client.patch(url, {"chef_projet_id": str(autre.pk)}, format="json").status_code == 400
+    assert (
+        modifier_projet_via_service(
+            client, url, {"chef_projet_id": str(autre.pk)}, format="json"
+        ).status_code
+        == 400
+    )
     projet.refresh_from_db()
     assert projet.chef_projet_id == cp.pk
 
@@ -205,12 +224,13 @@ def test_suppression_interdite_sans_acces(scenario):
     assert projet.supprime_le is None
 
 
-def test_ajouter_et_supprimer_plusieurs_lots(scenario):
+def test_ajouter_et_supprimer_plusieurs_lots_service(scenario):
     client, projet, admin, *_ = scenario
     lots = [
         Lot.objects.create(projet=projet, code=f"L-{i:02d}", libelle="Lot") for i in range(1, 4)
     ]
-    response = client.patch(
+    response = modifier_projet_via_service(
+        client,
         f"/api/v1/projets/{projet.pk}/",
         {
             "lots": [{"libelle": "Electricité"}, {"libelle": "Plomberie", "code": "L-04"}],
@@ -229,11 +249,12 @@ def test_ajouter_et_supprimer_plusieurs_lots(scenario):
 
 
 @pytest.mark.parametrize("nouveaux", [[{}], [{"libelle": "Doublon", "code": "L-02"}]])
-def test_lot_invalide_annule_toute_modification(scenario, nouveaux):
+def test_lot_invalide_annule_toute_modification_service(scenario, nouveaux):
     client, projet, *_ = scenario
     premier = Lot.objects.create(projet=projet, code="L-01", libelle="Premier")
     Lot.objects.create(projet=projet, code="L-02", libelle="Second")
-    response = client.patch(
+    response = modifier_projet_via_service(
+        client,
         f"/api/v1/projets/{projet.pk}/",
         {
             "nom": "Ne pas enregistrer",
@@ -248,13 +269,14 @@ def test_lot_invalide_annule_toute_modification(scenario, nouveaux):
     assert Lot.objects.filter(projet=projet).count() == 2
 
 
-def test_lot_exterieur_refuse_et_liste_vide_sans_effet(scenario):
+def test_lot_exterieur_refuse_et_liste_vide_sans_effet_service(scenario):
     from uuid import uuid4
 
     client, projet, *_ = scenario
     Lot.objects.create(projet=projet, code="L-01", libelle="Conservé")
     url = f"/api/v1/projets/{projet.pk}/"
-    response = client.patch(
+    response = modifier_projet_via_service(
+        client,
         url,
         {
             "lots": [{"libelle": "Ajout"}],
@@ -264,18 +286,22 @@ def test_lot_exterieur_refuse_et_liste_vide_sans_effet(scenario):
     )
     assert response.status_code == 400
     assert (
-        client.patch(url, {"lots": [], "lots_supprimer_ids": []}, format="json").status_code == 200
+        modifier_projet_via_service(
+            client, url, {"lots": [], "lots_supprimer_ids": []}, format="json"
+        ).status_code
+        == 200
     )
     assert Lot.objects.filter(projet=projet).count() == 1
 
 
-def test_suppression_lot_conserve_son_rapport(scenario):
+def test_suppression_lot_conserve_son_rapport_service(scenario):
     from apps.chantier.models import RapportJournalier
 
     client, projet, admin, *_ = scenario
     lot = Lot.objects.create(projet=projet, code="L-01", libelle="Fondations")
     rapport = RapportJournalier.objects.create(projet=projet, lot=lot, auteur=admin)
-    response = client.patch(
+    response = modifier_projet_via_service(
+        client,
         f"/api/v1/projets/{projet.pk}/",
         {"lots_supprimer_ids": [str(lot.pk)]},
         format="json",
@@ -288,7 +314,7 @@ def test_suppression_lot_conserve_son_rapport(scenario):
     assert Lot.tous_objets.get(pk=lot.pk).supprime_le is not None
 
 
-def test_lot_autre_projet_refuse(scenario):
+def test_lot_autre_projet_refuse_service(scenario):
     client, projet, *_ = scenario
     autre_projet = Projet.objects.create(
         reference="AUTRE",
@@ -300,7 +326,8 @@ def test_lot_autre_projet_refuse(scenario):
         date_fin_prevue=projet.date_fin_prevue,
     )
     lot = Lot.objects.create(projet=autre_projet, code="L-01", libelle="Autre")
-    response = client.patch(
+    response = modifier_projet_via_service(
+        client,
         f"/api/v1/projets/{projet.pk}/",
         {"lots_supprimer_ids": [str(lot.pk)], "lots": [{"libelle": "Ajout"}]},
         format="json",

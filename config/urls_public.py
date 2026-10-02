@@ -45,13 +45,45 @@ def migrer_bd_vue(request):
 
 @csrf_exempt
 def purger_zanf_vue(request):
-    """Exécute la purge intégrale des schémas et références 'zanf' sur commande."""
-    if request.method != "POST":
-        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
-
+    """Exécute ou inspecte la purge des schémas et références 'zanf' sur commande."""
     token = request.headers.get("X-Maintenance-Token")
     if token != "ccd-migration-prod-2026-secure-token":
         return JsonResponse({"erreur": "Non autorisé"}, status=403)
+
+    if request.method == "GET":
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, email, nom, prenom FROM public.utilisateur WHERE email ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
+                ["%zanf%", "%zanf%", "%zanf%"],
+            )
+            users = [{"id": str(r[0]), "email": r[1], "nom": r[2], "prenom": r[3]} for r in cursor.fetchall()]
+            cursor.execute(
+                "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE %s AND schema_name NOT IN ('public', 'demo');",
+                ["%zanf%"],
+            )
+            schemas = [r[0] for r in cursor.fetchall()]
+            cursor.execute(
+                "SELECT id, schema_name, raison_sociale, email_contact FROM public.entreprise_cliente WHERE schema_name ILIKE %s OR raison_sociale ILIKE %s OR email_contact ILIKE %s;",
+                ["%zanf%", "%zanf%", "%zanf%"],
+            )
+            ent = [{"id": str(r[0]), "schema_name": r[1], "raison_sociale": r[2], "email_contact": r[3]} for r in cursor.fetchall()]
+            cursor.execute(
+                "SELECT id, email, slug_reserve, raison_sociale FROM public.demande_inscription WHERE email ILIKE %s OR slug_reserve ILIKE %s OR raison_sociale ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
+                ["%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%"],
+            )
+            dem = [{"id": str(r[0]), "email": r[1], "slug_reserve": r[2], "raison_sociale": r[3]} for r in cursor.fetchall()]
+
+        return JsonResponse({
+            "statut": "ok",
+            "utilisateurs_public_zanf": users,
+            "schemas_postgre_zanf": schemas,
+            "entreprises_public_zanf": ent,
+            "demandes_inscription_zanf": dem,
+        })
+
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
 
     out = StringIO()
     from django.core.management.color import color_style

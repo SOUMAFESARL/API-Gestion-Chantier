@@ -18,16 +18,165 @@ from apps.tenants.services.inscription import provisionner
 logger = logging.getLogger(__name__)
 
 
-def _purger_utilisateurs_test_public(stdout, style):
-    """Purge les comptes de test résiduels spécifiques du schéma public."""
+def _purger_tout_zanf(stdout=None, style=None):
+    """Purge intégrale de tous les schémas et références 'zanf' pour tests en production.
+    
+    1. Schémas PostgreSQL (DROP SCHEMA ... CASCADE)
+    2. Dépendances et entreprises dans public.entreprise_cliente
+    3. public.demande_inscription
+    4. public.utilisateur et toutes ses clés étrangères
+    """
+    import sys
+    from django.conf import settings
+    # Ne jamais exécuter pendant les tests unitaires
+    if getattr(settings, "TESTING", False) or "pytest" in sys.modules or "test" in sys.argv:
+        return
+
     from django.db import connection
 
-    cibles_sql = "'duzanf@gmail.com', 'duzanf2@gmail.com'"
+    def _log(msg, niveau="success"):
+        if stdout and style:
+            fn = getattr(style, niveau.upper(), style.SUCCESS)
+            stdout.write(fn(msg))
+
     try:
+        # ── 1. Identifier les entreprises 'zanf' et leurs schémas ────────
         with connection.cursor() as cursor:
-            # 1. Neutraliser les contraintes FK pointant vers public.utilisateur
-            cursor.execute(
-                f"""
+            cursor.execute("""
+                SELECT id, schema_name 
+                FROM public.entreprise_cliente 
+                WHERE schema_name ILIKE '%zanf%' 
+                   OR raison_sociale ILIKE '%zanf%' 
+                   OR email_contact ILIKE '%zanf%';
+            """)
+            entreprises = cursor.fetchall()
+
+        # ── 2. Identifier et supprimer les schémas PostgreSQL ────────────
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT schema_name 
+                FROM information_schema.schemata 
+                WHERE schema_name ILIKE '%zanf%' 
+                  AND schema_name NOT IN ('public', 'demo');
+            """)
+            schemas_directs = [row[0] for row in cursor.fetchall()]
+
+        schemas_from_ent = [e[1] for e in entreprises if e[1] not in ("public", "demo")]
+        tous_schemas = set(schemas_directs + schemas_from_ent)
+
+        for schema_nom in tous_schemas:
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f'DROP SCHEMA IF EXISTS "{schema_nom}" CASCADE;')
+                _log(f"[PURGE] Schéma PostgreSQL « {schema_nom} » supprimé.")
+            except Exception as e:
+                _log(f"[PURGE] Avertissement suppression schéma {schema_nom} : {e}", "warning")
+
+        # ── 3. Supprimer les entreprises 'zanf' et leurs dépendances ──────
+        if entreprises:
+            ent_ids = [e[0] for e in entreprises]
+            with connection.cursor() as cursor:
+                # catalogue_entreprise_module
+                cursor.execute(
+                    "DELETE FROM public.catalogue_entreprise_module WHERE entreprise_id = ANY(%s);",
+                    [ent_ids],
+                )
+                # factures & paiements
+                cursor.execute("""
+                    DELETE FROM public.paiement_abonnement 
+                    WHERE facture_id IN (
+                        SELECT id FROM public.facture WHERE entreprise_id = ANY(%s)
+                    );
+                """, [ent_ids])
+                cursor.execute("DELETE FROM public.facture WHERE entreprise_id = ANY(%s);", [ent_ids])
+                # abonnements & rappels / relances
+                cursor.execute("""
+                    DELETE FROM public.rappel_expiration_abonnement 
+                    WHERE abonnement_id IN (
+                        SELECT id FROM public.abonnement WHERE entreprise_id = ANY(%s)
+                    );
+                """, [ent_ids])
+                cursor.execute("""
+                    DELETE FROM public.relance_essai 
+                    WHERE abonnement_id IN (
+                        SELECT id FROM public.abonnement WHERE entreprise_id = ANY(%s)
+                    );
+                """, [ent_ids])
+                cursor.execute("DELETE FROM public.abonnement WHERE entreprise_id = ANY(%s);", [ent_ids])
+                # Détacher demandes_inscription
+                cursor.execute(
+                    "UPDATE public.demande_inscription SET entreprise_id = NULL WHERE entreprise_id = ANY(%s);",
+                    [ent_ids],
+                )
+                # domaines
+                cursor.execute("DELETE FROM public.domaine WHERE tenant_id = ANY(%s);", [ent_ids])
+                # entreprises
+                cursor.execute("DELETE FROM public.entreprise_cliente WHERE id = ANY(%s);", [ent_ids])
+
+            _log(f"[PURGE] {len(entreprises)} entreprise(s) purgée(s) de public.entreprise_cliente.")
+
+        # ── 4. Supprimer les demandes d'inscription 'zanf' ────────────────
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                DELETE FROM public.demande_inscription 
+                WHERE email ILIKE '%zanf%' 
+                   OR slug_reserve ILIKE '%zanf%' 
+                   OR raison_sociale ILIKE '%zanf%' 
+                   OR nom ILIKE '%zanf%' 
+                   OR prenom ILIKE '%zanf%';
+            """)
+            nb_demandes = cursor.rowcount
+            if nb_demandes > 0:
+                _log(f"[PURGE] {nb_demandes} demande(s) d'inscription purgée(s).")
+
+        # ── 5. Supprimer les utilisateurs 'zanf' dans public.utilisateur ──
+        with connection.cursor() as cursor:
+            # Tables dépendantes directes
+            cursor.execute("""
+                DELETE FROM public.utilisateur_groups 
+                WHERE utilisateur_id IN (
+                    SELECT id FROM public.utilisateur 
+                    WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                );
+            """)
+            cursor.execute("""
+                DELETE FROM public.utilisateur_user_permissions 
+                WHERE utilisateur_id IN (
+                    SELECT id FROM public.utilisateur 
+                    WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                );
+            """)
+            cursor.execute("""
+                DELETE FROM public.jeton_reinitialisation 
+                WHERE utilisateur_id IN (
+                    SELECT id FROM public.utilisateur 
+                    WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                );
+            """)
+            cursor.execute("""
+                DELETE FROM public.appareil 
+                WHERE utilisateur_id IN (
+                    SELECT id FROM public.utilisateur 
+                    WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                );
+            """)
+            cursor.execute("""
+                DELETE FROM public.django_admin_log 
+                WHERE user_id IN (
+                    SELECT id FROM public.utilisateur 
+                    WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                );
+            """)
+            cursor.execute("""
+                DELETE FROM public.invitation 
+                WHERE emetteur_id IN (
+                    SELECT id FROM public.utilisateur 
+                    WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                );
+            """)
+
+            # Neutraliser les FKs cree_par_id / supprime_par_id
+            cursor.execute("""
                 SELECT tc.table_name, kcu.column_name
                 FROM information_schema.table_constraints AS tc
                 JOIN information_schema.key_column_usage AS kcu
@@ -39,36 +188,32 @@ def _purger_utilisateurs_test_public(stdout, style):
                 WHERE tc.constraint_type = 'FOREIGN KEY'
                   AND tc.table_schema = 'public'
                   AND ccu.table_name = 'utilisateur'
-                """
-            )
+            """)
             fks = cursor.fetchall()
             for table, col in fks:
                 try:
-                    cursor.execute(
-                        f"""
+                    cursor.execute(f"""
                         UPDATE public."{table}"
                         SET "{col}" = NULL
                         WHERE "{col}" IN (
-                            SELECT id FROM public.utilisateur WHERE LOWER(email) IN ({cibles_sql})
-                        )
-                        """
-                    )
+                            SELECT id FROM public.utilisateur 
+                            WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%'
+                        );
+                    """)
                 except Exception:
                     pass
 
-            # 2. Supprimer les comptes résiduels du schéma public
-            cursor.execute(
-                f"""
-                DELETE FROM public.utilisateur
-                WHERE LOWER(email) IN ({cibles_sql})
-                """
-            )
-            count = cursor.rowcount
-            if count > 0 and stdout and style:
-                stdout.write(style.SUCCESS(f"[PURGE] {count} compte(s) purgé(s) du schéma public."))
+            # Supprimer de public.utilisateur
+            cursor.execute("""
+                DELETE FROM public.utilisateur 
+                WHERE email ILIKE '%zanf%' OR nom ILIKE '%zanf%' OR prenom ILIKE '%zanf%';
+            """)
+            nb_users = cursor.rowcount
+            if nb_users > 0:
+                _log(f"[PURGE] {nb_users} utilisateur(s) purgé(s) du schéma public.")
+
     except Exception as exc:
-        if stdout and style:
-            stdout.write(style.WARNING(f"[PURGE] Avertissement purge public : {exc}"))
+        _log(f"[PURGE] Erreur globale lors de la purge zanf : {exc}", "error")
 
 
 class Command(BaseCommand):
@@ -83,7 +228,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        _purger_utilisateurs_test_public(self.stdout, self.style)
+        _purger_tout_zanf(self.stdout, self.style)
         demande_id = options.get("demande_id")
 
         if demande_id:

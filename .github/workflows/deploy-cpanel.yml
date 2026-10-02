@@ -149,6 +149,9 @@ jobs:
 
             cd "$PROJECT_DIR"
 
+            echo "=== Installation des dependances backend ==="
+            "$VENV_PYTHON" -m pip install -r requirements/base.txt
+
             echo "=== Migrations en attente AVANT migrate ==="
             "$VENV_PYTHON" manage.py showmigrations --list 2>&1 | grep '\[ \]' || echo "(aucune migration en attente)"
 

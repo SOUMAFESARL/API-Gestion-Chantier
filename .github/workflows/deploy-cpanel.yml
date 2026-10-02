@@ -170,6 +170,10 @@ jobs:
             echo "✅ Toutes les migrations sont appliquées."
 
             echo ""
+            echo "=== Rattrapage des inscriptions en attente ==="
+            "$VENV_PYTHON" manage.py provisionner_inscriptions 2>&1 || true
+
+            echo ""
             echo "=== Redémarrage Passenger ==="
             mkdir -p tmp
             touch tmp/restart.txt

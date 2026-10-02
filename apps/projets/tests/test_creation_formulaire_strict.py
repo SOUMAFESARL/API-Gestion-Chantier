@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 from apps.projets.models import Projet
-from apps.projets.serializers.swagger import CHAMPS_FORMULAIRE
+from apps.projets.serializers.swagger import CHAMPS_REPONSE
 
 pytestmark = pytest.mark.django_db
 
@@ -45,11 +45,12 @@ def test_creation_and_persistence(formulaire_client):
     }
     response = formulaire_client.post("/api/v1/projets/", data, format="json")
     assert response.status_code == 201, response.data
-    assert set(response.data) == set(CHAMPS_FORMULAIRE)
+    assert set(response.data) == set(CHAMPS_REPONSE)
     assert response.data["duree_jours_ouvres"] == 5
     for key, value in data.items():
         assert response.data[key] == value
     projet = Projet.objects.get(reference=response.data["reference"])
+    assert response.data["id"] == str(projet.pk)
     assert projet.chef_projet_id is None
     assert not projet.lots.exists() and not projet.affectations.exists()
 
@@ -72,6 +73,7 @@ def test_required_fields(formulaire_client, field):
 @pytest.mark.parametrize(
     "field,value",
     [
+        ("id", "00000000-0000-0000-0000-000000000001"),
         ("lots", []),
         ("equipe", {}),
         ("client", None),
@@ -114,21 +116,24 @@ def test_full_crud_form_only(formulaire_client):
     url = created["Location"]
     detail = client.get(url)
     assert detail.status_code == 200
-    assert set(detail.data) == set(CHAMPS_FORMULAIRE)
+    assert set(detail.data) == set(CHAMPS_REPONSE)
     listed = client.get("/api/v1/projets/")
     assert listed.status_code == 200
-    assert all(set(row) == set(CHAMPS_FORMULAIRE) for row in listed.data)
+    assert all(set(row) == set(CHAMPS_REPONSE) for row in listed.data)
     updated = client.patch(url, {"description": "Phase 2"}, format="json")
     assert updated.status_code == 200
     assert updated.data["nom"] == payload()["nom"]
     assert updated.data["description"] == "Phase 2"
-    assert set(updated.data) == set(CHAMPS_FORMULAIRE)
+    assert set(updated.data) == set(CHAMPS_REPONSE)
     assert client.put(url, {"nom": "Incomplet"}, format="json").status_code == 400
     replaced = client.put(url, {**payload(), "nom": "Phase 3"}, format="json")
     assert replaced.status_code == 200, replaced.data
     assert replaced.data["description"] == ""
-    assert set(replaced.data) == set(CHAMPS_FORMULAIRE)
+    assert set(replaced.data) == set(CHAMPS_REPONSE)
     assert replaced.data["reference"] == created.data["reference"]
+    for result in (detail.data, listed.data[0], updated.data, replaced.data):
+        assert result["id"] == created.data["id"]
+    assert url.endswith(f'/projets/{created.data["id"]}/')
     assert client.delete(url).status_code == 204
     assert client.get(url).status_code == 404
 
@@ -136,7 +141,13 @@ def test_full_crud_form_only(formulaire_client):
 @pytest.mark.parametrize("method", ["put", "patch"])
 @pytest.mark.parametrize(
     "field,value",
-    [("lots", []), ("client", None), ("reference", "Autre"), ("duree_jours_ouvres", 10)],
+    [
+        ("id", "00000000-0000-0000-0000-000000000001"),
+        ("lots", []),
+        ("client", None),
+        ("reference", "Autre"),
+        ("duree_jours_ouvres", 10),
+    ],
 )
 def test_update_rejects_extra_fields(formulaire_client, method, field, value):
     client = formulaire_client

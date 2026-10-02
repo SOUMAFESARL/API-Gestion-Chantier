@@ -43,6 +43,9 @@ class Lot(ModeleBase):
         default=False,
     )
     ordre = models.IntegerField(_("ordre"), default=1)
+    budget_initial_montant = models.BigIntegerField(
+        _("budget initial (centimes FCFA)"), null=True, blank=True,
+    )
     titulaire = models.ForeignKey(
         "tiers.Tiers",
         on_delete=models.RESTRICT,

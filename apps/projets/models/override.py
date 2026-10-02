@@ -44,6 +44,21 @@ class ProjetRoleModuleOverride(ModeleBase):
         blank=True,
         verbose_name=_("permissions accordées sur ce projet"),
     )
+    module_catalogue = models.ForeignKey(
+        "catalogue.CatalogueModule",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="overrides_projets_catalogue",
+        verbose_name=_("module catalogue"),
+    )
+    permissions_catalogue = models.ManyToManyField(
+        "catalogue.CataloguePermission",
+        related_name="overrides_projets_catalogue",
+        blank=True,
+        db_table="projet_role_module_override_permissions_catalogue",
+        verbose_name=_("permissions catalogue accordées sur ce projet"),
+    )
     niveau = models.PositiveSmallIntegerField(
         _("niveau d'accès sur ce projet"),
         choices=NiveauAcces.choices,
@@ -60,7 +75,12 @@ class ProjetRoleModuleOverride(ModeleBase):
                 fields=["projet", "role", "module"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_projet_role_module_actif",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["projet", "role", "module_catalogue"],
+                condition=models.Q(supprime_le__isnull=True, module_catalogue__isnull=False),
+                name="uq_projet_role_module_catalogue_actif",
+            ),
         ]
 
     def __str__(self) -> str:

@@ -76,6 +76,21 @@ class RoleModulePermission(ModeleBase):
         blank=True,
         verbose_name=_("permissions accordées"),
     )
+    module_catalogue = models.ForeignKey(
+        "catalogue.CatalogueModule",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="permissions_roles_catalogue",
+        verbose_name=_("module catalogue"),
+    )
+    permissions_catalogue = models.ManyToManyField(
+        "catalogue.CataloguePermission",
+        related_name="roles_modules_catalogue",
+        blank=True,
+        db_table="role_module_permission_permissions_catalogue",
+        verbose_name=_("permissions catalogue accordées"),
+    )
     niveau = models.PositiveSmallIntegerField(
         _("niveau d'accès"),
         choices=NiveauAcces.choices,
@@ -93,7 +108,12 @@ class RoleModulePermission(ModeleBase):
                 fields=["role", "module"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_role_module_actif",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["role", "module_catalogue"],
+                condition=models.Q(supprime_le__isnull=True, module_catalogue__isnull=False),
+                name="uq_role_module_catalogue_actif",
+            ),
         ]
 
     def __str__(self) -> str:

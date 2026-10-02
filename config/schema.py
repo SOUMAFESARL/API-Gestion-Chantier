@@ -2,12 +2,20 @@
 
 
 def limiter_projets_au_crud(endpoints):
-    """Keep only list/create and detail/update/delete under /projets/."""
+    """Expose project CRUD and the independent lot creation/import workflow."""
     from apps.projets.views import ProjetDetailView, ProjetListCreateView
+    from apps.projets.views.lot import (
+        ProjetLotImportView,
+        ProjetLotListCreateView,
+        ProjetLotModeleView,
+    )
 
     crud = {
         ProjetListCreateView: {"GET", "POST"},
         ProjetDetailView: {"GET", "PUT", "PATCH", "DELETE"},
+        ProjetLotListCreateView: {"GET", "POST"},
+        ProjetLotImportView: {"POST"},
+        ProjetLotModeleView: {"GET"},
     }
     return [
         endpoint

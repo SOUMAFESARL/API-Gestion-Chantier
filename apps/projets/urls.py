@@ -19,6 +19,11 @@ from apps.projets.views.affectation import (
     ProjetAffectationListCreateView,
 )
 from apps.projets.views.contexte_creation import ContexteCreationProjetView
+from apps.projets.views.lot import (
+    ProjetLotImportView,
+    ProjetLotListCreateView,
+    ProjetLotModeleView,
+)
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
@@ -40,9 +45,15 @@ urlpatterns = [
         MotifReportListCreateView.as_view(),
         name="motifs-report-liste-creer",
     ),
-
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path("projets/<uuid:pk>/lots/", ProjetLotListCreateView.as_view(), name="projet-lots"),
+    path(
+        "projets/<uuid:pk>/lots/import/", ProjetLotImportView.as_view(), name="projet-lots-import"
+    ),
+    path(
+        "projets/<uuid:pk>/lots/modele/", ProjetLotModeleView.as_view(), name="projet-lots-modele"
+    ),
     path(
         "projets/journal-reports/",
         GlobalJournalReportsView.as_view(),
@@ -86,7 +97,6 @@ urlpatterns = [
         ProjetAffectationDetailView.as_view(),
         name="projet-affectation-detail",
     ),
-
     # Lots
     path(
         "lots/<uuid:pk>/reprogrammer/",
@@ -103,7 +113,6 @@ urlpatterns = [
         LotActiviteListCreateView.as_view(),
         name="lot-activites-liste-creer",
     ),
-
     # Activités
     path(
         "activites/<uuid:pk>/",
@@ -120,7 +129,6 @@ urlpatterns = [
         ActiviteHistoriqueDatesView.as_view(),
         name="activite-historique-dates",
     ),
-
     # Tableau de bord
     path("tableau-de-bord/", TableauDeBordView.as_view(), name="tableau-de-bord"),
 ]

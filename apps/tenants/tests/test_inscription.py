@@ -12,6 +12,8 @@ capture, celui qui vérifie le provisionnement de bout en bout.
 
 import re
 import uuid
+from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from django.core import mail
@@ -489,4 +491,59 @@ def test_la_sonde_porte_des_entetes_anti_cache_et_surrogate(client, deposer):
     assert "no-store" in cache_control
     assert "no-cache" in cache_control
     assert reponse.headers.get("Surrogate-Control") == "no-store"
+
+
+@pytest.mark.django_db
+def test_la_sonde_ne_relance_pas_avant_le_seuil_180s(client, deposer):
+    """Aucune relance ne doit partir tant que la demande stagne depuis moins de 180 secondes."""
+    _, jeton = deposer(raison_sociale="TEST AVANT SEUIL")
+    activation = client.post(
+        ACTIVER, {"jeton": jeton, "nom": "Koné", "mot_de_passe": MOT_DE_PASSE}, format="json"
+    )
+    suivi = activation.data["suivi"]
+
+    # Simuler une demande en PROVISIONNEMENT modifiée il y a 50 secondes
+    # (au-delà de l'ancien seuil de 45 s, mais bien en-deçà du nouveau seuil de 180 s)
+    maintenant = timezone.now()
+    DemandeInscription.objects.filter(pk=suivi).update(
+        statut=DemandeInscription.Statut.PROVISIONNEMENT,
+        modifie_le=maintenant - timedelta(seconds=50),
+    )
+
+    with patch("apps.tenants.services.inscription.lancer_provisionnement") as mock_lancer:
+        reponse = client.get(f"/api/v1/inscription/etat/{suivi}/")
+        assert reponse.status_code == 200
+        assert reponse.data["statut"] == "PROVISIONNEMENT"
+        mock_lancer.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_la_sonde_appels_concurrents_ne_lancent_qu_une_seule_relance(client, deposer):
+    """Deux appels concurrents/consécutifs de la sonde au-delà de 180 s ne déclenchent qu'une seule relance grâce au verrou atomique en base."""
+    _, jeton = deposer(raison_sociale="TEST RELANCE ATOMIQUE")
+    activation = client.post(
+        ACTIVER, {"jeton": jeton, "nom": "Koné", "mot_de_passe": MOT_DE_PASSE}, format="json"
+    )
+    suivi = activation.data["suivi"]
+
+    # Simuler une demande en PROVISIONNEMENT inactive depuis 200 s (au-delà du seuil de 180 s)
+    maintenant = timezone.now()
+    DemandeInscription.objects.filter(pk=suivi).update(
+        statut=DemandeInscription.Statut.PROVISIONNEMENT,
+        modifie_le=maintenant - timedelta(seconds=200),
+    )
+
+    with patch("apps.tenants.services.inscription.lancer_provisionnement") as mock_lancer:
+        # 1er appel : le verrou atomique est acquis (1 ligne modifiée), lancer_provisionnement est appelé
+        rep1 = client.get(f"/api/v1/inscription/etat/{suivi}/")
+        assert rep1.status_code == 200
+        assert rep1.data["statut"] == "PROVISIONNEMENT"
+        assert mock_lancer.call_count == 1
+
+        # 2e appel immédiat : modifie_le a été actualisé par le 1er appel, 0 ligne affectée
+        rep2 = client.get(f"/api/v1/inscription/etat/{suivi}/")
+        assert rep2.status_code == 200
+        assert rep2.data["statut"] == "PROVISIONNEMENT"
+        # Le compteur d'appels reste strictement à 1
+        assert mock_lancer.call_count == 1
 

@@ -9,6 +9,8 @@ répondent. Les issues d'échec remontent en exceptions, mises en forme par le
 gestionnaire d'erreurs commun.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ValidationDjango
 from django.utils import timezone
@@ -49,6 +51,8 @@ __all__ = [
     "RenvoiActivationView",
     "VerificationJetonInscriptionView",
 ]
+
+SEUIL_RELANCE_PROVISIONNEMENT_SECONDES = 180
 
 
 def _reste(demande: DemandeInscription) -> int:
@@ -278,20 +282,24 @@ class EtatProvisionnementView(APIView):
         }:
             return Response({"statut": demande.statut})
 
-        # Filet de sécurité en cas de panne du sous-processus initial :
-        # Ne relancer que si la demande stagne en PROVISIONNEMENT depuis plus de 45 secondes
+        # Filet de sécurité en cas de panne ou mort prématurée du sous-processus initial :
+        # Ne relancer que si la demande stagne en PROVISIONNEMENT depuis plus de 180 secondes.
+        # Prise de verrou atomique en base de données (PostgreSQL RowExclusiveLock) :
+        # seule la requête qui met à jour modifie_le (lignes_affectees == 1) déclenche la relance.
         if demande.statut == DemandeInscription.Statut.PROVISIONNEMENT:
-            from django.utils import timezone
-            ecoulet_secondes = (timezone.now() - demande.modifie_le).total_seconds()
-            if ecoulet_secondes > 45:
-                from django.core.cache import cache
+            maintenant = timezone.now()
+            seuil_inactivite = maintenant - timedelta(seconds=SEUIL_RELANCE_PROVISIONNEMENT_SECONDES)
 
-                cle_cache = f"prov_relance_{demande.pk}"
-                if not cache.get(cle_cache):
-                    cache.set(cle_cache, True, timeout=30)
-                    from apps.tenants.services.inscription import lancer_provisionnement
+            lignes_affectees = DemandeInscription.objects.filter(
+                pk=demande.pk,
+                statut=DemandeInscription.Statut.PROVISIONNEMENT,
+                modifie_le__lte=seuil_inactivite,
+            ).update(modifie_le=maintenant)
 
-                    lancer_provisionnement(str(demande.pk))
+            if lignes_affectees == 1:
+                from apps.tenants.services.inscription import lancer_provisionnement
+
+                lancer_provisionnement(str(demande.pk))
 
         return Response({"statut": "PROVISIONNEMENT"})
 

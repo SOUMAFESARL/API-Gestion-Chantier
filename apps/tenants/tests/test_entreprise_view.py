@@ -10,6 +10,8 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Utilisateur
 from apps.tenants.models import Entreprise
 
+from apps.core.enums import RoleGlobal
+
 HOTE = "demo.localhost"
 SCHEMA = "demo"
 
@@ -24,8 +26,9 @@ def utilisateur_demo(db):
     with schema_context(SCHEMA):
         user, _ = Utilisateur.objects.get_or_create(
             email="test.entreprise@ccd-digital.ci",
-            defaults={"is_active": True},
+            defaults={"is_active": True, "role_global": RoleGlobal.DIRECTEUR_GENERAL},
         )
+        user.role_global = RoleGlobal.DIRECTEUR_GENERAL
         user.set_password("MotDePasse1!")
         user.save()
         return user
@@ -109,3 +112,65 @@ def test_retrait_du_logo(client, utilisateur_demo, settings, tmp_path):
         assert entreprise.logo == ""
         assert entreprise.logo_1x == ""
         assert entreprise.logo_original == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "role,statut_attendu",
+    [
+        (RoleGlobal.DIRECTEUR_GENERAL, status.HTTP_200_OK),
+        (RoleGlobal.ADMIN, status.HTTP_200_OK),
+        (RoleGlobal.CHEF_PROJET, status.HTTP_403_FORBIDDEN),
+        (RoleGlobal.CONDUCTEUR_TRAVAUX, status.HTTP_403_FORBIDDEN),
+        (RoleGlobal.CHEF_CHANTIER, status.HTTP_403_FORBIDDEN),
+        (RoleGlobal.MAITRE_OUVRAGE, status.HTTP_403_FORBIDDEN),
+        (RoleGlobal.MAITRE_OEUVRE, status.HTTP_403_FORBIDDEN),
+        (RoleGlobal.VISITEUR, status.HTTP_403_FORBIDDEN),
+    ],
+)
+def test_modification_entreprise_par_role(client, role, statut_attendu):
+    """Seuls DG et AD peuvent modifier l'entreprise via PATCH /entreprise/."""
+    with schema_context(SCHEMA):
+        user, _ = Utilisateur.objects.get_or_create(
+            email=f"user.{role.lower()}@ccd-digital.ci",
+            defaults={"is_active": True, "role_global": role},
+        )
+        user.role_global = role
+        user.save()
+
+    client.force_authenticate(user=user)
+    reponse = client.patch(
+        "/api/v1/entreprise/",
+        {"telephone_contact": "+2250700000000"},
+        format="json",
+    )
+    assert reponse.status_code == statut_attendu
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "role",
+    [
+        RoleGlobal.DIRECTEUR_GENERAL,
+        RoleGlobal.ADMIN,
+        RoleGlobal.CHEF_PROJET,
+        RoleGlobal.CONDUCTEUR_TRAVAUX,
+        RoleGlobal.CHEF_CHANTIER,
+        RoleGlobal.MAITRE_OUVRAGE,
+        RoleGlobal.MAITRE_OEUVRE,
+        RoleGlobal.VISITEUR,
+    ],
+)
+def test_lecture_entreprise_tous_roles(client, role):
+    """Tous les utilisateurs authentifiés peuvent lire les informations d'entreprise."""
+    with schema_context(SCHEMA):
+        user, _ = Utilisateur.objects.get_or_create(
+            email=f"lecture.{role.lower()}@ccd-digital.ci",
+            defaults={"is_active": True, "role_global": role},
+        )
+        user.role_global = role
+        user.save()
+
+    client.force_authenticate(user=user)
+    reponse = client.get("/api/v1/entreprise/")
+    assert reponse.status_code == status.HTTP_200_OK

@@ -367,8 +367,12 @@ def _sauvegarder_entreprise(tenant, request) -> Response:
 class EntrepriseView(APIView):
     """`GET`, `PATCH` et `POST /api/v1/entreprise/` — Étape 1 du Wizard & Paramètres."""
 
-    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PATCH", "PUT"):
+            return [RoleRequis.pour(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)()]
+        return [IsAuthenticated()]
 
     @extend_schema(
         summary="Lire les informations de l'entreprise cliente",

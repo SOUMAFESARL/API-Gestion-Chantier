@@ -24,22 +24,18 @@ def cache_vide():
 
 @pytest.mark.django_db
 def test_admin_dashboard_sans_restriction_ip():
-    """L'accès à /admin/dashboard/ ne subit aucun blocage 403 de restriction IP."""
+    """L'accès à /admin/dashboard/ renvoie 404 par défaut (Django admin désactivé)."""
     client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.25")
     reponse = client.get("/admin/dashboard/")
-    # Ne renvoie pas 403 restriction IP (302/200 si activé, 404 si désactivé)
-    assert reponse.status_code != status.HTTP_403_FORBIDDEN
-    assert reponse.status_code in (200, 302, 404)
+    assert reponse.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.django_db
 def test_admin_sans_restriction_ip():
-    """L'accès à /admin/ ne subit aucun blocage 403 de restriction IP."""
+    """L'accès à /admin/ renvoie 404 par défaut (Django admin désactivé)."""
     client = APIClient(headers={"host": "localhost"}, REMOTE_ADDR="198.51.100.99")
     reponse = client.get("/admin/")
-    # Ne renvoie pas 403 restriction IP (302/200 si activé, 404 si désactivé)
-    assert reponse.status_code != status.HTTP_403_FORBIDDEN
-    assert reponse.status_code in (200, 302, 404)
+    assert reponse.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.django_db

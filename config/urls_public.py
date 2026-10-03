@@ -118,11 +118,82 @@ def purger_zanf_vue(request):
         return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
 
 
+@csrf_exempt
+def inspecter_entreprises_prod_vue(request):
+    """Inspection sécurisée des entreprises et directeurs généraux en production."""
+    token = request.headers.get("X-Maintenance-Token")
+    if token != "ccd-migration-prod-2026-secure-token":
+        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+
+    if request.method != "GET":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    from apps.tenants.services.nettoyage import lister_entreprises_avec_directeurs
+    try:
+        donnees = lister_entreprises_avec_directeurs()
+        return JsonResponse({"statut": "ok", **donnees})
+    except Exception as exc:
+        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+
+
+@csrf_exempt
+def supprimer_entreprise_prod_vue(request):
+    """Suppression propre et atomique d'une entreprise (schéma + dépendances public)."""
+    token = request.headers.get("X-Maintenance-Token")
+    if token != "ccd-migration-prod-2026-secure-token":
+        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    import json
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except Exception:
+        payload = {}
+
+    identifiant = (
+        payload.get("schema_name")
+        or payload.get("entreprise_id")
+        or payload.get("identifiant")
+    )
+    if not identifiant:
+        return JsonResponse(
+            {"erreur": "Identifiant requis (précisez 'schema_name' ou 'entreprise_id')."},
+            status=400,
+        )
+
+    from apps.tenants.services.nettoyage import supprimer_entreprise_proprement
+    try:
+        rapport = supprimer_entreprise_proprement(identifiant)
+        from django.db import connection
+        connection.commit()
+        return JsonResponse({"statut": "succes", "rapport": rapport})
+    except ValueError as exc:
+        return JsonResponse({"statut": "erreur", "message": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+
+
 urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
     path("api/v1/maintenance/purger-zanf/", purger_zanf_vue, name="maintenance-purger-zanf"),
+    path(
+        "api/v1/maintenance/entreprises/",
+        inspecter_entreprises_prod_vue,
+        name="maintenance-inspecter-entreprises",
+    ),
+    path(
+        "api/v1/maintenance/entreprises/supprimer/",
+        supprimer_entreprise_prod_vue,
+        name="maintenance-supprimer-entreprise",
+    ),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
-    path("admin/dashboard/", RedirectView.as_view(url="/admin/", permanent=False), name="admin-dashboard"),
+    path(
+        "admin/dashboard/",
+        RedirectView.as_view(url="/admin/", permanent=False),
+        name="admin-dashboard",
+    ),
     path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-publique"),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

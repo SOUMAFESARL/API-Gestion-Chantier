@@ -12,7 +12,9 @@ gestionnaire d'erreurs commun.
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ValidationDjango
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.cache import never_cache
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -202,6 +204,7 @@ class ActivationView(APIView):
         )
 
 
+@method_decorator(never_cache, name="dispatch")
 class EtatProvisionnementView(APIView):
     """`GET /api/v1/inscription/etat/{suivi}/` — la sonde de l'écran d'attente.
 
@@ -222,6 +225,11 @@ class EtatProvisionnementView(APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "inscription_etat"
     serializer_class = EtatProvisionnementResponseSerializer
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response["Surrogate-Control"] = "no-store"
+        return response
 
     @extend_schema(
         summary="Suivre le provisionnement",

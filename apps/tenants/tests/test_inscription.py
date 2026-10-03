@@ -472,3 +472,21 @@ def test_la_sonde_ne_livre_le_slug_qu_une_fois_l_espace_pret(client, deposer):
 
     assert reponse.data["statut"] == "PROVISIONNEMENT"
     assert "url_connexion" not in reponse.data
+
+
+@pytest.mark.django_db
+def test_la_sonde_porte_des_entetes_anti_cache_et_surrogate(client, deposer):
+    """La sonde d'état ne doit jamais être mise en cache par un proxy intermédiaire (Varnish/Edge)."""
+    _, jeton = deposer(raison_sociale="TEST ANTI CACHE")
+    activation = client.post(
+        ACTIVER, {"jeton": jeton, "nom": "Koné", "mot_de_passe": MOT_DE_PASSE}, format="json"
+    )
+    suivi = activation.data["suivi"]
+    reponse = client.get(f"/api/v1/inscription/etat/{suivi}/")
+
+    assert reponse.status_code == 200
+    cache_control = reponse.headers.get("Cache-Control", "")
+    assert "no-store" in cache_control
+    assert "no-cache" in cache_control
+    assert reponse.headers.get("Surrogate-Control") == "no-store"
+

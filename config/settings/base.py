@@ -50,6 +50,7 @@ except UndefinedValueError as exc:  # pragma: no cover
     ) from exc
 
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
+ENABLE_DJANGO_ADMIN = config("ENABLE_DJANGO_ADMIN", default=False, cast=bool)
 
 
 def _liste(valeur: str) -> list[str]:

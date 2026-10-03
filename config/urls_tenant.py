@@ -34,7 +34,6 @@ from config.urls_public import migrer_bd_vue
 urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd-tenant"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
-    path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-tenant"),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/v1/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
@@ -63,6 +62,10 @@ if settings.DEBUG or _stockage_defaut == "django.core.files.storage.FileSystemSt
     urlpatterns += [
         re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
     ]
+
+# Administration standard Django (/admin/) : désactivée par défaut, activable par réglage
+if getattr(settings, "ENABLE_DJANGO_ADMIN", False):
+    urlpatterns.append(path("admin/", admin.site.urls))
 
 # Conventions d API §5 : une URL non routée sous /api/ doit répondre en JSON,
 # pas en HTML. Voir apps/core/views.py.

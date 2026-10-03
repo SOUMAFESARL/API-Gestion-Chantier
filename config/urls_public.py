@@ -189,12 +189,6 @@ urlpatterns = [
         name="maintenance-supprimer-entreprise",
     ),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
-    path(
-        "admin/dashboard/",
-        RedirectView.as_view(url="/admin/", permanent=False),
-        name="admin-dashboard",
-    ),
-    path("admin/", admin.site.urls),
     path("api/health/", sante, name="sante-publique"),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
@@ -242,6 +236,17 @@ if settings.DEBUG or _stockage_defaut == "django.core.files.storage.FileSystemSt
 
     urlpatterns += [
         re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    ]
+
+# Administration standard Django (/admin/) : désactivée par défaut, activable par réglage
+if getattr(settings, "ENABLE_DJANGO_ADMIN", False):
+    urlpatterns += [
+        path(
+            "admin/dashboard/",
+            RedirectView.as_view(url="/admin/", permanent=False),
+            name="admin-dashboard",
+        ),
+        path("admin/", admin.site.urls),
     ]
 
 # Conventions d API §5 : une URL non routée sous /api/ doit répondre en JSON,

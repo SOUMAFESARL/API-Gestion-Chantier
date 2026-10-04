@@ -221,56 +221,146 @@ def _calculer_niveau_scalaire(permissions_list: list[Permission]) -> int:
     return NiveauAcces.AUCUN
 
 
-def initialiser_roles_par_defaut() -> list[Role]:
-    """Initialise les rôles par défaut avec leurs permissions dans le schéma courant.
+def _verifier_plafond_modele(code_role: str, mod_code: str, niveau_demande: int):
+    """Vérifie que le niveau demandé ne dépasse pas le plafond défini par le ModeleRole s'il existe."""
+    if not code_role or not mod_code:
+        return
+    try:
+        from apps.catalogue.models import ModeleRoleModule
 
-    Seul DG reçoit ``est_systeme=True`` (non supprimable).
-    Les autres rôles (dont AD) sont modifiables et supprimables (AD uniquement par le DG).
-    """
+        mrm = ModeleRoleModule.objects.filter(
+            modele_role__code=code_role.upper(),
+            module_code=mod_code.lower(),
+            modele_role__est_actif=True,
+            modele_role__supprime_le__isnull=True,
+        ).first()
+        if mrm is not None and niveau_demande > mrm.niveau_max:
+            raise ValidationError(
+                _(
+                    f"Le niveau d'accès demandé ({niveau_demande}) sur le module '{mod_code}' "
+                    f"dépasse le plafond autorisé ({mrm.niveau_max}) pour le modèle de rôle '{code_role.upper()}'."
+                )
+            )
+    except ValidationError:
+        raise
+    except Exception:
+        pass
+
+
+def appliquer_modeles_roles() -> list[Role]:
+    """Applique les gabarits de rôles souverains (ModeleRole) et leurs plafonds au schéma courant."""
     initialiser_modules_par_defaut()
     initialiser_permissions_par_defaut()
-    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
-    all_perms = list(Permission.objects.filter(est_actif=True, supprime_le__isnull=True))
-    cat_modules_map = {
-        m.code.lower(): m for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-    }
-    all_cat_perms = list(CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True))
 
-    roles_crees = []
+    from apps.catalogue.models import ModeleRole
+
+    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+    cat_modules_map = {
+        m.code.lower(): m
+        for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+    }
+    all_perms_map = {
+        p.code: p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True)
+    }
+    all_cat_perms_map = {
+        p.code: p
+        for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
+    }
+
+    modeles_qs = list(
+        ModeleRole.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related(
+            "modules_plafonds"
+        )
+    )
+
+    roles_traites = []
     with transaction.atomic():
-        for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
-            role, _ = Role.objects.update_or_create(
-                code=code,
-                defaults={
-                    "libelle": libelle,
-                    "description": description,
-                    "est_systeme": code in CODES_ROLES_SYSTEME,
-                    "est_actif": True,
-                },
-            )
-            # Met à jour ou crée les permissions de chaque module actif
-            for mod in modules_actifs:
-                cat_mod = cat_modules_map.get(mod.code.lower())
-                rmp, _ = RoleModulePermission.objects.update_or_create(
-                    role=role,
-                    module=mod,
+        if modeles_qs:
+            for modele in modeles_qs:
+                role, _ = Role.objects.update_or_create(
+                    code=modele.code,
                     defaults={
-                        "niveau": NiveauAcces.VALIDATION,
-                        "module_catalogue": cat_mod,
+                        "libelle": modele.libelle,
+                        "description": modele.description,
+                        "est_systeme": modele.code in CODES_ROLES_SYSTEME,
+                        "est_actif": True,
                     },
                 )
-                rmp.permissions.set(all_perms)
-                if all_cat_perms:
-                    rmp.permissions_catalogue.set(all_cat_perms)
-                if cat_mod and rmp.module_catalogue_id != cat_mod.id:
-                    rmp.module_catalogue = cat_mod
-                rmp.niveau = NiveauAcces.VALIDATION
-                rmp.save()
-            RoleModulePermission.objects.filter(role=role).exclude(
-                module__in=modules_actifs
-            ).delete()
-            roles_crees.append(role)
-    return roles_crees
+                plafonds = {
+                    mrm.module_code.lower(): mrm.niveau_max
+                    for mrm in modele.modules_plafonds.all()
+                }
+
+                for mod in modules_actifs:
+                    m_key = mod.code.lower()
+                    cat_mod = cat_modules_map.get(m_key)
+                    niveau_cible = plafonds.get(m_key, 0)
+                    if role.code == "DG":
+                        niveau_cible = NiveauAcces.VALIDATION
+
+                    rmp, _ = RoleModulePermission.objects.update_or_create(
+                        role=role,
+                        module=mod,
+                        defaults={
+                            "niveau": niveau_cible,
+                            "module_catalogue": cat_mod,
+                        },
+                    )
+
+                    perms_to_set = []
+                    if niveau_cible >= 1 and "LECTURE" in all_perms_map:
+                        perms_to_set.append(all_perms_map["LECTURE"])
+                    if niveau_cible >= 2 and "ECRITURE" in all_perms_map:
+                        perms_to_set.append(all_perms_map["ECRITURE"])
+                    if niveau_cible >= 3 and "VALIDATION" in all_perms_map:
+                        perms_to_set.append(all_perms_map["VALIDATION"])
+
+                    rmp.permissions.set(perms_to_set)
+
+                    cat_perms_to_set = [
+                        all_cat_perms_map[p.code]
+                        for p in perms_to_set
+                        if p.code in all_cat_perms_map
+                    ]
+                    if cat_perms_to_set:
+                        rmp.permissions_catalogue.set(cat_perms_to_set)
+
+                    rmp.niveau = niveau_cible
+                    rmp.save()
+
+                RoleModulePermission.objects.filter(role=role).exclude(
+                    module__in=modules_actifs
+                ).delete()
+                roles_traites.append(role)
+        else:
+            for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
+                role, _ = Role.objects.update_or_create(
+                    code=code,
+                    defaults={
+                        "libelle": libelle,
+                        "description": description,
+                        "est_systeme": code in CODES_ROLES_SYSTEME,
+                        "est_actif": True,
+                    },
+                )
+                for mod in modules_actifs:
+                    cat_mod = cat_modules_map.get(mod.code.lower())
+                    rmp, _ = RoleModulePermission.objects.update_or_create(
+                        role=role,
+                        module=mod,
+                        defaults={
+                            "niveau": NiveauAcces.VALIDATION if code == "DG" else NiveauAcces.LECTURE,
+                            "module_catalogue": cat_mod,
+                        },
+                    )
+                roles_traites.append(role)
+
+    return roles_traites
+
+
+def initialiser_roles_par_defaut() -> list[Role]:
+    """Initialise les rôles par défaut avec leurs permissions selon les modèles souverains."""
+    return appliquer_modeles_roles()
 
 
 def creer_role(
@@ -318,11 +408,13 @@ def creer_role(
         for mod in modules_actifs:
             perms_for_mod = norm_perms.get(mod.code.lower(), [])
             cat_mod = cat_modules_map.get(mod.code.lower())
+            niveau_calcule = _calculer_niveau_scalaire(perms_for_mod)
+            _verifier_plafond_modele(code, mod.code, niveau_calcule)
             rmp = RoleModulePermission.objects.create(
                 role=role,
                 module=mod,
                 module_catalogue=cat_mod,
-                niveau=_calculer_niveau_scalaire(perms_for_mod),
+                niveau=niveau_calcule,
                 cree_par=cree_par,
             )
             if perms_for_mod:
@@ -383,7 +475,9 @@ def modifier_role(
                     cat_perms = [all_cat_perms[p.code] for p in perms_list if p.code in all_cat_perms]
                     if cat_perms:
                         rmp.permissions_catalogue.set(cat_perms)
-                    rmp.niveau = _calculer_niveau_scalaire(perms_list)
+                    niveau_scalaire = _calculer_niveau_scalaire(perms_list)
+                    _verifier_plafond_modele(role.code, mod_code, niveau_scalaire)
+                    rmp.niveau = niveau_scalaire
                     rmp.save()
 
     return role

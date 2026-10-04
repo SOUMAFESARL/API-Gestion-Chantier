@@ -75,6 +75,15 @@ def _obtenir_plafonds_modele(code_role: str) -> dict[str, int]:
     plafonds: dict[str, int] = {}
     if not code_role:
         return plafonds
+    ROLE_ALIASES = {
+        "ADMIN": "AD",
+        "DIRECTEUR_GENERAL": "DG",
+        "CHEF_PROJET": "CP",
+        "CONDUCTEUR_TRAVAUX": "CT",
+        "CHEF_CHANTIER": "CC",
+        "VISITEUR": "VI",
+    }
+    code_role = ROLE_ALIASES.get(code_role, code_role)
     try:
         from apps.catalogue.models import ModeleRoleModule
 
@@ -84,7 +93,7 @@ def _obtenir_plafonds_modele(code_role: str) -> dict[str, int]:
             modele_role__supprime_le__isnull=True,
         ).select_related("module")
         for mrm in mrms:
-            mod_code = mrm.module.code if mrm.module else getattr(mrm, "module_code", "")
+            mod_code = getattr(mrm, "module_code", "") or (mrm.module.code if mrm.module else "")
             if mod_code:
                 plafonds[mod_code.lower()] = mrm.niveau_max
     except Exception:
@@ -113,7 +122,7 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
     is_dg = bool(
         getattr(collaborateur, "is_owner", False)
         or getattr(collaborateur, "is_dg", False)
-        or getattr(collaborateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG")
+        or getattr(collaborateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG", "DIRECTEUR_GENERAL")
         or (
             getattr(collaborateur, "role_personnalise", None)
             and getattr(collaborateur.role_personnalise, "code", "") == "DG"
@@ -127,17 +136,32 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
 
     # 3. Autre rôle
     role = getattr(collaborateur, "role_personnalise", None)
-    if not role and hasattr(collaborateur, "role_global"):
+    code_role = getattr(collaborateur, "role_global", "") or ""
+    if not role and code_role:
         try:
             from apps.accounts.models import Role
 
             role = Role.objects.filter(
-                code=collaborateur.role_global, supprime_le__isnull=True
+                code=code_role, supprime_le__isnull=True
             ).first()
         except Exception:
             role = None
 
     if not role or not getattr(role, "est_actif", True):
+        # Repli sur le modèle de rôle système si le rôle local n'a pas encore été initialisé en base
+        if code_role:
+            plafonds = _obtenir_plafonds_modele(code_role)
+            if plafonds:
+                perms_accordees = set()
+                for mod_code in modules_actifs:
+                    mod_key = mod_code.lower()
+                    niv = plafonds.get(mod_key, 0)
+                    if niv > 0:
+                        perms_accordees.update(permissions_du_module(mod_key, niv))
+                if request:
+                    request._permissions_effectives_cache = perms_accordees
+                return perms_accordees
+
         if request:
             request._permissions_effectives_cache = set()
         return set()

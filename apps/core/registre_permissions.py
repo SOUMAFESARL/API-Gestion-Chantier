@@ -18,7 +18,7 @@ REGISTRE: dict[str, DefPermission] = {
     for p in [
         DefPermission("projets.lire", "projets", 1, "Consulter les projets"),
         DefPermission("projets.ecrire", "projets", 2, "Modifier les projets"),
-        DefPermission("projets.creer", "projets", 2, "Créer un projet"),
+        DefPermission("projets.creer", "projets", 3, "Créer un projet"),
         DefPermission("projets.changer_statut", "projets", 3, "Suspendre / terminer un projet"),
         DefPermission("projets.voir_tous", "projets", 3, "Voir tous les projets de l'entreprise"),
         DefPermission("chantier.lire", "chantier", 1, "Consulter les rapports"),
@@ -36,7 +36,7 @@ REGISTRE: dict[str, DefPermission] = {
             "Inviter / suspendre / changer de rôle",
         ),
         DefPermission(
-            "administration.roles_gerer", "administration", 3, "Gérer les rôles et la matrice"
+            "administration.roles_gerer", "administration", 2, "Gérer les rôles et la matrice"
         ),
         DefPermission(
             "administration.entreprise_modifier", "administration", 3, "Modifier l'entreprise"

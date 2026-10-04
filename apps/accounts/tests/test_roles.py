@@ -58,7 +58,7 @@ def test_initialiser_roles_par_defaut():
         roles = initialiser_roles_par_defaut()
         assert len(roles) >= 7
 
-        # Vérifie que l'admin a validation sur tous les modules mais n'est plus système
+        # Vérifie que l'admin a les droits définis par son modèle mais n'est plus système
         role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
         assert role_ad.est_systeme is False
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
@@ -66,14 +66,14 @@ def test_initialiser_roles_par_defaut():
         perms_ad = RoleModulePermission.objects.filter(role=role_ad)
         assert perms_ad.count() == len(ModuleChoix.values)
         for p in perms_ad:
-            assert p.niveau == NiveauAcces.VALIDATION
+            assert p.niveau >= NiveauAcces.ECRITURE
 
-        # Vérifie que tous les rôles ont accès complet à tous les modules à ce stade
+        # Vérifie que le chef de chantier a ses plafonds respectés
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
         perm_chantier = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.CHANTIER)
-        assert perm_chantier.niveau == NiveauAcces.VALIDATION
+        assert perm_chantier.niveau == NiveauAcces.ECRITURE
         perm_ged = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.GED)
-        assert perm_ged.niveau == NiveauAcces.VALIDATION
+        assert perm_ged.niveau == NiveauAcces.ECRITURE
 
 
 @pytest.mark.django_db
@@ -98,18 +98,8 @@ def test_seul_dg_est_role_systeme():
         assert role_dg.est_systeme is True
 
         # AD et tous les autres rôles ne sont PAS système
-        codes_non_systeme = (
-            RoleGlobal.ADMIN,
-            RoleGlobal.CHEF_PROJET,
-            RoleGlobal.CONDUCTEUR_TRAVAUX,
-            RoleGlobal.CHEF_CHANTIER,
-            RoleGlobal.MAITRE_OUVRAGE,
-            RoleGlobal.MAITRE_OEUVRE,
-            RoleGlobal.VISITEUR,
-        )
-        for code in codes_non_systeme:
-            role = Role.objects.get(code=code)
-            assert role.est_systeme is False, f"{code} ne devrait PAS être est_systeme=True"
+        for role in Role.objects.exclude(code=RoleGlobal.DIRECTEUR_GENERAL):
+            assert role.est_systeme is False, f"{role.code} ne devrait PAS être est_systeme=True"
 
 
 @pytest.mark.django_db
@@ -175,13 +165,13 @@ def test_surcharge_permissions_par_projet(admin_user):
 
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
 
-        # Vérifie la matrice par défaut du projet (initialement VALIDATION)
+        # Vérifie la matrice par défaut du projet
         matrice = get_matrice_permissions_projet(projet)
         cc_info = next(r for r in matrice if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_info["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.VALIDATION
+        assert cc_info["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.AUCUN
         assert cc_info["modules"][ModuleChoix.TIERS]["est_surcharge"] is False
 
-        # Appliquer une surcharge : restreindre les tiers à LECTURE sur ce chantier
+        # Appliquer une surcharge : autoriser les tiers à LECTURE sur ce chantier
         set_override_permission_projet(
             projet=projet,
             role=role_cc,
@@ -199,7 +189,7 @@ def test_surcharge_permissions_par_projet(admin_user):
         supprimer_override_permission_projet(projet, role_cc, ModuleChoix.TIERS)
         matrice_reinit = get_matrice_permissions_projet(projet)
         cc_reinit = next(r for r in matrice_reinit if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_reinit["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.VALIDATION
+        assert cc_reinit["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.AUCUN
         assert cc_reinit["modules"][ModuleChoix.TIERS]["est_surcharge"] is False
 
 

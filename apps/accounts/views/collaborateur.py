@@ -43,17 +43,12 @@ __all__ = [
 ]
 
 
-def _autoriser_parametres_collaborateurs(user):
-    """Autorise AD, DG, Owner et Superuser pour les modifications de collaborateurs."""
+def _autoriser_parametres_collaborateurs(user, request=None):
+    """Autorise administration.collaborateurs_gerer pour les modifications de collaborateurs."""
     if not user or not user.is_authenticated:
         raise ActionReserveeDg()
-    est_autorise = (
-        getattr(user, "is_dg", False)
-        or getattr(user, "is_owner", False)
-        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-        or getattr(user, "is_superuser", False)
-    )
-    if not est_autorise:
+    from apps.core.droits import a_permission
+    if not a_permission(user, "administration.collaborateurs_gerer", request=request):
         raise ActionReserveeDg()
 
 
@@ -76,14 +71,14 @@ class ParametresCollaborateurListCreateView(APIView):
         responses={200: CollaborateurResponseSerializer(many=True)},
     )
     def get(self, request):
-        est_direction = (
-            request.user.is_superuser
-            or getattr(request.user, "is_owner", False)
-            or getattr(request.user, "is_dg", False)
-            or getattr(request.user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        from apps.core.droits import a_permission
+
+        peut_voir_tout = (
+            a_permission(request.user, "administration.collaborateurs_voir", request=request)
+            or a_permission(request.user, "projets.voir_tous", request=request)
         )
         projets_visibles_ids = None
-        if not est_direction:
+        if not peut_voir_tout:
             from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
 
             projets_visibles_ids = set(
@@ -232,7 +227,7 @@ class ParametresCollaborateurListCreateView(APIView):
         responses={201: CollaborateurResponseSerializer},
     )
     def post(self, request):
-        _autoriser_parametres_collaborateurs(request.user)
+        _autoriser_parametres_collaborateurs(request.user, request=request)
 
         serializer = CollaborateurCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -256,8 +251,22 @@ class ParametresCollaborateurListCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        role_personnalise = None
+        if role_personnalise_id:
+            role_personnalise = Role.objects.filter(
+                id=role_personnalise_id, supprime_le__isnull=True
+            ).first()
+            if not role_personnalise:
+                raise ValidationError(
+                    {"role_personnalise_id": _("Rôle personnalisé introuvable.")}
+                )
+
         # Règle R-DEMO-01 : Seul le DG ou le Propriétaire peut inviter/créer un ADMIN
-        if role_global == RoleGlobal.ADMIN and not (
+        est_creation_admin = (
+            role_global == RoleGlobal.ADMIN
+            or (role_personnalise and role_personnalise.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if est_creation_admin and not (
             getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)
         ):
             raise ActionInterditeDelegue()
@@ -402,11 +411,18 @@ class ParametresCollaborateurDetailView(APIView):
         responses={200: CollaborateurResponseSerializer},
     )
     def get(self, request, pk):
+        from apps.core.droits import a_permission
+
         collaborateur = get_object_or_404(
             Utilisateur.tous_objets,
             pk=pk,
             supprime_le__isnull=True,
         )
+
+        if collaborateur.pk != request.user.pk and not a_permission(
+            request.user, "administration.collaborateurs_voir", request=request
+        ):
+            raise ActionReserveeDg()
 
         rp_data = None
         if collaborateur.role_personnalise:
@@ -453,7 +469,7 @@ class ParametresCollaborateurDetailView(APIView):
         responses={200: CollaborateurResponseSerializer},
     )
     def patch(self, request, pk):
-        _autoriser_parametres_collaborateurs(request.user)
+        _autoriser_parametres_collaborateurs(request.user, request=request)
 
         collaborateur = get_object_or_404(
             Utilisateur.tous_objets,
@@ -467,8 +483,29 @@ class ParametresCollaborateurDetailView(APIView):
         role_instance = serializer.validated_data.get("role_instance")
         role_global = serializer.validated_data.get("role_global")
 
+        # Règle d'immutabilité absolue du DG : Unique au créateur du tenant
+        if (
+            getattr(collaborateur, "is_owner", False)
+            or getattr(collaborateur, "is_dg", False)
+            or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+        ):
+            if role_global or role_instance:
+                return Response(
+                    {
+                        "erreur": {
+                            "code": "role_dg_immuable",
+                            "message": "Le rôle du Directeur Général / Propriétaire est immuable.",
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Règle R-DEMO-01 : Seul le DG ou Propriétaire peut attribuer le rôle ADMIN
-        if role_global == RoleGlobal.ADMIN and not (
+        est_attribution_admin = (
+            role_global == RoleGlobal.ADMIN
+            or (role_instance and role_instance.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if est_attribution_admin and not (
             getattr(request.user, "is_dg", False)
             or getattr(request.user, "is_owner", False)
         ):
@@ -534,13 +571,28 @@ class ParametresCollaborateurDetailView(APIView):
         responses={200: dict},
     )
     def delete(self, request, pk):
-        _autoriser_parametres_collaborateurs(request.user)
+        _autoriser_parametres_collaborateurs(request.user, request=request)
 
         collaborateur = get_object_or_404(
             Utilisateur.tous_objets,
             pk=pk,
             supprime_le__isnull=True,
         )
+
+        if (
+            getattr(collaborateur, "is_owner", False)
+            or getattr(collaborateur, "is_dg", False)
+            or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+        ):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "suppression_dg_interdite",
+                        "message": "Le Directeur Général / Propriétaire ne peut pas être supprimé.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             resultat = desactiver_collaborateur_plateforme(
@@ -566,7 +618,7 @@ class ParametresCollaborateurSuspendreView(APIView):
         responses={200: CollaborateurResponseSerializer},
     )
     def post(self, request, pk):
-        _autoriser_parametres_collaborateurs(request.user)
+        _autoriser_parametres_collaborateurs(request.user, request=request)
 
         collaborateur = get_object_or_404(
             Utilisateur.tous_objets,
@@ -580,7 +632,11 @@ class ParametresCollaborateurSuspendreView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if getattr(collaborateur, "is_owner", False) or getattr(collaborateur, "is_dg", False):
+        if (
+            getattr(collaborateur, "is_owner", False)
+            or getattr(collaborateur, "is_dg", False)
+            or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+        ):
             return Response(
                 {"detail": _("Le compte du Directeur Général / Propriétaire ne peut pas être suspendu.")},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -644,7 +700,7 @@ class ParametresCollaborateurReactiverView(APIView):
         responses={200: CollaborateurResponseSerializer},
     )
     def post(self, request, pk):
-        _autoriser_parametres_collaborateurs(request.user)
+        _autoriser_parametres_collaborateurs(request.user, request=request)
 
         collaborateur = get_object_or_404(
             Utilisateur.tous_objets,

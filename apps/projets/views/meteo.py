@@ -68,16 +68,12 @@ def _localiser(request, tenant) -> tuple[str, str]:
         else:
             projet = Projet.objects.filter(pk=projet_id, supprime_le__isnull=True).first()
         if projet and projet.ville:
+            from apps.core.droits import a_permission
             from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
 
-            est_direction = (
-                request.user.is_superuser
-                or getattr(request.user, "is_owner", False)
-                or getattr(request.user, "is_dg", False)
-                or getattr(request.user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-            )
+            peut_voir_tous = a_permission(request.user, "projets.voir_tous", request=request)
             projets_actifs = obtenir_projets_ids_actifs_utilisateur(request.user, request=request)
-            if est_direction or projet.id in projets_actifs or str(projet.id) in [str(p) for p in projets_actifs]:
+            if peut_voir_tous or projet.id in projets_actifs or str(projet.id) in [str(p) for p in projets_actifs]:
                 return (projet.ville, PORTEE_CHANTIER)
 
     # Rôle de chantier : son affectation la plus récente. Quelqu'un qui suit

@@ -24,12 +24,13 @@ def test_permissions_du_module_niveaux():
     # Niveau 2 : lecture + ecriture (rang <= 2)
     p2 = permissions_du_module("projets", 2)
     assert "projets.lire" in p2
-    assert "projets.creer" in p2
     assert "projets.ecrire" in p2
+    assert "projets.creer" not in p2
     assert "projets.changer_statut" not in p2
 
     # Niveau 3 : complet (rang <= 3)
     p3 = permissions_du_module("projets", 3)
+    assert "projets.creer" in p3
     assert "projets.changer_statut" in p3
     assert "projets.voir_tous" in p3
     assert p2.issubset(p3)

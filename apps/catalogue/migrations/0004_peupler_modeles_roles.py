@@ -88,7 +88,7 @@ MODELES_ROLES_DATA = [
         "modules": {
             "projets": 1,
             "chantier": 2,
-            "ged": 1,
+            "ged": 2,
             "pilotage": 0,
             "tiers": 0,
             "administration": 0,

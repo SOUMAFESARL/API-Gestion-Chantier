@@ -423,6 +423,20 @@ def creer_role(
                 if cat_perms:
                     rmp.permissions_catalogue.set(cat_perms)
 
+        try:
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            journaliser(
+                action=ActionAudit.CREATION,
+                type_entite="Role",
+                entite_id=role.id,
+                utilisateur_id=cree_par.id if cree_par else None,
+                valeur_apres={"code": role.code, "libelle": role.libelle},
+            )
+        except Exception:
+            pass
+
     return role
 
 
@@ -479,6 +493,20 @@ def modifier_role(
                     _verifier_plafond_modele(role.code, mod_code, niveau_scalaire)
                     rmp.niveau = niveau_scalaire
                     rmp.save()
+
+        try:
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            journaliser(
+                action=ActionAudit.MODIFICATION,
+                type_entite="Role",
+                entite_id=role.id,
+                utilisateur_id=modifie_par.id if modifie_par else None,
+                valeur_apres={"code": role.code, "libelle": role.libelle},
+            )
+        except Exception:
+            pass
 
     return role
 
@@ -647,6 +675,20 @@ def supprimer_role(
         role.est_actif = False
         role.save()
 
+        try:
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            journaliser(
+                action=ActionAudit.SUPPRESSION,
+                type_entite="Role",
+                entite_id=role.id,
+                utilisateur_id=supprime_par.id if supprime_par else None,
+                valeur_avant={"code": role.code, "libelle": role.libelle},
+            )
+        except Exception:
+            pass
+
     return {
         "role_supprime": role.code,
         "mode": "suppression_collaborateurs" if supprimer_collaborateurs else "reassignation",
@@ -712,5 +754,24 @@ def rattacher_collaborateur_a_role(
                 champs_a_mettre_a_jour.append("role_global")
 
         collaborateur.save(update_fields=champs_a_mettre_a_jour)
+
+        try:
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            journaliser(
+                action=ActionAudit.MODIFICATION,
+                type_entite="CollaborateurRole",
+                entite_id=collaborateur.id,
+                utilisateur_id=modifie_par.id if modifie_par else None,
+                valeur_apres={
+                    "role_global": collaborateur.role_global,
+                    "role_personnalise_id": str(collaborateur.role_personnalise_id)
+                    if collaborateur.role_personnalise_id
+                    else None,
+                },
+            )
+        except Exception:
+            pass
 
     return collaborateur

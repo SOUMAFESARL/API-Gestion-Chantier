@@ -234,12 +234,57 @@ class PermissionModule(permissions.BasePermission):
         if not utilisateur or not utilisateur.is_authenticated:
             return False
 
-        from apps.core.droits import permissions_effectives
+        if (
+            utilisateur.is_superuser
+            or getattr(utilisateur, "is_owner", False)
+            or getattr(utilisateur, "is_dg", False)
+            or getattr(utilisateur, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+        ):
+            return True
 
-        perms = permissions_effectives(utilisateur, request=request)
+        from django.apps import apps as registre
+
+        try:
+            Role = registre.get_model("accounts", "Role")
+            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
+        except LookupError:
+            Role = None
+            RoleModulePermission = None
+
+        if Role and RoleModulePermission:
+            role = utilisateur.role_personnalise or Role.objects.filter(
+                code=utilisateur.role_global, supprime_le__isnull=True
+            ).first()
+            if role:
+                from django.db import models as dj_models
+
+                rmp = RoleModulePermission.objects.filter(
+                    dj_models.Q(module_catalogue__code=self.module) | dj_models.Q(module__code=self.module),
+                    role=role,
+                    supprime_le__isnull=True,
+                ).first()
+                if rmp:
+                    if rmp.niveau == 0:
+                        return False
+                    has_m2m = (
+                        rmp.permissions_catalogue.filter(supprime_le__isnull=True).exists()
+                        or rmp.permissions.filter(supprime_le__isnull=True).exists()
+                    )
+                    if has_m2m:
+                        has_perm_m2m = (
+                            rmp.permissions_catalogue.filter(
+                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                            ).exists()
+                            or rmp.permissions.filter(
+                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                            ).exists()
+                        )
+                        return has_perm_m2m
+
+        from apps.core.droits import permissions_effectives
         from apps.core.registre_permissions import REGISTRE
 
-        # Vérifier si l'utilisateur possède au moins une permission de ce module avec rang >= niveau requis
+        perms = permissions_effectives(utilisateur, request=request)
         for def_p in REGISTRE.values():
             if def_p.module == self.module and def_p.rang >= self.niveau_requis and def_p.code in perms:
                 return True

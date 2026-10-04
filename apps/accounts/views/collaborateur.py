@@ -588,7 +588,7 @@ class ParametresCollaborateurDetailView(APIView):
                 {
                     "erreur": {
                         "code": "suppression_dg_interdite",
-                        "message": "Le Directeur Général / Propriétaire ne peut pas être supprimé.",
+                        "message": "Le Directeur Général / Propriétaire ne peut pas être désactivé ni supprimé.",
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,

@@ -38,6 +38,14 @@ __all__ = [
 ]
 
 
+def _autoriser_roles_dg(user):
+    """Règle R-DEMO-08 : Seul le DG / Propriétaire a autorité sur les routes /api/v1/roles/."""
+    if not user or not user.is_authenticated:
+        raise ActionReserveeDg()
+    if not (getattr(user, "is_dg", False) or getattr(user, "is_owner", False)):
+        raise ActionReserveeDg()
+
+
 def _autoriser_parametres_roles(user, request=None):
     """Autorise administration.roles_gerer pour les routes parametres/roles."""
     if not user or not user.is_authenticated:
@@ -71,7 +79,7 @@ class RoleListCreateView(APIView):
         responses={201: RoleDetailSerializer},
     )
     def post(self, request):
-        _autoriser_parametres_roles(request.user, request=request)
+        _autoriser_roles_dg(request.user)
 
         serializer = RoleCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -113,7 +121,7 @@ class RoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def patch(self, request, pk):
-        _autoriser_parametres_roles(request.user, request=request)
+        _autoriser_roles_dg(request.user)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
@@ -167,7 +175,7 @@ class RoleSupprimerReassignerView(APIView):
         responses={200: dict},
     )
     def post(self, request, pk):
-        _autoriser_parametres_roles(request.user, request=request)
+        _autoriser_roles_dg(request.user)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
@@ -176,7 +184,7 @@ class RoleSupprimerReassignerView(APIView):
                 {
                     "erreur": {
                         "code": "suppression_dg_interdite",
-                        "message": "Le rôle Directeur Général ne peut pas être supprimé.",
+                        "message": "Le rôle Directeur Général ne peut pas être supprimé : les rôles système ne peuvent pas être supprimés.",
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -362,7 +370,7 @@ class ParametresRoleSupprimerReassignerView(APIView):
                 {
                     "erreur": {
                         "code": "suppression_dg_interdite",
-                        "message": "Le rôle Directeur Général ne peut pas être supprimé.",
+                        "message": "Le rôle Directeur Général ne peut pas être supprimé : les rôles système ne peuvent pas être supprimés.",
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,

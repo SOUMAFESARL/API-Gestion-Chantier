@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Invitation, Utilisateur
-from apps.core.enums import StatutUtilisateur
+from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 logger = logging.getLogger(__name__)
 

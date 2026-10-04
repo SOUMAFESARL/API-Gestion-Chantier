@@ -100,7 +100,7 @@ def test_permissions_effectives_collaborateur_niveaux(mock_collaborateur):
         # Projets niveau 2
         assert "projets.lire" in perms
         assert "projets.ecrire" in perms
-        assert "projets.creer" in perms
+        assert "projets.creer" not in perms
         assert "projets.changer_statut" not in perms
         assert "projets.voir_tous" not in perms
         # Chantier niveau 3

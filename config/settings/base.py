@@ -52,6 +52,10 @@ except UndefinedValueError as exc:  # pragma: no cover
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 ENABLE_DJANGO_ADMIN = config("ENABLE_DJANGO_ADMIN", default=False, cast=bool)
 
+# Jeton des endpoints /api/v1/maintenance/ : uniquement par variable
+# d'environnement. Vide (défaut) = endpoints éteints (404).
+MAINTENANCE_TOKEN = config("MAINTENANCE_TOKEN", default="")
+
 
 def _liste(valeur: str) -> list[str]:
     """Transforme une variable « a,b,c » en liste."""

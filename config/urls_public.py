@@ -20,20 +20,37 @@ def sante(_request):
     return JsonResponse({"statut": "ok", "portee": "public"})
 
 
+import hmac
 from io import StringIO
 from django.core.management import call_command
 from django.views.decorators.csrf import csrf_exempt
 
 
+def _refuser_maintenance(request):
+    """Contrôle du jeton de maintenance. Renvoie une réponse d'erreur, ou None si autorisé.
+
+    - aucun jeton configuré (`MAINTENANCE_TOKEN` vide) : 404, l'endpoint est éteint ;
+    - jeton absent ou faux : 403 ;
+    - comparaison à temps constant (`hmac.compare_digest`).
+    """
+    attendu = getattr(settings, "MAINTENANCE_TOKEN", "") or ""
+    if not attendu:
+        return JsonResponse({"erreur": "Ressource introuvable."}, status=404)
+    fourni = request.headers.get("X-Maintenance-Token") or ""
+    if not hmac.compare_digest(fourni.encode("utf-8"), attendu.encode("utf-8")):
+        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+    return None
+
+
 @csrf_exempt
 def migrer_bd_vue(request):
     """Exécute les migrations sans passer par cPanel SSH."""
+    refus = _refuser_maintenance(request)
+    if refus is not None:
+        return refus
+
     if request.method != "POST":
         return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
-
-    token = request.headers.get("X-Maintenance-Token")
-    if token != "ccd-migration-prod-2026-secure-token":
-        return JsonResponse({"erreur": "Non autorisé"}, status=403)
 
     out = StringIO()
     try:
@@ -46,9 +63,9 @@ def migrer_bd_vue(request):
 @csrf_exempt
 def purger_zanf_vue(request):
     """Exécute ou inspecte la purge des schémas et références 'zanf' sur commande."""
-    token = request.headers.get("X-Maintenance-Token")
-    if token != "ccd-migration-prod-2026-secure-token":
-        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+    refus = _refuser_maintenance(request)
+    if refus is not None:
+        return refus
 
     if request.method == "GET":
         from django.db import connection
@@ -121,9 +138,9 @@ def purger_zanf_vue(request):
 @csrf_exempt
 def inspecter_entreprises_prod_vue(request):
     """Inspection sécurisée des entreprises et directeurs généraux en production."""
-    token = request.headers.get("X-Maintenance-Token")
-    if token != "ccd-migration-prod-2026-secure-token":
-        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+    refus = _refuser_maintenance(request)
+    if refus is not None:
+        return refus
 
     if request.method != "GET":
         return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
@@ -139,9 +156,9 @@ def inspecter_entreprises_prod_vue(request):
 @csrf_exempt
 def supprimer_entreprise_prod_vue(request):
     """Suppression propre et atomique d'une entreprise (schéma + dépendances public)."""
-    token = request.headers.get("X-Maintenance-Token")
-    if token != "ccd-migration-prod-2026-secure-token":
-        return JsonResponse({"erreur": "Non autorisé"}, status=403)
+    refus = _refuser_maintenance(request)
+    if refus is not None:
+        return refus
 
     if request.method != "POST":
         return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)

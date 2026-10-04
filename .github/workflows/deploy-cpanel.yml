@@ -135,6 +135,15 @@ jobs:
             **/media/**
             **/staticfiles/**
             **/*.sqlite3
+            **/contexte_projet.txt
+            **/arborescence.txt
+            **/personas_extracted.json
+            **/*.xlsx
+            **/docs/**
+            **/Manuels_Apprentissage/**
+            **/.agents/**
+            **/.http-forge/**
+            **/.kilo/**
 
       - name: Appliquer les migrations Django (SSH)
         if: ${{ vars.CPANEL_PROJECT_DIR != '' }}

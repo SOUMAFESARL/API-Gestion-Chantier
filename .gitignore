@@ -48,3 +48,10 @@ logo.png
 *.postman_environment.json
 postman/
 
+# Fichiers de contexte générés et documents métier locaux : jamais versionnés
+# (le dépôt est déployé dans la racine web cPanel).
+contexte_projet.txt
+arborescence.txt
+personas_extracted.json
+*.xlsx
+

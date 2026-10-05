@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('chantier', '0001_squashed_0003_contraintes_rapport'),
-        ('projets', '0024_projet_badge_sante_arretchantier_santeprojetsnapshot'),
+        ('projets', '0026_projet_badge_sante_arretchantier_santeprojetsnapshot'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

@@ -136,11 +136,7 @@ class LotActiviteListCreateView(APIView):
 
 
 class ActiviteDetailView(APIView):
-<<<<<<< HEAD
-    """Détail, mise à jour partielle et suppression logique d'une activité."""
-=======
     """Détail, modification partielle et suppression logique d'une activité."""
->>>>>>> origin/develop
 
     parser_classes = [JSONParser]
 

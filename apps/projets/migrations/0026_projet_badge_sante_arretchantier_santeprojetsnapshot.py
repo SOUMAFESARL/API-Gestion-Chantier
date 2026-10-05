@@ -10,7 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('projets', '0023_repointer_override_vers_catalogue'),
+        ('projets', '0025_motif_lots_activites'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

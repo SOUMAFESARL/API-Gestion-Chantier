@@ -90,6 +90,13 @@ class Activite(ModeleBase):
         related_name="successeurs",
         verbose_name=_("commence après"),
     )
+    colaborateur = models.ForeignKey(
+        "accounts.Utilisateur",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activites_responsables",
+    )
     equipe = models.ManyToManyField(
         "accounts.Utilisateur",
         blank=True,

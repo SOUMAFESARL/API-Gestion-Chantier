@@ -66,7 +66,8 @@ class LotActiviteListCreateView(APIView):
         description=(
             "Activité rattachée au lot de l'URL. Tout utilisateur connecté ayant accès "
             "au projet peut créer une activité. Libellé obligatoire ; quantité par défaut 1, "
-            "unité U, dates et équipe facultatives. Dépendance active du même projet. "
+            "unit? U, dates et ?quipe facultatives. colaborateur_id d?signe un utilisateur "
+            "actif affect? au projet ; facultatif et nullable. "
             "Budget facultatif en centimes FCFA pour les statistiques pondérées. "
             "equipe_ids contient des UUID de collaborateurs du projet ; les équipes de "
             "chantier se rattachent ensuite via l'API d'affectations. Avancement automatique "
@@ -90,7 +91,7 @@ class LotActiviteListCreateView(APIView):
                     "unite": "M2",
                     "date_debut_prevue": "2026-10-04",
                     "date_fin_prevue": "2026-10-11",
-                    "dependance": None,
+                    "colaborateur_id": None,
                     "equipe_ids": [],
                     "budget_initial_montant": 1000000,
                 },

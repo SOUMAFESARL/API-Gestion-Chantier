@@ -56,7 +56,7 @@ def test_creation_and_statistics(contexte):
             "libelle": "Coffrage",
             "quantite_prevue": "100",
             "unite": "M2",
-            "dependance": created.data["id"],
+            "colaborateur_id": str(user.pk),
         },
         format="json",
     )
@@ -162,3 +162,16 @@ def test_dependency_team_scope_and_permissions(contexte):
     assert client.post(url, {"libelle": "Interdit"}, format="json").status_code == 400
     client.force_authenticate(None)
     assert client.get(f"/api/v1/projets/{projet.pk}/statistiques/").status_code in (401, 403)
+
+
+def test_colaborateur_create_read_clear(contexte):
+    client, _, lot, user = contexte
+    created = client.post(f"/api/v1/lots/{lot.pk}/activites/", {"libelle": "Responsable", "colaborateur_id": str(user.pk)}, format="json")
+    assert created.status_code == 201, created.data
+    assert str(created.data["colaborateur_id"]) == str(user.pk)
+    assert "dependance" not in created.data
+    url = f"/api/v1/activites/{created.data['id']}/"
+    assert str(client.get(url).data["colaborateur_id"]) == str(user.pk)
+    patched = client.patch(url, {"colaborateur_id": None}, format="json")
+    assert patched.status_code == 200, patched.data
+    assert patched.data["colaborateur_id"] is None

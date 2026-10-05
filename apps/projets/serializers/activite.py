@@ -13,6 +13,10 @@ from apps.projets.services.statistiques import pourcentage_realise
 class ActiviteSerializer(serializers.ModelSerializer):
     """Lecture complète d'une activité de chantier."""
 
+    colaborateur_id = serializers.PrimaryKeyRelatedField(
+        source="colaborateur", read_only=True, allow_null=True
+    )
+
     unite_libelle = serializers.CharField(source="get_unite_display", read_only=True)
     statut = serializers.CharField(read_only=True)
     avancement = serializers.SerializerMethodField()
@@ -29,7 +33,7 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "libelle",
             "motif",
             "statut",
-            "dependance",
+            "colaborateur_id",
             "equipe_ids",
             "budget_initial_montant",
             "unite",
@@ -87,11 +91,12 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         max_value=9223372036854775807,
         help_text="Budget prévisionnel facultatif en centimes FCFA, utilisé pour la pondération.",
     )
-    dependance = serializers.PrimaryKeyRelatedField(
-        queryset=Activite.objects.all(),
+    colaborateur_id = serializers.PrimaryKeyRelatedField(
+        source="colaborateur",
+        queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF, supprime_le__isnull=True),
         required=False,
         allow_null=True,
-        help_text="Activité précédente active appartenant au même projet, ou null.",
+        help_text="UUID d'un utilisateur actif affect? au projet, ou null.",
     )
     equipe_ids = serializers.PrimaryKeyRelatedField(
         source="equipe",
@@ -107,7 +112,7 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
             "libelle",
             "motif",
             "statut",
-            "dependance",
+            "colaborateur_id",
             "equipe_ids",
             "budget_initial_montant",
             "unite",
@@ -137,16 +142,6 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
                 {"date_fin_prevue": "La fin prévue ne peut pas précéder le début."}
             )
 
-        dependance = attrs.get("dependance")
-        if dependance:
-            if dependance.projet_id != lot.projet_id or not dependance.est_actif:
-                raise serializers.ValidationError(
-                    {"dependance": "Activité hors projet ou inactive."}
-                )
-            if debut and dependance.date_fin_prevue and debut < dependance.date_fin_prevue:
-                raise serializers.ValidationError(
-                    {"date_debut_prevue": "Le début doit suivre la fin de l'activité précédente."}
-                )
         equipe = attrs.get("equipe", [])
         if len(equipe) > 50:
             raise serializers.ValidationError({"equipe_ids": "Maximum 50 collaborateurs."})
@@ -157,6 +152,11 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
             ).values_list("utilisateur_id", flat=True)
         )
         autorises.update((lot.projet.chef_projet_id, lot.projet.conducteur_travaux_id))
+        colaborateur = attrs.get("colaborateur")
+        if colaborateur is not None and colaborateur.pk not in autorises:
+            raise serializers.ValidationError(
+                {"colaborateur_id": "Collaborateur non affect? au projet."}
+            )
         if any(user.pk not in autorises for user in equipe):
             raise serializers.ValidationError(
                 {"equipe_ids": "Collaborateur non affecté au projet."}
@@ -220,13 +220,6 @@ class ActiviteModificationSerializer(ActiviteCreationSerializer):
         }
         valeurs.update(attrs)
         valeurs = super().validate(valeurs)
-        dependance = valeurs.get("dependance")
-        visites = {self.instance.pk}
-        while dependance:
-            if dependance.pk in visites:
-                raise serializers.ValidationError({"dependance": "Dépendance cyclique interdite."})
-            visites.add(dependance.pk)
-            dependance = dependance.dependance
         if valeurs["quantite_prevue"] < self.instance.quantite_realisee:
             raise serializers.ValidationError(
                 {"quantite_prevue": "Quantité inférieure au réalisé."}

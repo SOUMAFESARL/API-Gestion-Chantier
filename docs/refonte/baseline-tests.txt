@@ -1,0 +1,396 @@
+........................................................................ [  8%]
+........................................................................ [ 17%]
+........................................................................ [ 25%]
+........................................................................ [ 34%]
+........................................................................ [ 42%]
+........................................................................ [ 51%]
+........................................................................ [ 59%]
+........................................................................ [ 68%]
+........................................................................ [ 76%]
+........................................................................ [ 85%]
+........................................................................ [ 93%]
+..............................F...FEFFFEEEEEEEEEEFFF                     [100%]
+=================================== ERRORS ====================================
+_______ ERROR at setup of test_inventaire_contient_toutes_les_sections ________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_______ ERROR at setup of test_i01_niveau_max_liste_exacte_et_complete ________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_____________ ERROR at setup of test_i02_conditions_copiees_du_dg _____________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_____ ERROR at setup of test_i03_i04_i10_constats_references[I-03-cles0] ______
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_____ ERROR at setup of test_i03_i04_i10_constats_references[I-04-cles1] ______
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_____ ERROR at setup of test_i03_i04_i10_constats_references[I-10-cles2] ______
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+___________ ERROR at setup of test_i05_statut_critique_caracterise ____________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_________ ERROR at setup of test_i06_registre_codes_reels_et_complets _________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+________________ ERROR at setup of test_i07_modules_et_portees ________________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+____________ ERROR at setup of test_i08_tests_existants_a_adapter _____________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+______________ ERROR at setup of test_i09_comptages_de_reference ______________
+
+    @pytest.fixture(scope="module")
+    def inv():
+>       return decouper_sections(lire(INVENTAIRE))
+                                 ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+================================== FAILURES ===================================
+______________________ test_lot0_arbre_de_travail_propre ______________________
+
+    def test_lot0_arbre_de_travail_propre():
+        """[G-05] Tout est commité à la fin du lot."""
+        code, out, err = git("status", "--porcelain")
+        assert code == 0, err
+>       assert out == "", f"Modifications non commitées :\n{out}"
+E       AssertionError: Modifications non commitées :
+E         ?? docs/refonte/baseline-tests.txt
+E       assert '?? docs/refo...ine-tests.txt' == ''
+E         
+E         + ?? docs/refonte/baseline-tests.txt
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:255: AssertionError
+__________________ test_g03_notes_de_changement_api_existent __________________
+
+    def test_g03_notes_de_changement_api_existent():
+        """[G-03] Le fichier de notes existe avec son titre."""
+>       texte = lire(NOTES)
+                ^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:292: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/notes-changement-api.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\notes-changement-api.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/notes-changement-api.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+_______________ test_inventaire_sans_hesitation_ni_placeholder ________________
+
+    def test_inventaire_sans_hesitation_ni_placeholder():
+        """Tout doute va dans questions-ouvertes.md, jamais dans l'inventaire."""
+>       texte = lire(INVENTAIRE)
+                ^^^^^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+______ test_inventaire_et_questions_ne_citent_que_des_regles_existantes _______
+
+    def test_inventaire_et_questions_ne_citent_que_des_regles_existantes():
+        """Aucune règle inventée : tout identifiant cité existe dans le cahier gelé."""
+        connus = ids_du_cahier()
+        for chemin in (INVENTAIRE, QUESTIONS):
+>           cites = set(ID_REGLE.findall(lire(chemin)))
+                                         ^^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:317: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\inventaire-lot0.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/inventaire-lot0.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+________________________ test_questions_format_valide _________________________
+
+    def test_questions_format_valide():
+        """Le fichier de questions existe et chaque question est bien formée."""
+>       qs = questions()
+             ^^^^^^^^^^^
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:324: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:192: in questions
+    texte = lire(QUESTIONS)
+            ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+chemin = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/questions-ouvertes.md')
+
+    def lire(chemin: Path) -> str:
+>       assert chemin.exists(), f"Fichier manquant : {chemin.relative_to(ROOT) if ROOT in chemin.parents else chemin}"
+E       AssertionError: Fichier manquant : docs\refonte\questions-ouvertes.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('C:/Users/Administrator/Desktop/SOUMAFE/Gestion_Chantier/05_Developpement/API-Gestion-Chantier/docs/refonte/questions-ouvertes.md').exists
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:97: AssertionError
+__________________ test_baseline_suite_de_tests_enregistree ___________________
+
+    def test_baseline_suite_de_tests_enregistree():
+        """La sortie de la suite existante, avant toute modification, est conservée."""
+        texte = lire(BASELINE)
+>       assert re.search(r"\b\d+ passed\b", texte), (
+            "baseline-tests.txt doit contenir la ligne de résumé pytest (« N passed ... »)"
+        )
+E       AssertionError: baseline-tests.txt doit contenir la ligne de résumé pytest (« N passed ... »)
+E       assert None
+E        +  where None = <function search at 0x0000024289C132E0>('\\b\\d+ passed\\b', '........................................................................ [  8%]\n................................................................................................... [ 93%]\n..............................F...FEFFFEEEEEEEEEE')
+E        +    where <function search at 0x0000024289C132E0> = re.search
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:482: AssertionError
+________________ test_caracterisation_presente_sans_raccourci _________________
+
+    def test_caracterisation_presente_sans_raccourci():
+        """Au moins un test de caractérisation, sans skip ni xfail."""
+        fichiers = list(CARACT.rglob("test_*.py")) if CARACT.is_dir() else []
+>       assert fichiers, "Aucun test dans tests/caracterisation/"
+E       AssertionError: Aucun test dans tests/caracterisation/
+E       assert []
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:490: AssertionError
+________________ test_caracterisation_passe_sur_le_code_actuel ________________
+
+    def test_caracterisation_passe_sur_le_code_actuel():
+        """Les tests de caractérisation décrivent le comportement ACTUEL : ils passent."""
+        r = subprocess.run(
+            [sys.executable, "-m", "pytest", "tests/caracterisation", "-q", "-p", "no:cacheprovider"],
+            cwd=ROOT, capture_output=True, text=True, timeout=900,
+        )
+>       assert r.returncode == 0, f"Caractérisation en échec :\n{r.stdout[-3000:]}"
+E       AssertionError: Caractérisation en échec :
+E         
+E         no tests ran in 0.00s
+E         
+E       assert 4 == 0
+E        +  where 4 = CompletedProcess(args=['C:\\Users\\Administrator\\Desktop\\SOUMAFE\\Gestion_Chantier\\05_Developpement\\API-Gestion-Ch...turncode=4, stdout='\nno tests ran in 0.00s\n', stderr='ERROR: file or directory not found: tests/caracterisation\n\n').returncode
+
+tests\acceptation\lot0\test_lot0_etat_des_lieux.py:504: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_lot0_arbre_de_travail_propre
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_g03_notes_de_changement_api_existent
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_inventaire_sans_hesitation_ni_placeholder
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_inventaire_et_questions_ne_citent_que_des_regles_existantes
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_questions_format_valide
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_baseline_suite_de_tests_enregistree
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_caracterisation_presente_sans_raccourci
+FAILED tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_caracterisation_passe_sur_le_code_actuel
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_inventaire_contient_toutes_les_sections
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i01_niveau_max_liste_exacte_et_complete
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i02_conditions_copiees_du_dg
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i03_i04_i10_constats_references[I-03-cles0]
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i03_i04_i10_constats_references[I-04-cles1]
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i03_i04_i10_constats_references[I-10-cles2]
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i05_statut_critique_caracterise
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i06_registre_codes_reels_et_complets
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i07_modules_et_portees
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i08_tests_existants_a_adapter
+ERROR tests/acceptation/lot0/test_lot0_etat_des_lieux.py::test_i09_comptages_de_reference
+8 failed, 825 passed, 1 warning, 11 errors in 194.03s (0:03:14)

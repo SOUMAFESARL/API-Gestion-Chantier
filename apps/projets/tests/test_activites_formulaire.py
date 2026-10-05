@@ -171,7 +171,18 @@ def test_colaborateur_create_read_clear(contexte):
     assert str(created.data["colaborateur_id"]) == str(user.pk)
     assert "dependance" not in created.data
     url = f"/api/v1/activites/{created.data['id']}/"
-    assert str(client.get(url).data["colaborateur_id"]) == str(user.pk)
+    assert client.get(url).status_code == 403
+    assert client.patch(url, {"colaborateur_id": None}, format="json").status_code == 403
+    admin = Utilisateur.objects.create_user(
+        email="activites.responsable.admin@demo.ci",
+        password="Test12345!",
+        nom="Admin",
+        role_global=RoleGlobal.ADMIN,
+    )
+    client.force_authenticate(admin)
+    detail = client.get(url)
+    assert detail.status_code == 200, detail.data
+    assert str(detail.data["colaborateur_id"]) == str(user.pk)
     patched = client.patch(url, {"colaborateur_id": None}, format="json")
     assert patched.status_code == 200, patched.data
     assert patched.data["colaborateur_id"] is None

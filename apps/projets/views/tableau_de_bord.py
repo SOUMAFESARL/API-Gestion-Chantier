@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.chantier.models import RapportJournalier
-from apps.core.enums import ModuleChoix, NiveauAcces, StatutRapport
+from apps.core.enums import ModuleChoix, NiveauAcces, StatutProjet, StatutRapport
 from apps.core.permissions import PermissionModule, filtrer_queryset_par_affectations
 from apps.projets.models import Projet
 from apps.projets.serializers import TableauDeBordResponseSerializer
@@ -199,10 +199,16 @@ class TableauDeBordView(APIView):
             note_securite = max(0, 100 - (blocages * 20))
             scores_securite.append(note_securite)
 
-            # Note synthétique BTP pondérée du projet
-            indice_projet = round(
-                (0.40 * note_delais) + (0.35 * note_budget) + (0.25 * note_securite)
-            )
+            # Indice de santé et badge persistés sur le projet (ou repli par défaut pour projet non démarré)
+            if p.indice_sante is not None:
+                indice_projet = p.indice_sante
+                badge_projet = p.badge_sante
+            elif p.statut == StatutProjet.EN_ATTENTE:
+                indice_projet = 100
+                badge_projet = "VERT"
+            else:
+                indice_projet = None
+                badge_projet = None
 
             # Statut du rapport du jour pour ce chantier
             rapport_soumis = p.id in projets_avec_rapport_ids
@@ -223,6 +229,7 @@ class TableauDeBordView(APIView):
                 "budget_consomme_montant": budget_consomme,
                 "rapport_jour_statut": "SOUMIS" if rapport_soumis else "EN_ATTENTE",
                 "indice_sante": indice_projet,
+                "badge_sante": badge_projet,
                 "chef_projet_nom": (
                     f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip() or p.chef_projet.email
                 ) if p.chef_projet else None,
@@ -238,9 +245,24 @@ class TableauDeBordView(APIView):
         moyenne_securite = (
             round(sum(scores_securite) / len(scores_securite)) if scores_securite else 100
         )
-        score_sante_global = round(
-            (0.40 * moyenne_delais) + (0.35 * moyenne_budget) + (0.25 * moyenne_securite)
-        )
+
+        # Santé globale : moyenne des indices de santé persistés des projets à l'état ACTIF seulement
+        # (exclut les scores nuls de projets sans activité)
+        statuts_actifs = {
+            StatutProjet.EN_COURS,
+            StatutProjet.EN_RETARD,
+            StatutProjet.CRITIQUE,
+            StatutProjet.BLOQUE,
+        }
+        scores_sante_actifs = [
+            p.indice_sante
+            for p in projets_qs
+            if p.statut in statuts_actifs and p.indice_sante is not None
+        ]
+        if scores_sante_actifs:
+            score_sante_global = round(sum(scores_sante_actifs) / len(scores_sante_actifs))
+        else:
+            score_sante_global = 100
 
         # Météo du premier chantier actif ou, à défaut, du siège. « Abidjan »
         # était écrit en dur ici comme dernier recours : faux pour huit clients

@@ -129,3 +129,77 @@ class TestTableauDeBordReel:
             Projet.objects.all().delete()
             RoleTiers.objects.all().delete()
             Tiers.objects.all().delete()
+
+    def test_tableau_de_bord_sante_globale_projets_actifs_et_badge(self, client, dg_user):
+        client.force_authenticate(user=dg_user)
+
+        with schema_context(SCHEMA):
+            Projet.objects.all().delete()
+            RoleTiers.objects.all().delete()
+            Tiers.objects.all().delete()
+
+            moa = Tiers.objects.create(raison_sociale="Client Dashboard", telephone="0202020202")
+            RoleTiers.objects.create(tiers=moa, role=RoleTiersChoix.CLIENT_MOA)
+
+            # Projet 1 actif : score 80, VERT
+            Projet.objects.create(
+                reference="PRJ-ACT-01",
+                nom="Chantier Actif 1",
+                client=moa,
+                statut=StatutProjet.EN_COURS,
+                indice_sante=80,
+                badge_sante="VERT",
+            )
+            # Projet 2 actif : score 50, ORANGE
+            Projet.objects.create(
+                reference="PRJ-ACT-02",
+                nom="Chantier Actif 2",
+                client=moa,
+                statut=StatutProjet.EN_RETARD,
+                indice_sante=50,
+                badge_sante="ORANGE",
+            )
+            # Projet 3 terminé (non actif) : score 95 -> doit être exclu de sante_globale
+            Projet.objects.create(
+                reference="PRJ-TERM-01",
+                nom="Chantier Terminé",
+                client=moa,
+                statut=StatutProjet.TERMINE,
+                indice_sante=95,
+                badge_sante="VERT",
+            )
+            # Projet 4 actif sans activité / non calculé : indice_sante=None -> exclu de sante_globale
+            Projet.objects.create(
+                reference="PRJ-SANS-ACT",
+                nom="Chantier Sans Activité",
+                client=moa,
+                statut=StatutProjet.EN_COURS,
+                indice_sante=None,
+                badge_sante=None,
+            )
+
+        response = client.get("/api/v1/tableau-de-bord/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.data
+
+        # sante_globale = moyenne des projets ACTIFS avec score non nul = (80 + 50) / 2 = 65
+        assert data["metriques"]["sante_globale"] == 65
+
+        projets_map = {p["reference"]: p for p in data["projets"]}
+        assert projets_map["PRJ-ACT-01"]["indice_sante"] == 80
+        assert projets_map["PRJ-ACT-01"]["badge_sante"] == "VERT"
+
+        assert projets_map["PRJ-ACT-02"]["indice_sante"] == 50
+        assert projets_map["PRJ-ACT-02"]["badge_sante"] == "ORANGE"
+
+        assert projets_map["PRJ-TERM-01"]["indice_sante"] == 95
+        assert projets_map["PRJ-TERM-01"]["badge_sante"] == "VERT"
+
+        assert projets_map["PRJ-SANS-ACT"]["indice_sante"] is None
+        assert projets_map["PRJ-SANS-ACT"]["badge_sante"] is None
+
+        with schema_context(SCHEMA):
+            Projet.objects.all().delete()
+            RoleTiers.objects.all().delete()
+            Tiers.objects.all().delete()
+

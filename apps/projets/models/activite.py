@@ -21,6 +21,8 @@ __all__ = ["Activite"]
 class Activite(ModeleBase):
     """Activité / Tâche élémentaire de travaux rattachée à un Lot unique."""
 
+    motif = models.TextField(_("motif"), blank=True, default="")
+
     lot = models.ForeignKey(
         Lot,
         on_delete=models.CASCADE,
@@ -109,12 +111,9 @@ class Activite(ModeleBase):
         _("ordre"),
         default=1,
     )
-    statut = models.CharField(
+    statut = models.TextField(
         _("statut"),
-        max_length=20,
-        choices=StatutActivite.choices,
         default=StatutActivite.PLANIFIE,
-        db_index=True,
     )
     est_actif = models.BooleanField(
         _("est actif"),

@@ -25,6 +25,7 @@ class Lot(ModeleBase):
     )
     code = models.CharField(_("code"), max_length=20)
     libelle = models.CharField(_("libellé"), max_length=200)
+    motif = models.TextField(_("motif"), blank=True, default="")
     phase = models.CharField(_("phase"), max_length=100, blank=True)
     mode_execution = models.CharField(
         _("mode d'exécution"),
@@ -92,12 +93,9 @@ class Lot(ModeleBase):
         decimal_places=2,
         default=0,
     )
-    statut = models.CharField(
+    statut = models.TextField(
         _("statut"),
-        max_length=20,
-        choices=StatutLot.choices,
         default=StatutLot.PLANIFIE,
-        db_index=True,
     )
     est_actif = models.BooleanField(_("est actif"), default=True)
 

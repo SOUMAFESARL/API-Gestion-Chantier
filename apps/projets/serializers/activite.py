@@ -27,6 +27,7 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "id",
             "lot_id",
             "libelle",
+            "motif",
             "statut",
             "dependance",
             "equipe_ids",
@@ -58,6 +59,19 @@ class ActiviteSerializer(serializers.ModelSerializer):
 
 class ActiviteCreationSerializer(serializers.ModelSerializer):
     """Création d'une activité rattachée à un lot."""
+
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=False,
+        help_text="Motif informatif facultatif ; texte libre, chaîne vide pour l'effacer.",
+    )
+
+    statut = serializers.CharField(
+        required=False,
+        trim_whitespace=False,
+        help_text="Statut d'évolution libre envoyé par le frontend ; chaîne non vide.",
+    )
 
     quantite_prevue = serializers.DecimalField(
         max_digits=14,
@@ -91,6 +105,8 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         model = Activite
         fields = [
             "libelle",
+            "motif",
+            "statut",
             "dependance",
             "equipe_ids",
             "budget_initial_montant",
@@ -187,31 +203,41 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         return activite
 
 
-class ActiviteModificationSerializer(serializers.ModelSerializer):
-    """Mise à jour partielle d'une activité de chantier."""
+class ActiviteModificationSerializer(ActiviteCreationSerializer):
+    """Réutilise la validation métier sur l'état final d'une modification partielle."""
 
-    quantite_realisee = serializers.DecimalField(
-        max_digits=14,
-        decimal_places=3,
-        min_value=Decimal("0.000"),
-        required=False,
-    )
-    budget_initial_montant = serializers.IntegerField(
-        required=False,
-        allow_null=True,
-        min_value=0,
-    )
-
-    class Meta:
-        model = Activite
-        fields = [
-            "libelle",
-            "statut",
-            "quantite_prevue",
-            "quantite_realisee",
-            "budget_initial_montant",
-            "poids",
-            "ordre",
-            "est_actif",
-        ]
+    def validate(self, attrs):
+        for champ in ("date_debut_prevue", "date_fin_prevue"):
+            ancienne = getattr(self.instance, champ)
+            if champ in attrs and ancienne is not None and attrs[champ] != ancienne:
+                raise serializers.ValidationError(
+                    {champ: "RG-11 : reprogrammez l'activité avec motif et justification."}
+                )
+        valeurs = {
+            champ.source: getattr(self.instance, champ.source)
+            for champ in self.fields.values()
+            if champ.source != "equipe"
+        }
+        valeurs.update(attrs)
+        valeurs = super().validate(valeurs)
+        dependance = valeurs.get("dependance")
+        visites = {self.instance.pk}
+        while dependance:
+            if dependance.pk in visites:
+                raise serializers.ValidationError({"dependance": "Dépendance cyclique interdite."})
+            visites.add(dependance.pk)
+            dependance = dependance.dependance
+        if valeurs["quantite_prevue"] < self.instance.quantite_realisee:
+            raise serializers.ValidationError(
+                {"quantite_prevue": "Quantité inférieure au réalisé."}
+            )
+        fin = valeurs.get("date_fin_prevue")
+        if fin and self.instance.successeurs.filter(date_debut_prevue__lt=fin).exists():
+            raise serializers.ValidationError(
+                {"date_fin_prevue": "La fin dépasse le début d'une activité suivante."}
+            )
+        # FORFAIT normalise la quantité à 1 ; les autres valeurs absentes restent intactes.
+        if valeurs["quantite_prevue"] != self.instance.quantite_prevue:
+            attrs["quantite_prevue"] = valeurs["quantite_prevue"]
+        return attrs
 

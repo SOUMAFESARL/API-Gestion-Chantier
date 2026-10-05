@@ -16,6 +16,7 @@ from apps.projets.views import (
     TableauDeBordView,
 )
 from apps.projets.views.activite import (
+    ActiviteActivationView,
     ActiviteDetailView,
     LotActiviteListCreateView,
 )
@@ -32,6 +33,8 @@ from apps.projets.views.equipe import (
     ProjetEquipeStatistiquesView,
 )
 from apps.projets.views.lot import (
+    LotActivationView,
+    LotDetailView,
     ProjetLotImportView,
     ProjetLotListCreateView,
     ProjetLotModeleView,
@@ -164,6 +167,8 @@ urlpatterns = [
         name="projet-affectation-detail",
     ),
     # Lots
+    path("lots/<uuid:pk>/", LotDetailView.as_view(), name="lot-detail"),
+    path("lots/<uuid:pk>/activation/", LotActivationView.as_view(), name="lot-activation"),
     path(
         "lots/<uuid:pk>/reprogrammer/",
         LotReprogrammerView.as_view(),
@@ -180,6 +185,11 @@ urlpatterns = [
         name="lot-activites-liste-creer",
     ),
     # Activités
+    path(
+        "activites/<uuid:pk>/activation/",
+        ActiviteActivationView.as_view(),
+        name="activite-activation",
+    ),
     path(
         "activites/<uuid:pk>/",
         ActiviteDetailView.as_view(),

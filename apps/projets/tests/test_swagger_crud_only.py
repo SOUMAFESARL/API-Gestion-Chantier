@@ -6,6 +6,46 @@ from drf_spectacular.generators import SchemaGenerator
 from apps.core.enums import StatutProjet
 
 
+def test_evolution_status_is_writable_in_post_and_patch_requests():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    for path, method in (
+        ("/api/v1/projets/{id}/lots/", "post"),
+        ("/api/v1/lots/{lot_id}/activites/", "post"),
+        ("/api/v1/lots/{id}/", "patch"),
+        ("/api/v1/activites/{id}/", "patch"),
+    ):
+        body = schema["paths"][path][method]["requestBody"]["content"]["application/json"]
+        component = body["schema"]["$ref"].rsplit("/", 1)[-1]
+        definition = schema["components"]["schemas"][component]
+        assert "statut" in definition["properties"]
+        assert not definition["properties"]["statut"].get("readOnly", False)
+        assert definition["properties"]["statut"]["type"] == "string"
+        assert "enum" not in definition["properties"]["statut"]
+        assert "maxLength" not in definition["properties"]["statut"]
+        assert "statut" not in definition.get("required", [])
+        assert definition["properties"]["motif"]["type"] == "string"
+        assert not definition["properties"]["motif"].get("readOnly", False)
+        assert "motif" not in definition.get("required", [])
+    for component in ("LotResponse", "Activite"):
+        fields = schema["components"]["schemas"][component]["properties"]
+        assert fields["statut"]["type"] == "string"
+        assert fields["motif"]["type"] == "string"
+
+
+def test_lot_and_activity_mutations_are_visible_in_swagger():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    for resource in ("lots", "activites"):
+        detail = schema["paths"][f"/api/v1/{resource}/{{id}}/"]
+        assert set(detail) == {"get", "patch", "delete"}
+        assert "204" in detail["delete"]["responses"]
+        assert "requestBody" in detail["patch"]
+        activation = schema["paths"][f"/api/v1/{resource}/{{id}}/activation/"]
+        assert set(activation) == {"patch"}
+        assert "400" in activation["patch"]["responses"]
+    activation_fields = schema["components"]["schemas"]["PatchedActivation"]["properties"]
+    assert activation_fields["est_actif"]["type"] == "boolean"
+
+
 def test_schema_contains_project_crud_and_lot_workflow():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
     paths = {path: value for path, value in schema["paths"].items() if "/projets/" in path}

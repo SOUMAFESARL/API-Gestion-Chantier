@@ -9,6 +9,17 @@ from apps.projets.services.statistiques import statistiques_lots
 
 class LotCreationSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=200, source="libelle")
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=False,
+        help_text="Motif informatif facultatif ; texte libre, chaîne vide pour l'effacer.",
+    )
+    statut = serializers.CharField(
+        required=False,
+        trim_whitespace=False,
+        help_text="Statut d'évolution libre envoyé par le frontend ; chaîne non vide.",
+    )
     mode_execution = serializers.ChoiceField(choices=ModeExecution.choices)
     type_bordereau = serializers.ChoiceField(choices=TypeBordereau.choices)
     budget_initial_montant = serializers.IntegerField(
@@ -41,9 +52,55 @@ class LotCreationSerializer(serializers.Serializer):
         return attrs
 
 
+class LotModificationSerializer(LotCreationSerializer):
+    """Valide le résultat du PATCH sans réécrire les champs absents."""
+
+    def validate(self, attrs):
+        for champ in ("date_debut_prevue", "date_fin_prevue"):
+            ancienne = getattr(self.instance, champ)
+            if champ in attrs and ancienne is not None and attrs[champ] != ancienne:
+                raise serializers.ValidationError(
+                    {champ: "RG-11 : reprogrammez le lot avec motif et justification."}
+                )
+        valeurs = {
+            champ.source: getattr(self.instance, champ.source) for champ in self.fields.values()
+        }
+        valeurs.update(attrs)
+        super().validate(valeurs)
+        debut = valeurs.get("date_debut_prevue")
+        fin = valeurs.get("date_fin_prevue")
+        activites = self.instance.activites.all()
+        if debut and activites.filter(date_debut_prevue__lt=debut).exists():
+            raise serializers.ValidationError(
+                {"date_debut_prevue": "Une activité débute avant cette date."}
+            )
+        if fin and activites.filter(date_fin_prevue__gt=fin).exists():
+            raise serializers.ValidationError(
+                {"date_fin_prevue": "Une activité finit après cette date."}
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        for champ, valeur in validated_data.items():
+            setattr(instance, champ, valeur)
+        instance.save()
+        return instance
+
+
+class ActivationSerializer(serializers.Serializer):
+    est_actif = serializers.BooleanField(required=True)
+
+    def to_internal_value(self, data):
+        inconnus = set(data.keys()) - set(self.fields)
+        if inconnus:
+            raise serializers.ValidationError(dict.fromkeys(inconnus, "Champ non accepté."))
+        return super().to_internal_value(data)
+
+
 class LotResponseSerializer(serializers.ModelSerializer):
     projet_id = serializers.UUIDField(read_only=True)
     nom = serializers.CharField(source="libelle", read_only=True)
+    statut = serializers.CharField(read_only=True)
     avancement = serializers.SerializerMethodField()
     activites_count = serializers.SerializerMethodField()
 
@@ -60,6 +117,8 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "projet_id",
             "code",
             "nom",
+            "motif",
+            "statut",
             "mode_execution",
             "type_bordereau",
             "budget_initial_montant",

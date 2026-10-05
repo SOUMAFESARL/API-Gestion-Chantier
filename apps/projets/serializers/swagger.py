@@ -230,43 +230,14 @@ class ProjetPatchSerializer(ProjetPostSerializer):
 
     def update(self, instance, validated_data):
         ancien_statut = instance.statut
-        nouveau_statut = validated_data.get("statut", ancien_statut)
+        nouveau_statut = validated_data.pop("statut", ancien_statut)
         user = getattr(self.context.get("request"), "user", None)
 
         projet = super().update(instance, validated_data)
 
-        # C2 : SUSPENDU ouvre automatiquement un ArretChantier, et la reprise le ferme
-        if ancien_statut != StatutProjet.SUSPENDU and nouveau_statut == StatutProjet.SUSPENDU:
-            from apps.projets.services.arret_chantier import declarer_arret_chantier
+        if nouveau_statut != ancien_statut:
+            from apps.projets.services.machine_etats import changer_statut_projet
 
-            declarer_arret_chantier(
-                projet=projet,
-                date_debut=timezone.localdate(),
-                motif="Suspension du projet",
-                auteur=user,
-                commentaire="Arrêt ouvert automatiquement lors de la suspension du chantier.",
-            )
-        elif ancien_statut == StatutProjet.SUSPENDU and nouveau_statut != StatutProjet.SUSPENDU:
-            arret_ouvert = projet.arrets_chantier.filter(
-                supprime_le__isnull=True,
-                date_fin__isnull=True,
-            ).first()
-            if arret_ouvert:
-                from apps.projets.services.arret_chantier import terminer_arret_chantier
-
-                terminer_arret_chantier(
-                    arret=arret_ouvert,
-                    date_fin=timezone.localdate(),
-                    utilisateur=user,
-                )
-
-        if ancien_statut != nouveau_statut:
-            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
-            declencher_recalcul_sante(
-                projet_id=projet.id,
-                declencheur_type="PROJET_STATUT_TRANSITION",
-                declencheur_id=str(nouveau_statut),
-            )
+            projet = changer_statut_projet(projet, nouveau_statut, user)
 
         return projet

@@ -28,39 +28,48 @@ def declencher_recalcul_sante(
     projet_id: UUID | str,
     declencheur_type: str,
     declencheur_id: Any | None = None,
-) -> bool:
-    """Enregistre l'intention de recalcul et planifie la tâche Celery post-commit.
+) -> None:
+    """Enregistre l'intention de recalcul et planifie la tâche Celery post-commit (C8 / F2).
 
-    Retourne True si une tâche a été planifiée, False si un recalcul était déjà en attente.
+    Règles de concurrence et déduplication :
+    1. cache.add est exécuté DANS le callback on_commit pour éviter de poser un verrou orphelin
+       si la transaction courante est annulée (rollback).
+    2. Si la clé est posée avec succès, la tâche est planifiée avec un countdown de 10s pour regrouper
+       les rafales d'événements.
+    3. Si la clé existe déjà, la tâche déjà planifiée recalculera l'état le plus récent.
     """
     from apps.projets.tasks import recalculer_sante_projet_task
 
     schema_name = getattr(connection, "schema_name", "public")
     cle = obtenir_cle_recalcul_en_attente(schema_name, projet_id)
-
-    # Déduplication réactive : si la clé existe déjà, un recalcul est déjà programmé
-    # et traitera l'état le plus récent dès son exécution
-    if cache.get(cle):
-        logger.debug(
-            "Recalcul de santé déjà en attente pour le projet %s (%s). Déclencheur %s ignoré.",
-            projet_id,
-            schema_name,
-            declencheur_type,
-        )
-        return False
-
-    cache.set(cle, 1, timeout=TTL_CLE_ATTENTE_SECONDES)
-
     declencheur_id_str = str(declencheur_id) if declencheur_id is not None else None
     projet_id_str = str(projet_id)
 
-    def _planifier_tache():
-        recalculer_sante_projet_task.delay(
-            schema_name=schema_name,
-            projet_id=projet_id_str,
-            declencheur_type=declencheur_type,
-            declencheur_id=declencheur_id_str,
-        )
+    def _planifier_apres_commit():
+        cle_posee = cache.add(cle, 1, timeout=TTL_CLE_ATTENTE_SECONDES)
+        if cle_posee:
+            recalculer_sante_projet_task.apply_async(
+                kwargs={
+                    "schema_name": schema_name,
+                    "projet_id": projet_id_str,
+                    "declencheur_type": declencheur_type,
+                    "declencheur_id": declencheur_id_str,
+                },
+                countdown=10,
+            )
+            logger.debug(
+                "Tâche de recalcul santé planifiée pour le projet %s (%s, déclencheur %s, countdown 10s).",
+                projet_id_str,
+                schema_name,
+                declencheur_type,
+            )
+        else:
+            logger.debug(
+                "Recalcul santé déjà en attente pour le projet %s (%s). Déclencheur %s absorbé.",
+                projet_id_str,
+                schema_name,
+                declencheur_type,
+            )
 
-    transaction.on_commit(_planifier_tache)
-    return True
+    transaction.on_commit(_planifier_apres_commit)
+

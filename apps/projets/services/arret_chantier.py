@@ -51,14 +51,14 @@ def declarer_arret_chantier(
         if arret_ouvert:
             raise ErreurMetier("Un arrêt de chantier est déjà en cours sur ce projet.")
 
+    declarant = auteur or getattr(projet, "chef_projet", None) or getattr(projet, "cree_par", None)
     arret = ArretChantier.objects.create(
         projet=projet,
         date_debut=date_debut,
         date_fin=date_fin,
         motif=motif,
-        commentaire=commentaire,
-        declare_par=auteur,
-        cree_par=cree_par or auteur,
+        declare_par=declarant,
+        cree_par=cree_par or declarant,
     )
 
     declencher_recalcul_sante(
@@ -81,8 +81,7 @@ def terminer_arret_chantier(
         raise ValidationError({"date_fin": "La date de fin ne peut pas précéder la date de début de l'arrêt."})
 
     arret.date_fin = date_fin
-    arret.modifie_par = utilisateur
-    arret.save(update_fields=["date_fin", "modifie_par", "modifie_le"])
+    arret.save(update_fields=["date_fin", "modifie_le"])
 
     declencher_recalcul_sante(
         projet_id=arret.projet_id,
@@ -100,8 +99,8 @@ def supprimer_arret_chantier(
 ) -> ArretChantier:
     """Suppression logique d'un arrêt de chantier."""
     arret.supprime_le = timezone.now()
-    arret.modifie_par = utilisateur
-    arret.save(update_fields=["supprime_le", "modifie_par", "modifie_le"])
+    arret.supprime_par = utilisateur
+    arret.save(update_fields=["supprime_le", "supprime_par", "modifie_le"])
 
     declencher_recalcul_sante(
         projet_id=arret.projet_id,

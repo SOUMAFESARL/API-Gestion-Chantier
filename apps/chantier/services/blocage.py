@@ -80,16 +80,18 @@ def modifier_blocage(
         "responsable_action",
     ]
     severite_changee = False
+    statut_change = False
     for champ in champs_modifiables:
         if champ in champs:
             if champ == "severite" and champs[champ] != blocage.severite:
                 severite_changee = True
+            if champ == "statut" and champs[champ] != blocage.statut:
+                statut_change = True
             setattr(blocage, champ, champs[champ])
 
-    blocage.modifie_par = modifie_par
     blocage.save()
 
-    if severite_changee:
+    if severite_changee or statut_change:
         declencher_recalcul_sante(
             projet_id=blocage.projet_id,
             declencheur_type="BLOCAGE_MODIFICATION",
@@ -109,8 +111,7 @@ def prendre_en_charge_blocage(
         raise ErreurMetier("Ce blocage ne peut pas être pris en charge dans son état actuel.")
 
     blocage.statut = StatutBlocage.PRIS_EN_CHARGE
-    blocage.modifie_par = utilisateur
-    blocage.save(update_fields=["statut", "modifie_par", "modifie_le"])
+    blocage.save(update_fields=["statut", "modifie_le"])
 
     # Le statut reste actif pour le calcul de santé, mais on notifie le recalcul
     declencher_recalcul_sante(
@@ -135,15 +136,11 @@ def resoudre_blocage(
     blocage.statut = StatutBlocage.RESOLU
     blocage.resolu_le = timezone.now()
     blocage.resolu_par = utilisateur
-    blocage.commentaire_resolution = commentaire_resolution
-    blocage.modifie_par = utilisateur
     blocage.save(
         update_fields=[
             "statut",
             "resolu_le",
             "resolu_par",
-            "commentaire_resolution",
-            "modifie_par",
             "modifie_le",
         ]
     )
@@ -170,8 +167,7 @@ def cloturer_blocage(
     if not blocage.resolu_le:
         blocage.resolu_le = timezone.now()
         blocage.resolu_par = utilisateur
-    blocage.modifie_par = utilisateur
-    blocage.save(update_fields=["statut", "resolu_le", "resolu_par", "modifie_par", "modifie_le"])
+    blocage.save(update_fields=["statut", "resolu_le", "resolu_par", "modifie_le"])
 
     declencher_recalcul_sante(
         projet_id=blocage.projet_id,

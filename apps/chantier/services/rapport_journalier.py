@@ -207,12 +207,6 @@ def valider_rapport_journalier(
             "modifie_le",
         ]
     )
-
-    declencher_recalcul_sante(
-        projet_id=rapport.projet_id,
-        declencheur_type="RAPPORT_VALIDATION",
-        declencheur_id=rapport.id,
-    )
     return rapport
 
 

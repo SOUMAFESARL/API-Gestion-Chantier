@@ -15,8 +15,11 @@ from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces
 from apps.core.permissions import MembreDuProjet, PermissionModule
-from apps.projets.models import Activite, Lot
-from apps.projets.serializers import ActiviteCreationSerializer, ActiviteSerializer
+from apps.projets.serializers import (
+    ActiviteCreationSerializer,
+    ActiviteModificationSerializer,
+    ActiviteSerializer,
+)
 
 __all__ = ["ActiviteDetailView", "LotActiviteListCreateView"]
 
@@ -106,11 +109,18 @@ class LotActiviteListCreateView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         activite = serializer.save()
+        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+        declencher_recalcul_sante(
+            projet_id=lot.projet_id,
+            declencheur_type="ACTIVITE_CREATION",
+            declencheur_id=activite.id,
+        )
         return Response(ActiviteSerializer(activite).data, status=status.HTTP_201_CREATED)
 
 
 class ActiviteDetailView(APIView):
-    """Détail et suppression logique d'une activité."""
+    """Détail, mise à jour partielle et suppression logique d'une activité."""
 
     parser_classes = [JSONParser]
 
@@ -139,6 +149,30 @@ class ActiviteDetailView(APIView):
         return Response(ActiviteSerializer(activite).data, status=status.HTTP_200_OK)
 
     @extend_schema(
+        summary="Modifier partiellement une activité",
+        tags=["activités"],
+        description="Mise à jour des quantités, statut, ou budget ; permission d'écriture requise.",
+        request=ActiviteModificationSerializer,
+        responses={200: ActiviteSerializer, **ERREURS_ACTIVITES},
+    )
+    @transaction.atomic
+    def patch(self, request, pk):
+        activite = get_object_or_404(
+            Activite.objects.select_related("lot", "lot__projet").select_for_update(), pk=pk
+        )
+        self.check_object_permissions(request, activite)
+        serializer = ActiviteModificationSerializer(activite, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        from apps.projets.services.activites import modifier_activite
+
+        activite = modifier_activite(
+            activite=activite,
+            utilisateur=request.user,
+            **serializer.validated_data,
+        )
+        return Response(ActiviteSerializer(activite).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
         summary="Supprimer une activité",
         tags=["activités"],
         description="Suppression logique ; permission d'écriture du module Projets requise.",
@@ -147,5 +181,14 @@ class ActiviteDetailView(APIView):
     def delete(self, request, pk):
         activite = get_object_or_404(Activite.objects.select_related("lot", "lot__projet"), pk=pk)
         self.check_object_permissions(request, activite)
+        projet_id = activite.lot.projet_id if activite.lot else None
         activite.delete(utilisateur=request.user)
+        if projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=projet_id,
+                declencheur_type="ACTIVITE_SUPPRESSION",
+                declencheur_id=activite.id,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)

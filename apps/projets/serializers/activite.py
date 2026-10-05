@@ -185,3 +185,33 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         )
         activite.equipe.set(equipe)
         return activite
+
+
+class ActiviteModificationSerializer(serializers.ModelSerializer):
+    """Mise à jour partielle d'une activité de chantier."""
+
+    quantite_realisee = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        min_value=Decimal("0.000"),
+        required=False,
+    )
+    budget_initial_montant = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
+
+    class Meta:
+        model = Activite
+        fields = [
+            "libelle",
+            "statut",
+            "quantite_prevue",
+            "quantite_realisee",
+            "budget_initial_montant",
+            "poids",
+            "ordre",
+            "est_actif",
+        ]
+

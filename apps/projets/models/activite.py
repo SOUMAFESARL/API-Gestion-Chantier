@@ -128,11 +128,11 @@ class Activite(ModeleBase):
         ordering = ["lot", "ordre", "cree_le"]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(date_fin_prevue__gte=models.F("date_debut_prevue")),
+                condition=models.Q(date_fin_prevue__gte=models.F("date_debut_prevue")),
                 name="chk_activite_dates_coherentes",
             ),
             models.CheckConstraint(
-                check=~models.Q(unite="FORFAIT") | models.Q(quantite_prevue=Decimal("1.000")),
+                condition=~models.Q(unite="FORFAIT") | models.Q(quantite_prevue=Decimal("1.000")),
                 name="chk_activite_forfait",
             ),
         ]

@@ -30,6 +30,7 @@ from apps.projets.services.affectations import affecter_collaborateur_projet
 from apps.projets.services.references import generer_reference_projet
 from apps.projets.serializers.activite import (
     ActiviteCreationSerializer,
+    ActiviteModificationSerializer,
     ActiviteSerializer,
 )
 from apps.projets.serializers.reprogrammation import (
@@ -44,6 +45,7 @@ from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
     "ActiviteCreationSerializer",
+    "ActiviteModificationSerializer",
     "ActiviteSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",

@@ -55,7 +55,7 @@ class ArretChantier(ModeleBase):
             ),
             # C7 : date_fin >= date_debut
             models.CheckConstraint(
-                check=models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=models.F("date_debut")),
+                condition=models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=models.F("date_debut")),
                 name="chk_arret_date_fin_gte_debut",
             ),
         ]

@@ -25,7 +25,7 @@ __all__ = ["envoyer_alerte_sante_rouge", "obtenir_destinataires_alerte_rouge"]
 
 
 def obtenir_destinataires_alerte_rouge(projet: Projet) -> list[str]:
-    """Récupère la liste dédupliquée des destinataires (Chef de Projet + DG / Admin)."""
+    """Récupère la liste dédupliquée des destinataires (Chef de Projet + DG uniquement - F3)."""
     emails: set[str] = set()
 
     # 1. Chef de projet
@@ -33,12 +33,11 @@ def obtenir_destinataires_alerte_rouge(projet: Projet) -> list[str]:
     if chef and getattr(chef, "email", None) and chef.is_active and chef.supprime_le is None:
         emails.add(chef.email.strip().lower())
 
-    # 2. Direction Générale & Administrateurs
+    # 2. Direction Générale uniquement (retrait des ADMIN et autres rôles selon spécification F3)
     dgs = Utilisateur.objects.filter(
         supprime_le__isnull=True,
         is_active=True,
-    ).filter(
-        Q(role_global=RoleGlobal.DIRECTEUR_GENERAL) | Q(role_global=RoleGlobal.ADMIN)
+        role_global=RoleGlobal.DIRECTEUR_GENERAL,
     )
     for u in dgs:
         if u.email:

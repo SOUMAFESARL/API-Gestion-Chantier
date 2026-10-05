@@ -289,3 +289,36 @@ def test_patch_rejects_foreign_team_and_dependency(contexte):
     assert client.patch(url, {"equipe_ids": [str(user.pk)]}, format="json").status_code == 400
     assert client.patch(url, {"equipe_ids": []}, format="json").status_code == 200
     assert not activite.equipe.exists()
+
+
+@pytest.mark.parametrize("ressource", ["lots", "activites"])
+def test_status_sent_on_creation_and_patch_persists(contexte, ressource):
+    client, projet, lot, _, _ = contexte
+    if ressource == "lots":
+        url = f"/api/v1/projets/{projet.pk}/lots/"
+        data = {"nom": "Lot manuel", "mode_execution": "REGIE", "type_bordereau": "FORFAIT"}
+        model = Lot
+    else:
+        url = f"/api/v1/lots/{lot.pk}/activites/"
+        data = {"libelle": "Activité manuelle"}
+        model = Activite
+    response = client.post(url, {**data, "statut": "EN_COURS"}, format="json")
+    assert response.status_code == 201, response.data
+    detail = f"/api/v1/{ressource}/{response.data['id']}/"
+    assert response.data["statut"] == "EN_COURS"
+    for statut in (
+        "SUSPENDU",
+        "CLOTURE",
+        "Terminé",
+        "en cours",
+        "Statut personnalisé très long",
+        "x" * 4096,
+    ):
+        response = client.patch(detail, {"statut": statut}, format="json")
+        assert response.status_code == 200, response.data
+        assert response.data["statut"] == statut
+        assert model.objects.get(pk=response.data["id"]).statut == statut
+        assert client.get(detail).data["statut"] == statut
+    response = client.patch(detail, {"statut": "INCONNU"}, format="json")
+    assert response.status_code == 200
+    assert response.data["statut"] == "INCONNU"

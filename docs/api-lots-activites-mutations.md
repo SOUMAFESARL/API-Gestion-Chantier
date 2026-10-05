@@ -18,6 +18,18 @@ ou calculés, le parent, l'UUID et la baseline sont refusés.
 Budget en centimes FCFA. L'équipe et la quantité restent intactes si elles sont absentes.
 La quantité prévue ne peut pas être abaissée sous le réalisé.
 
+Le frontend peut envoyer `statut` à la création (POST) et en modification (PATCH).
+Toute chaîne non vide est acceptée, sans liste imposée ni limite de 20 caractères.
+Exemples : `{"statut": "Terminé"}`, `{"statut": "en cours"}` ou un libellé personnalisé.
+La casse, les accents et les espaces sont conservés.
+Sans statut à la création, le modèle utilise `PLANIFIE`. Un PATCH sans statut
+conserve la valeur courante. Vide ou null : 400. Les règles automatiques existantes
+peuvent faire évoluer les codes calendaires internes ; les libellés personnalisés
+sont préservés et stockés sans interprétation métier automatique.
+Appliquer la migration `0024_statuts_lots_activites_libres` sur les tenants :
+`python manage.py migrate_schemas --tenant`. Les champs deviennent du texte libre ;
+les anciens index de statut sont retirés pour accepter les chaînes longues.
+
 Les dates prévisionnelles déjà renseignées passent par
 POST `/api/v1/lots/{id}/reprogrammer/` ou
 POST `/api/v1/activites/{id}/reprogrammer/` (motif et justification, RG-11).
@@ -33,7 +45,7 @@ DELETE renvoie 204 sans corps et conserve la ligne avec son acteur de suppressio
 Un lot contenant des activités non supprimées renvoie 400 : supprimer les activités
 au préalable ou désactiver le lot. Une activité ayant des successeurs non supprimés
 renvoie 400 : retirer les dépendances auparavant. Un objet supprimé ou dont le
-parent est supprimé renvoie 404. Aucun changement de schéma n'est nécessaire.
+parent est supprimé renvoie 404.
 
 Les mutations et la création d'activités verrouillent le projet puis le lot
 (puis l'activité pour sa mutation) dans une transaction. Cela sérialise les

@@ -6,6 +6,28 @@ from drf_spectacular.generators import SchemaGenerator
 from apps.core.enums import StatutProjet
 
 
+def test_evolution_status_is_writable_in_post_and_patch_requests():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    for path, method in (
+        ("/api/v1/projets/{id}/lots/", "post"),
+        ("/api/v1/lots/{lot_id}/activites/", "post"),
+        ("/api/v1/lots/{id}/", "patch"),
+        ("/api/v1/activites/{id}/", "patch"),
+    ):
+        body = schema["paths"][path][method]["requestBody"]["content"]["application/json"]
+        component = body["schema"]["$ref"].rsplit("/", 1)[-1]
+        definition = schema["components"]["schemas"][component]
+        assert "statut" in definition["properties"]
+        assert not definition["properties"]["statut"].get("readOnly", False)
+        assert definition["properties"]["statut"]["type"] == "string"
+        assert "enum" not in definition["properties"]["statut"]
+        assert "maxLength" not in definition["properties"]["statut"]
+        assert "statut" not in definition.get("required", [])
+    for component in ("LotResponse", "Activite"):
+        fields = schema["components"]["schemas"][component]["properties"]
+        assert fields["statut"]["type"] == "string"
+
+
 def test_lot_and_activity_mutations_are_visible_in_swagger():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
     for resource in ("lots", "activites"):

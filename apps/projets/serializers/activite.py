@@ -59,6 +59,12 @@ class ActiviteSerializer(serializers.ModelSerializer):
 class ActiviteCreationSerializer(serializers.ModelSerializer):
     """Création d'une activité rattachée à un lot."""
 
+    statut = serializers.CharField(
+        required=False,
+        trim_whitespace=False,
+        help_text="Statut d'évolution libre envoyé par le frontend ; chaîne non vide.",
+    )
+
     quantite_prevue = serializers.DecimalField(
         max_digits=14,
         decimal_places=3,
@@ -91,6 +97,7 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         model = Activite
         fields = [
             "libelle",
+            "statut",
             "dependance",
             "equipe_ids",
             "budget_initial_montant",
@@ -195,9 +202,7 @@ class ActiviteModificationSerializer(ActiviteCreationSerializer):
             ancienne = getattr(self.instance, champ)
             if champ in attrs and ancienne is not None and attrs[champ] != ancienne:
                 raise serializers.ValidationError(
-                    {
-                        champ: "RG-11 : reprogrammez l'activité avec motif et justification."
-                    }
+                    {champ: "RG-11 : reprogrammez l'activité avec motif et justification."}
                 )
         valeurs = {
             champ.source: getattr(self.instance, champ.source)

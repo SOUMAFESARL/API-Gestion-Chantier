@@ -60,6 +60,9 @@ def evaluer_statut_activite(activite: Activite, date_reference: date | None = No
     """
     date_ref = date_reference or timezone.now().date()
 
+    if activite.statut not in StatutActivite.values:
+        return False
+
     if activite.avancement >= 100 or activite.statut == StatutActivite.CLOTURE:
         nouveau_statut = StatutActivite.CLOTURE
     elif activite.statut == StatutActivite.SUSPENDU:
@@ -97,6 +100,9 @@ def evaluer_statut_lot(lot: Lot, date_reference: date | None = None) -> bool:
     Retourne True si le statut a été modifié et sauvegardé, False sinon.
     """
     date_ref = date_reference or timezone.now().date()
+
+    if lot.statut not in StatutLot.values:
+        return False
 
     if lot.statut == StatutLot.SUSPENDU:
         return False

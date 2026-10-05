@@ -9,6 +9,11 @@ from apps.projets.services.statistiques import statistiques_lots
 
 class LotCreationSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=200, source="libelle")
+    statut = serializers.CharField(
+        required=False,
+        trim_whitespace=False,
+        help_text="Statut d'évolution libre envoyé par le frontend ; chaîne non vide.",
+    )
     mode_execution = serializers.ChoiceField(choices=ModeExecution.choices)
     type_bordereau = serializers.ChoiceField(choices=TypeBordereau.choices)
     budget_initial_montant = serializers.IntegerField(
@@ -49,9 +54,7 @@ class LotModificationSerializer(LotCreationSerializer):
             ancienne = getattr(self.instance, champ)
             if champ in attrs and ancienne is not None and attrs[champ] != ancienne:
                 raise serializers.ValidationError(
-                    {
-                        champ: "RG-11 : reprogrammez le lot avec motif et justification."
-                    }
+                    {champ: "RG-11 : reprogrammez le lot avec motif et justification."}
                 )
         valeurs = {
             champ.source: getattr(self.instance, champ.source) for champ in self.fields.values()
@@ -91,6 +94,7 @@ class ActivationSerializer(serializers.Serializer):
 class LotResponseSerializer(serializers.ModelSerializer):
     projet_id = serializers.UUIDField(read_only=True)
     nom = serializers.CharField(source="libelle", read_only=True)
+    statut = serializers.CharField(read_only=True)
     avancement = serializers.SerializerMethodField()
     activites_count = serializers.SerializerMethodField()
 
@@ -107,6 +111,7 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "projet_id",
             "code",
             "nom",
+            "statut",
             "mode_execution",
             "type_bordereau",
             "budget_initial_montant",

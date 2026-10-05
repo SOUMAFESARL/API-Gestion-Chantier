@@ -67,6 +67,7 @@ class LotActiviteListCreateView(APIView):
             "equipe_ids contient des UUID de collaborateurs du projet ; les équipes de "
             "chantier se rattachent ensuite via l'API d'affectations. Avancement automatique "
             "à 0 à la création, jusqu'à 100 selon les quantités réalisées."
+            " Statut d'évolution facultatif : toute chaîne non vide envoyée par le frontend."
         ),
         examples=[
             OpenApiExample(
@@ -79,6 +80,7 @@ class LotActiviteListCreateView(APIView):
                 request_only=True,
                 value={
                     "libelle": "Carte_transport",
+                    "statut": "À démarrer",
                     "quantite_prevue": "100.000",
                     "unite": "M2",
                     "date_debut_prevue": "2026-10-04",
@@ -202,7 +204,10 @@ class ActiviteDetailView(APIView):
         ),
         request=ActiviteModificationSerializer,
         responses={200: ActiviteSerializer, **ERREURS_ACTIVITES},
-        examples=[OpenApiExample("Renommer", value={"libelle": "Terrassement"}, request_only=True)],
+        examples=[
+            OpenApiExample("Renommer", value={"libelle": "Terrassement"}, request_only=True),
+            OpenApiExample("Statut libre", value={"statut": "Terminé"}, request_only=True),
+        ],
     )
     @transaction.atomic
     def patch(self, request, pk):

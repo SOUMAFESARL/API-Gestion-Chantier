@@ -109,12 +109,9 @@ class Activite(ModeleBase):
         _("ordre"),
         default=1,
     )
-    statut = models.CharField(
+    statut = models.TextField(
         _("statut"),
-        max_length=20,
-        choices=StatutActivite.choices,
         default=StatutActivite.PLANIFIE,
-        db_index=True,
     )
     est_actif = models.BooleanField(
         _("est actif"),

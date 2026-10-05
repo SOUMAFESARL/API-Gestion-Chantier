@@ -68,6 +68,7 @@ class ProjetLotListCreateView(APIView):
             "Code et ordre générés automatiquement. Budget en centimes de FCFA. "
             "Le projet est celui de l'URL ; ne pas envoyer projet ni id_projet. "
             "Avancement automatique à 0 tant qu'aucune activité n'est réalisée."
+            " Statut d'évolution facultatif : toute chaîne non vide envoyée par le frontend."
         ),
         request=LotCreationSerializer,
         responses={
@@ -81,6 +82,7 @@ class ProjetLotListCreateView(APIView):
                 request_only=True,
                 value={
                     "nom": "Gros œuvre",
+                    "statut": "En cours",
                     "mode_execution": "REGIE",
                     "type_bordereau": "FORFAIT",
                     "budget_initial_montant": None,
@@ -219,7 +221,8 @@ class LotDetailView(APIView):
         request=LotModificationSerializer,
         responses={200: LotResponseSerializer, **ERREURS_MUTATION_LOT},
         examples=[
-            OpenApiExample("Renommer le lot", value={"nom": "Fondations"}, request_only=True)
+            OpenApiExample("Renommer le lot", value={"nom": "Fondations"}, request_only=True),
+            OpenApiExample("Statut libre", value={"statut": "Terminé"}, request_only=True),
         ],
     )
     @transaction.atomic

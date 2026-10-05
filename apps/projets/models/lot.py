@@ -92,12 +92,9 @@ class Lot(ModeleBase):
         decimal_places=2,
         default=0,
     )
-    statut = models.CharField(
+    statut = models.TextField(
         _("statut"),
-        max_length=20,
-        choices=StatutLot.choices,
         default=StatutLot.PLANIFIE,
-        db_index=True,
     )
     est_actif = models.BooleanField(_("est actif"), default=True)
 

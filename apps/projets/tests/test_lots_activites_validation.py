@@ -25,6 +25,7 @@ def objets(monkeypatch):
         projet_id=uuid4(),
         projet=SimpleNamespace(chef_projet_id=None, conducteur_travaux_id=None),
         libelle="Lot",
+        statut="PLANIFIE",
         mode_execution="REGIE",
         type_bordereau="FORFAIT",
         budget_initial_montant=None,
@@ -39,6 +40,7 @@ def objets(monkeypatch):
     activite = SimpleNamespace(
         pk=uuid4(),
         libelle="Activité",
+        statut="PLANIFIE",
         dependance=None,
         budget_initial_montant=None,
         unite="U",
@@ -161,3 +163,55 @@ def test_activation_accepts_both_states(etat):
     serializer = ActivationSerializer(data={"est_actif": etat})
     assert serializer.is_valid(), serializer.errors
     assert serializer.validated_data["est_actif"] is etat
+
+
+@pytest.mark.parametrize("ressource", ["lot", "activite"])
+@pytest.mark.parametrize(
+    "statut",
+    [
+        "PLANIFIE",
+        "EN_COURS",
+        "EN_RETARD",
+        "SUSPENDU",
+        "CLOTURE",
+        "Terminé",
+        "en cours",
+        "Statut personnalisé très long",
+        "inconnu",
+    ],
+)
+def test_frontend_can_send_evolution_status(objets, ressource, statut):
+    lot, activite = objets
+    serializer = (
+        LotModificationSerializer(lot, data={"statut": statut}, partial=True)
+        if ressource == "lot"
+        else ActiviteModificationSerializer(
+            activite, data={"statut": statut}, partial=True, context={"lot": lot}
+        )
+    )
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data == {"statut": statut}
+
+
+@pytest.mark.parametrize("ressource", ["lot", "activite"])
+@pytest.mark.parametrize("statut", ["", None, {}, []])
+def test_empty_or_non_string_evolution_status_is_rejected(objets, ressource, statut):
+    lot, activite = objets
+    serializer = (
+        LotModificationSerializer(lot, data={"statut": statut}, partial=True)
+        if ressource == "lot"
+        else ActiviteModificationSerializer(
+            activite, data={"statut": statut}, partial=True, context={"lot": lot}
+        )
+    )
+    assert not serializer.is_valid()
+    assert "statut" in serializer.errors
+
+
+def test_custom_status_is_not_overwritten_by_automatic_evaluation():
+    from apps.projets.services.machine_etats import evaluer_statut_activite, evaluer_statut_lot
+
+    for evaluer in (evaluer_statut_activite, evaluer_statut_lot):
+        objet = SimpleNamespace(statut="Terminé")
+        assert evaluer(objet) is False
+        assert objet.statut == "Terminé"

@@ -3,6 +3,12 @@
 Journal de chantier : rapports journaliers, production, photos, blocages.
 """
 
+from .blocage import (
+    BlocageDetailView,
+    BlocagePrendreEnChargeView,
+    BlocageResoudreView,
+    ProjetBlocageListCreateView,
+)
 from .rapport_journalier import (
     RapportDetailView,
     RapportListCreateView,
@@ -12,6 +18,10 @@ from .rapport_journalier import (
 )
 
 __all__ = [
+    "BlocageDetailView",
+    "BlocagePrendreEnChargeView",
+    "BlocageResoudreView",
+    "ProjetBlocageListCreateView",
     "RapportDetailView",
     "RapportListCreateView",
     "RapportRejeterView",

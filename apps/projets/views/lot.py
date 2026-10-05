@@ -231,7 +231,16 @@ class LotDetailView(APIView):
         lot = self.obtenir_lot(request, pk, verrou=True)
         serializer = LotModificationSerializer(lot, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        return Response(LotResponseSerializer(serializer.save()).data)
+        lot_sauvegarde = serializer.save()
+        if lot.projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=lot.projet_id,
+                declencheur_type="LOT_MODIFICATION",
+                declencheur_id=lot.id,
+            )
+        return Response(LotResponseSerializer(lot_sauvegarde).data)
 
     @extend_schema(
         tags=["lots"],
@@ -252,7 +261,16 @@ class LotDetailView(APIView):
             raise ValidationError(
                 {"lot": "Supprimez les activités du lot avant de le supprimer, ou désactivez-le."}
             )
+        projet_id = lot.projet_id
         lot.delete(utilisateur=request.user)
+        if projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=projet_id,
+                declencheur_type="LOT_SUPPRESSION",
+                declencheur_id=lot.id,
+            )
         return Response(status=204)
 
 
@@ -281,4 +299,12 @@ class LotActivationView(LotDetailView):
         serializer.is_valid(raise_exception=True)
         lot.est_actif = serializer.validated_data["est_actif"]
         lot.save(update_fields=["est_actif", "modifie_le"])
+        if lot.projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=lot.projet_id,
+                declencheur_type="LOT_ACTIVATION",
+                declencheur_id=lot.id,
+            )
         return Response(LotResponseSerializer(lot).data)

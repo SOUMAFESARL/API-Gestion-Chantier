@@ -112,33 +112,72 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
                 "logo_url": logo_url,
             }
 
-    # 3. Matrice des habilitations par module
+    # 3. Matrice des habilitations par module et permissions effectives
+    from apps.core.droits import _obtenir_modules_actifs, permissions_effectives
+
+    modules_actifs = _obtenir_modules_actifs(tenant)
     habilitations = {}
     role = (
-        utilisateur.role_personnalise or Role.objects.filter(code=utilisateur.role_global).first()
+        utilisateur.role_personnalise
+        or Role.objects.filter(code=utilisateur.role_global, supprime_le__isnull=True).first()
     )
     if role:
-        rpm_qs = getattr(role, "modules_permissions", None) or getattr(role, "permissions_modules", None)
-        if rpm_qs is not None:
-            for perm in rpm_qs.select_related("module").all():
-                mod_code = perm.module.code if hasattr(perm.module, "code") else str(perm.module)
-                habilitations[mod_code] = {
-                    "libelle": perm.get_niveau_display() if hasattr(perm, "get_niveau_display") else "Personnalisé",
-                    "niveau": perm.niveau if getattr(perm, "niveau", None) is not None else 0,
-                }
+        try:
+            from apps.accounts.models import RoleModulePermission
 
-    # Accès de secours pour DG / Admin / Super Admin ou modules non configurés
-    est_plein_droit = (
-        utilisateur.is_dg
-        or utilisateur.role_global == RoleGlobal.ADMIN
-        or bool(getattr(utilisateur, "is_superuser", False))
+            for rmp in RoleModulePermission.objects.filter(
+                role=role, supprime_le__isnull=True
+            ).select_related("module", "module_catalogue"):
+                mod_code = None
+                if getattr(rmp, "module_catalogue_id", None) and rmp.module_catalogue:
+                    mod_code = rmp.module_catalogue.code
+                elif getattr(rmp, "module_id", None) and rmp.module:
+                    mod_code = rmp.module.code
+                if mod_code:
+                    m_key = mod_code.lower()
+                    # Si le module n'est pas souscrit par l'entreprise, forcer niveau: 0 (masquage frontend)
+                    if m_key not in modules_actifs and m_key != "administration":
+                        niveau = 0
+                        libelle = "Non souscrit"
+                    else:
+                        niveau = rmp.niveau if getattr(rmp, "niveau", None) is not None else 0
+                        libelle = (
+                            rmp.get_niveau_display()
+                            if hasattr(rmp, "get_niveau_display")
+                            else "Personnalisé"
+                        )
+
+                    habilitations[mod_code.upper()] = {
+                        "libelle": libelle,
+                        "niveau": niveau,
+                    }
+        except Exception:
+            pass
+
+    is_dg_ou_super = (
+        getattr(utilisateur, "is_owner", False)
+        or getattr(utilisateur, "is_dg", False)
+        or getattr(utilisateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG")
+        or getattr(utilisateur, "is_superuser", False)
     )
+
     for mod_code, _mod_label in ModuleChoix.choices:
-        if mod_code not in habilitations:
-            habilitations[mod_code] = {
-                "libelle": "Validation" if est_plein_droit else "Lecture",
-                "niveau": 3 if est_plein_droit else 1,
-            }
+        m_upper = mod_code.upper()
+        m_lower = mod_code.lower()
+        est_souscrit = m_lower in modules_actifs or m_lower == "administration"
+        if m_upper not in habilitations or is_dg_ou_super:
+            if not est_souscrit:
+                habilitations[m_upper] = {"libelle": "Non souscrit", "niveau": 0}
+            elif is_dg_ou_super:
+                habilitations[m_upper] = {"libelle": "Validation", "niveau": 3}
+            else:
+                habilitations[m_upper] = habilitations.get(
+                    m_upper, {"libelle": "Aucun", "niveau": 0}
+                )
+
+    perms_effectives = sorted(
+        permissions_effectives(utilisateur, request=request, tenant=tenant)
+    )
 
     # 4. Rôle personnalisé
     role_perso_info = None
@@ -172,6 +211,7 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "schema": schema_name,
         "entreprise": entreprise_info,
         "habilitations": habilitations,
+        "permissions": perms_effectives,
         "derniere_connexion": utilisateur.last_login.isoformat()
         if utilisateur.last_login
         else None,

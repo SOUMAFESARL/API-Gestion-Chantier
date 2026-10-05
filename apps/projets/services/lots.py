@@ -48,6 +48,13 @@ def creer_lots(projet, donnees, utilisateur):
             )
         )
         codes.add(code)
+    if resultats:
+        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+        declencher_recalcul_sante(
+            projet_id=projet.id,
+            declencheur_type="LOT_CREATION",
+        )
     return resultats
 
 

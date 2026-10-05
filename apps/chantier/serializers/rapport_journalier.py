@@ -167,13 +167,9 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
         request = self.context.get("request")
         user = request.user if request else None
         if user and user.is_authenticated:
-            est_direction = (
-                user.is_superuser
-                or getattr(user, "is_owner", False)
-                or getattr(user, "is_dg", False)
-                or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-            )
-            if not est_direction:
+            from apps.core.droits import a_permission
+
+            if not a_permission(user, "projets.voir_tous", request=request):
                 from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
 
                 projets_actifs = obtenir_projets_ids_actifs_utilisateur(user, request=request)
@@ -238,13 +234,9 @@ class RapportJournalierUpdateSerializer(serializers.Serializer):
             request = self.context.get("request")
             user = request.user if request else None
             if user and user.is_authenticated:
-                est_direction = (
-                    user.is_superuser
-                    or getattr(user, "is_owner", False)
-                    or getattr(user, "is_dg", False)
-                    or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-                )
-                if not est_direction:
+                from apps.core.droits import a_permission
+
+                if not a_permission(user, "projets.voir_tous", request=request):
                     from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
 
                     projets_actifs = obtenir_projets_ids_actifs_utilisateur(user, request=request)

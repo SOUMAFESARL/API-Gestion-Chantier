@@ -101,11 +101,11 @@ class ProjetPermissionsRolesView(APIView):
         projet = get_object_or_404(Projet, pk=pk, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
 
-        est_admin = (
-            request.user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-            or getattr(request.user, "is_owner", False)
-            or getattr(request.user, "is_dg", False)
-            or getattr(request.user, "is_superuser", False)
+        from apps.core.droits import a_permission
+
+        peut_gerer_droits = (
+            a_permission(request.user, "administration.roles_gerer", request=request)
+            or a_permission(request.user, "projets.ecrire", request=request)
         )
         est_chef_projet = (
             projet.chef_projet_id == request.user.id
@@ -118,7 +118,7 @@ class ProjetPermissionsRolesView(APIView):
             ).exists()
         )
 
-        if not (est_admin or est_chef_projet):
+        if not (peut_gerer_droits or est_chef_projet):
             return Response(
                 {
                     "detail": _(

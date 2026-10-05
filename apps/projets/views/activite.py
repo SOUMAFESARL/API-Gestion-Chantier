@@ -17,9 +17,13 @@ from rest_framework.views import APIView
 from apps.core.enums import ModuleChoix, NiveauAcces
 from apps.core.permissions import MembreDuProjet, PermissionModule
 from apps.projets.models import Activite, Lot, Projet
-from apps.projets.serializers import ActiviteCreationSerializer, ActiviteSerializer
-from apps.projets.serializers.activite import ActiviteModificationSerializer
+from apps.projets.serializers import (
+    ActiviteCreationSerializer,
+    ActiviteModificationSerializer,
+    ActiviteSerializer,
+)
 from apps.projets.serializers.lot import ActivationSerializer
+
 
 __all__ = ["ActiviteDetailView", "LotActiviteListCreateView"]
 
@@ -122,6 +126,13 @@ class LotActiviteListCreateView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         activite = serializer.save()
+        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+        declencher_recalcul_sante(
+            projet_id=lot.projet_id,
+            declencheur_type="ACTIVITE_CREATION",
+            declencheur_id=activite.id,
+        )
         return Response(ActiviteSerializer(activite).data, status=status.HTTP_201_CREATED)
 
 
@@ -192,7 +203,16 @@ class ActiviteDetailView(APIView):
             raise ValidationError(
                 {"dependance": "Retirez les dépendances avant de supprimer cette activité."}
             )
+        projet_id = activite.lot.projet_id if activite.lot else None
         activite.delete(utilisateur=request.user)
+        if projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=projet_id,
+                declencheur_type="ACTIVITE_SUPPRESSION",
+                declencheur_id=activite.id,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
@@ -221,7 +241,16 @@ class ActiviteDetailView(APIView):
             context={"request": request, "lot": activite.lot},
         )
         serializer.is_valid(raise_exception=True)
-        return Response(ActiviteSerializer(serializer.save()).data)
+        activite_modifiee = serializer.save()
+        if activite.lot and activite.lot.projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=activite.lot.projet_id,
+                declencheur_type="ACTIVITE_MODIFICATION",
+                declencheur_id=activite.id,
+            )
+        return Response(ActiviteSerializer(activite_modifiee).data)
 
 
 class ActiviteActivationView(ActiviteDetailView):
@@ -251,4 +280,12 @@ class ActiviteActivationView(ActiviteDetailView):
             raise ValidationError({"lot": "Réactivez le lot avant l'activité."})
         activite.est_actif = etat
         activite.save(update_fields=["est_actif", "modifie_le"])
+        if activite.lot and activite.lot.projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=activite.lot.projet_id,
+                declencheur_type="ACTIVITE_ACTIVATION",
+                declencheur_id=activite.id,
+            )
         return Response(ActiviteSerializer(activite).data)

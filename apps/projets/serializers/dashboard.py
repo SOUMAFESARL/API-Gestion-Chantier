@@ -77,7 +77,12 @@ class ProjetDashboardItemSerializer(serializers.Serializer):
     budget_initial_montant = serializers.IntegerField(allow_null=True)
     budget_consomme_montant = serializers.IntegerField()
     rapport_jour_statut = serializers.CharField(help_text="SOUMIS ou EN_ATTENTE")
-    indice_sante = serializers.IntegerField(help_text="Note sur 100")
+    indice_sante = serializers.IntegerField(help_text="Note sur 100", allow_null=True)
+    badge_sante = serializers.CharField(
+        help_text="Badge de santé opérationnel (VERT, ORANGE, ROUGE)",
+        required=False,
+        allow_null=True,
+    )
     chef_projet_nom = serializers.CharField()
     conducteur_travaux_nom = serializers.CharField()
 

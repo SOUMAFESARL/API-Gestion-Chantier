@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Invitation, Utilisateur
-from apps.core.enums import StatutUtilisateur
+from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def desactiver_collaborateur_plateforme(
     - Clôture automatique de toutes les affectations actives sur les chantiers.
     - Révocation des invitations en attente et des sessions actives.
     """
-    if getattr(collaborateur, "is_owner", False):
+    if getattr(collaborateur, "is_owner", False) or getattr(collaborateur, "is_dg", False) or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL:
         raise ValidationError(
             _("Le compte du Directeur Général / Propriétaire ne peut pas être désactivé.")
         )

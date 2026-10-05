@@ -227,3 +227,17 @@ class ProjetPatchSerializer(ProjetPostSerializer):
             if debut and fin and fin <= debut:
                 raise serializers.ValidationError({"date_fin_prevue": "Fin apres debut requise."})
         return attrs
+
+    def update(self, instance, validated_data):
+        ancien_statut = instance.statut
+        nouveau_statut = validated_data.pop("statut", ancien_statut)
+        user = getattr(self.context.get("request"), "user", None)
+
+        projet = super().update(instance, validated_data)
+
+        if nouveau_statut != ancien_statut:
+            from apps.projets.services.machine_etats import changer_statut_projet
+
+            projet = changer_statut_projet(projet, nouveau_statut, user)
+
+        return projet

@@ -17,6 +17,7 @@ from apps.chantier.selectors.rapport_journalier import rapport_existe
 from apps.core.enums import Meteo, StatutRapport
 from apps.core.exceptions import ErreurMetier, RapportDejaExistant, RapportNonModifiable
 from apps.projets.models import Lot, Projet
+from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 __all__ = [
     "creer_rapport_journalier",
@@ -87,6 +88,13 @@ def creer_rapport_journalier(
     if est_soumis and lot is not None and not lot.premier_rapport_soumis:
         lot.premier_rapport_soumis = True
         lot.save(update_fields=["premier_rapport_soumis", "modifie_le"])
+
+    if est_soumis:
+        declencher_recalcul_sante(
+            projet_id=projet.id,
+            declencheur_type="RAPPORT_SOUMISSION",
+            declencheur_id=rapport.id,
+        )
 
     return rapport
 
@@ -170,6 +178,11 @@ def soumettre_rapport_journalier(
         rapport.lot.premier_rapport_soumis = True
         rapport.lot.save(update_fields=["premier_rapport_soumis", "modifie_le"])
 
+    declencher_recalcul_sante(
+        projet_id=rapport.projet_id,
+        declencheur_type="RAPPORT_SOUMISSION",
+        declencheur_id=rapport.id,
+    )
     return rapport
 
 
@@ -227,5 +240,11 @@ def rejeter_rapport_journalier(
             "commentaire_validation",
             "modifie_le",
         ]
+    )
+
+    declencher_recalcul_sante(
+        projet_id=rapport.projet_id,
+        declencheur_type="RAPPORT_REJET",
+        declencheur_id=rapport.id,
     )
     return rapport

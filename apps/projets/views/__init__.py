@@ -46,24 +46,38 @@ from apps.projets.views.reprogrammation import (
     ProjetJournalReportsConsolideView,
     ProjetReprogrammerView,
 )
+from apps.projets.views.arret_chantier import (
+    ArretChantierDetailView,
+    ProjetArretChantierListCreateView,
+)
+from apps.projets.views.sante import (
+    ProjetSanteApercuView,
+    ProjetSanteDetailView,
+    ProjetSanteHistoriqueView,
+)
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
     "ActiviteDetailView",
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",
+    "ArretChantierDetailView",
     "GlobalJournalReportsView",
     "LotActiviteListCreateView",
     "LotHistoriqueDatesView",
     "LotReprogrammerView",
     "MeteoProjetView",
     "MotifReportListCreateView",
+    "ProjetArretChantierListCreateView",
     "ProjetDetailView",
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
     "ProjetPermissionsRolesView",
     "ProjetReprogrammerView",
+    "ProjetSanteApercuView",
+    "ProjetSanteDetailView",
+    "ProjetSanteHistoriqueView",
     "ReferentielVillesView",
     "TableauDeBordView",
 ]
@@ -75,20 +89,26 @@ class ProjetListCreateView(APIView):
     parser_classes = [JSONParser, MultiPartParser]
 
     def get_permissions(self):
+        from apps.core.droits import APermission
+
         if self.request.method == "POST":
             return [
                 IsAuthenticated(),
-                EstDirection(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
+                APermission.pour("projets.creer")(),
             ]
-        if self.request.method in ("PUT", "PATCH", "DELETE"):
+        if self.request.method in ("PUT", "PATCH"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
+                APermission.pour("projets.ecrire")(),
+            ]
+        if self.request.method == "DELETE":
+            return [
+                IsAuthenticated(),
+                APermission.pour("projets.changer_statut")(),
             ]
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
+            APermission.pour("projets.lire")(),
         ]
 
     @extend_schema(

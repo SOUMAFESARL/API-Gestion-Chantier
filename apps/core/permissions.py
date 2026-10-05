@@ -68,19 +68,15 @@ def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
 def filtrer_queryset_par_affectations(qs, user, champ_projet="id", request=None):
     """Restreint un QuerySet aux seuls chantiers où l'utilisateur est affecté.
 
-    Pour la Direction (DG, Admin, Propriétaire, Superuser) : vision consolidée sans restriction.
+    Pour ceux qui ont 'projets.voir_tous' (DG, Superuser, Administrateur) : vision consolidée sans restriction.
     Pour les collaborateurs opérationnels : vision bornée aux chantiers affectés.
     """
     if not user or not user.is_authenticated:
         return qs.none()
 
-    est_direction = (
-        user.is_superuser
-        or getattr(user, "is_owner", False)
-        or getattr(user, "is_dg", False)
-        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-    )
-    if est_direction:
+    from apps.core.droits import a_permission
+
+    if a_permission(user, "projets.voir_tous", request=request):
         return qs
 
     projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
@@ -137,11 +133,14 @@ class EstDirection(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
+        from apps.core.droits import a_permission
+
         return bool(
             user.is_superuser
             or getattr(user, "is_owner", False)
             or getattr(user, "is_dg", False)
-            or user.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+            or a_permission(user, "administration.collaborateurs_gerer", request=request)
+            or a_permission(user, "administration.roles_gerer", request=request)
         )
 
 
@@ -158,12 +157,9 @@ class MembreDuProjet(permissions.BasePermission):
         if not utilisateur or not utilisateur.is_authenticated:
             return False
 
-        if (
-            utilisateur.is_superuser
-            or getattr(utilisateur, "is_owner", False)
-            or getattr(utilisateur, "is_dg", False)
-            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-        ):
+        from apps.core.droits import a_permission
+
+        if a_permission(utilisateur, "projets.voir_tous", request=request):
             return True
 
         projet_id = self._extraire_projet_id(obj)
@@ -237,20 +233,14 @@ class PermissionModule(permissions.BasePermission):
         utilisateur = request.user
         if not utilisateur or not utilisateur.is_authenticated:
             return False
+
         if (
             utilisateur.is_superuser
             or getattr(utilisateur, "is_owner", False)
             or getattr(utilisateur, "is_dg", False)
-            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+            or getattr(utilisateur, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
         ):
             return True
-
-        if not hasattr(request, "_rbac_module_permissions_cache"):
-            request._rbac_module_permissions_cache = {}
-
-        cle_cache = (self.module, self.permission_requise)
-        if cle_cache in request._rbac_module_permissions_cache:
-            return request._rbac_module_permissions_cache[cle_cache]
 
         from django.apps import apps as registre
 
@@ -258,65 +248,56 @@ class PermissionModule(permissions.BasePermission):
             Role = registre.get_model("accounts", "Role")
             RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
         except LookupError:
-            return True
+            Role = None
+            RoleModulePermission = None
 
-        role = utilisateur.role_personnalise
-        if not role:
-            role = Role.objects.filter(
+        if Role and RoleModulePermission:
+            role = utilisateur.role_personnalise or Role.objects.filter(
                 code=utilisateur.role_global, supprime_le__isnull=True
             ).first()
+            if role:
+                from django.db import models as dj_models
 
-        if not role:
-            request._rbac_module_permissions_cache[cle_cache] = False
-            return False
+                rmp = RoleModulePermission.objects.filter(
+                    dj_models.Q(module_catalogue__code=self.module) | dj_models.Q(module__code=self.module),
+                    role=role,
+                    supprime_le__isnull=True,
+                ).first()
+                if rmp:
+                    if rmp.niveau == 0:
+                        return False
+                    has_m2m = (
+                        rmp.permissions_catalogue.filter(supprime_le__isnull=True).exists()
+                        or rmp.permissions.filter(supprime_le__isnull=True).exists()
+                    )
+                    if has_m2m:
+                        has_perm_m2m = (
+                            rmp.permissions_catalogue.filter(
+                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                            ).exists()
+                            or rmp.permissions.filter(
+                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                            ).exists()
+                        )
+                        return has_perm_m2m
 
-        perm = RoleModulePermission.objects.filter(
-            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
-            role=role,
-            supprime_le__isnull=True,
-        ).first()
+        from apps.core.droits import permissions_effectives
+        from apps.core.registre_permissions import REGISTRE
 
-        if not perm:
-            request._rbac_module_permissions_cache[cle_cache] = False
-            return False
-
-        if perm.niveau == 0:
-            request._rbac_module_permissions_cache[cle_cache] = False
-            return False
-
-        # Vérification granulaire dans les permissions ManyToMany (catalogue prioritaire, puis legacy)
-        has_perm = (
-            perm.permissions_catalogue.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-            or perm.permissions.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-        )
-
-        # Fallback pour compatibilité niveau scalaire UNIQUEMENT si aucune permission M2M n'a été rattachée
-        has_m2m = perm.permissions_catalogue.exists() or perm.permissions.exists()
-        if not has_perm and not has_m2m and perm.niveau is not None and perm.niveau > 0:
-            if self.permission_requise == "LECTURE" and perm.niveau >= 1:
-                has_perm = True
-            elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
-                has_perm = True
-            elif self.permission_requise == "VALIDATION" and perm.niveau >= 3:
-                has_perm = True
-
-        request._rbac_module_permissions_cache[cle_cache] = has_perm
-        return has_perm
+        perms = permissions_effectives(utilisateur, request=request)
+        for def_p in REGISTRE.values():
+            if def_p.module == self.module and def_p.rang >= self.niveau_requis and def_p.code in perms:
+                return True
+        return False
 
     def has_object_permission(self, request, view, obj) -> bool:
         utilisateur = request.user
         if not utilisateur or not utilisateur.is_authenticated:
             return False
-        if (
-            utilisateur.is_superuser
-            or getattr(utilisateur, "is_owner", False)
-            or getattr(utilisateur, "is_dg", False)
-            or utilisateur.role_global in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-        ):
+
+        from apps.core.droits import a_permission
+
+        if a_permission(utilisateur, "projets.voir_tous", request=request):
             return True
 
         projet_id = MembreDuProjet._extraire_projet_id(obj)

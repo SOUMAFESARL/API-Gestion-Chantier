@@ -44,29 +44,17 @@ class PeutConsulterRapports(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        user = request.user
-        if (
-            user.is_superuser
-            or getattr(user, "is_owner", False)
-            or getattr(user, "is_dg", False)
-            or user.role_global in ROLES_GESTION_CHANTIER
-        ):
-            return True
+        from apps.core.droits import a_permission
 
-        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.LECTURE)()
-        return perm.has_permission(request, view)
+        return a_permission(request.user, "chantier.lire", request=request)
 
     def has_object_permission(self, request, view, obj) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
 
-        user = request.user
-        if (
-            user.is_superuser
-            or getattr(user, "is_owner", False)
-            or getattr(user, "is_dg", False)
-            or user.role_global in ROLES_DIRECTION
-        ):
+        from apps.core.droits import a_permission
+
+        if a_permission(request.user, "projets.voir_tous", request=request):
             return True
 
         return MembreDuProjet().has_object_permission(request, view, obj)
@@ -79,96 +67,40 @@ class PeutRedigerRapports(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        user = request.user
-        if (
-            user.is_superuser
-            or getattr(user, "is_owner", False)
-            or getattr(user, "is_dg", False)
-            or user.role_global in (
-                RoleGlobal.ADMIN,
-                RoleGlobal.DIRECTEUR_GENERAL,
-                RoleGlobal.CHEF_CHANTIER,
-                RoleGlobal.CONDUCTEUR_TRAVAUX,
-                RoleGlobal.CHEF_PROJET,
-            )
-        ):
-            return True
+        from apps.core.droits import a_permission
 
-        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.ECRITURE)()
-        return perm.has_permission(request, view)
+        return a_permission(request.user, "chantier.rediger", request=request)
 
     def has_object_permission(self, request, view, obj) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
 
-        user = request.user
-        if (
-            user.is_superuser
-            or getattr(user, "is_owner", False)
-            or getattr(user, "is_dg", False)
-            or user.role_global in ROLES_DIRECTION
-        ):
+        from apps.core.droits import a_permission
+
+        if a_permission(request.user, "projets.voir_tous", request=request):
             return True
 
         return MembreDuProjet().has_object_permission(request, view, obj)
 
 
 class PeutValiderRapports(permissions.BasePermission):
-    """Vérifie que l'utilisateur a autorité pour valider ou rejeter un rapport (CT / CP / DG)."""
+    """Vérifie que l'utilisateur a autorité pour valider ou rejeter un rapport."""
 
     def has_permission(self, request, view) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
 
-        user = request.user
-        if (
-            user.is_superuser
-            or getattr(user, "is_owner", False)
-            or getattr(user, "is_dg", False)
-            or user.role_global in ROLES_VALIDATION_CHANTIER
-        ):
-            return True
+        from apps.core.droits import a_permission
 
-        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.VALIDATION)()
-        return perm.has_permission(request, view)
+        return a_permission(request.user, "chantier.valider", request=request)
 
     def has_object_permission(self, request, view, obj) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
 
-        user = request.user
-        if (
-            user.is_superuser
-            or getattr(user, "is_owner", False)
-            or getattr(user, "is_dg", False)
-            or user.role_global in ROLES_DIRECTION
-        ):
+        from apps.core.droits import a_permission
+
+        if a_permission(request.user, "projets.voir_tous", request=request):
             return True
 
-        # Vérifier l'affectation projet
-        from django.apps import apps as registre
-
-        try:
-            AffectationProjet = registre.get_model("projets", "AffectationProjet")
-            projet_id = MembreDuProjet._extraire_projet_id(obj)
-            if not projet_id:
-                return False
-
-            affectation = AffectationProjet.objects.filter(
-                utilisateur=user, projet_id=projet_id, est_actif=True
-            ).first()
-
-            if affectation and (
-                affectation.role_projet
-                in (
-                    RoleProjet.CONDUCTEUR_TRAVAUX,
-                    RoleProjet.CHEF_PROJET,
-                )
-                or user.role_global in ROLES_VALIDATION_CHANTIER
-            ):
-                return True
-        except LookupError:
-            pass
-
-        perm = PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.VALIDATION)()
-        return perm.has_object_permission(request, view, obj)
+        return MembreDuProjet().has_object_permission(request, view, obj)

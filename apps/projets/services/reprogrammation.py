@@ -264,6 +264,18 @@ def reprogrammer_date_instance(
         )
         alerte_declenchee = True
 
+    # Déclenchement réactif du recalcul de santé (C8)
+    projet_cible = kwargs_lien.get("projet")
+    if projet_cible:
+        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+        dernier_h_id = historiques_crees[-1].id if historiques_crees else None
+        declencher_recalcul_sante(
+            projet_id=projet_cible.id,
+            declencheur_type="REPROGRAMMATION_DATE",
+            declencheur_id=dernier_h_id,
+        )
+
     return {
         "instance": instance,
         "date_debut_prevue": debut_cible,

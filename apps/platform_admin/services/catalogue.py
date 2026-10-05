@@ -177,7 +177,7 @@ def propager_creation_module(
                         defaults={"cree_par": None, "module_catalogue": cat_mod},
                     )
                     rmp.module_catalogue = cat_mod
-                    if role.code in ("DG", "ADMIN", "AD") or role.est_systeme:
+                    if role.code in ("DG", "DIRECTEUR_GENERAL"):
                         rmp.permissions.set(perms_direction)
                         if codes_perms:
                             rmp.permissions_catalogue.set(cat_perms)
@@ -497,7 +497,7 @@ def propager_creation_permission(
                     perm_tenant.modules.set(mods_tenant)
 
                     roles_direction = Role.objects.filter(
-                        code__in=["DG", "ADMIN", "AD"], supprime_le__isnull=True
+                        code__in=["DG", "DIRECTEUR_GENERAL"], supprime_le__isnull=True
                     )
                     for role in roles_direction:
                         for rmp in RoleModulePermission.objects.filter(

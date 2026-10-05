@@ -38,17 +38,20 @@ __all__ = [
 ]
 
 
-def _autoriser_parametres_roles(user):
-    """Autorise AD, DG, Owner et Superuser pour les routes parametres/roles."""
+def _autoriser_roles_dg(user):
+    """Règle R-DEMO-08 : Seul le DG / Propriétaire a autorité sur les routes /api/v1/roles/."""
     if not user or not user.is_authenticated:
         raise ActionReserveeDg()
-    est_autorise = (
-        getattr(user, "is_dg", False)
-        or getattr(user, "is_owner", False)
-        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-        or getattr(user, "is_superuser", False)
-    )
-    if not est_autorise:
+    if not (getattr(user, "is_dg", False) or getattr(user, "is_owner", False)):
+        raise ActionReserveeDg()
+
+
+def _autoriser_parametres_roles(user, request=None):
+    """Autorise administration.roles_gerer pour les routes parametres/roles."""
+    if not user or not user.is_authenticated:
+        raise ActionReserveeDg()
+    from apps.core.droits import a_permission
+    if not a_permission(user, "administration.roles_gerer", request=request):
         raise ActionReserveeDg()
 
 
@@ -76,9 +79,7 @@ class RoleListCreateView(APIView):
         responses={201: RoleDetailSerializer},
     )
     def post(self, request):
-        # Règle R-DEMO-08 : Seul le DG / Propriétaire a autorité sur les rôles
-        if not (getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)):
-            raise ActionReserveeDg()
+        _autoriser_roles_dg(request.user)
 
         serializer = RoleCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -120,10 +121,21 @@ class RoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def patch(self, request, pk):
-        if not (getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)):
-            raise ActionReserveeDg()
+        _autoriser_roles_dg(request.user)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+
+        if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "modification_dg_interdite",
+                        "message": "Le rôle Directeur Général est immuable et ne peut pas être modifié.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = RoleModificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -163,8 +175,29 @@ class RoleSupprimerReassignerView(APIView):
         responses={200: dict},
     )
     def post(self, request, pk):
-        if not (getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)):
-            raise ActionReserveeDg()
+        _autoriser_roles_dg(request.user)
+
+        role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+
+        if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "suppression_dg_interdite",
+                        "message": "Le rôle Directeur Général ne peut pas être supprimé : les rôles système ne peuvent pas être supprimés.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if role.code in (RoleGlobal.ADMIN, "AD"):
+            est_dg_ou_owner = (
+                getattr(request.user, "is_dg", False)
+                or getattr(request.user, "is_owner", False)
+                or getattr(request.user, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+            )
+            if not est_dg_ou_owner:
+                raise ActionReserveeDg()
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
@@ -232,7 +265,7 @@ class ParametresRoleListCreateView(APIView):
         responses={201: RoleDetailSerializer},
     )
     def post(self, request):
-        _autoriser_parametres_roles(request.user)
+        _autoriser_parametres_roles(request.user, request=request)
 
         serializer = RoleCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -274,9 +307,21 @@ class ParametresRoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def patch(self, request, pk):
-        _autoriser_parametres_roles(request.user)
+        _autoriser_parametres_roles(request.user, request=request)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+
+        if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "modification_dg_interdite",
+                        "message": "Le rôle Directeur Général est immuable et ne peut pas être modifié.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = RoleModificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -316,9 +361,20 @@ class ParametresRoleSupprimerReassignerView(APIView):
         responses={200: dict},
     )
     def post(self, request, pk):
-        _autoriser_parametres_roles(request.user)
+        _autoriser_parametres_roles(request.user, request=request)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
+
+        if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "suppression_dg_interdite",
+                        "message": "Le rôle Directeur Général ne peut pas être supprimé : les rôles système ne peuvent pas être supprimés.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Protection du rôle Administrateur : seul le DG / Propriétaire a autorité pour le supprimer
         if role.code in (RoleGlobal.ADMIN, "AD"):

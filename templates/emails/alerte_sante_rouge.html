@@ -1,0 +1,48 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}Alerte Santé Projet — Passage en Zone Rouge{% endblock %}
+{% block preheader %}Le projet « {{ projet_nom }} » est entré en zone de vigilance critique (Score {{ score }}/100, Badge Rouge).{% endblock %}
+{% block titre %}🔴 Alerte Santé Projet : Passage au ROUGE{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+<p style="margin:0 0 14px 0;">L'indice de santé du projet <strong>« {{ projet_nom }} » ({{ projet_reference }})</strong> vient de basculer au niveau <strong>ROUGE</strong> (score global : <strong>{{ score }}/100</strong>).</p>
+
+<table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="margin:14px 0;border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;font-size:14px;">
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;width:40%;"><strong>Score synthétique :</strong></td>
+        <td style="color:#DC2626;font-weight:bold;font-size:16px;">{{ score }} / 100 (ROUGE)</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Avancement physique :</strong></td>
+        <td>{{ avancement_physique }} %</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Avancement temporel (Baseline v0) :</strong></td>
+        <td>{{ avancement_temporel }} %</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Retard mesuré :</strong></td>
+        <td style="color:#DC2626;font-weight:bold;">{{ retard_pts }} points</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Pénalité Délais :</strong></td>
+        <td>{{ p_delais }} / 40 pts</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Pénalité Blocages :</strong></td>
+        <td>{{ p_blocages }} / 40 pts (dont {{ blocages_critiques }} blocage(s) critique(s))</td>
+    </tr>
+    <tr style="border-bottom:1px solid #E5E5E5;">
+        <td style="color:#666;"><strong>Pénalité Reporting :</strong></td>
+        <td>{{ p_reporting }} / 20 pts</td>
+    </tr>
+    {% if plancher_applique %}
+    <tr>
+        <td style="color:#666;"><strong>Plancher de gravité :</strong></td>
+        <td style="color:#DC2626;">Actif (blocage critique ancien ou retard majeur)</td>
+    </tr>
+    {% endif %}
+</table>
+
+<p style="margin:14px 0;">Une intervention immédiate du Chef de Projet et de la Direction est requise pour lever les blocages et stabiliser le planning.</p>
+{% endblock %}

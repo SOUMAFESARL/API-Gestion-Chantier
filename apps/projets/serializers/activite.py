@@ -233,3 +233,4 @@ class ActiviteModificationSerializer(ActiviteCreationSerializer):
         if valeurs["quantite_prevue"] != self.instance.quantite_prevue:
             attrs["quantite_prevue"] = valeurs["quantite_prevue"]
         return attrs
+

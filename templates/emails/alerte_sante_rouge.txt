@@ -1,0 +1,18 @@
+Bonjour,
+
+L'indice de santé du projet « {{ projet_nom }} » ({{ projet_reference }}) vient de basculer au niveau ROUGE (score global : {{ score }}/100).
+
+Détail de la situation :
+- Score synthétique : {{ score }} / 100 (ROUGE)
+- Avancement physique : {{ avancement_physique }} %
+- Avancement temporel : {{ avancement_temporel }} %
+- Retard mesuré : {{ retard_pts }} points
+- Pénalité Délais : {{ p_delais }} / 40 pts
+- Pénalité Blocages : {{ p_blocages }} / 40 pts (dont {{ blocages_critiques }} blocage(s) critique(s))
+- Pénalité Reporting : {{ p_reporting }} / 20 pts
+{% if plancher_applique %}- Plancher de gravité : Actif{% endif %}
+
+Une intervention immédiate du Chef de Projet et de la Direction est requise pour lever les blocages et stabiliser le planning.
+
+---
+Notification automatique de la plateforme Gestion de Chantier (BTP).

@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "STATUTS_PROJET_MANUELS_FIXES",
+    "changer_statut_projet",
     "evaluer_statut_activite",
     "evaluer_statut_lot",
     "evaluer_statut_projet",
@@ -86,6 +87,14 @@ def evaluer_statut_activite(activite: Activite, date_reference: date | None = No
             ancien,
             nouveau_statut,
         )
+        if activite.lot and activite.lot.projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=activite.lot.projet_id,
+                declencheur_type="ACTIVITE_STATUT_TRANSITION",
+                declencheur_id=str(activite.id),
+            )
         return True
     return False
 
@@ -139,6 +148,14 @@ def evaluer_statut_lot(lot: Lot, date_reference: date | None = None) -> bool:
             ancien,
             nouveau_statut,
         )
+        if lot.projet_id:
+            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+            declencher_recalcul_sante(
+                projet_id=lot.projet_id,
+                declencheur_type="LOT_STATUT_TRANSITION",
+                declencheur_id=str(lot.id),
+            )
         return True
     return False
 
@@ -178,8 +195,73 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
             ancien,
             nouveau_statut,
         )
+        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+        declencher_recalcul_sante(
+            projet_id=projet.id,
+            declencheur_type="PROJET_STATUT_TRANSITION",
+            declencheur_id=str(nouveau_statut),
+        )
         return True
     return False
+
+
+@transaction.atomic
+def changer_statut_projet(
+    projet: Projet,
+    nouveau_statut: str,
+    utilisateur=None,
+) -> Projet:
+    """Modifie le statut d'un projet avec gestion des effets de bord opérationnels (C2, F1).
+
+    - Validation stricte de réception (100 % lots clôturés) si RECEPTIONNE.
+    - Ouverture automatique d'un ArretChantier lors du passage à SUSPENDU.
+    - Fermeture automatique de l'ArretChantier ouvert lors de la reprise (sortie de SUSPENDU).
+    - Déclenchement réactif du recalcul de l'indice de santé.
+    """
+    ancien_statut = projet.statut
+
+    if nouveau_statut == StatutProjet.RECEPTIONNE:
+        valider_transition_reception(projet)
+
+    # C2 : SUSPENDU ouvre automatiquement un ArretChantier, et la reprise le ferme
+    if ancien_statut != StatutProjet.SUSPENDU and nouveau_statut == StatutProjet.SUSPENDU:
+        from apps.projets.services.arret_chantier import declarer_arret_chantier
+
+        declarer_arret_chantier(
+            projet=projet,
+            date_debut=timezone.localdate(),
+            motif="Suspension du projet",
+            auteur=utilisateur,
+            commentaire="Arrêt ouvert automatiquement lors de la suspension du chantier.",
+        )
+    elif ancien_statut == StatutProjet.SUSPENDU and nouveau_statut != StatutProjet.SUSPENDU:
+        arret_ouvert = projet.arrets_chantier.filter(
+            supprime_le__isnull=True,
+            date_fin__isnull=True,
+        ).first()
+        if arret_ouvert:
+            from apps.projets.services.arret_chantier import terminer_arret_chantier
+
+            terminer_arret_chantier(
+                arret=arret_ouvert,
+                date_fin=timezone.localdate(),
+                utilisateur=utilisateur,
+            )
+
+    projet.statut = nouveau_statut
+    projet.save(update_fields=["statut", "modifie_le"])
+
+    if ancien_statut != nouveau_statut:
+        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+        declencher_recalcul_sante(
+            projet_id=projet.id,
+            declencheur_type="PROJET_STATUT_TRANSITION",
+            declencheur_id=str(nouveau_statut),
+        )
+
+    return projet
 
 
 def valider_transition_reception(projet: Projet) -> None:

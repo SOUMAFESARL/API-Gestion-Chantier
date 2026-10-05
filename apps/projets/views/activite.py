@@ -130,7 +130,12 @@ class ActiviteDetailView(APIView):
     @extend_schema(
         summary="Détail d'une activité",
         tags=["activités"],
-        description="Accès au projet et permission de lecture du module Projets requis.",
+        description=(
+            "Accès au projet et permission de lecture du module Projets requis. "
+            "Cette route permet de consulter (GET) et de supprimer logiquement "
+            "(DELETE) une activité. La modification (PUT/PATCH), l'activation et "
+            "la désactivation ne sont pas encore exposées par cette API."
+        ),
         responses={200: ActiviteSerializer, **ERREURS_ACTIVITES},
     )
     def get(self, request, pk):
@@ -139,9 +144,14 @@ class ActiviteDetailView(APIView):
         return Response(ActiviteSerializer(activite).data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        summary="Supprimer une activité",
+        summary="Supprimer logiquement une activité",
         tags=["activités"],
-        description="Suppression logique ; permission d'écriture du module Projets requise.",
+        description=(
+            "Accès au projet et permission d'écriture du module Projets requis. "
+            "Suppression logique : l'activité est conservée en base mais retirée "
+            "des résultats courants. Retourne 204 sans corps de réponse. "
+            "Cette opération est distincte d'une désactivation."
+        ),
         responses={204: OpenApiResponse(description="Activité supprimée."), **ERREURS_ACTIVITES},
     )
     def delete(self, request, pk):

@@ -36,7 +36,11 @@ class ProjetLotListCreateView(APIView):
         summary="Lister les lots d'un projet",
         description=(
             "Chaque lot expose son UUID et le UUID parent dans projet_id, le compteur "
-            "activites_count et l'avancement réalisé calculé de 0 à 100."
+            "activites_count et l'avancement réalisé calculé de 0 à 100. "
+            "La liste comprend les lots actifs et désactivés, hors lots supprimés. "
+            "Le champ est_actif indique l'état d'activation du lot. "
+            "Les opérations de modification, suppression, activation et désactivation "
+            "ne sont pas encore exposées par cette API."
         ),
         responses={200: LotResponseSerializer(many=True), **ERREURS_LOTS},
     )

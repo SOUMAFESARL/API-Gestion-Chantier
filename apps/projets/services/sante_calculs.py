@@ -172,32 +172,48 @@ def calculer_avancement_physique_lot(lot) -> float:
     return float(round(somme / total_poids, 2))
 
 
+def obtenir_budget_effectif_lot(lot) -> float | None:
+    """Retourne le budget initial du lot, ou à défaut la somme des budgets de ses activités actives."""
+    b_lot = getattr(lot, "budget_initial_montant", None)
+    if b_lot is not None and b_lot > 0:
+        return float(b_lot)
+    activites = [
+        a for a in lot.activites.all()
+        if getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None
+    ]
+    somme_act = sum(float(getattr(a, "budget_initial_montant", None) or 0) for a in activites)
+    if somme_act > 0:
+        return somme_act
+    return None
+
+
 def calculer_avancement_physique_projet(projet) -> tuple[float, str]:
-    """Calcule l'avancement physique du projet : moyenne pondérée des lots actifs par leur budget.
+    """Calcule l'avancement physique du projet : moyenne pondérée des lots actifs par leur budget effectif.
 
     Retourne (avancement_physique, mode_ponderation).
-    Si un lot actif n'a pas de budget initial > 0, repli à pondération uniforme.
+    Si un lot actif n'a pas de budget effectif > 0, repli à pondération uniforme.
     """
     lots = [
         lot for lot in projet.lots.all()
         if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
     ]
-    if not lots:
+    # Seuls les lots ayant une consistance (budget propre ou au moins une activité active) participent au calcul
+    lots_pertinents = [
+        lot for lot in lots
+        if (getattr(lot, "budget_initial_montant", None) is not None and lot.budget_initial_montant > 0)
+        or any(getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None for a in lot.activites.all())
+    ]
+    if not lots_pertinents:
         return 0.0, "UNIFORME"
 
-    budget_complet = all(
-        lot.budget_initial_montant is not None and lot.budget_initial_montant > 0
-        for lot in lots
-    )
-    poids = [
-        float(lot.budget_initial_montant) if budget_complet else 1.0
-        for lot in lots
-    ]
+    budgets_lots = [obtenir_budget_effectif_lot(lot) for lot in lots_pertinents]
+    budget_complet = all(b is not None and b > 0 for b in budgets_lots)
+    poids = [b if budget_complet else 1.0 for b in budgets_lots]
     total_poids = sum(poids)
     if total_poids <= 0:
         return 0.0, "UNIFORME"
 
-    avancements = [calculer_avancement_physique_lot(lot) for lot in lots]
+    avancements = [calculer_avancement_physique_lot(lot) for lot in lots_pertinents]
     somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
     mode = "BUDGET" if budget_complet else "UNIFORME"
     return float(round(somme / total_poids, 2)), mode
@@ -261,14 +277,9 @@ def calculer_avancement_temporel_projet(
         avertissements.append("AUCUN_LOT_AVEC_BASELINE")
         return 0.0, avertissements
 
-    budget_complet = all(
-        lot.budget_initial_montant is not None and lot.budget_initial_montant > 0
-        for lot, _ in lots_avec_temporel
-    )
-    poids = [
-        float(lot.budget_initial_montant) if budget_complet else 1.0
-        for lot, _ in lots_avec_temporel
-    ]
+    budgets_lots = [obtenir_budget_effectif_lot(lot) for lot, _ in lots_avec_temporel]
+    budget_complet = all(b is not None and b > 0 for b in budgets_lots)
+    poids = [b if budget_complet else 1.0 for b in budgets_lots]
     total_poids = sum(poids)
     if total_poids <= 0:
         return 0.0, avertissements

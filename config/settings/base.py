@@ -514,7 +514,41 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.projets.tasks.evaluer_statuts_quotidiens_tous_tenants",
         "schedule": crontab(hour=0, minute=5),
     },
+    "evaluation_quotidienne_sante_projets": {
+        "task": "apps.projets.tasks.evaluer_sante_projets_quotidien_tous_tenants",
+        "schedule": crontab(hour=0, minute=15),
+    },
 }
+
+# --------------------------------------------------------------------------
+# Indice de Santé de Projet (BTP)
+# --------------------------------------------------------------------------
+SANTE_PLAFOND_DELAIS = 40
+SANTE_PLAFOND_BLOCAGES = 40
+SANTE_PLAFOND_REPORTING = 20
+SANTE_DELTA_MAX_PTS = 25
+SANTE_MALUS_REPORT = 2  # inclus dans le plafond de 40
+
+SANTE_POIDS_BLOCAGE = {
+    "MINEUR": 2,
+    "MAJEUR": 5,
+    "CRITIQUE": 15,
+}
+
+# Multiplicateur d'ancienneté (jours ouvrés depuis l'ouverture) :
+# 0 à 2 jours ouvrés -> x1.0 ; 3 à 7 jours ouvrés -> x1.5 ; > 7 jours ouvrés -> x2.0
+SANTE_MULTIPLICATEUR_ANCIENNETE_PALIERS = (
+    (2, 1.0),
+    (7, 1.5),
+)
+SANTE_MULTIPLICATEUR_ANCIENNETE_MAX = 2.0
+
+SANTE_SEUIL_VERT = 80
+SANTE_SEUIL_ORANGE = 50  # ROUGE sous 50
+SANTE_PLANCHER_GRAVITE_JOURS = 7  # Jours ouvrés
+
+SANTE_FENETRE_REPORTING_JOURS = 14  # Jours calendaires
+SANTE_TOLERANCE_SOUMISSION_HEURES = 48
 
 # --------------------------------------------------------------------------
 # Journalisation

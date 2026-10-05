@@ -19,6 +19,7 @@ from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 __all__ = [
     "declarer_arret_chantier",
+    "modifier_arret_chantier",
     "supprimer_arret_chantier",
     "terminer_arret_chantier",
 ]
@@ -108,3 +109,29 @@ def supprimer_arret_chantier(
         declencheur_id=arret.id,
     )
     return arret
+
+
+@transaction.atomic
+def modifier_arret_chantier(
+    *,
+    arret: ArretChantier,
+    utilisateur: Utilisateur,
+    **champs: Any,
+) -> ArretChantier:
+    """Modifie les informations d'un arrêt de chantier et planifie le recalcul de santé."""
+    champs_modifiables = ["motif", "date_debut", "date_fin"]
+    for champ in champs_modifiables:
+        if champ in champs and champs[champ] is not None:
+            setattr(arret, champ, champs[champ])
+
+    if arret.date_fin and arret.date_fin < arret.date_debut:
+        raise ValidationError({"date_fin": "La date de fin ne peut pas être antérieure à la date de début."})
+
+    arret.save()
+    declencher_recalcul_sante(
+        projet_id=arret.projet_id,
+        declencheur_type="ARRET_MODIFICATION",
+        declencheur_id=arret.id,
+    )
+    return arret
+

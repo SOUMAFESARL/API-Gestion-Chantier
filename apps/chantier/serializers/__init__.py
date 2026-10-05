@@ -14,9 +14,19 @@ from .rapport_journalier import (
     RapportRejetSerializer,
     RapportValidationSerializer,
 )
+from .blocage import (
+    BlocageCreateSerializer,
+    BlocageResolutionSerializer,
+    BlocageSerializer,
+    BlocageUpdateSerializer,
+)
 
 __all__ = [
     "AuteurSimpleSerializer",
+    "BlocageCreateSerializer",
+    "BlocageResolutionSerializer",
+    "BlocageSerializer",
+    "BlocageUpdateSerializer",
     "LotSimpleSerializer",
     "ProjetSimpleSerializer",
     "RapportJournalierCreateSerializer",

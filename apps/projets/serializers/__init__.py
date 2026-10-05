@@ -33,12 +33,22 @@ from apps.projets.serializers.activite import (
     ActiviteModificationSerializer,
     ActiviteSerializer,
 )
+from apps.projets.serializers.arret_chantier import (
+    ArretChantierCreateSerializer,
+    ArretChantierSerializer,
+    ArretChantierUpdateSerializer,
+)
 from apps.projets.serializers.reprogrammation import (
     HistoriqueDateSerializer,
     MotifReportCreationSerializer,
     MotifReportSerializer,
     ReprogrammationRequestSerializer,
     ReprogrammationResponseSerializer,
+)
+from apps.projets.serializers.sante import (
+    SanteApercuSerializer,
+    SanteDetailResponseSerializer,
+    SanteHistoriqueItemSerializer,
 )
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
@@ -47,6 +57,9 @@ __all__ = [
     "ActiviteCreationSerializer",
     "ActiviteModificationSerializer",
     "ActiviteSerializer",
+    "ArretChantierCreateSerializer",
+    "ArretChantierSerializer",
+    "ArretChantierUpdateSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
     "EquipeCreationSerializer",
@@ -61,6 +74,9 @@ __all__ = [
     "ReferentielVillesResponseSerializer",
     "ReprogrammationRequestSerializer",
     "ReprogrammationResponseSerializer",
+    "SanteApercuSerializer",
+    "SanteDetailResponseSerializer",
+    "SanteHistoriqueItemSerializer",
     "TableauDeBordResponseSerializer",
 ]
 

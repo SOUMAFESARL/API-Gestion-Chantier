@@ -46,24 +46,38 @@ from apps.projets.views.reprogrammation import (
     ProjetJournalReportsConsolideView,
     ProjetReprogrammerView,
 )
+from apps.projets.views.arret_chantier import (
+    ArretChantierDetailView,
+    ProjetArretChantierListCreateView,
+)
+from apps.projets.views.sante import (
+    ProjetSanteApercuView,
+    ProjetSanteDetailView,
+    ProjetSanteHistoriqueView,
+)
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
     "ActiviteDetailView",
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",
+    "ArretChantierDetailView",
     "GlobalJournalReportsView",
     "LotActiviteListCreateView",
     "LotHistoriqueDatesView",
     "LotReprogrammerView",
     "MeteoProjetView",
     "MotifReportListCreateView",
+    "ProjetArretChantierListCreateView",
     "ProjetDetailView",
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
     "ProjetPermissionsRolesView",
     "ProjetReprogrammerView",
+    "ProjetSanteApercuView",
+    "ProjetSanteDetailView",
+    "ProjetSanteHistoriqueView",
     "ReferentielVillesView",
     "TableauDeBordView",
 ]

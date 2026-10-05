@@ -3,10 +3,15 @@
 from django.urls import path
 
 from apps.projets.views import (
+    ArretChantierDetailView,
     MeteoProjetView,
+    ProjetArretChantierListCreateView,
     ProjetDetailView,
     ProjetListCreateView,
     ProjetPermissionsRolesView,
+    ProjetSanteApercuView,
+    ProjetSanteDetailView,
+    ProjetSanteHistoriqueView,
     ReferentielVillesView,
     TableauDeBordView,
 )
@@ -120,6 +125,33 @@ urlpatterns = [
         "projets/<uuid:pk>/journal-reports/",
         ProjetJournalReportsConsolideView.as_view(),
         name="projet-journal-reports-consolide",
+    ),
+    # Santé du projet
+    path(
+        "projets/<uuid:pk>/sante/",
+        ProjetSanteApercuView.as_view(),
+        name="projet-sante-apercu",
+    ),
+    path(
+        "projets/<uuid:pk>/sante/historique/",
+        ProjetSanteHistoriqueView.as_view(),
+        name="projet-sante-historique",
+    ),
+    path(
+        "projets/<uuid:pk>/sante/detail/",
+        ProjetSanteDetailView.as_view(),
+        name="projet-sante-detail",
+    ),
+    # Arrêts de chantier
+    path(
+        "projets/<uuid:projet_id>/arrets-chantier/",
+        ProjetArretChantierListCreateView.as_view(),
+        name="projet-arrets-chantier-liste-creer",
+    ),
+    path(
+        "arrets-chantier/<uuid:pk>/",
+        ArretChantierDetailView.as_view(),
+        name="arret-chantier-detail",
     ),
     path(
         "projets/<uuid:projet_id>/affectations/",

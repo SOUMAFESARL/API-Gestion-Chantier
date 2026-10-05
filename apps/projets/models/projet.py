@@ -7,7 +7,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import RoleProjet, StatutProjet, TypeProjet
+from apps.core.enums import BadgeSante, RoleProjet, StatutProjet, TypeProjet
 from apps.core.models import ModeleBase
 
 __all__ = ["AffectationProjet", "Projet"]
@@ -115,6 +115,14 @@ class Projet(ModeleBase):
         blank=True,
     )
     indice_sante_calcule_le = models.DateTimeField(null=True, blank=True)
+    badge_sante = models.CharField(
+        _("badge de santé"),
+        max_length=10,
+        choices=BadgeSante.choices,
+        null=True,
+        blank=True,
+        help_text=_("Badge final (après application du plancher de gravité)."),
+    )
 
     @property
     def duree_jours_ouvres(self) -> int | None:

@@ -154,6 +154,18 @@ class StatutBlocage(models.TextChoices):
     RESOLU = "RESOLU", "Résolu"
 
 
+class SeveriteBlocage(models.TextChoices):
+    MINEUR = "MINEUR", "Mineur"
+    MAJEUR = "MAJEUR", "Majeur"
+    CRITIQUE = "CRITIQUE", "Critique"
+
+
+class BadgeSante(models.TextChoices):
+    VERT = "VERT", "Vert"
+    ORANGE = "ORANGE", "Orange"
+    ROUGE = "ROUGE", "Rouge"
+
+
 class StatutBonPaiement(models.TextChoices):
     BROUILLON = "BROUILLON", "Brouillon"
     A_SIGNER = "A_SIGNER", "À signer"

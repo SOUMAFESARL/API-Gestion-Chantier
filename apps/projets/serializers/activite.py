@@ -13,7 +13,7 @@ from apps.projets.services.statistiques import pourcentage_realise
 class ActiviteSerializer(serializers.ModelSerializer):
     """Lecture complète d'une activité de chantier."""
 
-    colaborateur_id = serializers.PrimaryKeyRelatedField(
+    responsable_id = serializers.PrimaryKeyRelatedField(
         source="colaborateur", read_only=True, allow_null=True
     )
 
@@ -33,7 +33,7 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "libelle",
             "motif",
             "statut",
-            "colaborateur_id",
+            "responsable_id",
             "equipe_ids",
             "budget_initial_montant",
             "unite",
@@ -91,12 +91,12 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         max_value=9223372036854775807,
         help_text="Budget prévisionnel facultatif en centimes FCFA, utilisé pour la pondération.",
     )
-    colaborateur_id = serializers.PrimaryKeyRelatedField(
+    responsable_id = serializers.PrimaryKeyRelatedField(
         source="colaborateur",
         queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF, supprime_le__isnull=True),
         required=False,
         allow_null=True,
-        help_text="UUID d'un utilisateur actif affect? au projet, ou null.",
+        help_text="UUID du responsable actif affecté au projet, ou null.",
     )
     equipe_ids = serializers.PrimaryKeyRelatedField(
         source="equipe",
@@ -112,7 +112,7 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
             "libelle",
             "motif",
             "statut",
-            "colaborateur_id",
+            "responsable_id",
             "equipe_ids",
             "budget_initial_montant",
             "unite",
@@ -155,7 +155,7 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         colaborateur = attrs.get("colaborateur")
         if colaborateur is not None and colaborateur.pk not in autorises:
             raise serializers.ValidationError(
-                {"colaborateur_id": "Collaborateur non affect? au projet."}
+                {"responsable_id": "Responsable non affecté au projet."}
             )
         if any(user.pk not in autorises for user in equipe):
             raise serializers.ValidationError(

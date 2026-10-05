@@ -214,7 +214,7 @@ def test_colaborateur_scope_and_patch_preservation(objets):
     lot, activite = objets
     user = SimpleNamespace(pk=uuid4())
     serializer = ActiviteModificationSerializer(activite, partial=True, context={"lot": lot})
-    with pytest.raises(ValidationError, match="colaborateur_id"):
+    with pytest.raises(ValidationError, match="responsable_id"):
         serializer.validate({"colaborateur": user})
     lot.projet.chef_projet_id = user.pk
     assert serializer.validate({"colaborateur": user})["colaborateur"] is user

@@ -56,7 +56,7 @@ def test_creation_and_statistics(contexte):
             "libelle": "Coffrage",
             "quantite_prevue": "100",
             "unite": "M2",
-            "colaborateur_id": str(user.pk),
+            "responsable_id": str(user.pk),
         },
         format="json",
     )
@@ -166,13 +166,13 @@ def test_dependency_team_scope_and_permissions(contexte):
 
 def test_colaborateur_create_read_clear(contexte):
     client, _, lot, user = contexte
-    created = client.post(f"/api/v1/lots/{lot.pk}/activites/", {"libelle": "Responsable", "colaborateur_id": str(user.pk)}, format="json")
+    created = client.post(f"/api/v1/lots/{lot.pk}/activites/", {"libelle": "Responsable", "responsable_id": str(user.pk)}, format="json")
     assert created.status_code == 201, created.data
-    assert str(created.data["colaborateur_id"]) == str(user.pk)
+    assert str(created.data["responsable_id"]) == str(user.pk)
     assert "dependance" not in created.data
     url = f"/api/v1/activites/{created.data['id']}/"
     assert client.get(url).status_code == 403
-    assert client.patch(url, {"colaborateur_id": None}, format="json").status_code == 403
+    assert client.patch(url, {"responsable_id": None}, format="json").status_code == 403
     admin = Utilisateur.objects.create_user(
         email="activites.responsable.admin@demo.ci",
         password="Test12345!",
@@ -182,7 +182,7 @@ def test_colaborateur_create_read_clear(contexte):
     client.force_authenticate(admin)
     detail = client.get(url)
     assert detail.status_code == 200, detail.data
-    assert str(detail.data["colaborateur_id"]) == str(user.pk)
-    patched = client.patch(url, {"colaborateur_id": None}, format="json")
+    assert str(detail.data["responsable_id"]) == str(user.pk)
+    patched = client.patch(url, {"responsable_id": None}, format="json")
     assert patched.status_code == 200, patched.data
-    assert patched.data["colaborateur_id"] is None
+    assert patched.data["responsable_id"] is None

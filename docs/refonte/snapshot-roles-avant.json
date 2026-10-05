@@ -1,0 +1,2252 @@
+{
+  "metadata": {
+    "date_generation": "2026-10-05T14:53:43.455853+00:00",
+    "branche": "refonte-droits",
+    "tag_reference": "verrouille-lot0",
+    "description": "Snapshot de reference des roles et permissions avant la migration du Lot 1 (point 13)."
+  },
+  "catalogue_modeles_roles": {
+    "AD": {
+      "code": "AD",
+      "libelle": "Administrateur",
+      "description": "Paramétrage de l'organisation, administration technique et gestion des utilisateurs",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 2,
+        "chantier": 3,
+        "ged": 3,
+        "pilotage": 2,
+        "projets": 3,
+        "tiers": 2
+      }
+    },
+    "BAI": {
+      "code": "BAI",
+      "libelle": "Bailleur / Client / MOA",
+      "description": "Suivi de l'avancement global du chantier et consultation des rapports d'activité",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 1,
+        "ged": 1,
+        "pilotage": 1,
+        "projets": 1,
+        "tiers": 0
+      }
+    },
+    "CC": {
+      "code": "CC",
+      "libelle": "Chef de Chantier",
+      "description": "Saisie terrain : avancement, incidents, photos, pointage",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 2,
+        "ged": 2,
+        "pilotage": 0,
+        "projets": 1,
+        "tiers": 0
+      }
+    },
+    "CP": {
+      "code": "CP",
+      "libelle": "Chef de Projet",
+      "description": "Pilotage opérationnel des projets qui lui sont confiés et accès complet à ses chantiers",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 2,
+        "ged": 2,
+        "pilotage": 1,
+        "projets": 2,
+        "tiers": 1
+      }
+    },
+    "CT": {
+      "code": "CT",
+      "libelle": "Conducteur de Travaux",
+      "description": "Supervision quotidienne, coordination des équipes terrain et validation technique",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 3,
+        "ged": 2,
+        "pilotage": 1,
+        "projets": 2,
+        "tiers": 1
+      }
+    },
+    "DF": {
+      "code": "DF",
+      "libelle": "Directeur Financier / DAF",
+      "description": "Suivi budgétaire, rentabilité, facturation et vision financière consolidée",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 1,
+        "ged": 2,
+        "pilotage": 3,
+        "projets": 1,
+        "tiers": 2
+      }
+    },
+    "DG": {
+      "code": "DG",
+      "libelle": "Directeur Général / PDG",
+      "description": "Supervision globale, décisions stratégiques et vision consolidée de tous les projets",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 3,
+        "chantier": 3,
+        "ged": 3,
+        "pilotage": 3,
+        "projets": 3,
+        "tiers": 3
+      }
+    },
+    "DO": {
+      "code": "DO",
+      "libelle": "Directeur des Opérations",
+      "description": "Pilotage opérationnel multi-chantiers et coordination des équipes techniques",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 3,
+        "ged": 3,
+        "pilotage": 2,
+        "projets": 3,
+        "tiers": 2
+      }
+    },
+    "MAG": {
+      "code": "MAG",
+      "libelle": "Magasinier / Gestionnaire de Stock",
+      "description": "Gestion des approvisionnements, réceptions de matériaux et sorties de stock",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 1,
+        "ged": 1,
+        "pilotage": 0,
+        "projets": 0,
+        "tiers": 2
+      }
+    },
+    "VI": {
+      "code": "VI",
+      "libelle": "Visiteur / Auditeur",
+      "description": "Consultation de l'avancement et des données du chantier en lecture seule",
+      "est_actif": true,
+      "plafonds_niveaux": {
+        "administration": 0,
+        "chantier": 1,
+        "ged": 1,
+        "pilotage": 1,
+        "projets": 1,
+        "tiers": 0
+      }
+    }
+  },
+  "tenants": {
+    "demo": {
+      "schema_name": "demo",
+      "nom_commercial": "Nom Modifie Par Visiteur",
+      "roles": {
+        "AD": {
+          "id": "563ebdb9-d02b-46b1-9005-4fafffed325f",
+          "code": "AD",
+          "libelle": "Administrateur",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            }
+          }
+        },
+        "CC": {
+          "id": "210a51c7-51ed-4cbf-b57a-810594d5a833",
+          "code": "CC",
+          "libelle": "Chef de Chantier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "ged": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "projets": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "tiers": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            }
+          }
+        },
+        "CP": {
+          "id": "1ecb364a-7a14-488f-8dce-5767bc4d77f8",
+          "code": "CP",
+          "libelle": "Directeur de Projet",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "ged": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "projets": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "tiers": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            }
+          }
+        },
+        "CT": {
+          "id": "890c2789-9082-4e5e-abcc-33f957cc1f32",
+          "code": "CT",
+          "libelle": "Conducteur de Travaux",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "projets": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "tiers": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            }
+          }
+        },
+        "DF": {
+          "id": "62213720-58ef-494d-8cef-88d5b406bc00",
+          "code": "DF",
+          "libelle": "Directeur Financier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "ged": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "tiers": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            }
+          }
+        },
+        "DG": {
+          "id": "0e40d7c9-2320-4c69-bde6-25fa4a0cbb9d",
+          "code": "DG",
+          "libelle": "Directeur Général / PDG",
+          "est_systeme": true,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "DP": {
+          "id": "dcf06c98-4add-41b4-a3c7-7021e6fa8ea0",
+          "code": "DP",
+          "libelle": "Directeur de Projet",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "FRN": {
+          "id": "caff3bbd-8193-4c20-8892-344c11d4e887",
+          "code": "FRN",
+          "libelle": "Fournisseur",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "IT": {
+          "id": "ba6287f5-c168-4b61-8508-ab99ad9e1cb7",
+          "code": "IT",
+          "libelle": "Ingénieur / Technicien",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "MAG": {
+          "id": "93e6ab08-4e08-48a4-9af1-c75ee4fabd5c",
+          "code": "MAG",
+          "libelle": "Magasinier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "ged": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "projets": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "tiers": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            }
+          }
+        },
+        "MOA": {
+          "id": "ccf09ad3-0bf0-4dab-91d4-417b072d5d84",
+          "code": "MOA",
+          "libelle": "Maître d'Ouvrage (Client)",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "MOE": {
+          "id": "851a3348-35ab-4801-96be-aece2ad42c46",
+          "code": "MOE",
+          "libelle": "Maître d'Œuvre",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "SUPPRESSION",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "RA": {
+          "id": "a7066507-5093-44b4-b570-a9c00b43058a",
+          "code": "RA",
+          "libelle": "Responsable Achats",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "RF": {
+          "id": "a15d83f7-c8a6-4b9e-a436-d716ff6bdaab",
+          "code": "RF",
+          "libelle": "Responsable Financier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "RH": {
+          "id": "4da8326f-0f9c-4695-b0d5-a663d7487b0d",
+          "code": "RH",
+          "libelle": "Responsable RH",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "ST": {
+          "id": "af4ac502-d22b-4e28-9dfd-64e74b82d3f6",
+          "code": "ST",
+          "libelle": "Sous-traitant",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "TEST": {
+          "id": "e57f83d7-2307-43f2-a352-b66e471f4529",
+          "code": "TEST",
+          "libelle": "Test",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "ged": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "pilotage": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "projets": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "tiers": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            }
+          }
+        },
+        "VI": {
+          "id": "9c37b676-c8be-4ccf-b2f7-e89a8aa3494e",
+          "code": "VI",
+          "libelle": "Consultant lecture",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "ged": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "projets": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE",
+                "SUPPRESSION"
+              ]
+            },
+            "tiers": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            }
+          }
+        }
+      },
+      "utilisateurs": [
+        {
+          "id": "81fdce7b-a8ec-47d3-83c4-6f3055236d7f",
+          "email": "ad.clean@demo.ci",
+          "nom": "Nom_AD",
+          "role_global": "AD",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "3e0cc69c-bb5e-4057-a424-db2cad825d75",
+          "email": "ad.test@demo.ci",
+          "nom": "AD",
+          "role_global": "AD",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "1b3e29db-0c42-40e9-a609-3932da40d0e3",
+          "email": "admin@demo.ci",
+          "nom": "Administrateur",
+          "role_global": "DG",
+          "role_personnalise": null,
+          "is_owner": true,
+          "is_active": true
+        },
+        {
+          "id": "9db3c4c7-0e76-4cd6-943a-61c467324e61",
+          "email": "angekouame5141@gmail.com",
+          "nom": "Kouassi",
+          "role_global": "DG",
+          "role_personnalise": null,
+          "is_owner": true,
+          "is_active": true
+        },
+        {
+          "id": "df5da18a-ea23-4e74-be0f-0d721e82970f",
+          "email": "cc.clean@demo.ci",
+          "nom": "Nom_CC",
+          "role_global": "CC",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "9fd04a47-cf0e-4707-9d54-3c66ac290edc",
+          "email": "cp.clean@demo.ci",
+          "nom": "Nom_CP",
+          "role_global": "CP",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "300eb41c-5697-444a-86cd-a1d657b68f89",
+          "email": "cp.test@demo.ci",
+          "nom": "CP",
+          "role_global": "CP",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "b5bd673e-a84a-401d-9d11-0844b4616614",
+          "email": "ct.clean@demo.ci",
+          "nom": "Nom_CT",
+          "role_global": "CT",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "134e323a-0109-402f-bb1f-3cce06a42f3f",
+          "email": "dev@demo.ci",
+          "nom": "NomModifie",
+          "role_global": "AD",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "116d9a57-a8d0-4495-8295-dd8180d9e633",
+          "email": "dg.clean@demo.ci",
+          "nom": "Nom_DG",
+          "role_global": "DG",
+          "role_personnalise": null,
+          "is_owner": true,
+          "is_active": true
+        },
+        {
+          "id": "d52054e0-f9a4-4d40-ae6e-0ad1a411abad",
+          "email": "dg.test@demo.ci",
+          "nom": "DG",
+          "role_global": "DG",
+          "role_personnalise": null,
+          "is_owner": true,
+          "is_active": true
+        },
+        {
+          "id": "c58a5ebf-caf9-4f18-993a-574833f34d5d",
+          "email": "moa.clean@demo.ci",
+          "nom": "Nom_MOA",
+          "role_global": "MOA",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "5b32cb9d-44d4-43dc-9a55-1c783601c5f5",
+          "email": "moe.clean@demo.ci",
+          "nom": "Nom_MOE",
+          "role_global": "MOE",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "5fed6b86-8a43-4840-af00-dbddd0bcd207",
+          "email": "new.collab.ad@demo.ci",
+          "nom": "Nouveau",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "5e95112f-dabd-473b-a780-f96b8ba43776",
+          "email": "new.collab.dg@demo.ci",
+          "nom": "Nouveau",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "06e561c3-6a4d-4678-94ee-c2ed0875eb4b",
+          "email": "new.inv.ad@demo.ci",
+          "nom": "Invite",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "ea5a2cdd-2ef0-4a58-a471-64594e389663",
+          "email": "new.inv.dg@demo.ci",
+          "nom": "Invite",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "b1885c2c-5c8d-4b2c-9908-227ab7f5d8aa",
+          "email": "non.aff.p2@demo.ci",
+          "nom": "NonAffP2",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "43bbf069-5143-4846-9dd6-9f53547f9c1a",
+          "email": "non.affecte@demo.ci",
+          "nom": "NonAffecte",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "d4d09784-f235-4dd9-be26-3e3c969583c4",
+          "email": "s.koffi@btp.ci",
+          "nom": "Koffi",
+          "role_global": "CP",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "7e1323cb-caf3-40d6-ae18-7e0743a7565a",
+          "email": "target.aff.cc@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "94cbe7be-1ec7-4468-9a81-4048abd12111",
+          "email": "target.aff.cp@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "5e4d1cbc-2c25-4def-94bf-38610b248495",
+          "email": "target.aff.ct@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "7695ae75-2e3f-4f2f-bdc6-86717b9f6d6c",
+          "email": "target.aff.dg@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "0661eefc-77c5-4fab-9c83-2c25e926c91d",
+          "email": "target.aff.moa@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "3210c621-da86-4b3b-b4d8-07b6047c7709",
+          "email": "target.aff.moe@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "a63d1db0-3d72-4663-b4d8-b72626085f15",
+          "email": "target.aff.non_aff@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "efa3ed4e-5a46-4101-bb92-dc3963446e91",
+          "email": "target.aff.vi@demo.ci",
+          "nom": "Temp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "a741d6ee-fca5-4439-887f-c6c8622a7dee",
+          "email": "target.del.cc@demo.ci",
+          "nom": "CibleDel",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "f444a7a3-6210-46f5-bf46-f0daa6a2cc2d",
+          "email": "target.del.cp@demo.ci",
+          "nom": "NomModifie",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "4653543d-197d-45c6-8a85-ddf2ab92c978",
+          "email": "target.del.ct@demo.ci",
+          "nom": "CibleDel",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "1e9a80d2-958b-47c8-a862-e370c85aa868",
+          "email": "target.del.moa@demo.ci",
+          "nom": "CibleDel",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "a45b12fb-8718-4b85-bd83-e63701946fa2",
+          "email": "target.del.moe@demo.ci",
+          "nom": "CibleDel",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "a30b80ee-e03a-48e7-97db-07c14b91b519",
+          "email": "target.del.vi@demo.ci",
+          "nom": "CibleDel",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "32b9b056-5f51-47a5-a4a2-09f6606ee391",
+          "email": "target.patch.ad@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "0d817f60-4c01-4a9d-8e8a-14642d36f41e",
+          "email": "target.patch.cc@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "ba42cfc8-b9ff-404b-8df0-34239edc7f00",
+          "email": "target.patch.cp@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "ac989d3d-0c62-48e1-8144-00689bc09e78",
+          "email": "target.patch.ct@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "c3a083b5-2434-4592-9962-fb58a6b60969",
+          "email": "target.patch.dg@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "6f5efd20-ad6c-480c-8607-2e8c285f84ee",
+          "email": "target.patch.moa@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "7fa1929a-cdaa-4727-99b1-c82990bebcd0",
+          "email": "target.patch.moe@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "edc53fa6-bbf8-4334-987d-6a35b9261608",
+          "email": "target.patch.vi@demo.ci",
+          "nom": "CiblePatch",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "f47b7b34-a6fc-457f-aaa7-b607cc3be372",
+          "email": "target.react.ad@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "a3d66581-5c2d-41cd-aa02-871451b18d3f",
+          "email": "target.react.cc@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "a3633e63-76e0-4fa0-b8b2-3d27b0907c13",
+          "email": "target.react.cp@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "5c173c44-be4a-45e0-b2e4-ccee451aff84",
+          "email": "target.react.ct@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "ba4abb9b-ca3e-4a85-9f50-99d24fb2e2a3",
+          "email": "target.react.dg@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "6206671a-fee0-4f8f-ab37-9fa357f79b7f",
+          "email": "target.react.moa@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "763a6ab8-ef8d-440d-ac31-107e7c2a2662",
+          "email": "target.react.moe@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "6786f6b5-651b-44f5-8569-10857571dc0f",
+          "email": "target.react.vi@demo.ci",
+          "nom": "CibleReact",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "b74590a9-3d6e-4055-a44c-5905a542838c",
+          "email": "target.susp.ad@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "26d7a58e-eb5a-46ba-b478-6f0077f8d93f",
+          "email": "target.susp.cc@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "9859a357-bf67-4522-a157-5885815cc42c",
+          "email": "target.susp.cp@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "b0f751ba-d1b5-4aaf-984e-843d3ef3af2b",
+          "email": "target.susp.ct@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "9bad29f1-411d-4dff-b90e-15314a91e6c5",
+          "email": "target.susp.dg@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": false
+        },
+        {
+          "id": "61c04066-2af5-4f60-9431-e59181a01b9a",
+          "email": "target.susp.moa@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "71c45ece-d1d3-4de3-86b4-fb22f394a27d",
+          "email": "target.susp.moe@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "e2e327d3-1581-4485-b648-32334988b4b7",
+          "email": "target.susp.vi@demo.ci",
+          "nom": "CibleSusp",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "627ae56e-cb37-44cf-83ba-7f2badb7418e",
+          "email": "vi.clean@demo.ci",
+          "nom": "Nom_VI",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        },
+        {
+          "id": "1eba6215-f462-4f80-8ea3-b8535ccaf8d0",
+          "email": "vi.test@demo.ci",
+          "nom": "VI",
+          "role_global": "VI",
+          "role_personnalise": null,
+          "is_owner": false,
+          "is_active": true
+        }
+      ]
+    },
+    "nouvelle_entreprise_btp": {
+      "schema_name": "nouvelle_entreprise_btp",
+      "nom_commercial": "Nouvelle Entreprise BTP",
+      "roles": {
+        "AD": {
+          "id": "bdf5392d-2492-43b4-867c-2714ff8936ba",
+          "code": "AD",
+          "libelle": "Administrateur",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            }
+          }
+        },
+        "CC": {
+          "id": "13c56cda-42f3-4083-a33f-7ef0cc5ac023",
+          "code": "CC",
+          "libelle": "Chef de Chantier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            },
+            "ged": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "projets": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "tiers": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            }
+          }
+        },
+        "CT": {
+          "id": "f212f92c-3407-4aeb-9d3e-e4b1ad264e65",
+          "code": "CT",
+          "libelle": "Conducteur de Travaux",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "projets": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            },
+            "tiers": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            }
+          }
+        },
+        "DF": {
+          "id": "c2cd7045-1e91-4880-aef2-f04e9a70b9d8",
+          "code": "DF",
+          "libelle": "Directeur Financier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "ged": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "tiers": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            }
+          }
+        },
+        "DG": {
+          "id": "df0cd5d3-5de6-430c-9a3d-39925e5d20f9",
+          "code": "DG",
+          "libelle": "Directeur Général / PDG",
+          "est_systeme": true,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "DP": {
+          "id": "4e70d89e-4cfa-417e-aa29-222d439e3662",
+          "code": "DP",
+          "libelle": "Directeur de Projet",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "FRN": {
+          "id": "c6f957ef-97a1-4c93-9247-847bc8314c79",
+          "code": "FRN",
+          "libelle": "Fournisseur",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "IT": {
+          "id": "622451ad-a024-42bb-b380-5592cf8c5289",
+          "code": "IT",
+          "libelle": "Ingénieur / Technicien",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "MAG": {
+          "id": "0c0ab8a1-366e-4823-9c0f-804fb46db5bc",
+          "code": "MAG",
+          "libelle": "Magasinier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "ged": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "projets": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            },
+            "tiers": {
+              "niveau": 2,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE"
+              ]
+            }
+          }
+        },
+        "MOA": {
+          "id": "1eaeffbd-283a-4810-98c5-b70b41414b8e",
+          "code": "MOA",
+          "libelle": "Maître d'Ouvrage (Client)",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "RA": {
+          "id": "bcd841dd-25ef-4027-bbd7-f912023788ad",
+          "code": "RA",
+          "libelle": "Responsable Achats",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "RF": {
+          "id": "ff08a777-5e07-4148-ac56-9ecef39c3ae5",
+          "code": "RF",
+          "libelle": "Responsable Financier",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "RH": {
+          "id": "c3f329a5-cdf5-4e2d-8bab-49c7db913421",
+          "code": "RH",
+          "libelle": "Responsable RH",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "ST": {
+          "id": "393636a6-67d9-42bf-aa1c-f3f68859cce5",
+          "code": "ST",
+          "libelle": "Sous-traitant",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "ged": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "pilotage": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "projets": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            },
+            "tiers": {
+              "niveau": 3,
+              "permissions_actuelles": [
+                "ECRITURE",
+                "LECTURE",
+                "VALIDATION"
+              ]
+            }
+          }
+        },
+        "VI": {
+          "id": "8aa98d84-e146-421e-bb8c-22dba7f82193",
+          "code": "VI",
+          "libelle": "Visiteur",
+          "est_systeme": false,
+          "est_actif": true,
+          "modules": {
+            "chantier": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "ged": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "pilotage": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "projets": {
+              "niveau": 1,
+              "permissions_actuelles": [
+                "LECTURE"
+              ]
+            },
+            "tiers": {
+              "niveau": 0,
+              "permissions_actuelles": []
+            }
+          }
+        }
+      },
+      "utilisateurs": [
+        {
+          "id": "7c7268c9-1a53-4d1e-9627-827708fdbdd9",
+          "email": "dg@nouvelle-entreprise.ci",
+          "nom": "Kouassi",
+          "role_global": "DG",
+          "role_personnalise": null,
+          "is_owner": true,
+          "is_active": true
+        }
+      ]
+    },
+    "s_ef76392c": {
+      "schema_name": "s_ef76392c",
+      "nom_commercial": "Test Branches SARL",
+      "roles": {},
+      "utilisateurs": []
+    },
+    "test_branches_schema": {
+      "schema_name": "test_branches_schema",
+      "nom_commercial": "Test Branches SARL",
+      "roles": {},
+      "utilisateurs": []
+    }
+  }
+}

@@ -195,10 +195,12 @@ def test_dependence_cycles_successors_and_realized_quantity(contexte):
     assert client.patch(url, {"unite": "FORFAIT"}, format="json").status_code == 400
     assert (
         client.patch(
-            f"/api/v1/activites/{suivant.pk}/", {"dependance": None}, format="json"
+            f"/api/v1/activites/{suivant.pk}/", {"colaborateur_id": None}, format="json"
         ).status_code
         == 200
     )
+    suivant.dependance = None
+    suivant.save(update_fields=["dependance"])
     assert client.delete(url).status_code == 204
 
 

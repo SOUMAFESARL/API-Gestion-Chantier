@@ -131,7 +131,7 @@ def test_activity_form_and_statistics_documented():
     component = body["schema"]["$ref"].rsplit("/", 1)[-1]
     definition = schema["components"]["schemas"][component]
     assert definition["required"] == ["libelle"]
-    for field in ("date_debut_prevue", "date_fin_prevue", "dependance"):
+    for field in ("date_debut_prevue", "date_fin_prevue", "colaborateur_id"):
         assert definition["properties"][field]["nullable"] is True
     assert "equipe_ids" in definition["properties"]
     assert len(body["examples"]) == 2
@@ -170,3 +170,23 @@ def test_lot_real_dates_and_project_id_documented():
         assert creation["properties"][champ]["nullable"] is True
         assert champ not in creation.get("required", [])
         assert response[champ]["nullable"] is True
+
+
+def test_activity_collaborator_contract_in_swagger():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    components = schema["components"]["schemas"]
+    for name in ("ActiviteCreation", "PatchedActiviteModification", "Activite"):
+        definition = components[name]
+        props = definition["properties"]
+        assert "dependance" not in props
+        field = props["colaborateur_id"]
+        assert field["type"] == "string"
+        assert field["format"] == "uuid"
+        assert field["nullable"] is True
+        assert field.get("readOnly", False) == (name == "Activite")
+        if name != "Activite":
+            assert "colaborateur_id" not in definition.get("required", [])
+    operation = schema["paths"]["/api/v1/lots/{lot_id}/activites/"]["post"]
+    assert "colaborateur_id" in operation["description"]
+    examples = operation["requestBody"]["content"]["application/json"]["examples"]
+    assert all("dependance" not in example["value"] for example in examples.values())

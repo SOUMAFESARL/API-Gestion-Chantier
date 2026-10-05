@@ -43,7 +43,7 @@ def objets(monkeypatch):
         libelle="Activité",
         motif="Initial",
         statut="PLANIFIE",
-        dependance=None,
+        colaborateur=None,
         budget_initial_montant=None,
         unite="U",
         quantite_prevue=Decimal("10"),
@@ -138,16 +138,7 @@ def test_quantity_and_forfait_validation(objets):
 
 def test_dependency_cycle_and_successor_dates(objets):
     lot, activite = objets
-    suivant = SimpleNamespace(
-        pk=uuid4(),
-        projet_id=lot.projet_id,
-        est_actif=True,
-        date_fin_prevue=None,
-        dependance=activite,
-    )
     serializer = ActiviteModificationSerializer(activite, partial=True, context={"lot": lot})
-    with pytest.raises(ValidationError, match="cyclique"):
-        serializer.validate({"dependance": suivant})
     activite.successeurs.filter.return_value.exists.return_value = True
     with pytest.raises(ValidationError, match="suivante"):
         serializer.validate({"libelle": "Nouveau"})
@@ -217,3 +208,23 @@ def test_custom_status_is_not_overwritten_by_automatic_evaluation():
         objet = SimpleNamespace(statut="Terminé")
         assert evaluer(objet) is False
         assert objet.statut == "Terminé"
+
+
+def test_colaborateur_scope_and_patch_preservation(objets):
+    lot, activite = objets
+    user = SimpleNamespace(pk=uuid4())
+    serializer = ActiviteModificationSerializer(activite, partial=True, context={"lot": lot})
+    with pytest.raises(ValidationError, match="colaborateur_id"):
+        serializer.validate({"colaborateur": user})
+    lot.projet.chef_projet_id = user.pk
+    assert serializer.validate({"colaborateur": user})["colaborateur"] is user
+    activite.colaborateur = user
+    assert serializer.validate({"libelle": "Renomm?e"}) == {"libelle": "Renomm?e"}
+    assert serializer.validate({"colaborateur": None}) == {"colaborateur": None}
+
+
+def test_old_dependency_field_rejected(objets):
+    lot, activite = objets
+    serializer = ActiviteModificationSerializer(activite, data={"dependance": None}, partial=True, context={"lot": lot})
+    assert not serializer.is_valid()
+    assert "dependance" in serializer.errors

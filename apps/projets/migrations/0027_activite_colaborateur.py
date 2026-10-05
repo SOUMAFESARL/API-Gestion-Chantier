@@ -5,7 +5,7 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("projets", "0025_motif_lots_activites"),
+        ("projets", "0026_projet_badge_sante_arretchantier_santeprojetsnapshot"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
     operations = [

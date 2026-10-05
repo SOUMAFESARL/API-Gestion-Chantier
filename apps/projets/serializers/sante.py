@@ -35,15 +35,15 @@ class SanteHistoriqueItemSerializer(serializers.Serializer):
 
     id = serializers.UUIDField(help_text="Identifiant unique du snapshot.")
     score = serializers.IntegerField(help_text="Score de santé (0-100).")
-    badge = serializers.CharField(help_text="Badge de santé final.")
-    penalite_delais = serializers.FloatField(help_text="Pénalité Délais (pts).")
-    penalite_blocages = serializers.FloatField(help_text="Pénalité Blocages (pts).")
-    penalite_reporting = serializers.FloatField(help_text="Pénalité Reporting (pts).")
-    retard_pts = serializers.FloatField(help_text="Retard temporel en points de pourcentage.")
+    badge = serializers.CharField(source="badge_final", help_text="Badge de santé final.")
+    penalite_delais = serializers.FloatField(source="p_delais", help_text="Pénalité Délais (pts).")
+    penalite_blocages = serializers.FloatField(source="p_blocages", help_text="Pénalité Blocages (pts).")
+    penalite_reporting = serializers.FloatField(source="p_reporting", help_text="Pénalité Reporting (pts).")
+    retard_pts = serializers.FloatField(source="delta", help_text="Retard temporel en points de pourcentage.")
     avancement_physique = serializers.FloatField(help_text="Avancement physique (%).")
     avancement_temporel = serializers.FloatField(help_text="Avancement temporel (%).")
     taux_reporting = serializers.FloatField(help_text="Taux de couverture des rapports journaliers (%).")
-    calcule_le = serializers.DateTimeField(help_text="Date et heure du snapshot.")
+    calcule_le = serializers.DateTimeField(source="date_calcul", help_text="Date et heure du snapshot.")
 
 
 class SanteDetailResponseSerializer(serializers.Serializer):

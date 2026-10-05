@@ -34,12 +34,12 @@ class ProjetArretChantierListCreateView(APIView):
         if self.request.method == "POST":
             return [
                 IsAuthenticated(),
-                APermission.pour("projets.changer_statut"),
+                APermission.pour("projets.changer_statut")(),
                 MembreDuProjet(),
             ]
         return [
             IsAuthenticated(),
-            APermission.pour("projets.lire"),
+            APermission.pour("projets.lire")(),
             MembreDuProjet(),
         ]
 

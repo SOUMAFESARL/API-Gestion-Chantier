@@ -130,8 +130,8 @@ def resoudre_blocage(
     commentaire_resolution: str = "",
 ) -> Blocage:
     """Résout un blocage : retire le blocage de l'assiette de pénalité de santé."""
-    if blocage.statut in {StatutBlocage.RESOLU, StatutBlocage.CLOTURE}:
-        raise ErreurMetier("Ce blocage est déjà résolu ou clôturé.")
+    if blocage.statut == StatutBlocage.RESOLU:
+        raise ErreurMetier("Ce blocage est déjà résolu.")
 
     blocage.statut = StatutBlocage.RESOLU
     blocage.resolu_le = timezone.now()

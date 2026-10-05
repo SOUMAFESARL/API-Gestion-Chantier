@@ -95,7 +95,7 @@ class ProjetSanteHistoriqueView(APIView):
         )
         self.check_object_permissions(request, projet)
 
-        snapshots = SanteProjetSnapshot.objects.filter(projet=projet).order_by("-calcule_le")[:30]
+        snapshots = SanteProjetSnapshot.objects.filter(projet=projet).order_by("-date_calcul")[:30]
         serializer = SanteHistoriqueItemSerializer(snapshots, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

@@ -25,6 +25,7 @@ def objets(monkeypatch):
         projet_id=uuid4(),
         projet=SimpleNamespace(chef_projet_id=None, conducteur_travaux_id=None),
         libelle="Lot",
+        motif="Initial",
         statut="PLANIFIE",
         mode_execution="REGIE",
         type_bordereau="FORFAIT",
@@ -40,6 +41,7 @@ def objets(monkeypatch):
     activite = SimpleNamespace(
         pk=uuid4(),
         libelle="Activité",
+        motif="Initial",
         statut="PLANIFIE",
         dependance=None,
         budget_initial_montant=None,

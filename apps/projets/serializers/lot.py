@@ -9,6 +9,12 @@ from apps.projets.services.statistiques import statistiques_lots
 
 class LotCreationSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=200, source="libelle")
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=False,
+        help_text="Motif informatif facultatif ; texte libre, chaîne vide pour l'effacer.",
+    )
     statut = serializers.CharField(
         required=False,
         trim_whitespace=False,
@@ -111,6 +117,7 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "projet_id",
             "code",
             "nom",
+            "motif",
             "statut",
             "mode_execution",
             "type_bordereau",

@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces
 from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.projets.models import Activite, Lot
 from apps.projets.serializers import (
     ActiviteCreationSerializer,
     ActiviteModificationSerializer,

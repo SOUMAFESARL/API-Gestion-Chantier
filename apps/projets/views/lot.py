@@ -11,14 +11,21 @@ from drf_spectacular.utils import (
     extend_schema_field,
 )
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import MembreDuProjet
-from apps.projets.models import Projet
-from apps.projets.serializers.lot import LotCreationSerializer, LotResponseSerializer
+from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.projets.models import Lot, Projet
+from apps.projets.serializers.lot import (
+    ActivationSerializer,
+    LotCreationSerializer,
+    LotModificationSerializer,
+    LotResponseSerializer,
+)
 from apps.projets.services.lots import creer_lots, lire_excel, modele_excel
 
 ERREURS_LOTS = {
@@ -39,8 +46,8 @@ class ProjetLotListCreateView(APIView):
             "activites_count et l'avancement réalisé calculé de 0 à 100. "
             "La liste comprend les lots actifs et désactivés, hors lots supprimés. "
             "Le champ est_actif indique l'état d'activation du lot. "
-            "Les opérations de modification, suppression, activation et désactivation "
-            "ne sont pas encore exposées par cette API."
+            "Modifier ou supprimer via /api/v1/lots/{id}/ ; activer ou désactiver "
+            "via PATCH /api/v1/lots/{id}/activation/."
         ),
         responses={200: LotResponseSerializer(many=True), **ERREURS_LOTS},
     )
@@ -158,3 +165,116 @@ class ProjetLotModeleView(APIView):
         )
         response["Content-Disposition"] = 'attachment; filename="modele-lots.xlsx"'
         return response
+
+
+ERREURS_MUTATION_LOT = {
+    **ERREURS_LOTS,
+    400: OpenApiResponse(
+        description="Champs invalides ou opération incompatible avec les activités du lot."
+    ),
+}
+
+
+class LotDetailView(APIView):
+    """Lecture, modification partielle et suppression logique d'un lot."""
+
+    def get_permissions(self):
+        niveau = (
+            NiveauAcces.LECTURE
+            if self.request.method in ("GET", "HEAD", "OPTIONS")
+            else NiveauAcces.ECRITURE
+        )
+        return [
+            IsAuthenticated(),
+            PermissionModule.pour(ModuleChoix.PROJETS, niveau)(),
+            MembreDuProjet(),
+        ]
+
+    def obtenir_lot(self, request, pk, verrou=False):
+        queryset = Lot.objects.select_related("projet").filter(projet__supprime_le__isnull=True)
+        lot = get_object_or_404(queryset, pk=pk)
+        self.check_object_permissions(request, lot)
+        if verrou:
+            get_object_or_404(Projet.objects.select_for_update(), pk=lot.projet_id)
+            lot = get_object_or_404(queryset.select_for_update(of=("self",)), pk=pk)
+        return lot
+
+    @extend_schema(
+        tags=["lots"],
+        summary="Détail d'un lot",
+        responses={200: LotResponseSerializer, **ERREURS_LOTS},
+    )
+    def get(self, request, pk):
+        return Response(LotResponseSerializer(self.obtenir_lot(request, pk)).data)
+
+    @extend_schema(
+        tags=["lots"],
+        summary="Modifier un lot",
+        description=(
+            "Modification partielle ; accès au projet et permission d'écriture requis. "
+            "Code, projet, ordre et baseline immuables. Dates compatibles avec les "
+            "activités existantes. Dates prévisionnelles déjà renseignées : "
+            "utilisez la reprogrammation avec motif et justification (RG-11)."
+        ),
+        request=LotModificationSerializer,
+        responses={200: LotResponseSerializer, **ERREURS_MUTATION_LOT},
+        examples=[
+            OpenApiExample("Renommer le lot", value={"nom": "Fondations"}, request_only=True)
+        ],
+    )
+    @transaction.atomic
+    def patch(self, request, pk):
+        lot = self.obtenir_lot(request, pk, verrou=True)
+        serializer = LotModificationSerializer(lot, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        return Response(LotResponseSerializer(serializer.save()).data)
+
+    @extend_schema(
+        tags=["lots"],
+        summary="Supprimer logiquement un lot",
+        description=(
+            "Permission d'écriture et accès au projet requis. Refus 400 si des "
+            "activités non supprimées existent. Aucune suppression physique."
+        ),
+        responses={
+            204: OpenApiResponse(description="Lot supprimé, réponse sans corps."),
+            **ERREURS_MUTATION_LOT,
+        },
+    )
+    @transaction.atomic
+    def delete(self, request, pk):
+        lot = self.obtenir_lot(request, pk, verrou=True)
+        if lot.activites.exists():
+            raise ValidationError(
+                {"lot": "Supprimez les activités du lot avant de le supprimer, ou désactivez-le."}
+            )
+        lot.delete(utilisateur=request.user)
+        return Response(status=204)
+
+
+class LotActivationView(LotDetailView):
+    http_method_names = ["patch", "options"]
+
+    @extend_schema(
+        tags=["lots"],
+        summary="Activer ou désactiver un lot",
+        description=(
+            "Permission d'écriture et accès au projet requis. Opération idempotente, "
+            "sans modification de l'état des activités. Un lot désactivé refuse les "
+            "nouvelles activités."
+        ),
+        request=ActivationSerializer,
+        responses={200: LotResponseSerializer, **ERREURS_MUTATION_LOT},
+        examples=[
+            OpenApiExample("Désactiver", value={"est_actif": False}, request_only=True),
+            OpenApiExample("Activer", value={"est_actif": True}, request_only=True),
+        ],
+    )
+    @transaction.atomic
+    def patch(self, request, pk):
+        lot = self.obtenir_lot(request, pk, verrou=True)
+        serializer = ActivationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        lot.est_actif = serializer.validated_data["est_actif"]
+        lot.save(update_fields=["est_actif", "modifie_le"])
+        return Response(LotResponseSerializer(lot).data)

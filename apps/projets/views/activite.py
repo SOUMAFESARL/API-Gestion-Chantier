@@ -8,6 +8,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,8 +16,10 @@ from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces
 from apps.core.permissions import MembreDuProjet, PermissionModule
-from apps.projets.models import Activite, Lot
+from apps.projets.models import Activite, Lot, Projet
 from apps.projets.serializers import ActiviteCreationSerializer, ActiviteSerializer
+from apps.projets.serializers.activite import ActiviteModificationSerializer
+from apps.projets.serializers.lot import ActivationSerializer
 
 __all__ = ["ActiviteDetailView", "LotActiviteListCreateView"]
 
@@ -24,6 +27,7 @@ ERREURS_ACTIVITES = {
     401: OpenApiResponse(description="Authentification requise."),
     403: OpenApiResponse(description="Accès au projet parent refusé."),
     404: OpenApiResponse(description="Lot ou activité absent ou supprimé."),
+    400: OpenApiResponse(description="Champs invalides, dépendance ou état du lot incompatible."),
 }
 
 
@@ -41,7 +45,9 @@ class LotActiviteListCreateView(APIView):
         responses={200: ActiviteSerializer(many=True), **ERREURS_ACTIVITES},
     )
     def get(self, request, lot_id):
-        lot = get_object_or_404(Lot.objects.select_related("projet"), pk=lot_id)
+        lot = get_object_or_404(
+            Lot.objects.select_related("projet").filter(projet__supprime_le__isnull=True), pk=lot_id
+        )
         self.check_object_permissions(request, lot)
         activites = lot.activites.filter(supprime_le__isnull=True).order_by("ordre", "cree_le")
         return Response(
@@ -91,8 +97,14 @@ class LotActiviteListCreateView(APIView):
     )
     @transaction.atomic
     def post(self, request, lot_id):
+        parent = get_object_or_404(Lot, pk=lot_id)
+        self.check_object_permissions(request, parent)
+        get_object_or_404(Projet.objects.select_for_update(), pk=parent.projet_id)
         lot = get_object_or_404(
-            Lot.objects.select_related("projet").select_for_update(of=("self",)), pk=lot_id
+            Lot.objects.select_related("projet")
+            .filter(projet__supprime_le__isnull=True)
+            .select_for_update(of=("self",)),
+            pk=lot_id,
         )
         self.check_object_permissions(request, lot)
         if not lot.est_actif:
@@ -110,7 +122,7 @@ class LotActiviteListCreateView(APIView):
 
 
 class ActiviteDetailView(APIView):
-    """Détail et suppression logique d'une activité."""
+    """Détail, modification partielle et suppression logique d'une activité."""
 
     parser_classes = [JSONParser]
 
@@ -127,20 +139,34 @@ class ActiviteDetailView(APIView):
             MembreDuProjet(),
         ]
 
+    def obtenir_activite(self, request, pk, verrou=False):
+        queryset = Activite.objects.select_related("lot", "lot__projet").filter(
+            lot__supprime_le__isnull=True,
+            lot__projet__supprime_le__isnull=True,
+        )
+        activite = get_object_or_404(queryset, pk=pk)
+        self.check_object_permissions(request, activite)
+        if verrou:
+            # Sérialise aussi les dépendances entre lots : projet, lot, activité.
+            get_object_or_404(Projet.objects.select_for_update(), pk=activite.lot.projet_id)
+            lot = get_object_or_404(Lot.objects.select_for_update(), pk=activite.lot_id)
+            activite = get_object_or_404(queryset.select_for_update(of=("self",)), pk=pk)
+            activite.lot = lot
+        return activite
+
     @extend_schema(
         summary="Détail d'une activité",
         tags=["activités"],
         description=(
             "Accès au projet et permission de lecture du module Projets requis. "
-            "Cette route permet de consulter (GET) et de supprimer logiquement "
-            "(DELETE) une activité. La modification (PUT/PATCH), l'activation et "
-            "la désactivation ne sont pas encore exposées par cette API."
+            "Cette route permet de consulter (GET), modifier partiellement (PATCH) "
+            "et supprimer logiquement (DELETE) une activité. Activation et "
+            "désactivation via PATCH /api/v1/activites/{id}/activation/."
         ),
         responses={200: ActiviteSerializer, **ERREURS_ACTIVITES},
     )
     def get(self, request, pk):
-        activite = get_object_or_404(Activite.objects.select_related("lot", "lot__projet"), pk=pk)
-        self.check_object_permissions(request, activite)
+        activite = self.obtenir_activite(request, pk)
         return Response(ActiviteSerializer(activite).data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -150,12 +176,72 @@ class ActiviteDetailView(APIView):
             "Accès au projet et permission d'écriture du module Projets requis. "
             "Suppression logique : l'activité est conservée en base mais retirée "
             "des résultats courants. Retourne 204 sans corps de réponse. "
-            "Cette opération est distincte d'une désactivation."
+            "Cette opération est distincte d'une désactivation. Refus 400 si des "
+            "activités non supprimées dépendent encore de cette activité."
         ),
         responses={204: OpenApiResponse(description="Activité supprimée."), **ERREURS_ACTIVITES},
     )
+    @transaction.atomic
     def delete(self, request, pk):
-        activite = get_object_or_404(Activite.objects.select_related("lot", "lot__projet"), pk=pk)
-        self.check_object_permissions(request, activite)
+        activite = self.obtenir_activite(request, pk, verrou=True)
+        if activite.successeurs.exists():
+            raise ValidationError(
+                {"dependance": "Retirez les dépendances avant de supprimer cette activité."}
+            )
         activite.delete(utilisateur=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        summary="Modifier une activité",
+        tags=["activités"],
+        description=(
+            "Modification partielle ; permission d'écriture et accès au projet requis. "
+            "Lot, réalisé, avancement et baseline immuables. Dates, équipe et "
+            "dépendance validées sur l'état final. Dates prévisionnelles déjà "
+            "renseignées : utilisez la reprogrammation avec motif et justification (RG-11)."
+        ),
+        request=ActiviteModificationSerializer,
+        responses={200: ActiviteSerializer, **ERREURS_ACTIVITES},
+        examples=[OpenApiExample("Renommer", value={"libelle": "Terrassement"}, request_only=True)],
+    )
+    @transaction.atomic
+    def patch(self, request, pk):
+        activite = self.obtenir_activite(request, pk, verrou=True)
+        serializer = ActiviteModificationSerializer(
+            activite,
+            data=request.data,
+            partial=True,
+            context={"request": request, "lot": activite.lot},
+        )
+        serializer.is_valid(raise_exception=True)
+        return Response(ActiviteSerializer(serializer.save()).data)
+
+
+class ActiviteActivationView(ActiviteDetailView):
+    http_method_names = ["patch", "options"]
+
+    @extend_schema(
+        summary="Activer ou désactiver une activité",
+        tags=["activités"],
+        description=(
+            "Permission d'écriture et accès au projet requis. Opération idempotente ; "
+            "réactivation refusée si le lot est désactivé."
+        ),
+        request=ActivationSerializer,
+        responses={200: ActiviteSerializer, **ERREURS_ACTIVITES},
+        examples=[
+            OpenApiExample("Désactiver", value={"est_actif": False}, request_only=True),
+            OpenApiExample("Activer", value={"est_actif": True}, request_only=True),
+        ],
+    )
+    @transaction.atomic
+    def patch(self, request, pk):
+        activite = self.obtenir_activite(request, pk, verrou=True)
+        serializer = ActivationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        etat = serializer.validated_data["est_actif"]
+        if etat and not activite.lot.est_actif:
+            raise ValidationError({"lot": "Réactivez le lot avant l'activité."})
+        activite.est_actif = etat
+        activite.save(update_fields=["est_actif", "modifie_le"])
+        return Response(ActiviteSerializer(activite).data)

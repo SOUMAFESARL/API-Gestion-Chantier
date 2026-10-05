@@ -6,6 +6,20 @@ from drf_spectacular.generators import SchemaGenerator
 from apps.core.enums import StatutProjet
 
 
+def test_lot_and_activity_mutations_are_visible_in_swagger():
+    schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
+    for resource in ("lots", "activites"):
+        detail = schema["paths"][f"/api/v1/{resource}/{{id}}/"]
+        assert set(detail) == {"get", "patch", "delete"}
+        assert "204" in detail["delete"]["responses"]
+        assert "requestBody" in detail["patch"]
+        activation = schema["paths"][f"/api/v1/{resource}/{{id}}/activation/"]
+        assert set(activation) == {"patch"}
+        assert "400" in activation["patch"]["responses"]
+    activation_fields = schema["components"]["schemas"]["PatchedActivation"]["properties"]
+    assert activation_fields["est_actif"]["type"] == "boolean"
+
+
 def test_schema_contains_project_crud_and_lot_workflow():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
     paths = {path: value for path, value in schema["paths"].items() if "/projets/" in path}

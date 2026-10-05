@@ -185,3 +185,44 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         )
         activite.equipe.set(equipe)
         return activite
+
+
+class ActiviteModificationSerializer(ActiviteCreationSerializer):
+    """Réutilise la validation métier sur l'état final d'une modification partielle."""
+
+    def validate(self, attrs):
+        for champ in ("date_debut_prevue", "date_fin_prevue"):
+            ancienne = getattr(self.instance, champ)
+            if champ in attrs and ancienne is not None and attrs[champ] != ancienne:
+                raise serializers.ValidationError(
+                    {
+                        champ: "RG-11 : reprogrammez l'activité avec motif et justification."
+                    }
+                )
+        valeurs = {
+            champ.source: getattr(self.instance, champ.source)
+            for champ in self.fields.values()
+            if champ.source != "equipe"
+        }
+        valeurs.update(attrs)
+        valeurs = super().validate(valeurs)
+        dependance = valeurs.get("dependance")
+        visites = {self.instance.pk}
+        while dependance:
+            if dependance.pk in visites:
+                raise serializers.ValidationError({"dependance": "Dépendance cyclique interdite."})
+            visites.add(dependance.pk)
+            dependance = dependance.dependance
+        if valeurs["quantite_prevue"] < self.instance.quantite_realisee:
+            raise serializers.ValidationError(
+                {"quantite_prevue": "Quantité inférieure au réalisé."}
+            )
+        fin = valeurs.get("date_fin_prevue")
+        if fin and self.instance.successeurs.filter(date_debut_prevue__lt=fin).exists():
+            raise serializers.ValidationError(
+                {"date_fin_prevue": "La fin dépasse le début d'une activité suivante."}
+            )
+        # FORFAIT normalise la quantité à 1 ; les autres valeurs absentes restent intactes.
+        if valeurs["quantite_prevue"] != self.instance.quantite_prevue:
+            attrs["quantite_prevue"] = valeurs["quantite_prevue"]
+        return attrs

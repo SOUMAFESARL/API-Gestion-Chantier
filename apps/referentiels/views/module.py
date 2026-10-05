@@ -105,12 +105,14 @@ class ModuleListView(APIView):
             # Accès par défaut normalisés pour le frontend Next.js
             perms_codes_set = {p["code"] for p in perms_data}
             acces_defaut = []
-            if "LECTURE" in perms_codes_set:
+            if any(c == "LECTURE" or c.endswith(".lire") for c in perms_codes_set):
                 acces_defaut.append("lecture")
-            if "ECRITURE" in perms_codes_set:
+            if any(c == "ECRITURE" or c.endswith(".ecrire") or c.endswith(".rediger") for c in perms_codes_set):
                 acces_defaut.append("saisie")
-            if "VALIDATION" in perms_codes_set:
+            if any(c == "VALIDATION" or c.endswith(".valider") or c == "projets.changer_statut" for c in perms_codes_set):
                 acces_defaut.append("validation")
+            if "lecture" not in acces_defaut:
+                acces_defaut.insert(0, "lecture")
 
             modules.append(
                 {

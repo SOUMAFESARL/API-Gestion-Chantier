@@ -41,6 +41,9 @@ def django_db_setup(django_db_setup, django_db_blocker):
                 domain="localhost", defaults={"tenant": public, "is_primary": True}
             )
 
+            from django.core.management import call_command
+            call_command("synchroniser_catalogue_permissions")
+
             entreprise = Entreprise.objects.filter(schema_name=SCHEMA_TEST).first()
             if entreprise is None:
                 entreprise = Entreprise(

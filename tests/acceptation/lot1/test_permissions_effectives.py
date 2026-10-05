@@ -195,10 +195,13 @@ def test_a12_plus_de_plafond_modele_role(client_tenant):
                 defaults={
                     "nom": "Magasinier",
                     "prenom": "Test",
-                    "role_global": RoleGlobal.MAGASINIER,
+                    "role_global": RoleGlobal.VISITEUR,
+                    "role_personnalise": role_mag,
                     "statut": StatutUtilisateur.ACTIF,
                 },
             )
+            user_mag.role_personnalise = role_mag
+            user_mag.save()
 
     if role_mag and p_lire:
         client_tenant.force_authenticate(user=user_mag)

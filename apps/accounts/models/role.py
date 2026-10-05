@@ -69,12 +69,8 @@ class RoleModulePermission(ModeleBase):
         on_delete=models.CASCADE,
         related_name="permissions_roles",
         verbose_name=_("module"),
-    )
-    permissions = models.ManyToManyField(
-        "accounts.Permission",
-        related_name="roles_modules",
+        null=True,
         blank=True,
-        verbose_name=_("permissions accordées"),
     )
     module_catalogue = models.ForeignKey(
         "catalogue.CatalogueModule",

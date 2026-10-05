@@ -41,6 +41,11 @@ class CataloguePermission(ModeleBase):
         default=True,
         help_text=_("Indique si cette permission est active et disponible."),
     )
+    reservee_administration = models.BooleanField(
+        _("réservée administration"),
+        default=False,
+        help_text=_("Indique si cette permission est réservée à l'administration de l'entreprise."),
+    )
     modules = models.ManyToManyField(
         "catalogue.CatalogueModule",
         related_name="permissions",

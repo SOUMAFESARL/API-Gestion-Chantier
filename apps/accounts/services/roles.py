@@ -137,33 +137,43 @@ def initialiser_permissions_par_defaut() -> list[Permission]:
     return perms_creees
 
 
-def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permission]]:
-    """Normalise les permissions reçues sous forme de dict ou de list vers un dict {module_code: [Permission, ...]}."""
-    perms_par_code = {p.code.upper(): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
-    perms_par_id = {str(p.id): p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related("modules")}
-
-    EQUIVALENCES_CODES = {
-        "SAISIE": "ECRITURE",
-        "ECRITURE": "ECRITURE",
-        "LECTURE": "LECTURE",
-        "VALIDATION": "VALIDATION",
-        "SUPPRESSION": "SUPPRESSION",
-    }
-
-    def _resoudre_perm(p_key, mod_code):
-        if not p_key:
-            return None
-        cle = str(p_key).strip().upper()
-        code_canonique = EQUIVALENCES_CODES.get(cle, cle)
-        target = perms_par_code.get(code_canonique) or perms_par_id.get(str(p_key))
-        if target and target.modules.exists() and not target.modules.filter(code=mod_code).exists():
-            return None
-        return target
-
-    resultat: dict[str, list[Permission]] = {}
-
+def _normaliser_permissions_modules(permissions_input) -> dict[str, list[str]]:
+    """Normalise les permissions reçues sous forme de dict ou de list vers un dict {module_code: [code_permission, ...]}."""
+    resultat: dict[str, list[str]] = {}
     if not permissions_input:
         return resultat
+
+    def _extraire_codes(m_code_str: str, val) -> list[str]:
+        m = m_code_str.lower()
+        codes = set()
+        if isinstance(val, int):
+            if val >= 1:
+                codes.add(f"{m}.lire")
+            if val >= 2:
+                codes.add("chantier.rediger" if m == "chantier" else f"{m}.ecrire")
+            if val >= 3:
+                codes.add(f"{m}.valider")
+            return list(codes)
+
+        items = val if isinstance(val, (list, tuple, set)) else [val]
+        for item in items:
+            if not item:
+                continue
+            code_str = str(item.get("code") if isinstance(item, dict) else item).strip().lower()
+            if code_str in ("lecture", "lire", f"{m}.lire"):
+                codes.add(f"{m}.lire")
+            elif code_str in ("saisie", "ecriture", "rediger", f"{m}.ecrire", f"{m}.rediger"):
+                codes.add("chantier.rediger" if m == "chantier" else f"{m}.ecrire")
+            elif code_str in ("validation", "valider", f"{m}.valider"):
+                if m == "projets":
+                    codes.add("projets.changer_statut")
+                else:
+                    codes.add(f"{m}.valider")
+            elif code_str in REGISTRE:
+                codes.add(code_str)
+            elif f"{m}.{code_str}" in REGISTRE:
+                codes.add(f"{m}.{code_str}")
+        return list(codes)
 
     if isinstance(permissions_input, list):
         for item in permissions_input:
@@ -171,84 +181,60 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[Permiss
                 m_code = item.get("module") or item.get("module_code")
                 p_items = item.get("permissions") or []
                 if m_code:
-                    m_code_str = str(m_code).lower()
-                    resolved = []
-                    for p in p_items:
-                        p_key = p.get("code") if isinstance(p, dict) else str(p)
-                        target_perm = _resoudre_perm(p_key, m_code_str)
-                        if target_perm and target_perm not in resolved:
-                            resolved.append(target_perm)
-                    resultat[m_code_str] = resolved
+                    resultat[str(m_code).lower()] = _extraire_codes(str(m_code).lower(), p_items)
     elif isinstance(permissions_input, dict):
         for m_code, val in permissions_input.items():
-            m_code_str = str(m_code).lower()
-            if isinstance(val, int):
-                resolved = []
-                if val == 1 and "LECTURE" in perms_par_code:
-                    resolved.append(perms_par_code["LECTURE"])
-                elif val == 2:
-                    for c in ["LECTURE", "ECRITURE"]:
-                        if c in perms_par_code:
-                            resolved.append(perms_par_code[c])
-                elif val >= 3:
-                    for c in ["LECTURE", "ECRITURE", "VALIDATION"]:
-                        if c in perms_par_code:
-                            resolved.append(perms_par_code[c])
-                resultat[m_code_str] = resolved
-            elif isinstance(val, str):
-                target_perm = _resoudre_perm(val, m_code_str)
-                resultat[m_code_str] = [target_perm] if target_perm else []
-            elif isinstance(val, (list, tuple, set)):
-                resolved = []
-                for p in val:
-                    p_key = p.get("code") if isinstance(p, dict) else str(p)
-                    target_perm = _resoudre_perm(p_key, m_code_str)
-                    if target_perm and target_perm not in resolved:
-                        resolved.append(target_perm)
-                resultat[m_code_str] = resolved
+            resultat[str(m_code).lower()] = _extraire_codes(str(m_code).lower(), val)
 
     return resultat
 
 
-def _calculer_niveau_scalaire(permissions_list: list[Permission]) -> int:
-    codes = {p.code for p in permissions_list}
-    if "VALIDATION" in codes:
+def _calculer_niveau_scalaire(codes_list: list[str]) -> int:
+    """Calcule le niveau scalaire correspondant aux codes pour compatibilité legacy."""
+    c_set = set(codes_list)
+    if any(c.endswith(".valider") for c in c_set):
         return NiveauAcces.VALIDATION
-    if "ECRITURE" in codes:
+    if any(c.endswith(".ecrire") or c.endswith(".rediger") for c in c_set):
         return NiveauAcces.ECRITURE
-    if "LECTURE" in codes:
+    if any(c.endswith(".lire") for c in c_set):
         return NiveauAcces.LECTURE
     return NiveauAcces.AUCUN
 
 
 def _verifier_plafond_modele(code_role: str, mod_code: str, niveau_demande: int):
-    """Vérifie que le niveau demandé ne dépasse pas le plafond défini par le ModeleRole s'il existe."""
-    if not code_role or not mod_code:
-        return
-    try:
-        from apps.catalogue.models import ModeleRoleModule
+    """Règle A-12 : aucun ancien plafond de modèle n'intervient."""
+    pass
 
-        mrm = ModeleRoleModule.objects.filter(
-            modele_role__code=code_role.upper(),
-            module_code=mod_code.lower(),
-            modele_role__est_actif=True,
-            modele_role__supprime_le__isnull=True,
-        ).first()
-        if mrm is not None and niveau_demande > mrm.niveau_max:
-            raise ValidationError(
-                _(
-                    f"Le niveau d'accès demandé ({niveau_demande}) sur le module '{mod_code}' "
-                    f"dépasse le plafond autorisé ({mrm.niveau_max}) pour le modèle de rôle '{code_role.upper()}'."
-                )
-            )
-    except ValidationError:
-        raise
-    except Exception:
-        pass
+
+NIVEAUX_DEFAUT_ROLES = {
+    "AD": {"administration": 2, "chantier": 3, "ged": 3, "pilotage": 2, "projets": 3, "tiers": 2},
+    "BAI": {"administration": 0, "chantier": 1, "ged": 1, "pilotage": 1, "projets": 1, "tiers": 0},
+    "CC": {"administration": 0, "chantier": 2, "ged": 2, "pilotage": 0, "projets": 1, "tiers": 0},
+    "CP": {"administration": 0, "chantier": 2, "ged": 2, "pilotage": 1, "projets": 2, "tiers": 1},
+    "CT": {"administration": 0, "chantier": 3, "ged": 2, "pilotage": 1, "projets": 2, "tiers": 1},
+    "DF": {"administration": 0, "chantier": 1, "ged": 2, "pilotage": 3, "projets": 1, "tiers": 2},
+    "DG": {"administration": 3, "chantier": 3, "ged": 3, "pilotage": 3, "projets": 3, "tiers": 3},
+    "DO": {"administration": 0, "chantier": 3, "ged": 3, "pilotage": 2, "projets": 3, "tiers": 2},
+    "MAG": {"administration": 0, "chantier": 1, "ged": 1, "pilotage": 0, "projets": 0, "tiers": 2},
+    "VI": {"administration": 0, "chantier": 1, "ged": 1, "pilotage": 1, "projets": 1, "tiers": 0},
+}
+
+ANNEXE1_CODES_PAR_ROLE = {
+    "DG": {"projets.creer", "projets.changer_statut", "projets.resilier_archiver", "projets.affecter_membres", "projets.gerer_equipes", "projets.voir_montants"},
+    "AD": {"projets.creer", "projets.changer_statut", "projets.resilier_archiver", "projets.affecter_membres", "projets.gerer_equipes"},
+    "DO": {"projets.creer", "projets.changer_statut", "projets.resilier_archiver", "projets.voir_montants"},
+    "DF": {"projets.voir_montants"},
+    "CP": {"projets.changer_statut", "projets.affecter_membres", "projets.gerer_equipes", "projets.voir_montants"},
+    "CT": {"projets.gerer_equipes"},
+    "CC": set(),
+    "MAG": set(),
+    "BAI": set(),
+    "VI": set(),
+}
 
 
 def appliquer_modeles_roles() -> list[Role]:
-    """Applique les gabarits de rôles souverains (ModeleRole) et leurs plafonds au schéma courant."""
+    """Applique les gabarits de rôles souverains (ModeleRole) au schéma courant (A-12)."""
     initialiser_modules_par_defaut()
     initialiser_permissions_par_defaut()
 
@@ -258,9 +244,6 @@ def appliquer_modeles_roles() -> list[Role]:
     cat_modules_map = {
         m.code.lower(): m
         for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-    }
-    all_perms_map = {
-        p.code: p for p in Permission.objects.filter(est_actif=True, supprime_le__isnull=True)
     }
     all_cat_perms_map = {
         p.code: p
@@ -277,26 +260,30 @@ def appliquer_modeles_roles() -> list[Role]:
     with transaction.atomic():
         if modeles_qs:
             for modele in modeles_qs:
+                r_code = (modele.code or "").upper()
                 role, _ = Role.objects.update_or_create(
-                    code=modele.code,
+                    code=r_code,
                     defaults={
                         "libelle": modele.libelle,
                         "description": modele.description,
-                        "est_systeme": modele.code in CODES_ROLES_SYSTEME,
+                        "est_systeme": r_code in CODES_ROLES_SYSTEME,
                         "est_actif": True,
                     },
                 )
-                plafonds = {
-                    mrm.module_code.lower(): mrm.niveau_max
+                modules_modele = {
+                    mrm.module_code.lower()
                     for mrm in modele.modules_plafonds.all()
                 }
 
                 for mod in modules_actifs:
                     m_key = mod.code.lower()
                     cat_mod = cat_modules_map.get(m_key)
-                    niveau_cible = plafonds.get(m_key, 0)
                     if role.code == "DG":
                         niveau_cible = NiveauAcces.VALIDATION
+                    else:
+                        niveau_cible = NIVEAUX_DEFAUT_ROLES.get(r_code, {}).get(
+                            m_key, NiveauAcces.LECTURE if m_key in modules_modele else NiveauAcces.AUCUN
+                        )
 
                     rmp, _ = RoleModulePermission.objects.update_or_create(
                         role=role,
@@ -307,52 +294,79 @@ def appliquer_modeles_roles() -> list[Role]:
                         },
                     )
 
-                    perms_to_set = []
-                    if niveau_cible >= 1 and "LECTURE" in all_perms_map:
-                        perms_to_set.append(all_perms_map["LECTURE"])
-                    if niveau_cible >= 2 and "ECRITURE" in all_perms_map:
-                        perms_to_set.append(all_perms_map["ECRITURE"])
-                    if niveau_cible >= 3 and "VALIDATION" in all_perms_map:
-                        perms_to_set.append(all_perms_map["VALIDATION"])
-
-                    rmp.permissions.set(perms_to_set)
+                    if m_key == "projets":
+                        codes_module = set()
+                        if niveau_cible >= 1:
+                            codes_module.add("projets.lire")
+                        if niveau_cible >= 2:
+                            codes_module.add("projets.ecrire")
+                        if r_code in ANNEXE1_CODES_PAR_ROLE:
+                            codes_module.update(ANNEXE1_CODES_PAR_ROLE[r_code])
+                    else:
+                        from apps.core.registre_permissions import permissions_du_module
+                        codes_module = set(permissions_du_module(m_key, niveau_cible))
 
                     cat_perms_to_set = [
-                        all_cat_perms_map[p.code]
-                        for p in perms_to_set
-                        if p.code in all_cat_perms_map
+                        all_cat_perms_map[c]
+                        for c in codes_module
+                        if c in all_cat_perms_map
                     ]
-                    if cat_perms_to_set:
-                        rmp.permissions_catalogue.set(cat_perms_to_set)
+                    rmp.permissions_catalogue.set(cat_perms_to_set)
 
                     rmp.niveau = niveau_cible
                     rmp.save()
 
-                RoleModulePermission.objects.filter(role=role).exclude(
+                RoleModulePermission.objects.filter(role=role).filter(module__isnull=False).exclude(
                     module__in=modules_actifs
                 ).delete()
                 roles_traites.append(role)
         else:
             for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
+                r_code = (code or "").upper()
                 role, _ = Role.objects.update_or_create(
-                    code=code,
+                    code=r_code,
                     defaults={
                         "libelle": libelle,
                         "description": description,
-                        "est_systeme": code in CODES_ROLES_SYSTEME,
+                        "est_systeme": r_code in CODES_ROLES_SYSTEME,
                         "est_actif": True,
                     },
                 )
                 for mod in modules_actifs:
-                    cat_mod = cat_modules_map.get(mod.code.lower())
+                    m_key = mod.code.lower()
+                    cat_mod = cat_modules_map.get(m_key)
+                    niveau_cible = NIVEAUX_DEFAUT_ROLES.get(r_code, {}).get(
+                        m_key, NiveauAcces.VALIDATION if r_code == "DG" else NiveauAcces.LECTURE
+                    )
                     rmp, _ = RoleModulePermission.objects.update_or_create(
                         role=role,
                         module=mod,
                         defaults={
-                            "niveau": NiveauAcces.VALIDATION if code == "DG" else NiveauAcces.LECTURE,
+                            "niveau": niveau_cible,
                             "module_catalogue": cat_mod,
                         },
                     )
+                    if m_key == "projets":
+                        codes_module = set()
+                        if niveau_cible >= 1:
+                            codes_module.add("projets.lire")
+                        if niveau_cible >= 2:
+                            codes_module.add("projets.ecrire")
+                        if r_code in ANNEXE1_CODES_PAR_ROLE:
+                            codes_module.update(ANNEXE1_CODES_PAR_ROLE[r_code])
+                    else:
+                        from apps.core.registre_permissions import permissions_du_module
+                        codes_module = set(permissions_du_module(m_key, niveau_cible))
+
+                    cat_perms_to_set = [
+                        all_cat_perms_map[c]
+                        for c in codes_module
+                        if c in all_cat_perms_map
+                    ]
+                    rmp.permissions_catalogue.set(cat_perms_to_set)
+                    rmp.niveau = niveau_cible
+                    rmp.save()
+
                 roles_traites.append(role)
 
     return roles_traites
@@ -418,8 +432,7 @@ def creer_role(
                 cree_par=cree_par,
             )
             if perms_for_mod:
-                rmp.permissions.set(perms_for_mod)
-                cat_perms = [all_cat_perms[p.code] for p in perms_for_mod if p.code in all_cat_perms]
+                cat_perms = [all_cat_perms[c] for c in perms_for_mod if c in all_cat_perms]
                 if cat_perms:
                     rmp.permissions_catalogue.set(cat_perms)
 
@@ -485,8 +498,7 @@ def modifier_role(
                     )
                     if not rmp.module_catalogue and cat_mod:
                         rmp.module_catalogue = cat_mod
-                    rmp.permissions.set(perms_list)
-                    cat_perms = [all_cat_perms[p.code] for p in perms_list if p.code in all_cat_perms]
+                    cat_perms = [all_cat_perms[c] for c in perms_list if c in all_cat_perms]
                     if cat_perms:
                         rmp.permissions_catalogue.set(cat_perms)
                     niveau_scalaire = _calculer_niveau_scalaire(perms_list)

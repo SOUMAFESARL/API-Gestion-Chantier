@@ -12,6 +12,19 @@ HOTE_TENANT = "demo.localhost"
 HOTE_PUBLIC = "localhost"
 
 
+@pytest.fixture(autouse=True)
+def initialiser_catalogue_test(db):
+    """Garantit que le catalogue public et les rôles de base sont initialisés pour les tests."""
+    from django.core.management import call_command
+    with schema_context(get_public_schema_name()):
+        call_command("synchroniser_catalogue_permissions")
+    with schema_context(SCHEMA_TEST):
+        from apps.accounts.models import Role
+        if not Role.objects.filter(supprime_le__isnull=True).exists():
+            from apps.accounts.services.roles import initialiser_roles_par_defaut
+            initialiser_roles_par_defaut()
+
+
 @pytest.fixture
 def client_tenant():
     """Client API configuré sur l'hôte du tenant de test."""

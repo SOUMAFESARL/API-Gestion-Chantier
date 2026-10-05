@@ -264,22 +264,15 @@ class PermissionModule(permissions.BasePermission):
                     supprime_le__isnull=True,
                 ).first()
                 if rmp:
-                    if rmp.niveau == 0:
+                    if rmp.niveau == 0 and not rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True).exists():
                         return False
-                    has_m2m = (
-                        rmp.permissions_catalogue.filter(supprime_le__isnull=True).exists()
-                        or rmp.permissions.filter(supprime_le__isnull=True).exists()
-                    )
-                    if has_m2m:
-                        has_perm_m2m = (
-                            rmp.permissions_catalogue.filter(
-                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                            ).exists()
-                            or rmp.permissions.filter(
-                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                            ).exists()
-                        )
-                        return has_perm_m2m
+                    if rmp.permissions_catalogue.filter(
+                        code__iexact=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                    ).exists():
+                        return True
+                    if self.permission_requise in ("LECTURE", "ECRITURE", "VALIDATION"):
+                        if rmp.niveau is not None and rmp.niveau >= self.niveau_requis:
+                            return True
 
         from apps.core.droits import permissions_effectives
         from apps.core.registre_permissions import REGISTRE
@@ -387,15 +380,10 @@ class PermissionModule(permissions.BasePermission):
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        has_perm = (
-            perm.permissions_catalogue.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-            or perm.permissions.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-        )
-        has_perm_m2m = perm.permissions_catalogue.exists() or perm.permissions.exists()
+        has_perm = perm.permissions_catalogue.filter(
+            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+        ).exists()
+        has_perm_m2m = perm.permissions_catalogue.exists()
         if not has_perm and not has_perm_m2m and perm.niveau is not None and perm.niveau > 0:
             if self.permission_requise == "LECTURE" and perm.niveau >= 1:
                 has_perm = True

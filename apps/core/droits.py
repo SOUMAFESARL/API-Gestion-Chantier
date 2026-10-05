@@ -1,19 +1,17 @@
 """Moteur unique de décision d'habilitation et contrôle d'accès RBAC souverain.
 
-Règle absolue :
+Règles :
 1. SuperAdmin -> tous les points de contrôle du REGISTRE.
-2. DG de l'entreprise -> tous les codes des modules actifs de l'entreprise + administration.
-3. Autre rôle -> intersection entre :
-   a) modules actifs de l'entreprise (EntrepriseModule.est_actif=True)
-   b) niveau accordé au rôle sur le module (RoleModulePermission.niveau)
-   c) plafond du modèle associé au rôle si applicable (ModeleRoleModule.niveau_max)
+2. DG de l'entreprise -> toutes les permissions actives des modules actifs de l'entreprise + administration.
+3. Autre rôle -> liste explicite des permissions cochées dans permissions_catalogue,
+   restreinte aux modules actifs de l'entreprise et aux permissions actives du catalogue (A-04, A-06, A-12).
 """
 
 from django.db import connection, models
 from rest_framework import permissions
 
 from apps.core.enums import RoleGlobal
-from apps.core.registre_permissions import REGISTRE, permissions_du_module
+from apps.core.registre_permissions import REGISTRE
 
 __all__ = ["APermission", "a_permission", "permissions_effectives"]
 
@@ -70,39 +68,8 @@ def _obtenir_modules_actifs(tenant=None) -> set[str]:
     return {p.module for p in REGISTRE.values()}
 
 
-def _obtenir_plafonds_modele(code_role: str) -> dict[str, int]:
-    """Retourne les plafonds {module_code: niveau_max} définis par le ModeleRole s'il existe."""
-    plafonds: dict[str, int] = {}
-    if not code_role:
-        return plafonds
-    ROLE_ALIASES = {
-        "ADMIN": "AD",
-        "DIRECTEUR_GENERAL": "DG",
-        "CHEF_PROJET": "CP",
-        "CONDUCTEUR_TRAVAUX": "CT",
-        "CHEF_CHANTIER": "CC",
-        "VISITEUR": "VI",
-    }
-    code_role = ROLE_ALIASES.get(code_role, code_role)
-    try:
-        from apps.catalogue.models import ModeleRoleModule
-
-        mrms = ModeleRoleModule.objects.filter(
-            modele_role__code=code_role,
-            modele_role__est_actif=True,
-            modele_role__supprime_le__isnull=True,
-        ).select_related("module")
-        for mrm in mrms:
-            mod_code = getattr(mrm, "module_code", "") or (mrm.module.code if mrm.module else "")
-            if mod_code:
-                plafonds[mod_code.lower()] = mrm.niveau_max
-    except Exception:
-        pass
-    return plafonds
-
-
 def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]:
-    """Calcule l'ensemble exact des codes de permissions accordées au collaborateur."""
+    """Calcule l'ensemble exact des codes de permissions accordées au collaborateur (A-04, A-06, A-12)."""
     if not collaborateur or not getattr(collaborateur, "is_authenticated", False):
         return set()
 
@@ -118,7 +85,9 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
 
     modules_actifs = _obtenir_modules_actifs(tenant)
 
-    # 2. DG ou Propriétaire : toutes les permissions des modules actifs de l'entreprise
+    from apps.catalogue.models import CataloguePermission
+
+    # 2. DG ou Propriétaire : toutes les permissions actives des modules actifs + administration
     is_dg = bool(
         getattr(collaborateur, "is_owner", False)
         or getattr(collaborateur, "is_dg", False)
@@ -129,7 +98,18 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
         )
     )
     if is_dg:
-        perms = {code for code, def_p in REGISTRE.items() if def_p.module in modules_actifs}
+        perms_actives = set(
+            CataloguePermission.objects.filter(
+                est_actif=True, supprime_le__isnull=True
+            ).values_list("code", flat=True)
+        )
+        if not perms_actives:
+            perms_actives = set(REGISTRE.keys())
+        perms = {
+            code for code, def_p in REGISTRE.items()
+            if (def_p.module in modules_actifs or def_p.module == "administration")
+            and code in perms_actives
+        }
         if request:
             request._permissions_effectives_cache = perms
         return perms
@@ -137,6 +117,9 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
     # 3. Autre rôle
     role = getattr(collaborateur, "role_personnalise", None)
     code_role = getattr(collaborateur, "role_global", "") or ""
+    if not role and getattr(collaborateur, "role_id", None):
+        role = getattr(collaborateur, "role", None)
+
     if not role and code_role:
         try:
             from apps.accounts.models import Role
@@ -144,39 +127,31 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
             role = Role.objects.filter(
                 code=code_role, supprime_le__isnull=True
             ).first()
+            if not role:
+                from apps.accounts.services.roles import initialiser_roles_par_defaut
+                initialiser_roles_par_defaut()
+                role = Role.objects.filter(
+                    code=code_role, supprime_le__isnull=True
+                ).first()
         except Exception:
             role = None
 
     if not role or not getattr(role, "est_actif", True):
-        # Repli sur le modèle de rôle système si le rôle local n'a pas encore été initialisé en base
-        if code_role:
-            plafonds = _obtenir_plafonds_modele(code_role)
-            if plafonds:
-                perms_accordees = set()
-                for mod_code in modules_actifs:
-                    mod_key = mod_code.lower()
-                    niv = plafonds.get(mod_key, 0)
-                    if niv > 0:
-                        perms_accordees.update(permissions_du_module(mod_key, niv))
-                if request:
-                    request._permissions_effectives_cache = perms_accordees
-                return perms_accordees
-
         if request:
             request._permissions_effectives_cache = set()
         return set()
 
-    # Récupérer les niveaux accordés au rôle par module
-    niveaux_role: dict[str, int] = {}
+    # Règle A-04 : lit uniquement la liste cochée dans permissions_catalogue
+    # Règle A-06 : filtre les modules désactivés pour l'entreprise et les permissions inactives
+    # Règle A-12 : aucun ancien plafond de modèle n'intervient
+    perms_accordees: set[str] = set()
     try:
         from apps.accounts.models import RoleModulePermission
 
         rmps = RoleModulePermission.objects.filter(
             role=role,
             supprime_le__isnull=True,
-        )
-        if hasattr(rmps, "select_related"):
-            rmps = rmps.select_related("module", "module_catalogue")
+        ).select_related("module", "module_catalogue")
 
         for rmp in rmps:
             mod_code = None
@@ -184,26 +159,38 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
                 mod_code = rmp.module_catalogue.code
             elif getattr(rmp, "module_id", None) and getattr(rmp, "module", None):
                 mod_code = rmp.module.code
-            if mod_code:
-                niveaux_role[mod_code.lower()] = (
-                    rmp.niveau if getattr(rmp, "niveau", None) is not None else 0
-                )
+
+            if not mod_code:
+                continue
+
+            mod_key = mod_code.lower()
+            if mod_key not in modules_actifs and mod_key != "administration":
+                continue
+
+            codes_cochés = set(
+                rmp.permissions_catalogue.filter(
+                    est_actif=True,
+                    supprime_le__isnull=True,
+                ).values_list("code", flat=True)
+            )
+
+            # Restreint aux codes officiellement enregistrés dans REGISTRE
+            perms_accordees.update({c for c in codes_cochés if c in REGISTRE})
+
+        # AD ou ADMIN : hérite des permissions d'administration actives du catalogue (Point P-2)
+        if code_role in (RoleGlobal.ADMIN, "AD") or getattr(role, "code", "") in (RoleGlobal.ADMIN, "AD"):
+            perms_admin = {
+                code for code, def_p in REGISTRE.items()
+                if def_p.module == "administration"
+            }
+            cat_admin_actifs = set(
+                CataloguePermission.objects.filter(
+                    code__in=perms_admin, est_actif=True, supprime_le__isnull=True
+                ).values_list("code", flat=True)
+            )
+            perms_accordees.update(cat_admin_actifs if cat_admin_actifs else perms_admin)
     except Exception:
         pass
-
-    plafonds = _obtenir_plafonds_modele(getattr(role, "code", ""))
-
-    perms_accordees: set[str] = set()
-    for mod_code in modules_actifs:
-        mod_key = mod_code.lower()
-        # Niveau accordé en base (ou repli sur le plafond template si module non configuré)
-        niveau = niveaux_role.get(mod_key, plafonds.get(mod_key, 0))
-        # Plafond template (le DG ne peut pas accorder plus que le template)
-        if mod_key in plafonds:
-            niveau = min(niveau, plafonds[mod_key])
-
-        if niveau > 0:
-            perms_accordees.update(permissions_du_module(mod_key, niveau))
 
     if request:
         request._permissions_effectives_cache = perms_accordees

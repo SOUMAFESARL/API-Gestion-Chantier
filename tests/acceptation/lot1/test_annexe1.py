@@ -36,9 +36,11 @@ def test_annexe1_matrice_roles_systeme(client_tenant, code_permission, roles_aut
                     "nom": f"Nom_{code_role}",
                     "prenom": "Annexe1",
                     "role_global": getattr(RoleGlobal, code_role, RoleGlobal.VISITEUR),
+                    "role_personnalise": role_obj,
                     "statut": StatutUtilisateur.ACTIF,
                 },
             )
+            user.role_personnalise = role_obj
             if code_role == "DG":
                 user.is_owner = True
             else:

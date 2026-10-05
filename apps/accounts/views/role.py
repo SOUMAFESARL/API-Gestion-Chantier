@@ -66,6 +66,8 @@ class RoleListCreateView(APIView):
         responses={200: RoleSerializer(many=True)},
     )
     def get(self, request):
+        _autoriser_roles_dg(request.user)
+
         if not Role.objects.filter(supprime_le__isnull=True).exists():
             initialiser_roles_par_defaut()
 

@@ -18,17 +18,24 @@ def appliquer_modeles_niveaux_tenant(apps, schema_editor):
         if not cursor.fetchone()[0]:
             return
 
-        # 1. Aligner les niveaux selon les plafonds des modèles de rôles
+        # 1. Aligner les niveaux selon les plafonds des modèles de rôles si la colonne existe
         cursor.execute("""
-            UPDATE role_module_permission rmp
-            SET niveau = cmrm.niveau_max
-            FROM role r, catalogue_modele_role cmr, catalogue_modele_role_module cmrm, module m
-            WHERE rmp.role_id = r.id
-              AND UPPER(r.code) = UPPER(cmr.code)
-              AND cmrm.modele_role_id = cmr.id
-              AND rmp.module_id = m.id
-              AND LOWER(cmrm.module_code) = LOWER(m.code);
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'catalogue_modele_role_module' AND column_name = 'niveau_max'
+            );
         """)
+        if cursor.fetchone()[0]:
+            cursor.execute("""
+                UPDATE role_module_permission rmp
+                SET niveau = cmrm.niveau_max
+                FROM role r, catalogue_modele_role cmr, catalogue_modele_role_module cmrm, module m
+                WHERE rmp.role_id = r.id
+                  AND UPPER(r.code) = UPPER(cmr.code)
+                  AND cmrm.modele_role_id = cmr.id
+                  AND rmp.module_id = m.id
+                  AND LOWER(cmrm.module_code) = LOWER(m.code);
+            """)
 
         # 2. Le rôle DG a toujours niveau 3 (Validation)
         cursor.execute("""

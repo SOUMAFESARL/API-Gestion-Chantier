@@ -81,6 +81,7 @@ class LotActiviteListCreateView(APIView):
                 value={
                     "libelle": "Carte_transport",
                     "statut": "À démarrer",
+                    "motif": "En attente du matériel",
                     "quantite_prevue": "100.000",
                     "unite": "M2",
                     "date_debut_prevue": "2026-10-04",

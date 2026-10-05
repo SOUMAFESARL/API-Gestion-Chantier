@@ -27,6 +27,7 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "id",
             "lot_id",
             "libelle",
+            "motif",
             "statut",
             "dependance",
             "equipe_ids",
@@ -58,6 +59,13 @@ class ActiviteSerializer(serializers.ModelSerializer):
 
 class ActiviteCreationSerializer(serializers.ModelSerializer):
     """Création d'une activité rattachée à un lot."""
+
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=False,
+        help_text="Motif informatif facultatif ; texte libre, chaîne vide pour l'effacer.",
+    )
 
     statut = serializers.CharField(
         required=False,
@@ -97,6 +105,7 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         model = Activite
         fields = [
             "libelle",
+            "motif",
             "statut",
             "dependance",
             "equipe_ids",

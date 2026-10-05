@@ -21,6 +21,8 @@ __all__ = ["Activite"]
 class Activite(ModeleBase):
     """Activité / Tâche élémentaire de travaux rattachée à un Lot unique."""
 
+    motif = models.TextField(_("motif"), blank=True, default="")
+
     lot = models.ForeignKey(
         Lot,
         on_delete=models.CASCADE,

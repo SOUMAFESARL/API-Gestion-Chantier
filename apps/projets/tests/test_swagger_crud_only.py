@@ -23,9 +23,13 @@ def test_evolution_status_is_writable_in_post_and_patch_requests():
         assert "enum" not in definition["properties"]["statut"]
         assert "maxLength" not in definition["properties"]["statut"]
         assert "statut" not in definition.get("required", [])
+        assert definition["properties"]["motif"]["type"] == "string"
+        assert not definition["properties"]["motif"].get("readOnly", False)
+        assert "motif" not in definition.get("required", [])
     for component in ("LotResponse", "Activite"):
         fields = schema["components"]["schemas"][component]["properties"]
         assert fields["statut"]["type"] == "string"
+        assert fields["motif"]["type"] == "string"
 
 
 def test_lot_and_activity_mutations_are_visible_in_swagger():

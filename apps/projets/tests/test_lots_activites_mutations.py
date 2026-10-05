@@ -322,3 +322,34 @@ def test_status_sent_on_creation_and_patch_persists(contexte, ressource):
     response = client.patch(detail, {"statut": "INCONNU"}, format="json")
     assert response.status_code == 200
     assert response.data["statut"] == "INCONNU"
+
+
+@pytest.mark.parametrize("ressource", ["lots", "activites"])
+def test_motif_creation_patch_read_and_clear(contexte, ressource):
+    client, projet, lot, activite, _ = contexte
+    assert lot.motif == activite.motif == ""
+    if ressource == "lots":
+        url = f"/api/v1/projets/{projet.pk}/lots/"
+        data = {"nom": "Lot", "mode_execution": "REGIE", "type_bordereau": "FORFAIT"}
+        model = Lot
+    else:
+        url = f"/api/v1/lots/{lot.pk}/activites/"
+        data = {"libelle": "Activité"}
+        model = Activite
+    motif = "  Suspendu pour intempéries  "
+    response = client.post(url, {**data, "motif": motif}, format="json")
+    assert response.status_code == 201, response.data
+    assert response.data["motif"] == motif
+    detail = f"/api/v1/{ressource}/{response.data['id']}/"
+    assert client.get(detail).data["motif"] == motif
+    assert model.objects.get(pk=response.data["id"]).motif == motif
+    response = client.patch(detail, {"statut": "En attente"}, format="json")
+    assert response.status_code == 200, response.data
+    assert response.data["motif"] == motif
+    response = client.patch(detail, {"motif": "Matériel livré"}, format="json")
+    assert response.status_code == 200, response.data
+    assert client.get(detail).data["motif"] == "Matériel livré"
+    assert client.patch(detail, {"motif": None}, format="json").status_code == 400
+    response = client.patch(detail, {"motif": ""}, format="json")
+    assert response.status_code == 200, response.data
+    assert client.get(detail).data["motif"] == ""

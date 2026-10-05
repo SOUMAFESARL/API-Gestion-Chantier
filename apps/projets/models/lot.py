@@ -25,6 +25,7 @@ class Lot(ModeleBase):
     )
     code = models.CharField(_("code"), max_length=20)
     libelle = models.CharField(_("libellé"), max_length=200)
+    motif = models.TextField(_("motif"), blank=True, default="")
     phase = models.CharField(_("phase"), max_length=100, blank=True)
     mode_execution = models.CharField(
         _("mode d'exécution"),

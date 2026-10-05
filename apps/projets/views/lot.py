@@ -83,6 +83,7 @@ class ProjetLotListCreateView(APIView):
                 value={
                     "nom": "Gros œuvre",
                     "statut": "En cours",
+                    "motif": "Démarrage des travaux validé",
                     "mode_execution": "REGIE",
                     "type_bordereau": "FORFAIT",
                     "budget_initial_montant": None,

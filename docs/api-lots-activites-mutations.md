@@ -18,6 +18,13 @@ ou calculés, le parent, l'UUID et la baseline sont refusés.
 Budget en centimes FCFA. L'équipe et la quantité restent intactes si elles sont absentes.
 La quantité prévue ne peut pas être abaissée sous le réalisé.
 
+`motif` est un texte facultatif en POST et PATCH, présent dans les réponses.
+Exemple : `{"statut": "Suspendu", "motif": "Intempéries"}`.
+Absent à la création : chaîne vide ; absent en PATCH : valeur conservée.
+`{"motif": ""}` efface le motif ; `null` est refusé. Accents et espaces conservés.
+Ce texte informatif ne remplace pas `motif_id` dans la reprogrammation des dates.
+Appliquer aussi la migration `0025_motif_lots_activites` sur les tenants.
+
 Le frontend peut envoyer `statut` à la création (POST) et en modification (PATCH).
 Toute chaîne non vide est acceptée, sans liste imposée ni limite de 20 caractères.
 Exemples : `{"statut": "Terminé"}`, `{"statut": "en cours"}` ou un libellé personnalisé.

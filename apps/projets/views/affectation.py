@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.enums import RoleGlobal, RoleProjet
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.serializers.affectation import (
     AffectationProjetCreateSerializer,
@@ -58,7 +58,7 @@ def _verifier_droits_gestion_equipe(user, projet: Projet):
 class ProjetAffectationListCreateView(APIView):
     """`GET` et `POST /api/v1/projets/{projet_id}/affectations/`."""
 
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
     parser_classes = [JSONParser]
 
     @extend_schema(
@@ -108,7 +108,7 @@ class ProjetAffectationListCreateView(APIView):
 class ProjetAffectationDetailView(APIView):
     """`GET`, `PATCH` et `DELETE /api/v1/projets/{projet_id}/affectations/{pk}/`."""
 
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
     parser_classes = [JSONParser]
 
     @extend_schema(

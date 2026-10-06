@@ -32,3 +32,19 @@
 - **[D-01 / D-07] Champ portée et migration** : Ajout du champ `portee` (`ENTREPRISE` / `PROJET`) sur `Role` et `ModeleRole`. Les rôles transverses (`DG`, `AD`, `DO`) et les rôles portant historiquement `projets.voir_tous` sont migrés vers `ENTREPRISE`, tous les autres vers `PROJET`.
 - **[D-07] Suppression de `projets.voir_tous`** : Le code `projets.voir_tous` est définitivement retiré du `REGISTRE` et du catalogue de permissions. La visibilité projet est gouvernée par la portée du rôle.
 - **[G-02] Compatibilité du profil pour le frontend** : `GET /api/v1/auth/profil/` conserve sa structure descendante exacte (`role_global`, `role_libelle`, `role_personnalise`, `habilitations` modulaires calculées de 0 à 3 et `permissions` effectives).
+
+## Lot 3 : Garde unique et filtrage par projet (D-01, D-06, D-08)
+
+### Nouveaux refus et validations (HTTP 403)
+- **[D-08] Garde unique sur le module projets (`GardePermissionProjet`)** : Toute action sur le module projets ou ses ressources enfants (lots, activités, équipes, affectations, santé, programmation) exige simultanément la possession du code de permission RBAC (ex: `projets.lire`, `projets.ecrire`) ET (la portée `ENTREPRISE` ou une affectation active au chantier). Tout accès en dehors de cette condition est rejeté avec `HTTP 403 Forbidden` (`{"detail": "Vous n'êtes pas affecté à ce projet."}`).
+
+### Évolution des contrats et du comportement de l'API
+- **[D-01] Filtrage dynamique de la liste des projets** :
+  - Pour les rôles de portée `ENTREPRISE` (DG, AD, DO ou rôle personnalisé configuré) : accès consolidé à l'ensemble des projets de l'entreprise, y compris les projets nouvellement créés.
+  - Pour les rôles de portée `PROJET` (CP, CT, CC, etc.) : restriction stricte aux projets sur lesquels le collaborateur est affecté activement (`AffectationProjet.est_actif=True`) ou dont il est responsable direct (chef de projet / conducteur de travaux).
+  - Un rôle de portée `PROJET` sans affectation active reçoit une liste vide (`[]`).
+  - La désactivation d'une affectation masque immédiatement le chantier à la requête suivante, sans reconnexion.
+  - La modification de portée d'un rôle (`PROJET` -> `ENTREPRISE`) est prise en compte instantanément à la requête suivante sans réauthentification.
+- **[D-06] Filtrage du journal consolidé des reports** : L'endpoint `/api/v1/projets/journal-reports/` filtre désormais automatiquement les rapports de reports par les seuls projets accessibles à l'utilisateur selon sa portée et ses affectations.
+- **[D-08] Éradication des gardes legacy** : `PermissionModule` et `MembreDuProjet` sont définitivement supprimés et remplacés par `GardePermissionProjet` et `APermission`.
+

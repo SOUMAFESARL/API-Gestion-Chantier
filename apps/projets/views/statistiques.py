@@ -4,14 +4,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Projet
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.statistiques import statistiques_lots
 
 
 class ProjetStatistiquesView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     @extend_schema(
         tags=["activités"],

@@ -260,13 +260,15 @@ def appliquer_modeles_roles() -> list[Role]:
         if modeles_qs:
             for modele in modeles_qs:
                 r_code = (modele.code or "").upper()
+                existing_role = Role.objects.filter(code=r_code, supprime_le__isnull=True).first()
+                portee_cible = existing_role.portee if (existing_role and existing_role.portee) else (getattr(modele, "portee", "PROJET") or "PROJET")
                 role, _ = Role.objects.update_or_create(
                     code=r_code,
                     defaults={
                         "libelle": modele.libelle,
                         "description": modele.description,
                         "est_systeme": r_code in CODES_ROLES_SYSTEME,
-                        "portee": getattr(modele, "portee", "PROJET"),
+                        "portee": portee_cible,
                         "est_actif": True,
                     },
                 )
@@ -323,13 +325,16 @@ def appliquer_modeles_roles() -> list[Role]:
         else:
             for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
                 r_code = (code or "").upper()
+                existing_role = Role.objects.filter(code=r_code, supprime_le__isnull=True).first()
+                defaut_portee = "ENTREPRISE" if r_code in {"DG", "AD", "DO"} else "PROJET"
+                portee_cible = existing_role.portee if (existing_role and existing_role.portee) else defaut_portee
                 role, _ = Role.objects.update_or_create(
                     code=r_code,
                     defaults={
                         "libelle": libelle,
                         "description": description,
                         "est_systeme": r_code in CODES_ROLES_SYSTEME,
-                        "portee": "ENTREPRISE" if r_code in {"DG", "AD", "DO"} else "PROJET",
+                        "portee": portee_cible,
                         "est_actif": True,
                     },
                 )

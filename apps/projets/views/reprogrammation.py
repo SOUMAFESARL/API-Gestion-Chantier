@@ -14,8 +14,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal
+from apps.core.droits import APermission
 from apps.core.pagination import PaginationStandard
-from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import (
     Activite,
     HistoriqueDate,
@@ -53,15 +54,7 @@ class MotifReportListCreateView(APIView):
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        if self.request.method == "POST":
-            return [
-                IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
-            ]
-        return [
-            IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
-        ]
+        return [IsAuthenticated(), APermission.pour("pilotage.lire")()]
 
     @extend_schema(
         summary="Lister les motifs de report actifs",
@@ -94,8 +87,7 @@ class BaseReprogrammerView(APIView):
     parser_classes = [JSONParser]
     permission_classes = [
         IsAuthenticated,
-        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.ecrire"),
     ]
 
     def executer_reprogrammation(self, request, instance, type_objet: str):
@@ -180,8 +172,7 @@ class BaseHistoriqueDatesView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.lire"),
     ]
 
     def lister_historique(self, request, instance, filtre_kwargs):
@@ -296,8 +287,7 @@ class ProjetJournalReportsConsolideView(APIView, JournalReportsFiltreMixin):
     pagination_class = PaginationStandard
     permission_classes = [
         IsAuthenticated,
-        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.lire"),
     ]
 
     @extend_schema(
@@ -336,7 +326,7 @@ class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
     pagination_class = PaginationStandard
     permission_classes = [
         IsAuthenticated,
-        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE),
+        APermission.pour("projets.lire"),
     ]
 
     @extend_schema(
@@ -350,6 +340,19 @@ class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
             .select_related("motif", "auteur", "projet", "lot", "activite", "lot__projet", "activite__lot__projet")
             .order_by("-cree_le")
         )
+
+        # Règle D-06 : filtrage par les projets accessibles
+        from apps.core.permissions import obtenir_portee_role, obtenir_projets_ids_actifs_utilisateur
+        from apps.core.droits import est_dg
+
+        user = request.user
+        if not (user.is_superuser or est_dg(user) or obtenir_portee_role(user) == "ENTREPRISE"):
+            projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+            qs = qs.filter(
+                models.Q(projet_id__in=projets_ids)
+                | models.Q(lot__projet_id__in=projets_ids)
+                | models.Q(activite__lot__projet_id__in=projets_ids)
+            )
 
         projet_id = request.query_params.get("projet_id")
         if projet_id:

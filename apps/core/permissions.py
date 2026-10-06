@@ -18,14 +18,44 @@ from apps.core.enums import RoleGlobal
 
 __all__ = [
     "EstDirection",
+    "GardePermissionProjet",
+    "GardeProjet",
     "LectureSeule",
     "MembreDuProjet",
     "PermissionModule",
     "RoleRequis",
     "ScopedProjetQuerySetMixin",
     "filtrer_queryset_par_affectations",
+    "obtenir_portee_role",
     "obtenir_projets_ids_actifs_utilisateur",
 ]
+
+
+def obtenir_portee_role(user) -> str:
+    """Règle B-11 & D-01 : Lit la portée effective du rôle à chaque requête."""
+    if not user or not user.is_authenticated:
+        return "PROJET"
+    from apps.core.droits import est_dg
+    if user.is_superuser or est_dg(user):
+        return "ENTREPRISE"
+
+    from django.apps import apps as registre
+    try:
+        Role = registre.get_model("accounts", "Role")
+    except LookupError:
+        return "PROJET"
+
+    role = None
+    if getattr(user, "role_id", None):
+        role = Role.objects.filter(pk=user.role_id, supprime_le__isnull=True).first()
+    if not role:
+        role = getattr(user, "role", None)
+    if not role and getattr(user, "role_global", None):
+        role = Role.objects.filter(code=user.role_global, supprime_le__isnull=True).first()
+
+    if role:
+        return getattr(role, "portee", "PROJET") or "PROJET"
+    return "PROJET"
 
 
 def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
@@ -66,22 +96,157 @@ def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
 
 
 def filtrer_queryset_par_affectations(qs, user, champ_projet="id", request=None):
-    """Restreint un QuerySet aux seuls chantiers où l'utilisateur est affecté.
-
-    Pour ceux qui ont 'projets.voir_tous' (DG, Superuser, Administrateur) : vision consolidée sans restriction.
-    Pour les collaborateurs opérationnels : vision bornée aux chantiers affectés.
+    """Règle D-01 & D-06 :
+    Restreint un QuerySet aux seuls chantiers où l'utilisateur a accès :
+    - Portée ENTREPRISE (ou Superuser / DG) : vision consolidée sans restriction (tous projets, futurs compris).
+    - Portée PROJET : vision bornée aux chantiers affectés activement. Sans affectation : rien.
     """
     if not user or not user.is_authenticated:
         return qs.none()
 
-    from apps.core.droits import a_permission
+    from apps.core.droits import est_dg
+    if user.is_superuser or est_dg(user):
+        return qs
 
-    if a_permission(user, "projets.voir_tous", request=request):
+    if obtenir_portee_role(user) == "ENTREPRISE":
         return qs
 
     projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
     filtre = {f"{champ_projet}__in": projets_ids}
     return qs.filter(**filtre)
+
+
+class GardePermissionProjet(permissions.BasePermission):
+    """Garde unique du module Projets et objets rattachés (Règle D-08).
+
+    Une action est autorisée SSI :
+    1. Le code de permission requis est détenu par l'utilisateur (ex: 'projets.lire', 'projets.ecrire').
+    2. ET (le rôle de l'utilisateur a la portée ENTREPRISE OU l'utilisateur a une affectation ACTIVE au projet).
+
+    Usage :
+        permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+    """
+
+    code_permission: str | None = None
+    message = "Vous n'avez pas les droits nécessaires pour cette action."
+
+    @classmethod
+    def pour(cls, code_permission: str):
+        nom_classe = f"GardeProjet_{code_permission.replace('.', '_')}"
+        return type(nom_classe, (cls,), {"code_permission": code_permission})
+
+    def has_permission(self, request, view) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        from apps.core.droits import a_permission, est_dg
+
+        perm = getattr(self, "code_permission", None) or getattr(view, "permission_requise", None)
+        if not perm:
+            if request.method in permissions.SAFE_METHODS:
+                perm = "projets.lire"
+            else:
+                perm = "projets.ecrire"
+
+        if not a_permission(user, perm, request=request):
+            return False
+
+        if user.is_superuser or est_dg(user):
+            return True
+
+        if obtenir_portee_role(user) == "ENTREPRISE":
+            return True
+
+        # Résolution de projet_id depuis l'URL si applicable
+        projet_id = None
+        if "pk" in view.kwargs:
+            view_name = view.__class__.__name__
+            if (
+                view_name.startswith("Projet")
+                and "equipe_id" not in view.kwargs
+                and "affectation_id" not in view.kwargs
+            ) or any(
+                seg in request.path
+                for seg in (
+                    "/lots",
+                    "/equipes",
+                    "/affectations",
+                    "/statistiques",
+                    "/reprogrammer",
+                    "/historique-dates",
+                    "/sante",
+                    "/permissions-roles",
+                )
+            ):
+                projet_id = view.kwargs["pk"]
+
+        if not projet_id:
+            projet_id = view.kwargs.get("projet_id") or view.kwargs.get("projet_pk")
+
+        if projet_id:
+            projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+            if not ((projet_id in projets_ids) or (str(projet_id) in [str(pid) for pid in projets_ids])):
+                self.message = "Vous n'êtes pas affecté à ce projet."
+                return False
+
+        return True
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        from apps.core.droits import a_permission, est_dg
+
+        perm = getattr(self, "code_permission", None) or getattr(view, "permission_requise", None)
+        if not perm:
+            if request.method in permissions.SAFE_METHODS:
+                perm = "projets.lire"
+            else:
+                perm = "projets.ecrire"
+
+        if not a_permission(user, perm, request=request):
+            return False
+
+        if user.is_superuser or est_dg(user):
+            return True
+
+        if obtenir_portee_role(user) == "ENTREPRISE":
+            return True
+
+        projet_id = self._extraire_projet_id(obj)
+        if projet_id is None:
+            return True
+
+        projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+        est_membre = (projet_id in projets_ids) or (str(projet_id) in [str(pid) for pid in projets_ids])
+        if not est_membre:
+            self.message = "Vous n'êtes pas affecté à ce projet."
+        return est_membre
+
+    @staticmethod
+    def _extraire_projet_id(obj):
+        if hasattr(obj, "projet_id") and obj.projet_id:
+            return obj.projet_id
+        if obj.__class__.__name__ == "Projet":
+            return obj.pk
+        if hasattr(obj, "projet") and obj.projet:
+            return obj.projet.pk
+        if hasattr(obj, "lot") and hasattr(obj.lot, "projet_id") and obj.lot.projet_id:
+            return obj.lot.projet_id
+        if hasattr(obj, "lot") and hasattr(obj.lot, "projet") and obj.lot.projet:
+            return obj.lot.projet.pk
+        if hasattr(obj, "activite") and hasattr(obj.activite, "lot"):
+            lot = obj.activite.lot
+            if hasattr(lot, "projet_id") and lot.projet_id:
+                return lot.projet_id
+            if hasattr(lot, "projet") and lot.projet:
+                return lot.projet.pk
+        return None
+
+
+GardeProjet = GardePermissionProjet
 
 
 class ScopedProjetQuerySetMixin:

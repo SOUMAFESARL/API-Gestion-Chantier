@@ -190,7 +190,7 @@ def creer_report(projet):
             code="INTEMPERIES",
             defaults={"libelle": "Intempéries", "est_actif": True},
         )
-        auteur = Utilisateur.objects.filter(supprime_le__isnull=True).first()
+        auteur = Utilisateur.objects.filter(supprime_le__isnull=True).first() or obtenir_dg()
         return HistoriqueDate.objects.create(
             type_objet="PROJET",
             projet=projet,
@@ -216,8 +216,11 @@ def client_pour(utilisateur):
 def liste_de(reponse):
     """Normalise une réponse de liste (paginée ou non)."""
     data = reponse.json() if hasattr(reponse, "json") else reponse.data
-    if isinstance(data, dict) and "results" in data:
-        return data["results"]
+    if isinstance(data, dict):
+        if "resultats" in data:
+            return data["resultats"]
+        if "results" in data:
+            return data["results"]
     return data
 
 

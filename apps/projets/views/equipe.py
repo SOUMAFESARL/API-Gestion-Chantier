@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Activite, AffectationEquipeActivite, EquipeChantier, Projet
 from apps.projets.serializers.equipe import EquipeCreationSerializer, EquipeResponseSerializer
 from apps.projets.services.statistiques import pourcentage_realise
@@ -20,7 +20,7 @@ ERREURS_EQUIPES = {
 
 
 class BaseEquipeView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     def projet(self, request, pk, verrou=False):
         qs = Projet.objects.select_for_update() if verrou else Projet.objects.all()

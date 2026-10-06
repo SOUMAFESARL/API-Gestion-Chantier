@@ -14,8 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
-from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Activite, Lot, Projet
 from apps.projets.serializers import (
     ActiviteCreationSerializer,
@@ -41,7 +40,9 @@ class LotActiviteListCreateView(APIView):
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        return [IsAuthenticated(), MembreDuProjet()]
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
 
     @extend_schema(
         summary="Lister les activités d'un lot",
@@ -144,13 +145,11 @@ class ActiviteDetailView(APIView):
         if self.request.method in ("DELETE", "PUT", "PATCH"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
-                MembreDuProjet(),
+                GardePermissionProjet.pour("projets.ecrire")(),
             ]
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
-            MembreDuProjet(),
+            GardePermissionProjet.pour("projets.lire")(),
         ]
 
     def obtenir_activite(self, request, pk, verrou=False):

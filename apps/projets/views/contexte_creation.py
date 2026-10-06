@@ -17,7 +17,7 @@ from apps.core.enums import (
     TypeBordereau,
     TypeProjet,
 )
-from apps.core.permissions import PermissionModule
+from apps.core.droits import APermission
 from apps.projets.serializers.contexte_creation import ContexteCreationProjetSerializer
 from apps.tiers.models import Tiers
 
@@ -25,7 +25,7 @@ from apps.tiers.models import Tiers
 class ContexteCreationProjetView(APIView):
     permission_classes = [
         IsAuthenticated,
-        PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE),
+        APermission.pour("projets.ecrire"),
     ]
 
     @extend_schema(

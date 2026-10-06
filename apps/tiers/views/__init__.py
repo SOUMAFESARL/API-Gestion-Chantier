@@ -6,8 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
-from apps.core.permissions import PermissionModule
+from apps.core.droits import APermission
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersCreationSerializer, TiersSerializer
 
@@ -23,11 +22,11 @@ class TiersListCreateView(APIView):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.ECRITURE)(),
+                APermission.pour("tiers.ecrire")(),
             ]
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.LECTURE)(),
+            APermission.pour("tiers.lire")(),
         ]
 
     @extend_schema(
@@ -61,11 +60,11 @@ class TiersDetailView(APIView):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.ECRITURE)(),
+                APermission.pour("tiers.ecrire")(),
             ]
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.LECTURE)(),
+            APermission.pour("tiers.lire")(),
         ]
 
     @extend_schema(

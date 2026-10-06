@@ -9,9 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.droits import APermission
-from apps.core.enums import StatutProjet
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Projet, SanteProjetSnapshot
 from apps.projets.serializers.sante import (
     SanteApercuSerializer,
@@ -32,8 +30,7 @@ class ProjetSanteApercuView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        APermission.pour("projets.lire"),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.lire"),
     ]
 
     @extend_schema(
@@ -79,8 +76,7 @@ class ProjetSanteHistoriqueView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        APermission.pour("projets.lire"),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.lire"),
     ]
 
     @extend_schema(
@@ -105,8 +101,7 @@ class ProjetSanteDetailView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        APermission.pour("projets.lire"),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.lire"),
     ]
 
     @extend_schema(

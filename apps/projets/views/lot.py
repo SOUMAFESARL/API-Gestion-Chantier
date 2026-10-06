@@ -17,8 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
-from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Lot, Projet
 from apps.projets.serializers.lot import (
     ActivationSerializer,
@@ -36,7 +35,10 @@ ERREURS_LOTS = {
 
 
 class ProjetLotListCreateView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
 
     @extend_schema(
         tags=["lots"],
@@ -115,7 +117,11 @@ class LotImportSerializer(serializers.Serializer):
 
 
 class ProjetLotImportView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     parser_classes = [MultiPartParser]
 
     @extend_schema(
@@ -146,7 +152,7 @@ class ProjetLotImportView(APIView):
 
 
 class ProjetLotModeleView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     @extend_schema(
         tags=["lots"],
@@ -182,16 +188,9 @@ class LotDetailView(APIView):
     """Lecture, modification partielle et suppression logique d'un lot."""
 
     def get_permissions(self):
-        niveau = (
-            NiveauAcces.LECTURE
-            if self.request.method in ("GET", "HEAD", "OPTIONS")
-            else NiveauAcces.ECRITURE
-        )
-        return [
-            IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, niveau)(),
-            MembreDuProjet(),
-        ]
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
 
     def obtenir_lot(self, request, pk, verrou=False):
         queryset = Lot.objects.select_related("projet").filter(projet__supprime_le__isnull=True)

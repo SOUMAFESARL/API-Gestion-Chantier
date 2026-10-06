@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import Role
 from apps.core.enums import RoleGlobal, RoleProjet
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.services.overrides import (
     get_matrice_permissions_projet,
@@ -75,7 +75,7 @@ class MatricePermissionProjetRoleSerializer(serializers.Serializer):
 class ProjetPermissionsRolesView(APIView):
     """`GET` et `PUT /api/v1/projets/{id}/permissions-roles/` — Matrice des droits par chantier."""
 
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
     parser_classes = [JSONParser]
     serializer_class = SurchargeMatriceInputSerializer
 

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.droits import APermission
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import ArretChantier, Projet
 from apps.projets.serializers.arret_chantier import (
     ArretChantierCreateSerializer,
@@ -34,13 +34,11 @@ class ProjetArretChantierListCreateView(APIView):
         if self.request.method == "POST":
             return [
                 IsAuthenticated(),
-                APermission.pour("projets.changer_statut")(),
-                MembreDuProjet(),
+                GardePermissionProjet.pour("projets.changer_statut")(),
             ]
         return [
             IsAuthenticated(),
-            APermission.pour("projets.lire")(),
-            MembreDuProjet(),
+            GardePermissionProjet.pour("projets.lire")(),
         ]
 
     @extend_schema(
@@ -94,8 +92,7 @@ class ArretChantierDetailView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        APermission.pour("projets.changer_statut"),
-        MembreDuProjet,
+        GardePermissionProjet.pour("projets.changer_statut"),
     ]
 
     @extend_schema(

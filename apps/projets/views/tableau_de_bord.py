@@ -15,8 +15,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.chantier.models import RapportJournalier
-from apps.core.enums import ModuleChoix, NiveauAcces, StatutProjet, StatutRapport
-from apps.core.permissions import PermissionModule, filtrer_queryset_par_affectations
+from apps.core.droits import APermission
+from apps.core.enums import StatutProjet, StatutRapport
+from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.projets.models import Projet
 from apps.projets.serializers import TableauDeBordResponseSerializer
 from apps.projets.services.meteo import (
@@ -35,7 +36,7 @@ class TableauDeBordView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        PermissionModule.pour(ModuleChoix.PILOTAGE, NiveauAcces.LECTURE),
+        APermission.pour("pilotage.lire"),
     ]
     serializer_class = TableauDeBordResponseSerializer
 

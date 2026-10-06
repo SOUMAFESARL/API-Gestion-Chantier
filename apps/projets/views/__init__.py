@@ -16,11 +16,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.core.droits import APermission
 from apps.core.permissions import (
     EstDirection,
-    MembreDuProjet,
-    PermissionModule,
+    GardePermissionProjet,
     filtrer_queryset_par_affectations,
 )
 from apps.projets.models import Projet, ProjetContrat
@@ -196,17 +195,15 @@ class ProjetDetailView(APIView):
     def get_permissions(self):
         # Seul le changement de statut bénéficie du droit accordé à tout membre.
         if self.request.method == "PATCH" and set(self.request.data.keys()) == {"statut"}:
-            return [IsAuthenticated(), MembreDuProjet()]
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
-                MembreDuProjet(),
+                GardePermissionProjet.pour("projets.ecrire")(),
             ]
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
-            MembreDuProjet(),
+            GardePermissionProjet.pour("projets.lire")(),
         ]
 
     @extend_schema(

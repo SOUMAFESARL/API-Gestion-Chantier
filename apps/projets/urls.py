@@ -61,6 +61,11 @@ urlpatterns = [
         MotifReportListCreateView.as_view(),
         name="motifs-report-liste-creer",
     ),
+    path(
+        "projets/motifs-report/",
+        MotifReportListCreateView.as_view(),
+        name="projets-motifs-report-alias",
+    ),
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
     path("projets/<uuid:pk>/equipes/", ProjetEquipeListCreateView.as_view(), name="projet-equipes"),

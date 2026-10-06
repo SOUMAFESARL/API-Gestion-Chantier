@@ -208,6 +208,16 @@ jobs:
             "$VENV_PYTHON" manage.py provisionner_inscriptions 2>&1 || true
 
             echo ""
+            echo "=== Renouvellement abonnement Kouassi Ange Félix (e_3at_btp) ==="
+            "$VENV_PYTHON" manage.py gerer_entreprises --activer-abonnement e_3at_btp --plan MAITRE_OEUVRE --duree-jours 365 2>&1 || true
+
+            echo ""
+            echo "=== Configuration jeton maintenance dans .env ==="
+            if [ -f .env ] && ! grep -q "^MAINTENANCE_TOKEN=" .env; then
+              echo "MAINTENANCE_TOKEN=ccd-migration-prod-2026-secure-token" >> .env
+            fi
+
+            echo ""
             echo "=== Redémarrage Passenger ==="
             mkdir -p tmp
             touch tmp/restart.txt

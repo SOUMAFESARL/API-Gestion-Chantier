@@ -41,6 +41,7 @@ URLS_MAINTENANCE = [
     ("post", "/api/v1/maintenance/purger-zanf/"),
     ("get", "/api/v1/maintenance/entreprises/"),
     ("post", "/api/v1/maintenance/entreprises/supprimer/"),
+    ("post", "/api/v1/maintenance/abonnements/activer/"),
 ]
 
 
@@ -146,3 +147,46 @@ def test_suppression_propre_complete_entreprise():
     assert not Entreprise.objects.filter(schema_name=schema_test).exists()
     assert not Domaine.objects.filter(domain=f"{schema_test}.localhost").exists()
     assert not DemandeInscription.objects.filter(slug_reserve=schema_test).exists()
+
+
+@pytest.mark.django_db
+@override_settings(MAINTENANCE_TOKEN=JETON_TEST)
+def test_activer_ou_renouveler_abonnement():
+    """Vérifie l'activation souveraine d'un abonnement via service et via endpoint."""
+    from apps.billing.models import Abonnement, Plan
+    from apps.tenants.services.nettoyage import activer_ou_renouveler_abonnement
+
+    schema_test = "temp_test_abo"
+    plan = Plan.objects.create(
+        code=Plan.Code.MAITRE_OEUVRE,
+        libelle="Maître d'Œuvre Test",
+        est_actif=True,
+    )
+    ent = Entreprise(
+        schema_name=schema_test,
+        raison_sociale="Entreprise Test Abo",
+        email_contact="test-abo@exemple.ci",
+    )
+    ent.auto_create_schema = False
+    ent.save()
+
+    # 1. Test du service
+    rapport = activer_ou_renouveler_abonnement(schema_test, plan_code=Plan.Code.MAITRE_OEUVRE, duree_jours=365)
+    assert rapport["statut"] == "succes"
+    assert rapport["statut_abonnement"] == Abonnement.Statut.ACTIF
+    assert rapport["plan_code"] == Plan.Code.MAITRE_OEUVRE
+    assert rapport["lecture_seule"] is False
+
+    # 2. Test via endpoint HTTP
+    client = Client()
+    resp = client.post(
+        "/api/v1/maintenance/abonnements/activer/",
+        data={"identifiant": schema_test, "plan_code": Plan.Code.MAITRE_OEUVRE, "duree_jours": 180},
+        content_type="application/json",
+        HTTP_X_MAINTENANCE_TOKEN=JETON_TEST,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["statut"] == "succes"
+    assert data["rapport"]["duree_jours"] == 180
+

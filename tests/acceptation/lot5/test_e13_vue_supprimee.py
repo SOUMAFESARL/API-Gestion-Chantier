@@ -19,7 +19,7 @@ def _fichiers_production():
     for dossier, sous, fichiers in os.walk(ROOT):
         rel = Path(dossier).relative_to(ROOT)
         sous[:] = [s for s in sous if s not in EXCLUS and not s.endswith(".egg-info")]
-        if rel.parts[:1] in (("tests",), ("docs",)) or {"tests", "test"} & set(rel.parts):
+        if rel.parts[:1] in (("tests",), ("docs",), ("scripts",)) or {"tests", "test"} & set(rel.parts):
             sous[:] = []
             continue
         for f in fichiers:

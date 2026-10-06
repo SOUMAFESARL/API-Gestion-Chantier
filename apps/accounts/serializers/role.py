@@ -117,6 +117,7 @@ class RoleSerializer(serializers.ModelSerializer):
     nb_utilisateurs = serializers.SerializerMethodField()
     modules = serializers.SerializerMethodField()
     permissions_modules = serializers.SerializerMethodField()
+    avertissements = serializers.SerializerMethodField()
 
     class Meta:
         model = Role
@@ -131,7 +132,23 @@ class RoleSerializer(serializers.ModelSerializer):
             "nb_utilisateurs",
             "modules",
             "permissions_modules",
+            "avertissements",
         ]
+
+    def get_avertissements(self, obj: Role) -> list[str]:
+        if obj.portee != "PROJET":
+            return []
+        from apps.accounts.models import RoleModulePermission
+        rpm_qs = RoleModulePermission.objects.filter(
+            role=obj,
+            supprime_le__isnull=True,
+        ).select_related("module").prefetch_related("permissions_catalogue")
+        for rmp in rpm_qs:
+            for p in rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True):
+                mod_code = rmp.module.code.lower() if rmp.module else p.code.split(".")[0].lower()
+                if mod_code not in ("projets", "projet"):
+                    return ["permission_globale_sur_role_projet"]
+        return []
 
     def get_nb_utilisateurs(self, obj: Role) -> int:
         return compter_utilisateurs_et_affectations(obj)["total"]

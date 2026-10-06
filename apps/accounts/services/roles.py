@@ -556,14 +556,7 @@ def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
         .count()
     )
 
-    from apps.projets.models import AffectationProjet
-
-    nb_affectations = (
-        AffectationProjet.objects.filter(role=role, est_actif=True).count()
-        + AffectationProjet.objects.filter(
-            role_projet=role.code, role__isnull=True, est_actif=True
-        ).count()
-    )
+    nb_affectations = 0
 
     return {
         "utilisateurs": nb_utilisateurs,
@@ -660,22 +653,15 @@ def supprimer_role(
                 )
                 utilisateurs_supprimes += 1
 
-            # Clôture des affectations de projets associées à ce rôle
+            # Clôture des affectations de projets associées à ces collaborateurs
             from apps.projets.models import AffectationProjet
 
-            affectations_cloturees = (
-                AffectationProjet.objects.filter(role=role).update(
-                    est_actif=False,
-                    supprime_le=timezone.now(),
-                    supprime_par=supprime_par,
-                )
-                + AffectationProjet.objects.filter(
-                    role_projet=role.code, role__isnull=True
-                ).update(
-                    est_actif=False,
-                    supprime_le=timezone.now(),
-                    supprime_par=supprime_par,
-                )
+            affectations_cloturees = AffectationProjet.objects.filter(
+                utilisateur__in=users_to_deactivate
+            ).update(
+                est_actif=False,
+                supprime_le=timezone.now(),
+                supprime_par=supprime_par,
             )
 
         elif reassigner_vers_role:
@@ -687,10 +673,7 @@ def supprimer_role(
                 u.save(update_fields=["role", "role_global", "modifie_le"])
                 utilisateurs_reassignes += 1
 
-            from apps.projets.models import AffectationProjet
-
-            qs_aff = AffectationProjet.objects.filter(role=role)
-            affectations_reassignees = qs_aff.update(role=reassigner_vers_role)
+            affectations_reassignees = 0
 
         # Suppression logique du rôle
         role.supprime_le = timezone.now()

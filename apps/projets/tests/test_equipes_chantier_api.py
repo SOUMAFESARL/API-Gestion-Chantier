@@ -16,13 +16,13 @@ def contexte(schema_demo):
         email="equipes.membre@demo.ci",
         password="Test12345!",
         nom="Membre",
-        role_global=RoleGlobal.VISITEUR,
+        role_global=RoleGlobal.CONDUCTEUR_TRAVAUX,
     )
     projet = Projet.objects.create(reference="PRJ-EQ", nom="Projet", ville="Man")
     AffectationProjet.objects.create(
         utilisateur=user,
         projet=projet,
-        role_projet=RoleProjet.VISITEUR,
+        role_projet=RoleProjet.CONDUCTEUR_TRAVAUX,
     )
     lot = Lot.objects.create(projet=projet, code="L-01", libelle="Lot")
     a = Activite.objects.create(lot=lot, libelle="A", quantite_prevue=1)

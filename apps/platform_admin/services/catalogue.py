@@ -368,22 +368,6 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
                     supprime_le=maintenant,
                     supprime_par=None,
                 )
-                try:
-                    from apps.projets.models import ProjetRoleModuleOverride
-                    ProjetRoleModuleOverride.objects.filter(
-                        module__code=code_supprime, supprime_le__isnull=True
-                    ).update(
-                        supprime_le=maintenant,
-                        supprime_par=None,
-                    )
-                    ProjetRoleModuleOverride.objects.filter(
-                        module_catalogue__code=code_supprime, supprime_le__isnull=True
-                    ).update(
-                        supprime_le=maintenant,
-                        supprime_par=None,
-                    )
-                except LookupError:
-                    pass
 
     return {
         "module_supprime": code_supprime,

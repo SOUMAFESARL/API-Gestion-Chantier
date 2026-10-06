@@ -213,7 +213,6 @@ def test_rec_s1_10_c_suppression_et_reaffectation_atomique(client_tenant, dg_use
         affectation = AffectationProjet.objects.create(
             projet=projet,
             utilisateur=collaborateur,
-            role=role_adjoint,
             role_projet=RoleProjet.CONDUCTEUR_TRAVAUX,
             est_actif=True,
         )
@@ -230,7 +229,7 @@ def test_rec_s1_10_c_suppression_et_reaffectation_atomique(client_tenant, dg_use
     data = rep.json()
     assert data["role_supprime"] == "CONDUCTEUR_ADJOINT"
     assert data["utilisateurs_reassignes"] == 1
-    assert data["affectations_reassignees"] == 1
+    assert data["affectations_reassignees"] == 0
 
     # Vérifications en base de données
     with schema_context(SCHEMA):
@@ -238,7 +237,7 @@ def test_rec_s1_10_c_suppression_et_reaffectation_atomique(client_tenant, dg_use
         assert collaborateur.role_personnalise == role_ct
 
         affectation.refresh_from_db()
-        assert affectation.role == role_ct
+        assert affectation.est_actif is True
 
         role_adjoint.refresh_from_db()
         assert role_adjoint.supprime_le is not None

@@ -183,14 +183,7 @@ class AffectationProjet(ModeleBase):
         max_length=5,
         choices=RoleProjet.choices,
         default=RoleProjet.CHEF_PROJET,
-    )
-    role = models.ForeignKey(
-        "accounts.Role",
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
-        related_name="affectations_projets",
-        verbose_name=_("rôle personnalisé"),
     )
     date_debut = models.DateField(_("date de début"), default=timezone.now)
     date_fin = models.DateField(_("date de fin"), null=True, blank=True)

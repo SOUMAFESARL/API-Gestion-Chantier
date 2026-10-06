@@ -74,22 +74,13 @@ def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
     except LookupError:
         return []
 
-    # 1. Projets issus d'affectations actives
-    projets_ids = set(
+    # 1. Projets issus d'affectations actives exclusivement (Règles D-01, D-08, E-05)
+    projets_ids = list(
         AffectationProjet.objects.filter(
             utilisateur=user, est_actif=True, supprime_le__isnull=True
         ).values_list("projet_id", flat=True)
     )
 
-    # 2. Projets où l'utilisateur est désigné comme chef de projet ou conducteur de travaux direct
-    projets_geres = set(
-        Projet.objects.filter(
-            Q(chef_projet=user) | Q(conducteur_travaux=user),
-            supprime_le__isnull=True,
-        ).values_list("id", flat=True)
-    )
-
-    projets_ids = list(projets_ids.union(projets_geres))
     if request:
         request._rbac_projets_ids_actifs = projets_ids
     return projets_ids
@@ -159,8 +150,8 @@ class GardePermissionProjet(permissions.BasePermission):
             return True
 
         # Résolution de projet_id depuis l'URL si applicable
-        projet_id = None
-        if "pk" in view.kwargs:
+        projet_id = view.kwargs.get("projet_id") or view.kwargs.get("projet_pk")
+        if not projet_id and "pk" in view.kwargs:
             view_name = view.__class__.__name__
             if (
                 view_name.startswith("Projet")
@@ -180,9 +171,6 @@ class GardePermissionProjet(permissions.BasePermission):
                 )
             ):
                 projet_id = view.kwargs["pk"]
-
-        if not projet_id:
-            projet_id = view.kwargs.get("projet_id") or view.kwargs.get("projet_pk")
 
         if projet_id:
             projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
@@ -473,7 +461,6 @@ class PermissionModule(permissions.BasePermission):
 
         try:
             AffectationProjet = registre.get_model("projets", "AffectationProjet")
-            ProjetRoleModuleOverride = registre.get_model("projets", "ProjetRoleModuleOverride")
             Role = registre.get_model("accounts", "Role")
             RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
         except LookupError:
@@ -490,51 +477,17 @@ class PermissionModule(permissions.BasePermission):
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        role = affectation.role
-        if not role:
-            role = Role.objects.filter(
-                code=affectation.role_projet, supprime_le__isnull=True
+        role = (
+            getattr(utilisateur, "role", None)
+            or getattr(utilisateur, "role_personnalise", None)
+            or Role.objects.filter(
+                code=utilisateur.role_global, supprime_le__isnull=True
             ).first()
-        if not role:
-            role = (
-                utilisateur.role_personnalise
-                or Role.objects.filter(
-                    code=utilisateur.role_global, supprime_le__isnull=True
-                ).first()
-            )
+        )
 
         if not role:
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
-
-        override = ProjetRoleModuleOverride.objects.filter(
-            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
-            projet_id=projet_id,
-            role=role,
-            supprime_le__isnull=True,
-        ).first()
-        if override:
-            if override.niveau == 0:
-                request._rbac_object_permissions_cache[cle_cache] = False
-                return False
-            has_perm = (
-                override.permissions_catalogue.filter(
-                    code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                ).exists()
-                or override.permissions.filter(
-                    code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                ).exists()
-            )
-            has_override_m2m = override.permissions_catalogue.exists() or override.permissions.exists()
-            if not has_perm and not has_override_m2m and override.niveau is not None and override.niveau > 0:
-                if self.permission_requise == "LECTURE" and override.niveau >= 1:
-                    has_perm = True
-                elif self.permission_requise == "ECRITURE" and override.niveau >= 2:
-                    has_perm = True
-                elif self.permission_requise == "VALIDATION" and override.niveau >= 3:
-                    has_perm = True
-            request._rbac_object_permissions_cache[cle_cache] = has_perm
-            return has_perm
 
         perm = RoleModulePermission.objects.filter(
             models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),

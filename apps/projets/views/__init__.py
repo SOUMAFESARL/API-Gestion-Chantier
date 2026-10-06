@@ -33,7 +33,6 @@ from apps.projets.views.activite import (
     LotActiviteListCreateView,
 )
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
-from apps.projets.views.override import ProjetPermissionsRolesView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
@@ -72,7 +71,6 @@ __all__ = [
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
-    "ProjetPermissionsRolesView",
     "ProjetReprogrammerView",
     "ProjetSanteApercuView",
     "ProjetSanteDetailView",
@@ -175,6 +173,21 @@ class ProjetListCreateView(APIView):
         serializer = ProjetPostSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
+
+        user = request.user
+        from apps.core.permissions import obtenir_portee_role
+
+        if user and user.is_authenticated and obtenir_portee_role(user) == "PROJET":
+            from apps.projets.models import AffectationProjet
+
+            AffectationProjet.objects.create(
+                projet=projet,
+                utilisateur=user,
+                est_actif=True,
+                role_projet="",
+                cree_par=user,
+            )
+
         retour = ProjetCreationResponseSerializer(projet, context={"request": request})
         return Response(
             retour.data,

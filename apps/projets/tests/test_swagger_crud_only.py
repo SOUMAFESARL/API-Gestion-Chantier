@@ -68,9 +68,7 @@ def test_schema_contains_project_crud_and_lot_workflow():
 
 def test_hidden_business_routes_remain_available():
     for path in (
-        "/api/v1/projets/contexte-creation/",
         "/api/v1/projets/meteo/",
-        "/api/v1/projets/00000000-0000-0000-0000-000000000001/permissions-roles/",
         "/api/v1/projets/00000000-0000-0000-0000-000000000001/affectations/",
     ):
         assert resolve(path, urlconf="config.urls_tenant")

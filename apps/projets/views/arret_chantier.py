@@ -34,7 +34,7 @@ class ProjetArretChantierListCreateView(APIView):
         if self.request.method == "POST":
             return [
                 IsAuthenticated(),
-                GardePermissionProjet.pour("projets.changer_statut")(),
+                GardePermissionProjet.pour("projets.ecrire")(),
             ]
         return [
             IsAuthenticated(),
@@ -92,7 +92,7 @@ class ArretChantierDetailView(APIView):
 
     permission_classes = [
         IsAuthenticated,
-        GardePermissionProjet.pour("projets.changer_statut"),
+        GardePermissionProjet.pour("projets.ecrire"),
     ]
 
     @extend_schema(

@@ -64,3 +64,21 @@
 ### Évolution des contrats et du comportement de l'API
 - **[B-12] Gestion du cycle de vie des rôles personnalisés** : Support de `role_reassignation_id` lors de la suppression d'un rôle personnalisé pour réassigner de manière fluide les collaborateurs associés.
 - **[F-02] Parité et équivalence totale `/roles/` et `/parametres/roles/`** : Les deux familles d'endpoints offrent désormais la même signature, le même niveau de sécurité, les mêmes codes de réponse HTTP et la même structure de données.
+
+## Lot 5 : Projets, écritures, affectation, équipes (C-05, E-03 à E-07, E-13)
+
+### Nouveaux refus et validations (HTTP 400 / 403 / 404)
+- **[E-13] Suppression de la route `contexte-creation` (HTTP 404)** : L'endpoint `GET /api/v1/projets/contexte-creation/` a été supprimé définitivement. Les requêtes vers cette route renvoient désormais `HTTP 404 Not Found`.
+- **[E-06] Suppression de la route d'override de permissions (HTTP 404)** : L'endpoint `/api/v1/projets/{id}/permissions-roles/` (GET, PUT, PATCH) a été supprimé définitivement.
+- **[E-05] Garde souverain sur les affectations (`projets.affecter_membres`) (HTTP 403)** : Les opérations de création (`POST /projets/{id}/affectations/`), modification et révocation (`PATCH` et `DELETE` sur `/projets/{id}/affectations/{pk}/`) requièrent impérativement la permission `projets.affecter_membres`. Tout utilisateur dépourvu de ce droit (DO, CT, VI, BAI, CC, ou collaborateur non affecté / affectation désactivée) reçoit `HTTP 403 Forbidden`. L'étiquette `role_projet = 'CP'` ne confère aucun droit à un utilisateur dont le rôle n'a pas la permission.
+- **[E-05] Validation stricte des candidats à l'affectation (HTTP 400)** : Tout candidat dont le compte est suspendu/inactif, inexistant, ou dont le rôle est à portée `ENTREPRISE` (DG, AD, DO) est immédiatement rejeté avec `HTTP 400 Bad Request` et le code d'erreur `candidat_invalide`. Seuls les collaborateurs actifs à portée `PROJET` peuvent être affectés.
+- **[E-03] Garde souverain sur la gestion des équipes (`projets.gerer_equipes`) (HTTP 403)** : La constitution, la modification, la suppression d'équipes et l'association équipe-activité exigent la permission `projets.gerer_equipes`. Les rôles VI, BAI, CC, DO et non affectés reçoivent `HTTP 403 Forbidden`.
+- **[E-03] Écritures sur les arrêts de chantier sous `projets.ecrire` (HTTP 403)** : La création, la modification et la suppression d'arrêts de chantier (`POST`, `PATCH`, `DELETE`) exigent la permission `projets.ecrire`.
+- **[E-07] Validation d'appartenance des membres d'équipe (HTTP 400)** : Tenter d'ajouter à une équipe un collaborateur qui n'est pas préalablement affecté activement au projet est rejeté avec `HTTP 400 Bad Request`.
+
+### Évolution des contrats et du comportement de l'API
+- **[E-06] Suppression du champ `AffectationProjet.role`** : Le champ `role` (ForeignKey vers `accounts.Role`) a été définitivement supprimé du modèle `AffectationProjet`. Les habilitations ne sont plus altérées localement par chantier. Le champ `role_projet` est une étiquette d'affichage et synchronise uniquement les attributs informatifs `chef_projet` et `conducteur_travaux` du projet.
+- **[E-04] Auto-affectation des créateurs de projet à portée PROJET** : Quand un créateur à portée `PROJET` disposant de `projets.creer` crée un projet, il est automatiquement doté d'une `AffectationProjet` active sur ce projet (avec `role_projet=""` et sans altérer `chef_projet`). Les créateurs à portée `ENTREPRISE` (DG, AD) ne reçoivent aucune affectation.
+- **[C-05 puce 2] Nouvelle route de collaborateurs affectables** : Endpoint `GET /api/v1/projets/{projet_id}/collaborateurs-affectables/` retournant la liste minimale (`id`, `nom`, `role`) des collaborateurs actifs éligibles (portée `PROJET`), sans informations personnelles (email, téléphone) ni rôles transverses `ENTREPRISE`.
+- **[C-05 puce 3] Masquage des données personnelles (PII)** : Dans `GET /api/v1/projets/{projet_id}/affectations/`, les champs `email` et `telephone` sont strictement omis pour les utilisateurs ne disposant pas des permissions `projets.affecter_membres` ou `projets.gerer_equipes` (VI, CC, DO).
+

@@ -29,12 +29,14 @@ class EquipeCreationSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=200)
     nature = serializers.ChoiceField(choices=["INTERNE", "SOUS_TRAITANTE"])
     corps_etat = serializers.CharField(max_length=200)
-    chef = PersonneEquipeSerializer()
+    chef = PersonneEquipeSerializer(required=False, allow_null=True, default=None)
     membres = MembreEquipeSerializer(many=True, required=False, default=list)
 
     def validate(self, attrs):
         projet = self.context["projet"]
-        personnes = [attrs["chef"], *attrs["membres"]]
+        chef = attrs.get("chef")
+        membres = attrs.get("membres", [])
+        personnes = [chef, *membres] if chef else list(membres)
         if len(personnes) > 100:
             raise serializers.ValidationError({"membres": "Maximum 100 personnes, chef compris."})
         autorises = set(
@@ -57,13 +59,13 @@ class EquipeCreationSerializer(serializers.Serializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        chef = validated_data.pop("chef")
+        chef = validated_data.pop("chef", None)
         membres = validated_data.pop("membres", [])
         createur = self.context["request"].user
         equipe = EquipeChantier.objects.create(
             projet=self.context["projet"],
-            chef_utilisateur=chef.get("utilisateur"),
-            chef_nom=chef.get("nom", ""),
+            chef_utilisateur=chef.get("utilisateur") if chef else None,
+            chef_nom=chef.get("nom", "") if chef else "",
             cree_par=createur,
             **validated_data,
         )

@@ -73,7 +73,8 @@ def test_e04_ca_cp_avec_droit_creer_auto_affectation(fab):
     # Le projet est visible dans la liste GET /projets/
     r_list = client_cp.get(fab.url_projets())
     assert r_list.status_code == 200
-    ids_projets = [p["id"] for p in r_list.data.get("results", r_list.data)]
+    items = r_list.data.get("results", r_list.data) if isinstance(r_list.data, dict) else r_list.data
+    ids_projets = [p["id"] for p in items]
     assert projet_id in ids_projets, "Le créateur doit voir son projet dans GET /projets/"
 
     # Vérification de l'affectation active créée pour le CP

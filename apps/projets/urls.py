@@ -8,7 +8,6 @@ from apps.projets.views import (
     ProjetArretChantierListCreateView,
     ProjetDetailView,
     ProjetListCreateView,
-    ProjetPermissionsRolesView,
     ProjetSanteApercuView,
     ProjetSanteDetailView,
     ProjetSanteHistoriqueView,
@@ -21,10 +20,10 @@ from apps.projets.views.activite import (
     LotActiviteListCreateView,
 )
 from apps.projets.views.affectation import (
+    CollaborateursAffectablesView,
     ProjetAffectationDetailView,
     ProjetAffectationListCreateView,
 )
-from apps.projets.views.contexte_creation import ContexteCreationProjetView
 from apps.projets.views.equipe import (
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
@@ -106,19 +105,9 @@ urlpatterns = [
         GlobalJournalReportsView.as_view(),
         name="projets-journal-reports-global",
     ),
-    path(
-        "projets/contexte-creation/",
-        ContexteCreationProjetView.as_view(),
-        name="projet-contexte-creation",
-    ),
     path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
     path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
-    path(
-        "projets/<uuid:pk>/permissions-roles/",
-        ProjetPermissionsRolesView.as_view(),
-        name="projet-permissions-roles",
-    ),
     path(
         "projets/<uuid:pk>/reprogrammer/",
         ProjetReprogrammerView.as_view(),
@@ -170,6 +159,11 @@ urlpatterns = [
         "projets/<uuid:projet_id>/affectations/<uuid:pk>/",
         ProjetAffectationDetailView.as_view(),
         name="projet-affectation-detail",
+    ),
+    path(
+        "projets/<uuid:projet_id>/collaborateurs-affectables/",
+        CollaborateursAffectablesView.as_view(),
+        name="projet-collaborateurs-affectables",
     ),
     # Lots
     path("lots/<uuid:pk>/", LotDetailView.as_view(), name="lot-detail"),

@@ -36,6 +36,11 @@ def equipes_projet(projet):
 
 
 class ProjetEquipeListCreateView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Lister les équipes du projet",
@@ -91,6 +96,11 @@ class ProjetEquipeListCreateView(BaseEquipeView):
 
 
 class ProjetEquipeDetailView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method in ("DELETE", "PUT", "PATCH"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Consulter une équipe du projet",
@@ -157,6 +167,11 @@ class AffectationEquipeResponseSerializer(serializers.ModelSerializer):
 
 
 class ProjetEquipeAffectationView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Lister les affectations équipe-activité",
@@ -253,6 +268,11 @@ class ProjetEquipeAffectationView(BaseEquipeView):
 
 
 class ProjetEquipeAffectationDetailView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method in ("DELETE", "PUT", "PATCH"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Retirer l'affectation d'une équipe",

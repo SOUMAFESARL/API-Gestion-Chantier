@@ -85,6 +85,5 @@ def statistiques_lots(lots):
             and float(calculer_avancement_physique_activite(a)) < 100.0
             and getattr(a, "statut", None) != StatutActivite.CLOTURE
         ),
-        "budget_activites_montant": sum(a.budget_initial_montant or 0 for a in activites),
     }
 

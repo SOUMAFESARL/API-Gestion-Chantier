@@ -47,14 +47,8 @@ class MetriquesDashboardSerializer(serializers.Serializer):
     budget_total_montant = serializers.IntegerField(
         help_text="Montant total des budgets alloués (en centimes FCFA)."
     )
-    budget_engage_montant = serializers.IntegerField(
-        help_text="Montant réel engagé (en centimes FCFA)."
-    )
     bons_a_signer_count = serializers.IntegerField(
         help_text="Nombre de bons de paiement en attente de signature."
-    )
-    bons_a_signer_montant = serializers.IntegerField(
-        help_text="Montant total des bons en attente de signature (en centimes FCFA)."
     )
     effectifs_sur_site = EffectifsSurSiteSerializer()
     rapports_journaliers = RapportsJournaliersStatutSerializer()
@@ -75,7 +69,6 @@ class ProjetDashboardItemSerializer(serializers.Serializer):
     avancement_theorique = serializers.IntegerField()
     ecart = serializers.IntegerField()
     budget_initial_montant = serializers.IntegerField(allow_null=True)
-    budget_consomme_montant = serializers.IntegerField()
     rapport_jour_statut = serializers.CharField(help_text="SOUMIS ou EN_ATTENTE")
     indice_sante = serializers.IntegerField(help_text="Note sur 100", allow_null=True)
     badge_sante = serializers.CharField(

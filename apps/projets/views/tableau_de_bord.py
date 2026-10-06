@@ -15,11 +15,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.chantier.models import RapportJournalier
-from apps.core.droits import APermission
+from apps.core.droits import APermission, peut_voir_montants
 from apps.core.enums import StatutProjet, StatutRapport
 from apps.core.permissions import filtrer_queryset_par_affectations
+from apps.core.purger_montants import purger_montants_recursif
 from apps.projets.models import Projet
 from apps.projets.serializers import TableauDeBordResponseSerializer
+from apps.projets.services.tableau_de_bord_bons import obtenir_bons_a_valider
 from apps.projets.services.meteo import (
     PORTEE_CHANTIER,
     PORTEE_ENTREPRISE,
@@ -66,11 +68,8 @@ class TableauDeBordView(APIView):
         # Somme des budgets initiaux
         somme_budgets = projets_qs.aggregate(total=Sum("budget_initial_montant"))["total"] or 0
 
-        # Données financières et achats retirées du périmètre (conservées neutres pour compatibilité sérialiseur)
-        bons_a_valider_qs = []
-        bons_a_valider_count = 0
-        bons_a_valider_montant = 0
-        budget_engage_reel = 0
+        bons_a_valider_qs = obtenir_bons_a_valider(projets_qs)
+        bons_a_valider_count = len(bons_a_valider_qs)
         receptions_qs = []
 
         # Détermination de la date cible pour les effectifs et rapports journaliers
@@ -119,9 +118,7 @@ class TableauDeBordView(APIView):
                         "budget": 100,
                     },
                     "budget_total_montant": 0,
-                    "budget_engage_montant": 0,
                     "bons_a_signer_count": 0,
-                    "bons_a_signer_montant": 0,
                     "effectifs_sur_site": {
                         "total": 0,
                         "regie": 0,
@@ -142,6 +139,8 @@ class TableauDeBordView(APIView):
                 ),
                 "aucun_chantier": True,
             }
+            if not peut_voir_montants(request.user, request):
+                reponse = purger_montants_recursif(reponse)
             return Response(reponse, status=status.HTTP_200_OK)
 
         # Analyse détaillée de chaque chantier
@@ -227,7 +226,6 @@ class TableauDeBordView(APIView):
                 "avancement_theorique": theorique,
                 "ecart": ecart,
                 "budget_initial_montant": budget_initial,
-                "budget_consomme_montant": budget_consomme,
                 "rapport_jour_statut": "SOUMIS" if rapport_soumis else "EN_ATTENTE",
                 "indice_sante": indice_projet,
                 "badge_sante": badge_projet,
@@ -301,9 +299,7 @@ class TableauDeBordView(APIView):
                     "budget": moyenne_budget,
                 },
                 "budget_total_montant": somme_budgets,
-                "budget_engage_montant": budget_engage_reel,
                 "bons_a_signer_count": bons_a_valider_count,
-                "bons_a_signer_montant": bons_a_valider_montant,
                 "effectifs_sur_site": {
                     "total": total_effectif,
                     "regie": total_regie,
@@ -340,5 +336,8 @@ class TableauDeBordView(APIView):
             "alerte_intemperies": alerte_intemperies,
             "aucun_chantier": False,
         }
+
+        if not peut_voir_montants(request.user, request):
+            reponse = purger_montants_recursif(reponse)
 
         return Response(reponse, status=status.HTTP_200_OK)

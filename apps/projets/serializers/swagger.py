@@ -191,6 +191,18 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
         fields = CHAMPS_REPONSE
         read_only_fields = CHAMPS_REPONSE
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        user = getattr(request, "user", None) if request else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(user, request):
+            from apps.core.purger_montants import purger_montants_recursif
+
+            data = purger_montants_recursif(data)
+        return data
+
 
 class ProjetPatchSerializer(ProjetPostSerializer):
     """Same visible fields for PUT and PATCH."""

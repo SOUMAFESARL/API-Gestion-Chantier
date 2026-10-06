@@ -101,4 +101,31 @@
 - **[E-09] Protection du statut CRITIQUE** : Le statut `CRITIQUE` peut être positionné manuellement par un utilisateur habilité (`projets.changer_statut`) et n'est plus jamais écrasé par la tâche d'évaluation quotidienne (`executer_evaluation_quotidienne_schema`).
 - **[E-10] Maintien des écritures sur chantiers en arrêt** : Les statuts opérationnels d'arrêt (`SUSPENDU`, `BLOQUE`) maintiennent toutes les capacités d'écriture ouvertes (`HTTP 201 / 200`).
 
+## Lot 7 : Montants financiers et visibilité budgétaire (E-11, E-12)
+
+### Nouveaux refus et validations (HTTP 400)
+- **[E-11] Refus d'écriture de montant sans la permission `projets.voir_montants` (HTTP 400)** :
+  - Tout utilisateur qui possède la permission d'écriture (`projets.ecrire` ou `projets.creer`), comme l'Administrateur Délégué (`AD`) ou le Conducteur de Travaux (`CT`), mais qui ne possède **pas** la permission `projets.voir_montants`, reçoit un refus `HTTP 400 Bad Request` lorsqu'il transmet un montant non nul (`budget_initial_montant`).
+  - Aucun enregistrement n'est effectué en base : ni le montant, ni les autres champs d'une création ou d'une modification partielle ne sont enregistrés en cas de 400.
+  - La valeur `null` ou l'absence du champ reste acceptée et ignorée sans erreur (`HTTP 200 / 201`), permettant aux rôles sans droit financier de créer ou modifier les chantiers, lots et activités sans montant (règle P-1 et P-3).
+  - L'ordre des contrôles est strictement préservé : le contrôle d'accès `HTTP 403 Forbidden` (`projets.ecrire` ou appartenance) prime sur le contrôle de validation `HTTP 400 Bad Request` (règle P-2).
+
+### Évolution des contrats et du comportement de l'API
+- **[E-11] Masquage strict en lecture des montants sans `projets.voir_montants`** :
+  - Pour tous les utilisateurs dépourvus de la permission `projets.voir_montants` (AD, CT, CC, MAG, BAI, VI) :
+    - Le champ `budget_initial_montant` est **strictement absent** du JSON (ni `null`, ni `0`) sur toutes les ressources : projets (liste et détail), lots (liste et détail), activités (liste et détail), et liste des projets du tableau de bord.
+    - Le champ `budget_total_montant` est strictement absent des métriques du tableau de bord.
+    - Le champ `montant` des bons de paiement du tableau de bord est strictement masqué.
+    - Filet de sécurité générique : aucune clé dont le nom évoque une donnée financière ou budgétaire n'est exposée aux rôles sans droit (y compris dans les statistiques).
+    - Les champs non financiers (`id`, `reference`, `nom`, `statut`, `bons_a_signer_count`, `bons_paiement_a_valider`) restent présents et intacts pour tous les rôles autorisés.
+- **[E-12] Retrait définitif des champs financiers sans source réelle** :
+  - Suppression totale pour l'ensemble des utilisateurs (Directeur Général `DG` compris) des 4 champs suivants :
+    - `budget_consomme_montant` (retiré de `ProjetSerializer` et du tableau de bord)
+    - `budget_engage_montant` (retiré des métriques du tableau de bord)
+    - `bons_a_signer_montant` (retiré des métriques du tableau de bord)
+    - `budget_activites_montant` (retiré des statistiques de projet)
+  - Suppression définitive de la valeur de consommation fictive calculée en dur à `0.225` (22,5 %).
+  - Impact frontend : la tuile « Dépensé » et la zone budget doivent prendre en compte l'absence de ces champs et le masquage par `voir_montants`.
+
+
 

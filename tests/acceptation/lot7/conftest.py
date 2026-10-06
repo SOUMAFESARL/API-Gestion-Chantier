@@ -15,8 +15,12 @@ from fabriques_lot7 import FabriqueLot7
 @pytest.fixture(autouse=True)
 def _positionner_schema_tenant(db):
     """Maintient la connexion sur le schéma tenant demo pendant tout le test."""
+    from apps.projets.services.tableau_de_bord_bons import vider_bons_test
+
+    vider_bons_test()
     with schema_context("demo"):
         yield
+    vider_bons_test()
 
 
 @pytest.fixture

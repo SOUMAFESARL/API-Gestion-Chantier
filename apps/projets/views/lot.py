@@ -57,7 +57,7 @@ class ProjetLotListCreateView(APIView):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
         return Response(
-            LotResponseSerializer(projet.lots.prefetch_related("activites"), many=True).data
+            LotResponseSerializer(projet.lots.prefetch_related("activites"), many=True, context={"request": request}).data
         )
 
     @extend_schema(
@@ -104,10 +104,10 @@ class ProjetLotListCreateView(APIView):
         from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 
         verifier_statut_projet_pour_ecriture(projet)
-        serializer = LotCreationSerializer(data=request.data)
+        serializer = LotCreationSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         lot = creer_lots(projet, [serializer.validated_data], request.user)[0]
-        return Response(LotResponseSerializer(lot).data, status=201)
+        return Response(LotResponseSerializer(lot, context={"request": request}).data, status=201)
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
@@ -154,7 +154,7 @@ class ProjetLotImportView(APIView):
         serializer.is_valid(raise_exception=True)
         donnees = lire_excel(serializer.validated_data["fichier"])
         lots = creer_lots(projet, donnees, request.user)
-        return Response(LotResponseSerializer(lots, many=True).data, status=201)
+        return Response(LotResponseSerializer(lots, many=True, context={"request": request}).data, status=201)
 
 
 class ProjetLotModeleView(APIView):
@@ -217,7 +217,7 @@ class LotDetailView(APIView):
         responses={200: LotResponseSerializer, **ERREURS_LOTS},
     )
     def get(self, request, pk):
-        return Response(LotResponseSerializer(self.obtenir_lot(request, pk)).data)
+        return Response(LotResponseSerializer(self.obtenir_lot(request, pk), context={"request": request}).data)
 
     @extend_schema(
         tags=["lots"],
@@ -238,7 +238,9 @@ class LotDetailView(APIView):
     @transaction.atomic
     def patch(self, request, pk):
         lot = self.obtenir_lot(request, pk, verrou=True)
-        serializer = LotModificationSerializer(lot, data=request.data, partial=True)
+        serializer = LotModificationSerializer(
+            lot, data=request.data, partial=True, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         lot_sauvegarde = serializer.save()
         if lot.projet_id:
@@ -249,7 +251,7 @@ class LotDetailView(APIView):
                 declencheur_type="LOT_MODIFICATION",
                 declencheur_id=lot.id,
             )
-        return Response(LotResponseSerializer(lot_sauvegarde).data)
+        return Response(LotResponseSerializer(lot_sauvegarde, context={"request": request}).data)
 
     @extend_schema(
         tags=["lots"],
@@ -316,4 +318,4 @@ class LotActivationView(LotDetailView):
                 declencheur_type="LOT_ACTIVATION",
                 declencheur_id=lot.id,
             )
-        return Response(LotResponseSerializer(lot).data)
+        return Response(LotResponseSerializer(lot, context={"request": request}).data)

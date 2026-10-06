@@ -153,24 +153,25 @@ class GardePermissionProjet(permissions.BasePermission):
         projet_id = view.kwargs.get("projet_id") or view.kwargs.get("projet_pk")
         if not projet_id and "pk" in view.kwargs:
             view_name = view.__class__.__name__
-            if (
-                view_name.startswith("Projet")
-                and "equipe_id" not in view.kwargs
-                and "affectation_id" not in view.kwargs
-            ) or any(
-                seg in request.path
-                for seg in (
-                    "/lots",
-                    "/equipes",
-                    "/affectations",
-                    "/statistiques",
-                    "/reprogrammer",
-                    "/historique-dates",
-                    "/sante",
-                    "/permissions-roles",
-                )
-            ):
-                projet_id = view.kwargs["pk"]
+            if not request.path.startswith("/api/v1/lots/") and not request.path.startswith("/api/v1/activites/"):
+                if (
+                    view_name.startswith("Projet")
+                    and "equipe_id" not in view.kwargs
+                    and "affectation_id" not in view.kwargs
+                ) or any(
+                    seg in request.path
+                    for seg in (
+                        "/lots",
+                        "/equipes",
+                        "/affectations",
+                        "/statistiques",
+                        "/reprogrammer",
+                        "/historique-dates",
+                        "/sante",
+                        "/permissions-roles",
+                    )
+                ):
+                    projet_id = view.kwargs["pk"]
 
         if projet_id:
             projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)

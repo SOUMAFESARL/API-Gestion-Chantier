@@ -13,7 +13,16 @@ from rest_framework import permissions
 from apps.core.enums import RoleGlobal
 from apps.core.registre_permissions import REGISTRE
 
-__all__ = ["APermission", "a_permission", "permissions_effectives", "permissions_du_role", "est_dg", "DROITS_ADMIN_AD", "DROITS_ADMIN_RESERVES_DG"]
+__all__ = [
+    "APermission",
+    "a_permission",
+    "permissions_effectives",
+    "permissions_du_role",
+    "est_dg",
+    "peut_voir_montants",
+    "DROITS_ADMIN_AD",
+    "DROITS_ADMIN_RESERVES_DG",
+]
 
 # Les 6 droits d'administration fixes de l'AD (B-04)
 DROITS_ADMIN_AD = frozenset({
@@ -49,6 +58,19 @@ def est_dg(utilisateur) -> bool:
     if getattr(utilisateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG", "DIRECTEUR_GENERAL"):
         return True
     return False
+
+
+def peut_voir_montants(utilisateur, request=None) -> bool:
+    """Règle E-11 : Détermine si l'utilisateur possède le droit de voir les montants financiers.
+
+    Détenteurs réels (annexe 1) : DG, DF, DO, CP.
+    Non-détenteurs : AD, CT, CC, MAG, BAI, VI.
+    """
+    if not utilisateur or not getattr(utilisateur, "is_authenticated", False):
+        return False
+    if est_dg(utilisateur):
+        return True
+    return a_permission(utilisateur, "projets.voir_montants", request=request)
 
 
 def _obtenir_modules_actifs(tenant=None) -> set[str]:

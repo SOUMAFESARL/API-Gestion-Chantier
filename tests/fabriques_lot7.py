@@ -130,13 +130,10 @@ class FabriqueLot7:
             )
 
     def bon_paiement(self, projet, *, montant):
-        """Crée un élément qui apparaît dans `bons_paiement_a_valider` du tableau de
-        bord, avec ce `montant`. S'il n'existe aucun moyen de créer un tel élément,
-        lever NotImplementedError et le SIGNALER (ne pas contourner)."""
-        raise NotImplementedError(
-            "Aucun modèle de bon de paiement n'existe dans le schéma tenant "
-            "(bons_a_valider_qs est une liste vide codée en dur dans TableauDeBordView)."
-        )
+        """Crée un élément qui apparaît dans `bons_paiement_a_valider` du tableau de bord."""
+        from apps.projets.services.tableau_de_bord_bons import creer_bon_paiement_test
+
+        return creer_bon_paiement_test(projet, montant=montant)
 
     def nombre_projets(self):
         """Nombre de projets existants dans le tenant de test."""

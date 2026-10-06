@@ -34,6 +34,12 @@ class LotCreationSerializer(serializers.Serializer):
     date_debut_reelle = serializers.DateField(required=False, allow_null=True)
     date_fin_reelle = serializers.DateField(required=False, allow_null=True)
 
+    def validate_budget_initial_montant(self, value):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.purger_montants import valider_ecriture_montant
+
+        return valider_ecriture_montant(value, request=request, champ="budget_initial_montant")
+
     def to_internal_value(self, data):
         inconnus = set(data.keys()) - set(self.fields)
         if inconnus:
@@ -41,6 +47,13 @@ class LotCreationSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
     def validate(self, attrs):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(getattr(request, "user", None) if request else None, request):
+            if "budget_initial_montant" in attrs and attrs["budget_initial_montant"] is None:
+                attrs.pop("budget_initial_montant")
+
         debut = attrs.get("date_debut_prevue")
         fin = attrs.get("date_fin_prevue")
         if debut and fin and fin < debut:
@@ -56,6 +69,13 @@ class LotModificationSerializer(LotCreationSerializer):
     """Valide le résultat du PATCH sans réécrire les champs absents."""
 
     def validate(self, attrs):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(getattr(request, "user", None) if request else None, request):
+            if "budget_initial_montant" in attrs and attrs["budget_initial_montant"] is None:
+                attrs.pop("budget_initial_montant")
+
         for champ in ("date_debut_prevue", "date_fin_prevue"):
             ancienne = getattr(self.instance, champ)
             if champ in attrs and ancienne is not None and attrs[champ] != ancienne:
@@ -132,3 +152,15 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "est_actif",
         )
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        user = getattr(request, "user", None) if request else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(user, request):
+            from apps.core.purger_montants import purger_montants_recursif
+
+            data = purger_montants_recursif(data)
+        return data

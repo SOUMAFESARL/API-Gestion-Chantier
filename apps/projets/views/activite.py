@@ -56,7 +56,7 @@ class LotActiviteListCreateView(APIView):
         self.check_object_permissions(request, lot)
         activites = lot.activites.filter(supprime_le__isnull=True).order_by("ordre", "cree_le")
         return Response(
-            ActiviteSerializer(activites.prefetch_related("equipe"), many=True).data,
+            ActiviteSerializer(activites.prefetch_related("equipe"), many=True, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
 
@@ -136,7 +136,10 @@ class LotActiviteListCreateView(APIView):
             declencheur_type="ACTIVITE_CREATION",
             declencheur_id=activite.id,
         )
-        return Response(ActiviteSerializer(activite).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ActiviteSerializer(activite, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ActiviteDetailView(APIView):
@@ -187,7 +190,7 @@ class ActiviteDetailView(APIView):
     )
     def get(self, request, pk):
         activite = self.obtenir_activite(request, pk)
-        return Response(ActiviteSerializer(activite).data, status=status.HTTP_200_OK)
+        return Response(ActiviteSerializer(activite, context={"request": request}).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Supprimer logiquement une activité",
@@ -255,7 +258,7 @@ class ActiviteDetailView(APIView):
                 declencheur_type="ACTIVITE_MODIFICATION",
                 declencheur_id=activite.id,
             )
-        return Response(ActiviteSerializer(activite_modifiee).data)
+        return Response(ActiviteSerializer(activite_modifiee, context={"request": request}).data)
 
 
 class ActiviteActivationView(ActiviteDetailView):
@@ -293,4 +296,4 @@ class ActiviteActivationView(ActiviteDetailView):
                 declencheur_type="ACTIVITE_ACTIVATION",
                 declencheur_id=activite.id,
             )
-        return Response(ActiviteSerializer(activite).data)
+        return Response(ActiviteSerializer(activite, context={"request": request}).data)

@@ -20,8 +20,9 @@ from apps.accounts.serializers import (
     RoleSuppressionSerializer,
 )
 from apps.accounts.services.roles import (
+    CODES_ROLES_SYSTEME,
+    compter_utilisateurs_et_affectations,
     creer_role,
-    initialiser_roles_par_defaut,
     modifier_role,
     supprimer_role,
 )
@@ -38,21 +39,47 @@ __all__ = [
 ]
 
 
-def _autoriser_roles_dg(user):
-    """Règle R-DEMO-08 : Seul le DG / Propriétaire a autorité sur les routes /api/v1/roles/."""
-    if not user or not user.is_authenticated:
-        raise ActionReserveeDg()
-    if not (getattr(user, "is_dg", False) or getattr(user, "is_owner", False)):
-        raise ActionReserveeDg()
-
-
 def _autoriser_parametres_roles(user, request=None):
-    """Autorise administration.roles_gerer pour les routes parametres/roles."""
+    """Autorise administration.roles_gerer pour les routes /roles/ et /parametres/roles/ (F-01, F-02)."""
     if not user or not user.is_authenticated:
         raise ActionReserveeDg()
     from apps.core.droits import a_permission
     if not a_permission(user, "administration.roles_gerer", request=request):
         raise ActionReserveeDg()
+
+
+def _extraire_codes_permissions_demandes(data) -> set[str]:
+    """Extrait tous les codes de permissions demandés dans une requête de création ou modification."""
+    codes = set()
+    perms_brutes = data.get("permissions")
+    if perms_brutes:
+        for p in perms_brutes:
+            if isinstance(p, str) and p.strip():
+                codes.add(p.strip())
+            elif isinstance(p, dict) and "code" in p:
+                codes.add(str(p["code"]).strip())
+    perms_mods = data.get("permissions_modules")
+    if perms_mods:
+        from apps.accounts.services.roles import _normaliser_permissions_modules
+        norm = _normaliser_permissions_modules(perms_mods)
+        for _, clist in norm.items():
+            codes.update(clist)
+    return codes
+
+
+def _verifier_ad_ne_donne_que_ce_qu_il_possede(user, data, request=None):
+    """Règle B-08 : L'AD ne donne que ce qu'il possède."""
+    from apps.core.droits import est_dg, permissions_effectives
+    if est_dg(user):
+        return
+    codes_demandes = _extraire_codes_permissions_demandes(data)
+    if not codes_demandes:
+        return
+    perms_user = permissions_effectives(user, request=request)
+    if not codes_demandes.issubset(perms_user):
+        raise ActionReserveeDg(
+            _("Vous ne pouvez attribuer que des permissions que vous possédez.")
+        )
 
 
 class RoleListCreateView(APIView):
@@ -66,11 +93,7 @@ class RoleListCreateView(APIView):
         responses={200: RoleSerializer(many=True)},
     )
     def get(self, request):
-        _autoriser_roles_dg(request.user)
-
-        if not Role.objects.filter(supprime_le__isnull=True).exists():
-            initialiser_roles_par_defaut()
-
+        _autoriser_parametres_roles(request.user, request=request)
         roles = Role.objects.filter(supprime_le__isnull=True).order_by("code")
         serializer = RoleSerializer(roles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -81,17 +104,25 @@ class RoleListCreateView(APIView):
         responses={201: RoleDetailSerializer},
     )
     def post(self, request):
-        _autoriser_roles_dg(request.user)
+        _autoriser_parametres_roles(request.user, request=request)
 
         serializer = RoleCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        _verifier_ad_ne_donne_que_ce_qu_il_possede(request.user, request.data, request=request)
+
+        perms_input = (
+            serializer.validated_data.get("permissions")
+            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            else serializer.validated_data.get("permissions_modules", {})
+        )
 
         try:
             role = creer_role(
                 code=serializer.validated_data["code"],
                 libelle=serializer.validated_data["libelle"],
                 description=serializer.validated_data.get("description", ""),
-                permissions_modules=serializer.validated_data.get("permissions_modules", {}),
+                permissions_modules=perms_input,
                 portee=serializer.validated_data.get("portee", "PROJET"),
                 cree_par=request.user,
             )
@@ -114,6 +145,7 @@ class RoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def get(self, request, pk):
+        _autoriser_parametres_roles(request.user, request=request)
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
         serializer = RoleDetailSerializer(role)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -124,7 +156,7 @@ class RoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def patch(self, request, pk):
-        _autoriser_roles_dg(request.user)
+        _autoriser_parametres_roles(request.user, request=request)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
@@ -139,12 +171,25 @@ class RoleDetailUpdateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        from apps.core.droits import est_dg
+        if not est_dg(request.user) and (role.est_systeme or role.code in CODES_ROLES_SYSTEME):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "modification_role_systeme_interdite",
+                        "message": "Seul le Directeur Général a autorité pour modifier les rôles système.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        _verifier_ad_ne_donne_que_ce_qu_il_possede(request.user, request.data, request=request)
+
         serializer = RoleModificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         nouvelle_portee = serializer.validated_data.get("portee")
         if nouvelle_portee is not None:
-            from apps.core.droits import est_dg
             if not est_dg(request.user):
                 return Response(
                     {"detail": _("Seul le Directeur Général peut modifier la portée d'un rôle.")},
@@ -179,12 +224,18 @@ class RoleDetailUpdateView(APIView):
                     users_with_role = Utilisateur.objects.filter(role=role, supprime_le__isnull=True)
                     AffectationProjet.objects.filter(utilisateur__in=users_with_role, est_actif=True).update(est_actif=False)
 
+        perms_input = (
+            serializer.validated_data.get("permissions")
+            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            else serializer.validated_data.get("permissions_modules")
+        )
+
         try:
             role_modifie = modifier_role(
                 role=role,
                 libelle=serializer.validated_data.get("libelle"),
                 description=serializer.validated_data.get("description"),
-                permissions_modules=serializer.validated_data.get("permissions_modules"),
+                permissions_modules=perms_input,
                 portee=nouvelle_portee,
                 modifie_par=request.user,
             )
@@ -205,7 +256,7 @@ class RoleDetailUpdateView(APIView):
 
 
 class RoleSupprimerReassignerView(APIView):
-    """`POST /api/v1/roles/{id}/supprimer/` — Suppression d'un rôle (réservée au DG)."""
+    """`POST /api/v1/roles/{id}/supprimer/` — Suppression d'un rôle."""
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
@@ -216,7 +267,7 @@ class RoleSupprimerReassignerView(APIView):
         responses={200: dict},
     )
     def post(self, request, pk):
-        _autoriser_roles_dg(request.user)
+        _autoriser_parametres_roles(request.user, request=request)
 
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
@@ -232,25 +283,22 @@ class RoleSupprimerReassignerView(APIView):
             )
 
         if role.code in (RoleGlobal.ADMIN, "AD"):
-            est_dg_ou_owner = (
-                getattr(request.user, "is_dg", False)
-                or getattr(request.user, "is_owner", False)
-                or getattr(request.user, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
-            )
-            if not est_dg_ou_owner:
+            from apps.core.droits import est_dg
+            if not est_dg(request.user):
                 raise ActionReserveeDg()
-
-        role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
 
         serializer = RoleSuppressionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        substitution_id = serializer.validated_data.get("role_substitution_id") or serializer.validated_data.get(
-            "reassigner_vers_role_id"
+        substitution_id = (
+            serializer.validated_data.get("role_reassignation_id")
+            or serializer.validated_data.get("role_substitution_id")
+            or serializer.validated_data.get("reassigner_vers_role_id")
         )
         supprimer_collaborateurs = serializer.validated_data.get("supprimer_collaborateurs", False)
 
-        if not substitution_id and not supprimer_collaborateurs:
+        counts = compter_utilisateurs_et_affectations(role)
+        if counts["total"] > 0 and not substitution_id and not supprimer_collaborateurs:
             raise RoleSubstitutionObligatoire()
 
         reassigner_vers_role = None
@@ -277,11 +325,6 @@ class RoleSupprimerReassignerView(APIView):
         )
 
 
-# ============================================================================
-# Vues dédiées pour /api/v1/parametres/roles/ (AD + DG autorisés)
-# ============================================================================
-
-
 class ParametresRoleListCreateView(APIView):
     """`GET` et `POST /api/v1/parametres/roles/` — Consultation et création des rôles dans les paramètres."""
 
@@ -293,9 +336,7 @@ class ParametresRoleListCreateView(APIView):
         responses={200: RoleSerializer(many=True)},
     )
     def get(self, request):
-        if not Role.objects.filter(supprime_le__isnull=True).exists():
-            initialiser_roles_par_defaut()
-
+        _autoriser_parametres_roles(request.user, request=request)
         roles = Role.objects.filter(supprime_le__isnull=True).order_by("code")
         serializer = RoleSerializer(roles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -311,12 +352,20 @@ class ParametresRoleListCreateView(APIView):
         serializer = RoleCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        _verifier_ad_ne_donne_que_ce_qu_il_possede(request.user, request.data, request=request)
+
+        perms_input = (
+            serializer.validated_data.get("permissions")
+            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            else serializer.validated_data.get("permissions_modules", {})
+        )
+
         try:
             role = creer_role(
                 code=serializer.validated_data["code"],
                 libelle=serializer.validated_data["libelle"],
                 description=serializer.validated_data.get("description", ""),
-                permissions_modules=serializer.validated_data.get("permissions_modules", {}),
+                permissions_modules=perms_input,
                 portee=serializer.validated_data.get("portee", "PROJET"),
                 cree_par=request.user,
             )
@@ -339,6 +388,7 @@ class ParametresRoleDetailUpdateView(APIView):
         responses={200: RoleDetailSerializer},
     )
     def get(self, request, pk):
+        _autoriser_parametres_roles(request.user, request=request)
         role = get_object_or_404(Role, pk=pk, supprime_le__isnull=True)
         serializer = RoleDetailSerializer(role)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -364,12 +414,25 @@ class ParametresRoleDetailUpdateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        from apps.core.droits import est_dg
+        if not est_dg(request.user) and (role.est_systeme or role.code in CODES_ROLES_SYSTEME):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "modification_role_systeme_interdite",
+                        "message": "Seul le Directeur Général a autorité pour modifier les rôles système.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        _verifier_ad_ne_donne_que_ce_qu_il_possede(request.user, request.data, request=request)
+
         serializer = RoleModificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         nouvelle_portee = serializer.validated_data.get("portee")
         if nouvelle_portee is not None:
-            from apps.core.droits import est_dg
             if not est_dg(request.user):
                 return Response(
                     {"detail": _("Seul le Directeur Général peut modifier la portée d'un rôle.")},
@@ -404,12 +467,18 @@ class ParametresRoleDetailUpdateView(APIView):
                     users_with_role = Utilisateur.objects.filter(role=role, supprime_le__isnull=True)
                     AffectationProjet.objects.filter(utilisateur__in=users_with_role, est_actif=True).update(est_actif=False)
 
+        perms_input = (
+            serializer.validated_data.get("permissions")
+            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            else serializer.validated_data.get("permissions_modules")
+        )
+
         try:
             role_modifie = modifier_role(
                 role=role,
                 libelle=serializer.validated_data.get("libelle"),
                 description=serializer.validated_data.get("description"),
-                permissions_modules=serializer.validated_data.get("permissions_modules"),
+                permissions_modules=perms_input,
                 portee=nouvelle_portee,
                 modifie_par=request.user,
             )
@@ -456,25 +525,23 @@ class ParametresRoleSupprimerReassignerView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Protection du rôle Administrateur : seul le DG / Propriétaire a autorité pour le supprimer
         if role.code in (RoleGlobal.ADMIN, "AD"):
-            est_dg_ou_owner = (
-                getattr(request.user, "is_dg", False)
-                or getattr(request.user, "is_owner", False)
-                or getattr(request.user, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
-            )
-            if not est_dg_ou_owner:
+            from apps.core.droits import est_dg
+            if not est_dg(request.user):
                 raise ActionReserveeDg()
 
         serializer = RoleSuppressionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        substitution_id = serializer.validated_data.get("role_substitution_id") or serializer.validated_data.get(
-            "reassigner_vers_role_id"
+        substitution_id = (
+            serializer.validated_data.get("role_reassignation_id")
+            or serializer.validated_data.get("role_substitution_id")
+            or serializer.validated_data.get("reassigner_vers_role_id")
         )
         supprimer_collaborateurs = serializer.validated_data.get("supprimer_collaborateurs", False)
 
-        if not substitution_id and not supprimer_collaborateurs:
+        counts = compter_utilisateurs_et_affectations(role)
+        if counts["total"] > 0 and not substitution_id and not supprimer_collaborateurs:
             raise RoleSubstitutionObligatoire()
 
         reassigner_vers_role = None

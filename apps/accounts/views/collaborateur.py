@@ -264,14 +264,30 @@ class ParametresCollaborateurListCreateView(APIView):
             mapped = "BAI" if role_global == "MOA" else ("VI" if role_global == "MOE" else role_global)
             role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
 
-        # Règle R-DEMO-01 : Seul le DG ou le Propriétaire peut inviter/créer un ADMIN
+        from apps.core.droits import est_dg
+        # Règle B-09 : Seul le DG peut inviter ou nommer un DG
+        if not est_dg(request.user) and (role_global in (RoleGlobal.DIRECTEUR_GENERAL, "DG") or (role_cible and role_cible.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"))):
+            raise ActionReserveeDg(_("Seul le Directeur Général peut attribuer le rôle Directeur Général."))
+
+        # Règle R-DEMO-01 / B-06 : Seul le DG ou le Propriétaire peut inviter/créer un ADMIN
         est_creation_admin = (
             role_global in (RoleGlobal.ADMIN, "AD")
             or (role_cible and role_cible.code in (RoleGlobal.ADMIN, "AD"))
         )
-        from apps.core.droits import est_dg
         if est_creation_admin and not est_dg(request.user):
             raise ActionInterditeDelegue()
+
+        # Règle B-09 : L'AD n'attribue qu'un rôle dont il détient toutes les permissions
+        if not est_dg(request.user) and role_cible:
+            from apps.core.droits import permissions_du_role, permissions_effectives
+            perms_ad = permissions_effectives(request.user, request=request)
+            perms_role = permissions_du_role(role_cible)
+            if not perms_role.issubset(perms_ad):
+                return Response(
+                    {"detail": _("Vous ne pouvez attribuer qu'un rôle dont vous possédez toutes les permissions (B-09).")},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
 
         # Vérifier si un collaborateur actif existe déjà
         existant = Utilisateur.objects.filter(email__iexact=email).first()
@@ -469,13 +485,32 @@ class ParametresCollaborateurDetailView(APIView):
             supprime_le__isnull=True,
         )
 
+        from apps.core.droits import est_dg
+        # Règle B-06 : Un AD ne peut ni modifier le rôle d'un autre AD ni son propre rôle (403)
+        is_cible_ad = (
+            collaborateur.role_global in (RoleGlobal.ADMIN, "AD")
+            or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
+            return Response(
+                {"detail": _("Seul le Directeur Général a autorité pour gérer les administrateurs.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Règle B-09 : L'AD ne peut pas attribuer DG ou AD
+        role_demande = request.data.get("role_global")
+        if not est_dg(request.user) and role_demande in (RoleGlobal.DIRECTEUR_GENERAL, "DG", RoleGlobal.ADMIN, "AD"):
+            return Response(
+                {"detail": _("Seul le Directeur Général peut attribuer ces rôles.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = CollaborateurRattacherRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         role_instance = serializer.validated_data.get("role_instance")
         role_global = serializer.validated_data.get("role_global")
 
-        from apps.core.droits import est_dg
         # Règle d'immutabilité absolue du DG : Unique au créateur du tenant
         if est_dg(collaborateur):
             if role_global or role_instance:
@@ -496,6 +531,23 @@ class ParametresCollaborateurDetailView(APIView):
         )
         if est_attribution_admin and not est_dg(request.user):
             raise ActionInterditeDelegue()
+
+        # Règle B-09 : L'AD n'attribue qu'un rôle dont il détient toutes les permissions
+        role_cible = role_instance
+        if not role_cible and role_global:
+            mapped = "BAI" if role_global == "MOA" else ("VI" if role_global == "MOE" else role_global)
+            role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
+
+        if not est_dg(request.user) and role_cible:
+            from apps.core.droits import permissions_du_role, permissions_effectives
+            perms_ad = permissions_effectives(request.user, request=request)
+            perms_role = permissions_du_role(role_cible)
+            if not perms_role.issubset(perms_ad):
+                return Response(
+                    {"detail": _("Vous ne pouvez attribuer qu'un rôle dont vous possédez toutes les permissions (B-09).")},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
 
         try:
             collaborateur = rattacher_collaborateur_a_role(
@@ -577,6 +629,23 @@ class ParametresCollaborateurDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Règle B-06 : Un AD ne peut ni supprimer un autre AD ni lui-même (403)
+        is_cible_ad = (
+            collaborateur.role_global in (RoleGlobal.ADMIN, "AD")
+            or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
+            return Response(
+                {
+                    "erreur": {
+                        "code": "suppression_ad_interdite",
+                        "message": "Seul le Directeur Général a autorité pour supprimer un administrateur.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+
         try:
             resultat = desactiver_collaborateur_plateforme(
                 collaborateur=collaborateur,
@@ -616,11 +685,23 @@ class ParametresCollaborateurSuspendreView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Règle B-06 : Un AD ne peut ni suspendre un autre AD ni son propre compte (403)
+        is_cible_ad = (
+            collaborateur.role_global in (RoleGlobal.ADMIN, "AD")
+            or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
+            return Response(
+                {"detail": _("Seul le Directeur Général a autorité pour suspendre un administrateur ou son propre compte.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if collaborateur.pk == request.user.pk:
             return Response(
                 {"detail": _("Vous ne pouvez pas suspendre votre propre compte.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
 
         if collaborateur.statut == StatutUtilisateur.DESACTIVE:
             return Response(
@@ -688,7 +769,20 @@ class ParametresCollaborateurReactiverView(APIView):
             supprime_le__isnull=True,
         )
 
+        from apps.core.droits import est_dg
+        # Règle B-06 : Un AD ne peut ni réactiver un autre AD ni son propre compte (403)
+        is_cible_ad = (
+            collaborateur.role_global in (RoleGlobal.ADMIN, "AD")
+            or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
+            return Response(
+                {"detail": _("Seul le Directeur Général a autorité pour réactiver un administrateur.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if collaborateur.statut == StatutUtilisateur.ACTIF:
+
             return Response(
                 {"detail": _("Ce collaborateur est déjà actif.")},
                 status=status.HTTP_409_CONFLICT,

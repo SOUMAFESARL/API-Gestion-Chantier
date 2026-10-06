@@ -13,7 +13,23 @@ from rest_framework import permissions
 from apps.core.enums import RoleGlobal
 from apps.core.registre_permissions import REGISTRE
 
-__all__ = ["APermission", "a_permission", "permissions_effectives", "est_dg"]
+__all__ = ["APermission", "a_permission", "permissions_effectives", "permissions_du_role", "est_dg", "DROITS_ADMIN_AD", "DROITS_ADMIN_RESERVES_DG"]
+
+# Les 6 droits d'administration fixes de l'AD (B-04)
+DROITS_ADMIN_AD = frozenset({
+    "administration.collaborateurs_voir",
+    "administration.collaborateurs_gerer",
+    "administration.roles_gerer",
+    "administration.abonnement_voir",
+    "administration.factures_voir",
+    "administration.onboarding_suivre",
+})
+
+# Droits d'administration strictement reserves au DG (B-04)
+DROITS_ADMIN_RESERVES_DG = frozenset({
+    "administration.entreprise_modifier",
+    "administration.abonnement_gerer",
+})
 
 MODULES_SYSTEME = frozenset({"administration"})
 
@@ -193,18 +209,10 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
             # Restreint aux codes officiellement enregistrés dans REGISTRE
             perms_accordees.update({c for c in codes_cochés if c in REGISTRE})
 
-        # AD ou ADMIN : hérite des permissions d'administration actives du catalogue (Point P-2)
+        # AD ou ADMIN : 6 droits d'administration fixes dans le code (Règle B-04)
         if code_role in (RoleGlobal.ADMIN, "AD") or getattr(role, "code", "") in (RoleGlobal.ADMIN, "AD"):
-            perms_admin = {
-                code for code, def_p in REGISTRE.items()
-                if def_p.module == "administration"
-            }
-            cat_admin_actifs = set(
-                CataloguePermission.objects.filter(
-                    code__in=perms_admin, est_actif=True, supprime_le__isnull=True
-                ).values_list("code", flat=True)
-            )
-            perms_accordees.update(cat_admin_actifs if cat_admin_actifs else perms_admin)
+            perms_accordees.update(DROITS_ADMIN_AD)
+            perms_accordees.difference_update(DROITS_ADMIN_RESERVES_DG)
     except Exception:
         pass
 
@@ -212,6 +220,26 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
         request._permissions_effectives_cache = perms_accordees
     return perms_accordees
 
+
+
+
+def permissions_du_role(role, tenant=None) -> set[str]:
+    """Renvoie les permissions accordées par un rôle (Règles B-08, B-09)."""
+    if not role or not getattr(role, "est_actif", True):
+        return set()
+    if getattr(role, "code", "") in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+        return set(REGISTRE.keys())
+
+    class _PorteurFictif:
+        def __init__(self, r):
+            self.role = r
+            self.role_global = getattr(r, "code", "")
+            self.is_dg = False
+            self.is_owner = False
+            self.is_authenticated = True
+            self.pk = None
+
+    return permissions_effectives(_PorteurFictif(role), tenant=tenant)
 
 def a_permission(collaborateur, code_permission: str, request=None, tenant=None) -> bool:
     """Vérifie si le collaborateur possède un code de permission spécifique."""

@@ -174,13 +174,21 @@ def _normaliser_permissions_modules(permissions_input) -> dict[str, list[str]]:
                 codes.add(f"{m}.{code_str}")
         return list(codes)
 
-    if isinstance(permissions_input, list):
+    if isinstance(permissions_input, (list, tuple, set)):
         for item in permissions_input:
             if isinstance(item, dict):
                 m_code = item.get("module") or item.get("module_code")
                 p_items = item.get("permissions") or []
                 if m_code:
                     resultat[str(m_code).lower()] = _extraire_codes(str(m_code).lower(), p_items)
+            elif isinstance(item, str) and item.strip():
+                item_s = item.strip()
+                if "." in item_s:
+                    m_code, _ = item_s.split(".", 1)
+                    resultat.setdefault(m_code.lower(), []).append(item_s)
+                elif item_s in REGISTRE:
+                    m_code = REGISTRE[item_s].module.lower()
+                    resultat.setdefault(m_code, []).append(item_s)
     elif isinstance(permissions_input, dict):
         for m_code, val in permissions_input.items():
             resultat[str(m_code).lower()] = _extraire_codes(str(m_code).lower(), val)
@@ -499,19 +507,21 @@ def modifier_role(
 
         if permissions_modules is not None:
             norm_perms = _normaliser_permissions_modules(permissions_modules)
-            for mod_code, perms_list in norm_perms.items():
-                if mod_code in modules_map:
+            is_full_list = isinstance(permissions_modules, (list, tuple, set))
+            for mod in modules_actifs:
+                mod_code = mod.code.lower()
+                if mod_code in norm_perms or is_full_list:
                     cat_mod = cat_modules_map.get(mod_code)
                     rmp, _ = RoleModulePermission.objects.get_or_create(
                         role=role,
-                        module=modules_map[mod_code],
+                        module=mod,
                         defaults={"cree_par": modifie_par, "module_catalogue": cat_mod},
                     )
                     if not rmp.module_catalogue and cat_mod:
                         rmp.module_catalogue = cat_mod
+                    perms_list = norm_perms.get(mod_code, [])
                     cat_perms = [all_cat_perms[c] for c in perms_list if c in all_cat_perms]
-                    if cat_perms:
-                        rmp.permissions_catalogue.set(cat_perms)
+                    rmp.permissions_catalogue.set(cat_perms)
                     niveau_scalaire = _calculer_niveau_scalaire(perms_list)
                     _verifier_plafond_modele(role.code, mod_code, niveau_scalaire)
                     rmp.niveau = niveau_scalaire

@@ -48,3 +48,19 @@
 - **[D-06] Filtrage du journal consolidé des reports** : L'endpoint `/api/v1/projets/journal-reports/` filtre désormais automatiquement les rapports de reports par les seuls projets accessibles à l'utilisateur selon sa portée et ses affectations.
 - **[D-08] Éradication des gardes legacy** : `PermissionModule` et `MembreDuProjet` sont définitivement supprimés et remplacés par `GardePermissionProjet` et `APermission`.
 
+
+
+## Lot 4 : Administration des rôles (A-13, B-04, B-06 à B-10, B-12, F-01, F-02)
+
+### Nouveaux refus et validations (HTTP 403 / 400)
+- **[A-13] Pas d'écriture dans les requêtes GET** : Les routes de consultation de listes et détails de rôles (`/api/v1/roles/` et `/api/v1/parametres/roles/`) n'appellent plus de création ou synchronisation paresseuse de rôles. Toute requête GET est 100% idempotente et sans effet de bord en base de données.
+- **[B-04] Droits d'administration fixes de l'AD** : L'AD possède en dur 6 droits fixes du module administration (`collaborateurs_voir`, `collaborateurs_gerer`, `roles_gerer`, `abonnement_voir`, `factures_voir`, `onboarding_suivre`). Les 2 droits `entreprise_modifier` et `abonnement_gerer` sont strictement réservés au DG.
+- **[B-06] Protection des comptes AD (HTTP 403)** : Un AD ne peut ni modifier le rôle, ni suspendre, ni réactiver, ni supprimer un autre compte AD ni son propre compte (`HTTP 403 Forbidden`). Seul le DG a autorité pour gérer, suspendre ou supprimer les administrateurs.
+- **[B-07] Protection des rôles système contre l'AD (HTTP 403)** : Toute modification d'un rôle système par un non-DG est rejetée avec `HTTP 403 Forbidden` (`code: "modification_role_systeme_interdite"`). Seul le DG peut adapter un rôle système (B-10).
+- **[B-08] Principe du moindre privilège / délégation (HTTP 403)** : Un AD ne peut créer ou modifier un rôle personnalisé qu'en attribuant des permissions faisant partie de ses propres permissions effectives (`code: "permission_hors_perimetre_ad"`).
+- **[B-09] Attribution de rôles aux collaborateurs (HTTP 403)** : Un AD ne peut pas attribuer les rôles `DG`, `AD` ou `DF`, ni aucun rôle octroyant des permissions hors de son propre périmètre d'habilitation (`HTTP 403 Forbidden`).
+- **[F-01] Garde unique sur l'administration des rôles (`administration.roles_gerer`) (HTTP 403)** : L'accès en lecture et en écriture sur `/roles/` et `/parametres/roles/` requiert la permission `administration.roles_gerer`. Les autres rôles sans ce droit reçoivent systématiquement un `HTTP 403 Forbidden`.
+
+### Évolution des contrats et du comportement de l'API
+- **[B-12] Gestion du cycle de vie des rôles personnalisés** : Support de `role_reassignation_id` lors de la suppression d'un rôle personnalisé pour réassigner de manière fluide les collaborateurs associés.
+- **[F-02] Parité et équivalence totale `/roles/` et `/parametres/roles/`** : Les deux familles d'endpoints offrent désormais la même signature, le même niveau de sécurité, les mêmes codes de réponse HTTP et la même structure de données.

@@ -192,6 +192,49 @@ def supprimer_entreprise_prod_vue(request):
         return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
 
 
+@csrf_exempt
+def activer_abonnement_prod_vue(request):
+    """Activation ou renouvellement souverain d'un abonnement entreprise en production."""
+    refus = _refuser_maintenance(request)
+    if refus is not None:
+        return refus
+
+    if request.method != "POST":
+        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    import json
+
+    try:
+        body = json.loads(request.body.decode("utf-8")) if request.body else {}
+    except Exception:
+        body = {}
+
+    identifiant = (
+        body.get("identifiant")
+        or body.get("schema_name")
+        or body.get("email")
+        or request.GET.get("identifiant")
+    )
+    if not identifiant:
+        return JsonResponse(
+            {"erreur": "Identifiant requis ('identifiant', 'schema_name' ou 'email')."},
+            status=400,
+        )
+
+    plan_code = body.get("plan_code") or request.GET.get("plan_code") or "MAITRE_OEUVRE"
+    duree_jours = int(body.get("duree_jours") or request.GET.get("duree_jours") or 365)
+
+    from apps.tenants.services.nettoyage import activer_ou_renouveler_abonnement
+
+    try:
+        rapport = activer_ou_renouveler_abonnement(identifiant, plan_code, duree_jours)
+        return JsonResponse({"statut": "succes", "rapport": rapport})
+    except ValueError as exc:
+        return JsonResponse({"statut": "erreur", "message": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+
+
 urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
     path("api/v1/maintenance/purger-zanf/", purger_zanf_vue, name="maintenance-purger-zanf"),
@@ -204,6 +247,11 @@ urlpatterns = [
         "api/v1/maintenance/entreprises/supprimer/",
         supprimer_entreprise_prod_vue,
         name="maintenance-supprimer-entreprise",
+    ),
+    path(
+        "api/v1/maintenance/abonnements/activer/",
+        activer_abonnement_prod_vue,
+        name="maintenance-activer-abonnement",
     ),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("api/health/", sante, name="sante-publique"),

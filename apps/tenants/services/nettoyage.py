@@ -302,3 +302,131 @@ def supprimer_entreprise_proprement(identifiant: str) -> dict[str, Any]:
         rapport["tables_nettoyees"],
     )
     return rapport
+
+
+def activer_ou_renouveler_abonnement(
+    identifiant: str,
+    plan_code: str = "MAITRE_OEUVRE",
+    duree_jours: int = 365,
+) -> dict[str, Any]:
+    """Active ou renouvelle un abonnement annuel ou personnalisé pour une entreprise dans le schéma public.
+
+    Identifiant accepté :
+    - schema_name (ex: 'e_3at_btp')
+    - UUID entreprise
+    - email du contact entreprise ou du directeur général
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.billing.models import Abonnement, Plan
+    from apps.core.enums import StatutEntreprise
+
+    ent = None
+    # 1. Tentative par UUID
+    try:
+        uuid_val = uuid.UUID(str(identifiant).strip())
+        ent = Entreprise.objects.filter(pk=uuid_val).first()
+    except (ValueError, AttributeError):
+        pass
+
+    # 2. Tentative par nom de schéma
+    if not ent:
+        ent = Entreprise.objects.filter(schema_name__iexact=str(identifiant).strip()).first()
+
+    # 3. Tentative par email entreprise
+    if not ent:
+        ent = Entreprise.objects.filter(email_contact__iexact=str(identifiant).strip()).first()
+
+    # 4. Tentative par email de demande d'inscription
+    if not ent:
+        demande = DemandeInscription.objects.filter(email__iexact=str(identifiant).strip()).first()
+        if demande and demande.entreprise:
+            ent = demande.entreprise
+
+    # 5. Tentative par recherche dans les utilisateurs des schémas
+    if not ent:
+        for candidate in Entreprise.objects.exclude(schema_name=settings.PUBLIC_SCHEMA_NAME):
+            try:
+                with schema_context(candidate.schema_name):
+                    if Utilisateur.objects.filter(email__iexact=str(identifiant).strip()).exists():
+                        ent = candidate
+                        break
+            except Exception:
+                continue
+
+    if not ent:
+        raise ValueError(f"Entreprise introuvable pour l'identifiant '{identifiant}'.")
+
+    # Recherche du plan
+    plan_obj = Plan.objects.filter(code=plan_code).first()
+    if not plan_obj:
+        plan_obj = Plan.objects.filter(code__iexact=plan_code).first()
+    if not plan_obj:
+        plan_obj = Plan.objects.filter(est_actif=True).first()
+    if not plan_obj:
+        raise ValueError(f"Plan '{plan_code}' introuvable.")
+
+    aujourdhui = timezone.localdate()
+    date_fin_calculee = aujourdhui + timedelta(days=int(duree_jours))
+
+    abonnement = ent.abonnements.first()
+    if abonnement:
+        abonnement.plan = plan_obj
+        abonnement.statut = Abonnement.Statut.ACTIF
+        abonnement.date_debut = aujourdhui
+        abonnement.date_fin = date_fin_calculee
+        abonnement.fin_essai = None
+        abonnement.lecture_seule_depuis = None
+        abonnement.renouvellement_auto = True
+        abonnement.save(
+            update_fields=[
+                "plan",
+                "statut",
+                "date_debut",
+                "date_fin",
+                "fin_essai",
+                "lecture_seule_depuis",
+                "renouvellement_auto",
+                "modifie_le",
+            ]
+        )
+    else:
+        abonnement = Abonnement.objects.create(
+            entreprise=ent,
+            plan=plan_obj,
+            date_debut=aujourdhui,
+            date_fin=date_fin_calculee,
+            fin_essai=None,
+            statut=Abonnement.Statut.ACTIF,
+            renouvellement_auto=True,
+        )
+
+    # Réactiver le statut de l'entreprise si nécessaire
+    ent.statut = StatutEntreprise.ACTIF
+    ent.save(update_fields=["statut"])
+
+    logger.info(
+        "Abonnement de l'entreprise %s activé avec succès : Plan %s, jusqu'au %s (%d jours)",
+        ent.schema_name,
+        plan_obj.code,
+        abonnement.date_fin,
+        duree_jours,
+    )
+
+    return {
+        "statut": "succes",
+        "entreprise_id": str(ent.id),
+        "schema_name": ent.schema_name,
+        "raison_sociale": ent.raison_sociale,
+        "email_contact": ent.email_contact,
+        "plan_code": plan_obj.code,
+        "plan_libelle": plan_obj.libelle,
+        "date_debut": str(abonnement.date_debut),
+        "date_fin": str(abonnement.date_fin),
+        "statut_abonnement": abonnement.statut,
+        "duree_jours": duree_jours,
+        "lecture_seule": False,
+    }
+

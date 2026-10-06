@@ -44,6 +44,8 @@ CHEMINS_OUVERTS = (
     "/api/v1/schema",
     "/api/v1/docs",
     "/api/v1/inscription",  # inscription publique d'une nouvelle entreprise
+    "/api/v1/cinetpay/",  # initier un paiement pour réactiver l'abonnement
+    "/api/v1/billing/",
 )
 
 

@@ -115,6 +115,9 @@ class LotActiviteListCreateView(APIView):
             pk=lot_id,
         )
         self.check_object_permissions(request, lot)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(lot.projet)
         if not lot.est_actif:
             from rest_framework.exceptions import ValidationError
 
@@ -159,6 +162,10 @@ class ActiviteDetailView(APIView):
         )
         activite = get_object_or_404(queryset, pk=pk)
         self.check_object_permissions(request, activite)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(activite.lot.projet)
         if verrou:
             # Sérialise aussi les dépendances entre lots : projet, lot, activité.
             get_object_or_404(Projet.objects.select_for_update(), pk=activite.lot.projet_id)

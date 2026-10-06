@@ -101,6 +101,9 @@ class ProjetLotListCreateView(APIView):
     def post(self, request, pk):
         projet = get_object_or_404(Projet.objects.select_for_update(), pk=pk)
         self.check_object_permissions(request, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
         serializer = LotCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lot = creer_lots(projet, [serializer.validated_data], request.user)[0]
@@ -144,6 +147,9 @@ class ProjetLotImportView(APIView):
     def post(self, request, pk):
         projet = get_object_or_404(Projet.objects.select_for_update(), pk=pk)
         self.check_object_permissions(request, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
         serializer = LotImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         donnees = lire_excel(serializer.validated_data["fichier"])
@@ -196,6 +202,10 @@ class LotDetailView(APIView):
         queryset = Lot.objects.select_related("projet").filter(projet__supprime_le__isnull=True)
         lot = get_object_or_404(queryset, pk=pk)
         self.check_object_permissions(request, lot)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(lot.projet)
         if verrou:
             get_object_or_404(Projet.objects.select_for_update(), pk=lot.projet_id)
             lot = get_object_or_404(queryset.select_for_update(of=("self",)), pk=pk)

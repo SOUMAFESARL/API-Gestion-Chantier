@@ -92,6 +92,17 @@ class BaseReprogrammerView(APIView):
 
     def executer_reprogrammation(self, request, instance, type_objet: str):
         self.check_object_permissions(request, instance)
+
+        projet = (
+            instance
+            if type_objet == TypeObjetHistorique.PROJET
+            else getattr(instance, "projet", getattr(getattr(instance, "lot", None), "projet", None))
+        )
+        if projet:
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(projet, action="REPROGRAMMATION")
+
         serializer = ReprogrammationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

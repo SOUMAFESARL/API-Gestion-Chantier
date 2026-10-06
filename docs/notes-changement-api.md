@@ -82,3 +82,23 @@
 - **[C-05 puce 2] Nouvelle route de collaborateurs affectables** : Endpoint `GET /api/v1/projets/{projet_id}/collaborateurs-affectables/` retournant la liste minimale (`id`, `nom`, `role`) des collaborateurs actifs éligibles (portée `PROJET`), sans informations personnelles (email, téléphone) ni rôles transverses `ENTREPRISE`.
 - **[C-05 puce 3] Masquage des données personnelles (PII)** : Dans `GET /api/v1/projets/{projet_id}/affectations/`, les champs `email` et `telephone` sont strictement omis pour les utilisateurs ne disposant pas des permissions `projets.affecter_membres` ou `projets.gerer_equipes` (VI, CC, DO).
 
+## Lot 6 : Statuts de projet, transitions et workflow chantier (E-08, E-09, E-10)
+
+### Nouveaux refus et validations (HTTP 403 / 409)
+- **[E-08] Suppression de l'exception historique "PATCH statut seul" (HTTP 403)** : L'ancienne exception qui permettait à tout utilisateur affecté disposant de la seule permission `projets.lire` de modifier le statut d'un projet a été définitivement supprimée.
+- **[E-08] Séparation des permissions de statut (HTTP 403)** :
+  - La modification vers un statut opérationnel (`EN_ATTENTE`, `EN_COURS`, `EN_RETARD`, `CRITIQUE`, `SUSPENDU`, `BLOQUE`, `RECEPTIONNE`, `TERMINE`) requiert la permission `projets.changer_statut` (détenue par DG, AD, DO, CP). Les rôles sans cette permission (CT, CC, VI, BAI) reçoivent `HTTP 403 Forbidden`.
+  - La modification vers un statut de fin de vie (`RESILIE`, `ARCHIVE`, `DESACTIVE`) ainsi que la réouverture/réactivation d'un chantier clos requiert la permission `projets.resilier_archiver` (réservée à DG, AD, DO). Le Chef de Projet (CP) reçoit `HTTP 403 Forbidden`.
+  - Les requêtes modifiant d'autres champs du projet en plus du statut exigent la permission `projets.ecrire`.
+- **[E-10] Verrouillage des écritures sur projets en fin de vie (HTTP 409)** :
+  - Lorsqu'un projet est au statut `RESILIE`, `ARCHIVE` ou `DESACTIVE`, il est verrouillé en lecture seule.
+  - Toute tentative d'écriture (création de rapport journalier, création/modification/suppression de lot, activité, équipe, affectation, reprogrammation, ou modification du projet hors réouverture) est rejetée avec `HTTP 409 Conflict` et le code d'erreur standard `projet_clos` (`{"detail": "...", "code": "projet_clos"}`).
+- **[E-10] Verrouillage des rapports et reprogrammations sur projets achevés (HTTP 409)** :
+  - Lorsqu'un projet est au statut `RECEPTIONNE` ou `TERMINE`, l'enregistrement de nouveaux rapports journaliers (`POST /api/v1/rapports/`) et les reprogrammations de calendrier (`POST /api/v1/projets/{id}/reprogrammer/`) sont rejetés avec `HTTP 409 Conflict` et le code d'erreur `projet_clos`. Les modifications de structure restent admises.
+- **[E-10] Priorité des gardes (Ordre d'évaluation)** : Les contrôles de permissions RBAC (`HTTP 403`) sont évalués en amont de l'état du chantier (`HTTP 409`). Un utilisateur sans permission reçoit 403 même sur un projet clos.
+
+### Évolution des contrats et du comportement de l'API
+- **[E-09] Protection du statut CRITIQUE** : Le statut `CRITIQUE` peut être positionné manuellement par un utilisateur habilité (`projets.changer_statut`) et n'est plus jamais écrasé par la tâche d'évaluation quotidienne (`executer_evaluation_quotidienne_schema`).
+- **[E-10] Maintien des écritures sur chantiers en arrêt** : Les statuts opérationnels d'arrêt (`SUSPENDU`, `BLOQUE`) maintiennent toutes les capacités d'écriture ouvertes (`HTTP 201 / 200`).
+
+

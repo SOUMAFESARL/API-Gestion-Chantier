@@ -178,6 +178,10 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
                         {"projet_id": "Vous n'êtes pas affecté à ce chantier."}
                     )
 
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet, action="NOUVEAU_RAPPORT")
+
         attrs["projet"] = projet
         attrs["lot"] = lot
         return attrs

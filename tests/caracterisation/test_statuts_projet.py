@@ -45,13 +45,13 @@ def test_statuts_projet_comportement_actuel_membre(schema_demo):
     # Sans affectation : refus 403
     assert visiteur_client.patch(url, {"statut": "SUSPENDU"}, format="json").status_code == 403
 
-    # Avec affectation membre : le code actuel accepte (200)
+    # Avec affectation membre : refusé 403 selon E-08 (suppression de l'exception historique)
     AffectationProjet.objects.create(
         utilisateur=visiteur,
         projet=projet,
         role_projet=RoleProjet.VISITEUR,
     )
     res = visiteur_client.patch(url, {"statut": "SUSPENDU"}, format="json")
-    assert res.status_code == 200
+    assert res.status_code == 403
     projet.refresh_from_db()
-    assert projet.statut == StatutProjet.SUSPENDU
+    assert projet.statut == StatutProjet.EN_ATTENTE

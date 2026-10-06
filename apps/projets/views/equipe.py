@@ -26,6 +26,10 @@ class BaseEquipeView(APIView):
         qs = Projet.objects.select_for_update() if verrou else Projet.objects.all()
         projet = get_object_or_404(qs, pk=pk)
         self.check_object_permissions(request, projet)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(projet)
         return projet
 
 

@@ -71,6 +71,9 @@ class ProjetAffectationListCreateView(APIView):
     def post(self, request, projet_id):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
 
         serializer = AffectationProjetCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -136,6 +139,9 @@ class ProjetAffectationDetailView(APIView):
     def patch(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
             AffectationProjet.objects.select_related("utilisateur"),
@@ -169,6 +175,9 @@ class ProjetAffectationDetailView(APIView):
     def delete(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
             AffectationProjet,

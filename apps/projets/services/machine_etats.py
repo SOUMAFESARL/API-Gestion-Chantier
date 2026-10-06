@@ -31,6 +31,9 @@ from apps.projets.models import Activite, Lot, Projet
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ProjetClosError",
+    "STATUTS_ACHEVES",
+    "STATUTS_FIN_DE_VIE",
     "STATUTS_PROJET_MANUELS_FIXES",
     "changer_statut_projet",
     "evaluer_statut_activite",
@@ -39,10 +42,47 @@ __all__ = [
     "executer_evaluation_quotidienne_schema",
     "retablir_statut_apres_decalage_si_necessaire",
     "valider_transition_reception",
+    "verifier_statut_projet_pour_ecriture",
 ]
+
+from rest_framework import status as http_status
+from rest_framework.exceptions import APIException
+
+
+class ProjetClosError(APIException):
+    status_code = http_status.HTTP_409_CONFLICT
+    default_detail = "Le projet est clos (résilié, archivé ou désactivé)."
+    default_code = "projet_clos"
+
+    def __init__(self, detail=None, code=None):
+        detail_msg = detail or self.default_detail
+        code_val = code or self.default_code
+        super().__init__(detail={"detail": detail_msg, "code": code_val})
+
+
+STATUTS_FIN_DE_VIE = frozenset(
+    {
+        StatutProjet.RESILIE,
+        StatutProjet.ARCHIVE,
+        StatutProjet.DESACTIVE,
+        "RESILIE",
+        "ARCHIVE",
+        "DESACTIVE",
+    }
+)
+
+STATUTS_ACHEVES = frozenset(
+    {
+        StatutProjet.RECEPTIONNE,
+        StatutProjet.TERMINE,
+        "RECEPTIONNE",
+        "TERMINE",
+    }
+)
 
 STATUTS_PROJET_MANUELS_FIXES = frozenset(
     {
+        StatutProjet.CRITIQUE,
         StatutProjet.SUSPENDU,
         StatutProjet.BLOQUE,
         StatutProjet.DESACTIVE,
@@ -52,6 +92,32 @@ STATUTS_PROJET_MANUELS_FIXES = frozenset(
         StatutProjet.TERMINE,
     }
 )
+
+
+def verifier_statut_projet_pour_ecriture(projet, action="ECRITURE"):
+    """Vérifie si l'état actuel du projet autorise l'écriture (Règle E-10).
+
+    Lève ProjetClosError (HTTP 409 Conflict, code='projet_clos') si l'écriture est refusée.
+    """
+    if not projet:
+        return
+    statut = getattr(projet, "statut", None)
+    if not statut:
+        return
+
+    # 1. Fin de vie : lecture seule absolue
+    if statut in STATUTS_FIN_DE_VIE:
+        raise ProjetClosError(
+            detail="Le projet est clos (résilié, archivé ou désactivé). Aucune écriture n'est autorisée.",
+            code="projet_clos",
+        )
+
+    # 2. Achèvement : interdiction des nouveaux rapports et des reprogrammations
+    if statut in STATUTS_ACHEVES and action in ("NOUVEAU_RAPPORT", "REPROGRAMMATION"):
+        raise ProjetClosError(
+            detail="Le projet est achevé (réceptionné ou terminé). Cette opération n'est plus autorisée.",
+            code="projet_clos",
+        )
 
 
 def evaluer_statut_activite(activite: Activite, date_reference: date | None = None) -> bool:

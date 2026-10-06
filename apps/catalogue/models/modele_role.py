@@ -38,6 +38,13 @@ class ModeleRole(ModeleBase):
         default=True,
         help_text=_("Indique si le modèle est disponible pour les nouvelles entreprises."),
     )
+    portee = models.CharField(
+        _("portée"),
+        max_length=20,
+        choices=[("ENTREPRISE", "Entreprise"), ("PROJET", "Projet")],
+        default="PROJET",
+        help_text=_("Portée par défaut : ENTREPRISE ou PROJET."),
+    )
 
     class Meta:
         db_table = "catalogue_modele_role"

@@ -109,18 +109,18 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
 
     role_global = models.CharField(
         _("rôle global"),
-        max_length=5,
-        choices=RoleGlobal.choices,
+        max_length=50,
         default=RoleGlobal.VISITEUR,
         db_index=True,
+        blank=True,
     )
-    role_personnalise = models.ForeignKey(
+    role = models.ForeignKey(
         "accounts.Role",
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name="utilisateurs",
-        verbose_name=_("rôle personnalisé"),
+        related_name="collaborateurs",
+        verbose_name=_("rôle"),
     )
     statut = models.CharField(
         _("statut"),
@@ -200,9 +200,31 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         """Date et heure de dernière connexion (alias lisible pour le frontend)."""
         return self.last_login
 
+    def get_role_global_display(self) -> str:
+        if self.role_id and self.role:
+            return self.role.libelle
+        from apps.accounts.models import Role
+        r = Role.objects.filter(code=self.role_global, supprime_le__isnull=True).first()
+        if r:
+            return r.libelle
+        return self.role_global or ""
+
     @property
     def is_dg(self) -> bool:
-        return self.role_global == RoleGlobal.DIRECTEUR_GENERAL or self.is_owner
+        from apps.core.droits import est_dg
+        return est_dg(self)
+
+    @property
+    def role_personnalise(self):
+        """Propriété de rétro-compatibilité renvoyant le rôle."""
+        return self.role
+
+    @role_personnalise.setter
+    def role_personnalise(self, value):
+        """Setter de rétro-compatibilité : affecte le rôle unique."""
+        self.role = value
+        if value and hasattr(value, "code"):
+            self.role_global = value.code
 
     @property
     def est_bloque(self) -> bool:
@@ -223,22 +245,22 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         super().clean()
         if self.pk:
             initial = Utilisateur.tous_objets.filter(pk=self.pk).first()
-            if initial and initial.is_owner:
-                from django.core.exceptions import ValidationError
-
-                if not self.is_owner:
-                    raise ValidationError(_("Le statut de Propriétaire est immuable."))
-                if self.statut == StatutUtilisateur.DESACTIVE:
-                    raise ValidationError(
-                        _("Le compte du Propriétaire ne peut pas être désactivé.")
-                    )
-                if self.role_global not in (RoleGlobal.DIRECTEUR_GENERAL, RoleGlobal.ADMIN):
-                    raise ValidationError(
-                        _("Le rôle du Propriétaire doit être Directeur Général ou Administrateur.")
-                    )
+            if initial:
+                from apps.core.droits import est_dg
+                if est_dg(initial):
+                    from django.core.exceptions import ValidationError
+                    if self.statut == StatutUtilisateur.DESACTIVE:
+                        raise ValidationError(
+                            _("Le compte du Directeur Général ne peut pas être désactivé.")
+                        )
+                    if not est_dg(self):
+                        raise ValidationError(
+                            _("Le rôle du Directeur Général ne peut pas être modifié.")
+                        )
 
     def delete(self, using=None, keep_parents=False, utilisateur=None):
-        if self.is_owner:
+        from apps.core.droits import est_dg
+        if est_dg(self):
             from django.core.exceptions import ValidationError
 
             raise ValidationError(
@@ -246,7 +268,40 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
             )
         super().delete(using=using, keep_parents=keep_parents, utilisateur=utilisateur)
 
+    @property
+    def role_personnalise(self):
+        if self.role_id and self.role and not self.role.est_systeme:
+            return self.role
+        return None
+
+    @role_personnalise.setter
+    def role_personnalise(self, val):
+        if val is not None:
+            self.role = val
+
+    @property
+    def role_personnalise_id(self):
+        if self.role_id and self.role and not self.role.est_systeme:
+            return self.role_id
+        return None
+
     def save(self, *args, **kwargs):
+        if self.role_id:
+            try:
+                if self.role and self.role.code:
+                    self.role_global = self.role.code
+            except Exception:
+                pass
+        elif getattr(self, "role_global", None):
+            try:
+                mapped = "BAI" if self.role_global == "MOA" else ("VI" if self.role_global == "MOE" else self.role_global)
+                from apps.accounts.models import Role
+                r = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
+                if r:
+                    self.role = r
+                    self.role_global = r.code
+            except Exception:
+                pass
         self.clean()
         super().save(*args, **kwargs)
 
@@ -286,7 +341,7 @@ class Invitation(ModeleBase):
 
     email = models.EmailField(_("email"), max_length=254)
     nom = models.CharField(_("nom"), max_length=100, blank=True, default="")
-    role_propose = models.CharField(_("rôle proposé"), max_length=5, choices=RoleGlobal.choices)
+    role_propose = models.CharField(_("rôle proposé"), max_length=50, blank=True)
     empreinte = models.CharField(_("empreinte"), max_length=64, unique=True, db_index=True)
     emetteur = models.ForeignKey(
         Utilisateur,
@@ -310,6 +365,13 @@ class Invitation(ModeleBase):
 
     def __str__(self) -> str:
         return f"{self.email} ({self.nom or 'sans nom'}) — {self.get_statut_display()}"
+
+    def get_role_propose_display(self) -> str:
+        from apps.accounts.models import Role
+        r = Role.objects.filter(code=self.role_propose, supprime_le__isnull=True).first()
+        if r:
+            return r.libelle
+        return self.role_propose or ""
 
     @property
     def est_expiree(self) -> bool:

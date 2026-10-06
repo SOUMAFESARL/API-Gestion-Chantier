@@ -127,6 +127,7 @@ class RoleSerializer(serializers.ModelSerializer):
             "description",
             "est_systeme",
             "est_actif",
+            "portee",
             "nb_utilisateurs",
             "modules",
             "permissions_modules",
@@ -222,6 +223,11 @@ class RoleCreationSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=50)
     libelle = serializers.CharField(max_length=100)
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    portee = serializers.ChoiceField(
+        choices=["ENTREPRISE", "PROJET"],
+        required=False,
+        default="PROJET",
+    )
     permissions_modules = serializers.JSONField(required=False, default=list)
     permissions = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
@@ -285,6 +291,11 @@ class RoleCreationSerializer(serializers.Serializer):
 class RoleModificationSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=100, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
+    portee = serializers.ChoiceField(
+        choices=["ENTREPRISE", "PROJET"],
+        required=False,
+    )
+    confirmer = serializers.BooleanField(required=False, default=False)
     permissions_modules = serializers.JSONField(required=False)
     permissions = serializers.ListField(
         child=serializers.CharField(), required=False

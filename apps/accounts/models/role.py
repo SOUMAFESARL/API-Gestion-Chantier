@@ -31,6 +31,13 @@ class Role(ModeleBase):
         help_text=_("Un rôle système ne peut pas être supprimé."),
     )
     est_actif = models.BooleanField(_("est actif"), default=True)
+    portee = models.CharField(
+        _("portée"),
+        max_length=20,
+        choices=[("ENTREPRISE", "Entreprise"), ("PROJET", "Projet")],
+        default="PROJET",
+        help_text=_("Portée d'intervention du rôle : ENTREPRISE (accès global) ou PROJET (accès par affectation)."),
+    )
 
     class Meta:
         db_table = "role"

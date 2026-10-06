@@ -13,9 +13,26 @@ from rest_framework import permissions
 from apps.core.enums import RoleGlobal
 from apps.core.registre_permissions import REGISTRE
 
-__all__ = ["APermission", "a_permission", "permissions_effectives"]
+__all__ = ["APermission", "a_permission", "permissions_effectives", "est_dg"]
 
 MODULES_SYSTEME = frozenset({"administration"})
+
+
+def est_dg(utilisateur) -> bool:
+    """Règle B-03 : Détermine de manière unique et souveraine si l'utilisateur est le DG."""
+    if not utilisateur or not getattr(utilisateur, "is_authenticated", False):
+        return False
+    if getattr(utilisateur, "is_owner", False):
+        return True
+    if getattr(utilisateur, "role_id", None) and getattr(utilisateur, "role", None):
+        if getattr(utilisateur.role, "code", "") == "DG":
+            return True
+    if getattr(utilisateur, "role_personnalise_id", None) and getattr(utilisateur, "role_personnalise", None):
+        if getattr(utilisateur.role_personnalise, "code", "") == "DG":
+            return True
+    if getattr(utilisateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG", "DIRECTEUR_GENERAL"):
+        return True
+    return False
 
 
 def _obtenir_modules_actifs(tenant=None) -> set[str]:
@@ -88,16 +105,7 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
     from apps.catalogue.models import CataloguePermission
 
     # 2. DG ou Propriétaire : toutes les permissions actives des modules actifs + administration
-    is_dg = bool(
-        getattr(collaborateur, "is_owner", False)
-        or getattr(collaborateur, "is_dg", False)
-        or getattr(collaborateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG", "DIRECTEUR_GENERAL")
-        or (
-            getattr(collaborateur, "role_personnalise", None)
-            and getattr(collaborateur.role_personnalise, "code", "") == "DG"
-        )
-    )
-    if is_dg:
+    if est_dg(collaborateur):
         perms_actives = set(
             CataloguePermission.objects.filter(
                 est_actif=True, supprime_le__isnull=True
@@ -152,6 +160,14 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
             role=role,
             supprime_le__isnull=True,
         ).select_related("module", "module_catalogue")
+
+        if not rmps.exists() and (getattr(role, "est_systeme", False) or getattr(role, "code", "") in {"DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"}):
+            from apps.accounts.services.roles import appliquer_modeles_roles
+            appliquer_modeles_roles()
+            rmps = RoleModulePermission.objects.filter(
+                role=role,
+                supprime_le__isnull=True,
+            ).select_related("module", "module_catalogue")
 
         for rmp in rmps:
             mod_code = None

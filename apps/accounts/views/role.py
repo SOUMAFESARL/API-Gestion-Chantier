@@ -92,6 +92,7 @@ class RoleListCreateView(APIView):
                 libelle=serializer.validated_data["libelle"],
                 description=serializer.validated_data.get("description", ""),
                 permissions_modules=serializer.validated_data.get("permissions_modules", {}),
+                portee=serializer.validated_data.get("portee", "PROJET"),
                 cree_par=request.user,
             )
         except DjangoValidationError as exc:
@@ -135,11 +136,48 @@ class RoleDetailUpdateView(APIView):
                         "message": "Le rôle Directeur Général est immuable et ne peut pas être modifié.",
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = RoleModificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        nouvelle_portee = serializer.validated_data.get("portee")
+        if nouvelle_portee is not None:
+            from apps.core.droits import est_dg
+            if not est_dg(request.user):
+                return Response(
+                    {"detail": _("Seul le Directeur Général peut modifier la portée d'un rôle.")},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+                return Response(
+                    {"detail": _("La portée du rôle Directeur Général ne peut pas être modifiée.")},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if nouvelle_portee != role.portee:
+                confirmer = serializer.validated_data.get("confirmer", False)
+                if not confirmer:
+                    from apps.accounts.models import Utilisateur
+                    from apps.core.enums import StatutUtilisateur
+                    personnes_touchees = Utilisateur.objects.filter(
+                        role=role,
+                        statut=StatutUtilisateur.ACTIF,
+                        supprime_le__isnull=True,
+                    ).count()
+                    return Response(
+                        {
+                            "code": "confirmation_requise",
+                            "personnes_touchees": personnes_touchees,
+                            "message": _("Confirmation requise pour le changement de portée."),
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if nouvelle_portee == "ENTREPRISE":
+                    from apps.accounts.models import Utilisateur
+                    from apps.projets.models import AffectationProjet
+                    users_with_role = Utilisateur.objects.filter(role=role, supprime_le__isnull=True)
+                    AffectationProjet.objects.filter(utilisateur__in=users_with_role, est_actif=True).update(est_actif=False)
 
         try:
             role_modifie = modifier_role(
@@ -147,6 +185,7 @@ class RoleDetailUpdateView(APIView):
                 libelle=serializer.validated_data.get("libelle"),
                 description=serializer.validated_data.get("description"),
                 permissions_modules=serializer.validated_data.get("permissions_modules"),
+                portee=nouvelle_portee,
                 modifie_par=request.user,
             )
         except DjangoValidationError as exc:
@@ -278,6 +317,7 @@ class ParametresRoleListCreateView(APIView):
                 libelle=serializer.validated_data["libelle"],
                 description=serializer.validated_data.get("description", ""),
                 permissions_modules=serializer.validated_data.get("permissions_modules", {}),
+                portee=serializer.validated_data.get("portee", "PROJET"),
                 cree_par=request.user,
             )
         except DjangoValidationError as exc:
@@ -321,11 +361,48 @@ class ParametresRoleDetailUpdateView(APIView):
                         "message": "Le rôle Directeur Général est immuable et ne peut pas être modifié.",
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = RoleModificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        nouvelle_portee = serializer.validated_data.get("portee")
+        if nouvelle_portee is not None:
+            from apps.core.droits import est_dg
+            if not est_dg(request.user):
+                return Response(
+                    {"detail": _("Seul le Directeur Général peut modifier la portée d'un rôle.")},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
+                return Response(
+                    {"detail": _("La portée du rôle Directeur Général ne peut pas être modifiée.")},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if nouvelle_portee != role.portee:
+                confirmer = serializer.validated_data.get("confirmer", False)
+                if not confirmer:
+                    from apps.accounts.models import Utilisateur
+                    from apps.core.enums import StatutUtilisateur
+                    personnes_touchees = Utilisateur.objects.filter(
+                        role=role,
+                        statut=StatutUtilisateur.ACTIF,
+                        supprime_le__isnull=True,
+                    ).count()
+                    return Response(
+                        {
+                            "code": "confirmation_requise",
+                            "personnes_touchees": personnes_touchees,
+                            "message": _("Confirmation requise pour le changement de portée."),
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if nouvelle_portee == "ENTREPRISE":
+                    from apps.accounts.models import Utilisateur
+                    from apps.projets.models import AffectationProjet
+                    users_with_role = Utilisateur.objects.filter(role=role, supprime_le__isnull=True)
+                    AffectationProjet.objects.filter(utilisateur__in=users_with_role, est_actif=True).update(est_actif=False)
 
         try:
             role_modifie = modifier_role(
@@ -333,6 +410,7 @@ class ParametresRoleDetailUpdateView(APIView):
                 libelle=serializer.validated_data.get("libelle"),
                 description=serializer.validated_data.get("description"),
                 permissions_modules=serializer.validated_data.get("permissions_modules"),
+                portee=nouvelle_portee,
                 modifie_par=request.user,
             )
         except DjangoValidationError as exc:

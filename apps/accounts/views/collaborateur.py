@@ -236,11 +236,11 @@ class ParametresCollaborateurListCreateView(APIView):
         nom = serializer.validated_data["nom"].strip()
         prenom = serializer.validated_data.get("prenom", "").strip()
         telephone = serializer.validated_data.get("telephone", "").strip()
-        role_global = serializer.validated_data["role_global"]
+        role_global = serializer.validated_data.get("role_global")
         role_personnalise_id = serializer.validated_data.get("role_personnalise_id")
 
         # Règle d'immutabilité absolue du DG : Unique au créateur du tenant
-        if role_global == RoleGlobal.DIRECTEUR_GENERAL:
+        if role_global in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
             return Response(
                 {
                     "erreur": {
@@ -248,38 +248,30 @@ class ParametresCollaborateurListCreateView(APIView):
                         "message": "Le rôle de Directeur Général est unique et immuable ; il ne peut pas être attribué.",
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        role_personnalise = None
+        role_cible = None
         if role_personnalise_id:
-            role_personnalise = Role.objects.filter(
+            role_cible = Role.objects.filter(
                 id=role_personnalise_id, supprime_le__isnull=True
             ).first()
-            if not role_personnalise:
+            if not role_cible:
                 raise ValidationError(
                     {"role_personnalise_id": _("Rôle personnalisé introuvable.")}
                 )
+        elif role_global:
+            mapped = "BAI" if role_global == "MOA" else ("VI" if role_global == "MOE" else role_global)
+            role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
 
         # Règle R-DEMO-01 : Seul le DG ou le Propriétaire peut inviter/créer un ADMIN
         est_creation_admin = (
-            role_global == RoleGlobal.ADMIN
-            or (role_personnalise and role_personnalise.code in (RoleGlobal.ADMIN, "AD"))
+            role_global in (RoleGlobal.ADMIN, "AD")
+            or (role_cible and role_cible.code in (RoleGlobal.ADMIN, "AD"))
         )
-        if est_creation_admin and not (
-            getattr(request.user, "is_dg", False) or getattr(request.user, "is_owner", False)
-        ):
+        from apps.core.droits import est_dg
+        if est_creation_admin and not est_dg(request.user):
             raise ActionInterditeDelegue()
-
-        role_personnalise = None
-        if role_personnalise_id:
-            role_personnalise = Role.objects.filter(
-                id=role_personnalise_id, supprime_le__isnull=True
-            ).first()
-            if not role_personnalise:
-                raise ValidationError(
-                    {"role_personnalise_id": _("Rôle personnalisé introuvable.")}
-                )
 
         # Vérifier si un collaborateur actif existe déjà
         existant = Utilisateur.objects.filter(email__iexact=email).first()
@@ -304,8 +296,8 @@ class ParametresCollaborateurListCreateView(APIView):
                 collaborateur.prenom = prenom
                 if telephone:
                     collaborateur.telephone = telephone
-                collaborateur.role_global = role_global
-                collaborateur.role_personnalise = role_personnalise
+                collaborateur.role = role_cible
+                collaborateur.role_global = role_cible.code if role_cible else (role_global or "VISITEUR")
                 collaborateur.statut = StatutUtilisateur.INVITE
                 collaborateur.save()
             else:
@@ -314,8 +306,8 @@ class ParametresCollaborateurListCreateView(APIView):
                     nom=nom,
                     prenom=prenom,
                     telephone=telephone,
-                    role_global=role_global,
-                    role_personnalise=role_personnalise,
+                    role=role_cible,
+                    role_global=role_cible.code if role_cible else (role_global or "VISITEUR"),
                     statut=StatutUtilisateur.INVITE,
                     is_active=True,
                 )
@@ -324,7 +316,7 @@ class ParametresCollaborateurListCreateView(APIView):
 
             invitation = creer_invitation(
                 email=email,
-                role_propose=role_global,
+                role_propose=role_cible.code if role_cible else (role_global or "VISITEUR"),
                 nom=f"{prenom} {nom}".strip(),
                 emetteur=request.user,
                 hote=request.get_host(),
@@ -483,12 +475,9 @@ class ParametresCollaborateurDetailView(APIView):
         role_instance = serializer.validated_data.get("role_instance")
         role_global = serializer.validated_data.get("role_global")
 
+        from apps.core.droits import est_dg
         # Règle d'immutabilité absolue du DG : Unique au créateur du tenant
-        if (
-            getattr(collaborateur, "is_owner", False)
-            or getattr(collaborateur, "is_dg", False)
-            or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
-        ):
+        if est_dg(collaborateur):
             if role_global or role_instance:
                 return Response(
                     {
@@ -497,18 +486,15 @@ class ParametresCollaborateurDetailView(APIView):
                             "message": "Le rôle du Directeur Général / Propriétaire est immuable.",
                         }
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
         # Règle R-DEMO-01 : Seul le DG ou Propriétaire peut attribuer le rôle ADMIN
         est_attribution_admin = (
-            role_global == RoleGlobal.ADMIN
+            role_global in (RoleGlobal.ADMIN, "AD")
             or (role_instance and role_instance.code in (RoleGlobal.ADMIN, "AD"))
         )
-        if est_attribution_admin and not (
-            getattr(request.user, "is_dg", False)
-            or getattr(request.user, "is_owner", False)
-        ):
+        if est_attribution_admin and not est_dg(request.user):
             raise ActionInterditeDelegue()
 
         try:
@@ -579,11 +565,8 @@ class ParametresCollaborateurDetailView(APIView):
             supprime_le__isnull=True,
         )
 
-        if (
-            getattr(collaborateur, "is_owner", False)
-            or getattr(collaborateur, "is_dg", False)
-            or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
-        ):
+        from apps.core.droits import est_dg
+        if est_dg(collaborateur):
             return Response(
                 {
                     "erreur": {
@@ -591,7 +574,7 @@ class ParametresCollaborateurDetailView(APIView):
                         "message": "Le Directeur Général / Propriétaire ne peut pas être désactivé ni supprimé.",
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         try:
@@ -626,19 +609,16 @@ class ParametresCollaborateurSuspendreView(APIView):
             supprime_le__isnull=True,
         )
 
+        from apps.core.droits import est_dg
+        if est_dg(collaborateur):
+            return Response(
+                {"detail": _("Le compte du Directeur Général / Propriétaire ne peut pas être suspendu.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if collaborateur.pk == request.user.pk:
             return Response(
                 {"detail": _("Vous ne pouvez pas suspendre votre propre compte.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if (
-            getattr(collaborateur, "is_owner", False)
-            or getattr(collaborateur, "is_dg", False)
-            or getattr(collaborateur, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
-        ):
-            return Response(
-                {"detail": _("Le compte du Directeur Général / Propriétaire ne peut pas être suspendu.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

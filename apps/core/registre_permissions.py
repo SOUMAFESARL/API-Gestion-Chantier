@@ -25,7 +25,6 @@ REGISTRE: dict[str, DefPermission] = {
         DefPermission("projets.affecter_membres", "projets", 2, "Affecter des membres aux projets"),
         DefPermission("projets.gerer_equipes", "projets", 2, "Gérer les équipes de chantier"),
         DefPermission("projets.voir_montants", "projets", 3, "Voir les montants financiers du projet"),
-        DefPermission("projets.voir_tous", "projets", 3, "Voir tous les projets de l'entreprise"),
         DefPermission("chantier.lire", "chantier", 1, "Consulter les rapports"),
         DefPermission("chantier.rediger", "chantier", 2, "Rédiger et soumettre un rapport"),
         DefPermission("chantier.valider", "chantier", 3, "Valider / rejeter un rapport"),

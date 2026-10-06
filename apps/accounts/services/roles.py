@@ -9,6 +9,7 @@ Gère :
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -63,10 +64,8 @@ ROLES_SYSTEME_INFOS = {
 }
 
 
-# Seul le Directeur Général est un rôle système
-# immuable (non supprimable). Les autres rôles par défaut (AD, CP, CT, CC,
-# MOA, MOE, VI) sont pré-configurés mais restent supprimables par le DG.
-CODES_ROLES_SYSTEME = frozenset({RoleGlobal.DIRECTEUR_GENERAL})
+# Les 10 rôles système souverains (B-02)
+CODES_ROLES_SYSTEME = frozenset({"DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"})
 
 
 def initialiser_modules_par_defaut() -> list[Module]:
@@ -267,6 +266,7 @@ def appliquer_modeles_roles() -> list[Role]:
                         "libelle": modele.libelle,
                         "description": modele.description,
                         "est_systeme": r_code in CODES_ROLES_SYSTEME,
+                        "portee": getattr(modele, "portee", "PROJET"),
                         "est_actif": True,
                     },
                 )
@@ -329,6 +329,7 @@ def appliquer_modeles_roles() -> list[Role]:
                         "libelle": libelle,
                         "description": description,
                         "est_systeme": r_code in CODES_ROLES_SYSTEME,
+                        "portee": "ENTREPRISE" if r_code in {"DG", "AD", "DO"} else "PROJET",
                         "est_actif": True,
                     },
                 )
@@ -382,6 +383,7 @@ def creer_role(
     libelle: str,
     description: str = "",
     permissions_modules=None,
+    portee: str = "PROJET",
     cree_par=None,
 ) -> Role:
     """Crée un nouveau rôle personnalisé obligatoirement lié à TOUS les modules actifs."""
@@ -404,6 +406,7 @@ def creer_role(
             code=code,
             libelle=libelle.strip(),
             description=description.strip(),
+            portee=portee,
             est_systeme=False,
             est_actif=True,
             cree_par=cree_par,
@@ -458,6 +461,7 @@ def modifier_role(
     libelle: str | None = None,
     description: str | None = None,
     permissions_modules=None,
+    portee: str | None = None,
     modifie_par=None,
 ) -> Role:
     """Modifie un rôle existant et met à jour sa matrice de permissions."""
@@ -466,6 +470,8 @@ def modifier_role(
             role.libelle = libelle.strip()
         if description is not None:
             role.description = description.strip()
+        if portee is not None:
+            role.portee = portee
         role.save()
 
         modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
@@ -525,17 +531,13 @@ def modifier_role(
 
 def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
     """Compte le nombre d'utilisateurs actifs et d'affectations actives portant ce rôle."""
-    # Nombre d'utilisateurs actifs ayant ce rôle comme rôle personnalisé ou rôle global
     nb_utilisateurs = (
-        Utilisateur.objects.filter(role_personnalise=role, supprime_le__isnull=True)
-        .exclude(statut=StatutUtilisateur.DESACTIVE)
-        .count()
-        + Utilisateur.objects.filter(
-            role_global=role.code,
-            role_personnalise__isnull=True,
+        Utilisateur.objects.filter(
+            Q(role=role) | Q(role_global=role.code),
             supprime_le__isnull=True,
         )
         .exclude(statut=StatutUtilisateur.DESACTIVE)
+        .distinct()
         .count()
     )
 
@@ -620,23 +622,21 @@ def supprimer_role(
             # Option B : Désactivation logique des collaborateurs portant ce rôle
             users_to_deactivate = list(
                 Utilisateur.objects.filter(
-                    Q(role_personnalise=role)
-                    | (Q(role_global=role.code) & Q(role_personnalise__isnull=True))
+                    Q(role=role) | Q(role_global=role.code)
                 )
                 .filter(supprime_le__isnull=True)
                 .exclude(statut=StatutUtilisateur.DESACTIVE)
+                .distinct()
             )
 
             for collab in users_to_deactivate:
+                from apps.core.droits import est_dg
                 # Garde-fou souverain : on ne désactive JAMAIS le propriétaire racine ni le DG ni l'auteur lui-même
                 if (
                     getattr(collab, "is_owner", False)
-                    or getattr(collab, "role_global", None) == RoleGlobal.DIRECTEUR_GENERAL
+                    or est_dg(collab)
                     or (supprime_par and collab.pk == supprime_par.pk)
                 ):
-                    if collab.role_personnalise_id == role.id:
-                        collab.role_personnalise = None
-                        collab.save(update_fields=["role_personnalise", "modifie_le"])
                     continue
 
                 desactiver_collaborateur_plateforme(
@@ -665,16 +665,12 @@ def supprimer_role(
 
         elif reassigner_vers_role:
             # Option A : Réassignation des utilisateurs et affectations
-            qs_users = Utilisateur.objects.filter(role_personnalise=role)
-            utilisateurs_reassignes = qs_users.update(role_personnalise=reassigner_vers_role)
-
-            qs_global = Utilisateur.objects.filter(
-                role_global=role.code, role_personnalise__isnull=True
-            )
-            if reassigner_vers_role.code in RoleGlobal.values:
-                qs_global.update(role_global=reassigner_vers_role.code)
-            else:
-                qs_global.update(role_personnalise=reassigner_vers_role)
+            qs_users = Utilisateur.objects.filter(Q(role=role) | Q(role_global=role.code))
+            for u in qs_users:
+                u.role = reassigner_vers_role
+                u.role_global = reassigner_vers_role.code
+                u.save(update_fields=["role", "role_global", "modifie_le"])
+                utilisateurs_reassignes += 1
 
             from apps.projets.models import AffectationProjet
 
@@ -727,21 +723,22 @@ def rattacher_collaborateur_a_role(
     - Seul le DG ou un Admin peut conférer le rôle ADMIN.
     """
     from django.core.exceptions import ValidationError
+    from apps.core.droits import est_dg
     from apps.core.enums import RoleGlobal, StatutUtilisateur
 
-    # Règle 1 : Immutabilité du compte Propriétaire
-    if collaborateur.is_owner:
+    # Règle 1 : Immutabilité du compte Propriétaire / DG
+    if est_dg(collaborateur):
         raise ValidationError(
-            _("Le rôle et le statut du Propriétaire / Fondateur sont immuables.")
+            _("Le rôle et le statut du Directeur Général / Propriétaire sont immuables.")
         )
 
     # Règle 2 : Interdiction d'attribuer le rôle DG
-    if role_global == RoleGlobal.DIRECTEUR_GENERAL:
+    if role_global in (RoleGlobal.DIRECTEUR_GENERAL, "DG") or (role and role.code == "DG"):
         raise ValidationError(
             _("Le rôle de Directeur Général est unique et ne peut pas être attribué.")
         )
 
-    # Règle 3 : Validation de l'existence et de l'état du rôle personnalisé
+    # Règle 3 : Validation de l'existence et de l'état du rôle
     if role is not None:
         if role.supprime_le is not None or not role.est_actif:
             raise ValidationError(
@@ -752,16 +749,23 @@ def rattacher_collaborateur_a_role(
         champs_a_mettre_a_jour = ["modifie_le"]
 
         if role is not None:
-            collaborateur.role_personnalise = role
-            champs_a_mettre_a_jour.append("role_personnalise")
-
-            # Si le code du rôle personnalisé correspond à un rôle global connu, synchroniser
-            if role.code in RoleGlobal.values:
-                collaborateur.role_global = role.code
+            collaborateur.role = role
+            collaborateur.role_global = role.code
+            if "role" not in champs_a_mettre_a_jour:
+                champs_a_mettre_a_jour.append("role")
+            if "role_global" not in champs_a_mettre_a_jour:
                 champs_a_mettre_a_jour.append("role_global")
 
-        if role_global is not None and role_global in RoleGlobal.values:
-            collaborateur.role_global = role_global
+        if role_global is not None:
+            mapped = "BAI" if role_global == "MOA" else ("VI" if role_global == "MOE" else role_global)
+            r = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
+            if r:
+                collaborateur.role = r
+                collaborateur.role_global = r.code
+                if "role" not in champs_a_mettre_a_jour:
+                    champs_a_mettre_a_jour.append("role")
+            else:
+                collaborateur.role_global = mapped
             if "role_global" not in champs_a_mettre_a_jour:
                 champs_a_mettre_a_jour.append("role_global")
 
@@ -778,9 +782,7 @@ def rattacher_collaborateur_a_role(
                 utilisateur_id=modifie_par.id if modifie_par else None,
                 valeur_apres={
                     "role_global": collaborateur.role_global,
-                    "role_personnalise_id": str(collaborateur.role_personnalise_id)
-                    if collaborateur.role_personnalise_id
-                    else None,
+                    "role_id": str(collaborateur.role_id) if collaborateur.role_id else None,
                 },
             )
         except Exception:

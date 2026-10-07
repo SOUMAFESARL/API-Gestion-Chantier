@@ -52,10 +52,16 @@ class PlansCatalogueView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+from apps.core.droits import APermission
+
+
 class InitierPaiementView(APIView):
     """`POST /api/v1/billing/cinetpay/initier/` — Démarre une session de paiement CinetPay."""
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        APermission.pour("administration.abonnement_gerer"),
+    ]
 
     @extend_schema(
         summary="Initier un paiement d'abonnement CinetPay",
@@ -122,7 +128,10 @@ class InitierPaiementView(APIView):
 class AnnulerPaiementView(APIView):
     """`POST /api/v1/billing/cinetpay/annuler/` — Abandon explicite d'une tentative en cours (Option A2)."""
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        APermission.pour("administration.abonnement_gerer"),
+    ]
 
     @extend_schema(
         summary="Annuler explicitement une session de paiement CinetPay en cours",
@@ -245,7 +254,10 @@ class StatutPaiementView(APIView):
     Consultation de l'état d'un paiement pour le retour frontend.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        APermission.pour("administration.abonnement_gerer"),
+    ]
 
     @extend_schema(
         summary="Consulter le statut d'un paiement CinetPay",
@@ -319,7 +331,10 @@ class AnnulerPaiementView(APIView):
     souhaite changer de forfait ou de moyen de paiement).
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        APermission.pour("administration.abonnement_gerer"),
+    ]
     serializer_class = AnnulerPaiementRequestSerializer
 
     @extend_schema(

@@ -87,6 +87,10 @@ class ModuleListView(APIView):
                     .order_by("ordre", "code")
                 )
 
+        from apps.core.droits import permissions_effectives
+
+        perms_utilisateur = permissions_effectives(request.user, request=request)
+
         modules = []
         for m in modules_qs:
             perms_qs = m.permissions.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
@@ -100,7 +104,11 @@ class ModuleListView(APIView):
                     "ordre": p.ordre,
                 }
                 for p in perms_qs
+                if p.code in perms_utilisateur
             ]
+
+            if not perms_data:
+                continue
 
             # Accès par défaut normalisés pour le frontend Next.js
             perms_codes_set = {p["code"] for p in perms_data}

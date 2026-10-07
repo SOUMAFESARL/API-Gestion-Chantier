@@ -34,6 +34,8 @@ CHAMPS_FORMULAIRE = (
     "budget_initial_montant",
     "description",
     "contrat",
+    "chef_projet_id",
+    "conducteur_travaux_id",
 )
 CHAMPS_REPONSE = (
     "id",
@@ -41,6 +43,7 @@ CHAMPS_REPONSE = (
     "avancement_reel",
     "indice_sante",
     "statistiques",
+    "sans_chef_projet",
 )
 
 
@@ -125,6 +128,12 @@ class ProjetPostSerializer(ProjetCreationSerializer):
 
     def to_internal_value(self, data):
         if hasattr(data, "keys"):
+            if "chef_projet" in data and "chef_projet_id" not in data:
+                data = dict(data)
+                data["chef_projet_id"] = data.pop("chef_projet")
+            if "conducteur_travaux" in data and "conducteur_travaux_id" not in data:
+                data = dict(data)
+                data["conducteur_travaux_id"] = data.pop("conducteur_travaux")
             errors = dict.fromkeys(
                 data.keys() - self.fields.keys(), "Ce champ n'est pas accepte dans le formulaire."
             )

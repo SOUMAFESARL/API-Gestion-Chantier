@@ -73,22 +73,16 @@ class ParametresCollaborateurListCreateView(APIView):
     def get(self, request):
         from apps.core.droits import a_permission
 
-        peut_voir_tout = (
-            a_permission(request.user, "administration.collaborateurs_voir", request=request)
-            or a_permission(request.user, "projets.voir_tous", request=request)
-        )
-        projets_visibles_ids = None
-        if not peut_voir_tout:
-            from apps.core.permissions import obtenir_projets_ids_actifs_utilisateur
+        if not a_permission(request.user, "administration.collaborateurs_voir", request=request):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(_("Vos habilitations ne vous permettent pas d'effectuer cette action."))
 
-            projets_visibles_ids = set(
-                str(pid) for pid in obtenir_projets_ids_actifs_utilisateur(request.user, request=request)
-            )
+        projets_visibles_ids = None
 
         # 1. Tous les utilisateurs du tenant
         utilisateurs = list(
             Utilisateur.objects.filter(supprime_le__isnull=True)
-            .select_related("role_personnalise")
+            .select_related("role")
             .order_by("-is_owner", "nom", "prenom")
         )
 
@@ -289,14 +283,30 @@ class ParametresCollaborateurListCreateView(APIView):
                 )
 
 
-        # Vérifier si un collaborateur actif existe déjà
-        existant = Utilisateur.objects.filter(email__iexact=email).first()
-        if existant and existant.statut == StatutUtilisateur.ACTIF:
+        email_clean = email.strip().lower()
+
+        # Règle C-03 & L8-1 : Vérification globale dans le Registre Global
+        from django_tenants.utils import schema_context
+        from apps.tenants.models import Entreprise, RegistreEmail
+
+        email_pris = False
+        with schema_context("public"):
+            email_pris = RegistreEmail.objects.filter(email=email_clean).exists()
+
+        existant = Utilisateur.objects.filter(
+            email__iexact=email_clean,
+            supprime_le__isnull=True,
+        ).first()
+
+        if not email_pris and existant and existant.statut == StatutUtilisateur.ACTIF:
+            email_pris = True
+
+        if email_pris:
             return Response(
                 {
                     "erreur": {
                         "code": "email_deja_utilise",
-                        "message": "Un collaborateur actif avec cette adresse email existe déjà.",
+                        "message": "Cette adresse email est déjà utilisée.",
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -318,7 +328,7 @@ class ParametresCollaborateurListCreateView(APIView):
                 collaborateur.save()
             else:
                 collaborateur = Utilisateur(
-                    email=email,
+                    email=email_clean,
                     nom=nom,
                     prenom=prenom,
                     telephone=telephone,
@@ -331,12 +341,21 @@ class ParametresCollaborateurListCreateView(APIView):
                 collaborateur.save()
 
             invitation = creer_invitation(
-                email=email,
+                email=email_clean,
                 role_propose=role_cible.code if role_cible else (role_global or "VISITEUR"),
                 nom=f"{prenom} {nom}".strip(),
                 emetteur=request.user,
                 hote=request.get_host(),
+                verifier_quota=False,
             )
+
+            with schema_context("public"):
+                entreprise_obj = Entreprise.objects.filter(schema_name=request.tenant.schema_name).first()
+                if entreprise_obj:
+                    RegistreEmail.objects.get_or_create(
+                        email=email_clean,
+                        defaults={"entreprise": entreprise_obj},
+                    )
 
         jeton = getattr(invitation, "jeton_clair", None)
         lien_activation = f"/invitation#jeton={jeton}" if jeton else None

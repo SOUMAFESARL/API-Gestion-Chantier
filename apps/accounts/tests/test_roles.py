@@ -260,16 +260,16 @@ def test_permission_module_enforcement():
     from rest_framework.response import Response
     from rest_framework.views import APIView
 
-    from apps.core.permissions import PermissionModule
+    from apps.core.droits import APermission
 
     class VueChantierEcriture(APIView):
-        permission_classes = [PermissionModule.pour(ModuleChoix.CHANTIER, NiveauAcces.ECRITURE)]
+        permission_classes = [APermission.pour("chantier.rediger")]
 
         def post(self, request):
             return Response({"autorise": True})
 
     class VueTiersValidation(APIView):
-        permission_classes = [PermissionModule.pour(ModuleChoix.TIERS, NiveauAcces.VALIDATION)]
+        permission_classes = [APermission.pour("tiers.ecrire")]
 
         def post(self, request):
             return Response({"autorise": True})

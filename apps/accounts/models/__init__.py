@@ -96,6 +96,7 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
     """
 
     email = models.EmailField(_("email"), max_length=254)
+    email_origine = models.EmailField(_("email d'origine"), max_length=254, null=True, blank=True)
     nom = models.CharField(_("nom"), max_length=100)
     prenom = models.CharField(_("prénom"), max_length=100, blank=True)
     telephone = models.CharField(_("téléphone"), max_length=20, blank=True)
@@ -304,6 +305,29 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
                 pass
         self.clean()
         super().save(*args, **kwargs)
+
+        # Règle C-03 (Q4) : Alimentation du registre global dans le schéma public
+        if self.email and not self.email.endswith("@depart.invalide"):
+            from django.db import connection
+            from django_tenants.utils import get_public_schema_name, schema_context
+            schema_actuel = getattr(connection, "schema_name", "public")
+            public_name = get_public_schema_name()
+            if schema_actuel != public_name:
+                try:
+                    with schema_context(public_name):
+                        from apps.tenants.models import Entreprise, RegistreEmail
+                        ent = Entreprise.objects.filter(schema_name=schema_actuel).first()
+                        if ent:
+                            clean_mail = self.email.strip().lower()
+                            reg, created = RegistreEmail.objects.get_or_create(
+                                email=clean_mail,
+                                defaults={"entreprise": ent},
+                            )
+                            if reg.entreprise_id != ent.pk:
+                                reg.entreprise = ent
+                                reg.save(update_fields=["entreprise"])
+                except Exception:
+                    pass
 
     def enregistrer_echec_connexion(self) -> None:
         """Socle Commun §2.1 — blocage après 5 échecs consécutifs.

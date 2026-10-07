@@ -170,6 +170,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             "date_fin_reelle",
             "chef_projet",
             "conducteur_travaux",
+            "sans_chef_projet",
             "statut",
             "avancement_reel",
             "avancement_theorique",

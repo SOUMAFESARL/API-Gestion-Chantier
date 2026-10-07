@@ -26,7 +26,6 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.core.enums import RoleGlobal
-from apps.core.permissions import RoleRequis
 from apps.tenants.models import DUREE_LIEN_ACTIVATION, DemandeInscription
 from apps.tenants.serializers import (
     AccuseActivationSerializer,
@@ -371,7 +370,8 @@ class EntrepriseView(APIView):
 
     def get_permissions(self):
         if self.request.method in ("POST", "PATCH", "PUT"):
-            return [RoleRequis.pour(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)()]
+            from apps.core.droits import APermission
+            return [IsAuthenticated(), APermission.pour("administration.entreprise_modifier")()]
         return [IsAuthenticated()]
 
     @extend_schema(
@@ -414,7 +414,8 @@ class ConfigurationEntrepriseView(APIView):
 
     def get_permissions(self):
         if self.request.method in ("POST", "PATCH", "PUT"):
-            return [RoleRequis.pour(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)()]
+            from apps.core.droits import APermission
+            return [IsAuthenticated(), APermission.pour("administration.entreprise_modifier")()]
         return [IsAuthenticated()]
 
     @extend_schema(

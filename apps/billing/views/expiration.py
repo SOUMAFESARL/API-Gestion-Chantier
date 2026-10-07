@@ -8,12 +8,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.billing.serializers.expiration import NotificationExpirationSerializer
-from apps.billing.services.expiration import ROLES_FACTURATION, notifications_expiration
-from apps.core.permissions import RoleRequis
+from apps.billing.services.expiration import notifications_expiration
+from apps.core.droits import APermission
 
 
 class NotificationsExpirationView(APIView):
-    permission_classes = [IsAuthenticated, RoleRequis.pour(*ROLES_FACTURATION)]
+    permission_classes = [IsAuthenticated, APermission.pour("administration.factures_voir")]
 
     @extend_schema(
         tags=["Notifications d'abonnement"],

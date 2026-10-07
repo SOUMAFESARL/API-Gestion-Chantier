@@ -64,4 +64,16 @@ class AbonnementView(APIView):
                 )
 
             serializer = AbonnementSerializer(abonnement)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            data = serializer.data
+
+            from apps.core.droits import a_permission
+            if not a_permission(request.user, "administration.abonnement_voir", request=request):
+                return Response(
+                    {
+                        "jours_essai_restants": data.get("jours_essai_restants"),
+                        "est_expire": data.get("est_expire"),
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            return Response(data, status=status.HTTP_200_OK)

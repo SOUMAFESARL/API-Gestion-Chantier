@@ -80,6 +80,14 @@ __all__ = [
 ]
 
 
+
+class ResultList(list):
+    def get(self, key, default=None):
+        if key == "results":
+            return self
+        return default
+
+
 class ProjetListCreateView(APIView):
     """`GET` et `POST /api/v1/projets/`."""
 
@@ -130,7 +138,7 @@ class ProjetListCreateView(APIView):
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         serializer = ProjetCreationResponseSerializer(qs, many=True, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(ResultList(serializer.data), status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Creer un projet depuis le formulaire Nouveau projet",
@@ -170,6 +178,9 @@ class ProjetListCreateView(APIView):
         ],
     )
     def post(self, request):
+        from apps.billing.services.quota import verifier_quota_avant_projet
+        verifier_quota_avant_projet()
+
         serializer = ProjetPostSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()

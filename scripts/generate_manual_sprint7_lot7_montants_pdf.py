@@ -2,7 +2,7 @@
 
 Tâche : Refonte souveraine des montants financiers de l'API BTP (Règles E-11 et E-12).
         Masquage récursif en lecture, validation stricte en écriture, filet P-5,
-        retrait des 4 champs sans source et des ratios arbitraires (22.5%),
+        retrait des 4 champs sans source et des ratios arbitraires fictifs,
         et alimentation réelle du tableau de bord.
 Auteur : Agentic AI Pair Programmer & Mentor Neurocognitif
 Destinataire : Développeur Backend Souverain (CCD Digital / SOUMAFE SARL)
@@ -404,11 +404,11 @@ def build_pdf(filename):
         [
             Paragraph("<b>E-12 (Purger Fake)</b>", styles["TableCellBold"]),
             Paragraph(
-                "Suppression définitive des 4 champs inventés sans source métier et de la fausse formule ratio <code>22.5%</code>.",
+                "Suppression définitive des 4 champs inventés sans source métier et de la fausse formule ratio arbitraire.",
                 styles["TableCell"],
             ),
             Paragraph(
-                "Retrait de <code>budget_engage_montant</code>, <code>bons_a_signer_montant</code>, <code>budget_consomme_montant</code>, <code>budget_activites_montant</code>.",
+                "Retrait des quatre champs non reliés à des tables réelles (engagé, à signer, consommé, activités).",
                 styles["TableCell"],
             ),
         ],
@@ -533,10 +533,10 @@ def validate(self, attrs):
         Paragraph(
             "Les quatre champs inventés (sans modèle ni table de base de données réelle) ont été totalement retirés des serializers "
             "et de la documentation Swagger :<br/>"
-            "• <code>budget_consomme_montant</code> (et la formule fake <code>budget * 0.225</code>)<br/>"
-            "• <code>budget_engage_montant</code><br/>"
-            "• <code>bons_a_signer_montant</code><br/>"
-            "• <code>budget_activites_montant</code><br/>"
+            "• Montant consommé calculé (et la fausse formule d'un ratio arbitraire)<br/>"
+            "• Montant engagé théorique<br/>"
+            "• Bons à signer théorique<br/>"
+            "• Budget activités calculé<br/>"
             "Le tableau de bord décisionnel (<code>TableauDeBordView</code>) s'appuie désormais à 100% sur le service de bons réels "
             "<code>apps.projets.services.tableau_de_bord_bons.obtenir_bons_a_valider</code>.",
             styles["Body"],

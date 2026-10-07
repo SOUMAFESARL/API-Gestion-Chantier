@@ -88,6 +88,7 @@ class Projet(ModeleBase):
         related_name="projets_chantiers",
         verbose_name=_("conducteur de travaux"),
     )
+    sans_chef_projet = models.BooleanField(_("sans chef de projet"), default=False)
 
     statut = models.CharField(
         _("statut"),
@@ -155,6 +156,8 @@ class Projet(ModeleBase):
 
     def save(self, *args, **kwargs):
         """Initialise la Baseline v0 à la première sauvegarde si non définie."""
+        if self.chef_projet_id is not None or self.chef_projet is not None:
+            self.sans_chef_projet = False
         if self.date_debut_baseline is None and self.date_debut_prevue:
             self.date_debut_baseline = self.date_debut_prevue
         if self.date_fin_baseline is None and self.date_fin_prevue:

@@ -13,8 +13,8 @@ from rest_framework.response import Response
 from apps.billing.models import Facture
 from apps.billing.serializers.facture import FactureSerializer
 from apps.billing.services.facture import generer_pdf_facture
+from apps.core.droits import APermission
 from apps.core.enums import RoleGlobal
-from apps.core.permissions import RoleRequis
 
 ERREURS_FACTURE = {
     401: OpenApiResponse(description="Jeton JWT absent ou invalide."),
@@ -45,10 +45,7 @@ class FactureBaseView(GenericAPIView):
     filter_backends = []
     permission_classes = [
         IsAuthenticated,
-        RoleRequis.pour(
-            RoleGlobal.ADMIN,
-            RoleGlobal.DIRECTEUR_GENERAL,
-        ),
+        APermission.pour("administration.factures_voir"),
     ]
 
     def get_queryset(self):

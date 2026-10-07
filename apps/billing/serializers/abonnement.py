@@ -48,7 +48,15 @@ class AbonnementSerializer(serializers.ModelSerializer):
         ]
 
     def get_est_expire(self, obj: Abonnement) -> bool:
-        """Indique si la période d'essai est échue."""
+        """Indique si l'abonnement est expiré ou suspendu."""
+        if obj.statut in (
+            Abonnement.Statut.SUSPENDU,
+            Abonnement.Statut.RESILIE,
+            Abonnement.Statut.IMPAYE,
+        ):
+            return True
+        if obj.lecture_seule_depuis is not None:
+            return True
         if obj.statut == Abonnement.Statut.ESSAI:
             restants = obj.jours_essai_restants
             return restants is not None and restants <= 0

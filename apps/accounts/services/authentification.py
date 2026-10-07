@@ -34,7 +34,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import Utilisateur
 from apps.core.enums import StatutEntreprise, StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
-from apps.tenants.models import Entreprise
+from apps.tenants.models import RegistreEmail
 
 __all__ = [
     "IdentifiantsInvalides",
@@ -97,40 +97,39 @@ def authentifier(email: str, mot_de_passe: str) -> Utilisateur:
     schema_courant = getattr(connection, "schema_name", "public")
     public_schema = get_public_schema_name()
 
-    # Si la requête arrive sur le schéma public, vérifier d'abord dans public (personnel éditeur),
-    # puis parcourir les entreprises clientes actives si absent.
+    # C-03 : Résolution directe via le registre global RegistreEmail (schéma public) sans boucle
+    ligne_registre = None
+    with schema_context(public_schema):
+        ligne_registre = (
+            RegistreEmail.objects.filter(email__iexact=email)
+            .select_related("entreprise")
+            .first()
+        )
+
     if schema_courant == public_schema:
         candidat_public = Utilisateur.objects.filter(email__iexact=email).first()
         if candidat_public is None:
-            entreprise_trouvee = None
-            entreprises = Entreprise.objects.exclude(schema_name=public_schema).filter(
-                models.Q(statut=StatutEntreprise.ACTIF) | models.Q(statut=StatutEntreprise.ESSAI)
-            )
-            for entreprise in entreprises:
-                with schema_context(entreprise.schema_name):
-                    if Utilisateur.objects.filter(email__iexact=email).exists():
-                        entreprise_trouvee = entreprise
-                        break
-            if entreprise_trouvee is not None:
-                connection.set_tenant(entreprise_trouvee)
+            if ligne_registre is not None:
+                connection.set_tenant(ligne_registre.entreprise)
+            else:
+                echec = IdentifiantsInvalides()
+    else:
+        # Sur un schéma tenant : l'utilisateur doit impérativement figurer dans le registre global
+        if ligne_registre is None or ligne_registre.entreprise.schema_name != schema_courant:
+            echec = IdentifiantsInvalides()
+
+    if echec is not None:
+        Utilisateur().set_password(mot_de_passe)
+        raise echec
 
     with transaction.atomic():
         utilisateur = Utilisateur.objects.select_for_update().filter(email__iexact=email).first()
 
         if utilisateur is None:
-            # R-02 — égalité temporelle. Le compte n'existe pas, mais on hache
-            # quand même : sans cela la réponse revient en une milliseconde au
-            # lieu de cent, et le chronomètre suffit à énumérer les adresses.
             Utilisateur().set_password(mot_de_passe)
             echec = IdentifiantsInvalides()
 
         else:
-            # R-02, suite. La vérification est faite **avant** de regarder
-            # l'état du compte, et sur tous les chemins : bloqué, désactivé et
-            # jamais activé sortaient auparavant sans hachage, ce qui les
-            # distinguait au temps de réponse alors que le corps était
-            # identique. Une réponse identique qui arrive plus vite n'est pas
-            # une réponse identique.
             mot_de_passe_exact = utilisateur.check_password(mot_de_passe)
 
             refuse = (
@@ -245,7 +244,7 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
     }
     tenant = getattr(connection, "tenant", None)
     if tenant and getattr(tenant, "schema_name", "") != get_public_schema_name():
-        entreprise = tenant if hasattr(tenant, "pk") else Entreprise.objects.filter(schema_name=tenant.schema_name).first()
+        entreprise = tenant if hasattr(tenant, "pk") else None
         if entreprise:
             profil["entreprise"] = {
                 "id": str(entreprise.pk),

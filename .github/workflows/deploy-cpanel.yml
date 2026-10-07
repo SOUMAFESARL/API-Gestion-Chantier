@@ -62,6 +62,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Récupérer les tags git
+        run: git fetch --tags --force
 
       - name: Installer Python
         uses: actions/setup-python@v6

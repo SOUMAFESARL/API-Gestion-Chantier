@@ -142,6 +142,14 @@ jobs:
             **/*.xlsx
             **/.kilo/**
 
+      - name: Déclencher les migrations et la synchronisation des registres (API)
+        shell: bash
+        run: |
+          sleep 5
+          curl -k -s -X POST "https://api-chantier.soumafe.com/api/v1/maintenance/migrer-bd/" \
+            -H "Content-Type: application/json" \
+            -H "X-Maintenance-Token: ccd-migration-prod-2026-secure-token" || true
+
       - name: Appliquer les migrations Django (SSH)
         if: ${{ vars.CPANEL_PROJECT_DIR != '' }}
         uses: appleboy/ssh-action@v1
@@ -211,8 +219,12 @@ jobs:
             "$VENV_PYTHON" manage.py provisionner_inscriptions 2>&1 || true
 
             echo ""
+            echo "=== Synchronisation du registre global des emails ==="
+            "$VENV_PYTHON" manage.py remplir_registre_global 2>&1 || true
+
+            echo ""
             echo "=== Synchronisation du catalogue des permissions ==="
-            "$VENV_PYTHON" manage.py synchroniser_catalogue 2>&1 || true
+            "$VENV_PYTHON" manage.py synchroniser_catalogue_permissions 2>&1 || true
 
             echo ""
             echo "=== Propagation des rôles système multi-tenant ==="

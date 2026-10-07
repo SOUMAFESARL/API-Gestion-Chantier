@@ -201,6 +201,10 @@ DatabaseFeatures.minimum_database_version = (13,)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Photos compressées et documents embarqués du journal (5 + 3 fichiers de 2 Mio).
+# L'API journal contrôle aussi les nombres, types et tailles de chaque fichier.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 24 * 1024 * 1024
+
 
 # --------------------------------------------------------------------------
 # Authentification

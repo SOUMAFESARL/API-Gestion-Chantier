@@ -44,7 +44,7 @@ def _refuser_maintenance(request):
 
 @csrf_exempt
 def migrer_bd_vue(request):
-    """Exécute les migrations sans passer par cPanel SSH."""
+    """Exécute les migrations et l'initialisation souveraine des registres sans passer par cPanel SSH."""
     refus = _refuser_maintenance(request)
     if refus is not None:
         return refus
@@ -55,6 +55,9 @@ def migrer_bd_vue(request):
     out = StringIO()
     try:
         call_command("migrate_schemas", interactive=False, stdout=out)
+        call_command("remplir_registre_global", stdout=out)
+        call_command("synchroniser_catalogue_permissions", stdout=out)
+        call_command("propager_roles_systeme", stdout=out)
         return JsonResponse({"statut": "succes", "output": out.getvalue()})
     except Exception as exc:
         return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)

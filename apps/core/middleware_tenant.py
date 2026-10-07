@@ -26,15 +26,27 @@ logger = logging.getLogger(__name__)
 class TenantResolutionMiddleware(TenantMainMiddleware):
     """Résout le tenant et active le bon schéma PostgreSQL."""
 
+    @classmethod
+    def setup_url_routing(cls, request, force_public=False):
+        """Configure explicitement request.urlconf et set_urlconf pour éviter toute pollution entre threads."""
+        from django.urls import set_urlconf
+        public_schema_name = get_public_schema_name()
+        tenant = getattr(request, "tenant", None)
+        if force_public or not tenant or tenant.schema_name == public_schema_name:
+            urlconf = getattr(settings, "PUBLIC_SCHEMA_URLCONF", "config.urls_public")
+        else:
+            urlconf = getattr(settings, "ROOT_URLCONF", "config.urls_tenant")
+        request.urlconf = urlconf
+        set_urlconf(urlconf)
+
     def process_request(self, request):
         connection.set_schema_to_public()
         tenant_model = get_tenant_model()
         public_schema_name = get_public_schema_name()
 
-        # 0. Routes strictement publiques de la plateforme (inscription, santé, documentation).
-        # Elles doivent TOUJOURS s'exécuter sur le schéma public et charger PUBLIC_SCHEMA_URLCONF,
-        # même si l'appelant a un jeton Bearer ou un sous-domaine de tenant résiduel.
-        if request.path.startswith(("/api/v1/inscription", "/api/health", "/api/v1/docs", "/api/v1/schema")):
+        # 0. Routes strictement publiques de la plateforme (inscription, documentation).
+        # Elles doivent TOUJOURS s'exécuter sur le schéma public et charger PUBLIC_SCHEMA_URLCONF.
+        if request.path.startswith(("/api/v1/inscription", "/api/v1/docs", "/api/v1/schema")):
             try:
                 public_tenant = tenant_model.objects.get(schema_name=public_schema_name)
                 request.tenant = public_tenant

@@ -33,6 +33,12 @@ def _auto_migrate():
             call_command("provisionner_inscriptions")
         except Exception as exc_prov:
             logger.error("Erreur lors du provisionnement automatique Passenger : %s", exc_prov)
+        try:
+            call_command("remplir_registre_global")
+            call_command("synchroniser_catalogue_permissions")
+            call_command("propager_roles_systeme")
+        except Exception as exc_sync:
+            logger.error("Erreur lors de la synchronisation registre/catalogue Passenger : %s", exc_sync)
 
         if lock_file:
             try:

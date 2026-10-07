@@ -1,0 +1,2 @@
+# Les offsets internes des PDF exigent de conserver exactement leurs octets.
+*.pdf binary

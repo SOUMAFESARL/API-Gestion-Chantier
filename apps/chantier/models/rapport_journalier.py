@@ -113,12 +113,12 @@ class RapportJournalier(ModeleBase):
         constraints = [
             models.UniqueConstraint(
                 fields=["lot", "date_rapport"],
-                condition=models.Q(lot__isnull=False),
+                condition=models.Q(lot__isnull=False, supprime_le__isnull=True),
                 name="uq_rapport_lot_date",
             ),
             models.UniqueConstraint(
                 fields=["projet", "date_rapport"],
-                condition=models.Q(lot__isnull=True),
+                condition=models.Q(lot__isnull=True, supprime_le__isnull=True),
                 name="uq_rapport_projet_date",
             ),
         ]

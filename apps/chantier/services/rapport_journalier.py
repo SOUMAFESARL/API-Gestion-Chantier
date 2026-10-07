@@ -28,6 +28,16 @@ __all__ = [
 ]
 
 
+def _verifier_route_historique(rapport):
+    """Les rapports du nouveau journal passent par son circuit CC/CT/CP."""
+    from apps.chantier.models import JournalChantier
+
+    if JournalChantier.objects.filter(rapport_id=rapport.pk).exists():
+        raise RapportNonModifiable(
+            "Utilisez les routes /api/v1/chantier/rapports/ pour ce journal."
+        )
+
+
 @transaction.atomic
 def creer_rapport_journalier(
     *,
@@ -107,6 +117,7 @@ def modifier_rapport_journalier(
     **champs,
 ) -> RapportJournalier:
     """Met à jour partiellement ou totalement un rapport de chantier."""
+    _verifier_route_historique(rapport)
     # Règle US-042 / MLD §6.7 : un rapport approuvé ne peut plus être modifié
     if rapport.statut == StatutRapport.APPROUVE:
         raise RapportNonModifiable()
@@ -166,6 +177,7 @@ def soumettre_rapport_journalier(
     utilisateur: Utilisateur,
 ) -> RapportJournalier:
     """Passe un rapport du statut BROUILLON ou REJETE à SOUMIS."""
+    _verifier_route_historique(rapport)
     if rapport.statut == StatutRapport.APPROUVE:
         raise RapportNonModifiable("Un rapport déjà approuvé ne peut plus être re-soumis.")
 
@@ -194,6 +206,7 @@ def valider_rapport_journalier(
     commentaire: str = "",
 ) -> RapportJournalier:
     """Valide et approuve le rapport journalier (action Conducteur de Travaux)."""
+    _verifier_route_historique(rapport)
     rapport.statut = StatutRapport.APPROUVE
     rapport.valide_par = utilisateur
     rapport.valide_le = timezone.now()
@@ -218,6 +231,7 @@ def rejeter_rapport_journalier(
     motif: str,
 ) -> RapportJournalier:
     """Rejette le rapport journalier avec motif obligatoire >= 20 caractères."""
+    _verifier_route_historique(rapport)
     if rapport.statut == StatutRapport.APPROUVE:
         raise RapportNonModifiable("Un rapport déjà approuvé ne peut plus être rejeté.")
 

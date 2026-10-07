@@ -587,7 +587,16 @@ def provisionner(identifiant) -> None:
         # tard. La branche existait au parcours et n'avait aucun code : le
         # client apprenait l'adresse de son espace par l'écran, et l'oubliait
         # en fermant l'onglet.
-        _envoyer_espace_pret(entreprise, demande.email, fin_essai)
+        try:
+            _envoyer_espace_pret(entreprise, demande.email, fin_essai)
+        except Exception:
+            # L'espace est déjà prêt : un incident SMTP ne doit pas annuler
+            # l'activation ni empêcher le suivi de renvoyer PRET.
+            logger.exception(
+                "Email espace prêt non envoyé — demande %s, entreprise %s",
+                identifiant,
+                entreprise.pk,
+            )
 
     except Exception:
         logger.exception("Provisionnement en échec — demande %s", identifiant)

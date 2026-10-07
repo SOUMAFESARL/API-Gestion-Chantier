@@ -4,14 +4,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Projet
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.statistiques import statistiques_lots
 
 
 class ProjetStatistiquesView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     @extend_schema(
         tags=["activités"],
@@ -37,7 +37,6 @@ class ProjetStatistiquesView(APIView):
                     "avancement_pondere": 12.5,
                     "ponderation": "BUDGET",
                     "activites_en_retard": 1,
-                    "budget_activites_montant": 40000,
                 },
             )
         ],
@@ -46,4 +45,10 @@ class ProjetStatistiquesView(APIView):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
         lots = projet.lots.prefetch_related("activites")
-        return Response(statistiques_lots(lots))
+        data = statistiques_lots(lots)
+        from apps.core.droits import peut_voir_montants
+        from apps.core.purger_montants import purger_montants_recursif
+
+        if not peut_voir_montants(request.user, request):
+            data = purger_montants_recursif(data)
+        return Response(data)

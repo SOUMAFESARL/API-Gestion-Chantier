@@ -1,5 +1,7 @@
+"""Tests des modèles de rôles du catalogue (Règle A-12 : plus de plafond)."""
+
 import pytest
-from apps.catalogue.models import ModeleRole, ModeleRoleModule
+from apps.catalogue.models import ModeleRole
 
 
 @pytest.mark.django_db
@@ -10,36 +12,35 @@ def test_10_modeles_roles_presents():
 
 
 @pytest.mark.django_db
-def test_plafonds_dg_et_ad():
+def test_modules_dg_et_ad():
+    """[A-12] Vérifie les modules associés aux modèles de rôles DG et AD."""
     dg = ModeleRole.objects.get(code="DG")
-    plafonds_dg = {mrm.module_code: mrm.niveau_max for mrm in dg.modules_plafonds.all()}
-    assert plafonds_dg.get("projets") == 3
-    assert plafonds_dg.get("chantier") == 3
-    assert plafonds_dg.get("administration") == 3
+    modules_dg = {mrm.module_code for mrm in dg.modules_plafonds.all()}
+    assert "projets" in modules_dg
+    assert "chantier" in modules_dg
+    assert "administration" in modules_dg
 
     ad = ModeleRole.objects.get(code="AD")
-    plafonds_ad = {mrm.module_code: mrm.niveau_max for mrm in ad.modules_plafonds.all()}
-    assert plafonds_ad.get("projets") == 3
-    assert plafonds_ad.get("chantier") == 3
-    assert plafonds_ad.get("tiers") == 2
-    assert plafonds_ad.get("pilotage") == 2
-    assert plafonds_ad.get("administration") == 2
+    modules_ad = {mrm.module_code for mrm in ad.modules_plafonds.all()}
+    assert "projets" in modules_ad
+    assert "chantier" in modules_ad
+    assert "tiers" in modules_ad
+    assert "pilotage" in modules_ad
+    assert "administration" in modules_ad
 
 
 @pytest.mark.django_db
-def test_plafonds_ct_et_magasinier():
+def test_modules_ct_et_magasinier():
+    """[A-12] Vérifie les modules associés aux modèles de rôles CT et MAG."""
     ct = ModeleRole.objects.get(code="CT")
-    plafonds_ct = {mrm.module_code: mrm.niveau_max for mrm in ct.modules_plafonds.all()}
-    assert plafonds_ct.get("projets") == 2
-    assert plafonds_ct.get("chantier") == 3
-    assert plafonds_ct.get("administration") == 0
+    modules_ct = {mrm.module_code for mrm in ct.modules_plafonds.all()}
+    assert "projets" in modules_ct
+    assert "chantier" in modules_ct
 
     mag = ModeleRole.objects.get(code="MAG")
-    plafonds_mag = {mrm.module_code: mrm.niveau_max for mrm in mag.modules_plafonds.all()}
-    assert plafonds_mag.get("projets") == 0
-    assert plafonds_mag.get("chantier") == 1
-    assert plafonds_mag.get("tiers") == 2
-    assert plafonds_mag.get("administration") == 0
+    modules_mag = {mrm.module_code for mrm in mag.modules_plafonds.all()}
+    assert "chantier" in modules_mag
+    assert "tiers" in modules_mag
 
 
 @pytest.mark.django_db

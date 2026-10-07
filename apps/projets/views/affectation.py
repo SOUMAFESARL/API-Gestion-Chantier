@@ -1,18 +1,18 @@
-"""Vues API pour la gestion de l'équipe de chantier / affectations (US-04)."""
+"""Vues API pour la gestion de l'équipe de chantier / affectations (US-04 / E-05 / C-05)."""
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework import serializers, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import RoleGlobal, RoleProjet
-from apps.core.permissions import MembreDuProjet
+from apps.accounts.models import Utilisateur
+from apps.core.enums import StatutUtilisateur
+from apps.core.permissions import GardePermissionProjet, obtenir_portee_role
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.serializers.affectation import (
     AffectationProjetCreateSerializer,
@@ -26,40 +26,28 @@ from apps.projets.services.affectations import (
     revoquer_affectation_projet,
 )
 
-__all__ = ["ProjetAffectationDetailView", "ProjetAffectationListCreateView"]
-
-
-def _verifier_droits_gestion_equipe(user, projet: Projet):
-    """Autorise l'administrateur, le DG ou le Chef de Projet assigné à ce chantier."""
-    if not user or not user.is_authenticated:
-        raise PermissionDenied(_("Authentification requise."))
-
-    est_admin = (
-        getattr(user, "is_owner", False)
-        or getattr(user, "is_dg", False)
-        or getattr(user, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-        or getattr(user, "is_superuser", False)
-    )
-    est_cp_du_projet = (
-        projet.chef_projet_id == user.id
-        or AffectationProjet.objects.filter(
-            projet=projet,
-            utilisateur=user,
-            role_projet=RoleProjet.CHEF_PROJET,
-            est_actif=True,
-            supprime_le__isnull=True,
-        ).exists()
-    )
-
-    if not (est_admin or est_cp_du_projet):
-        raise PermissionDenied(_("Seul le Chef de Projet assigné ou la Direction peut gérer l'équipe du chantier."))
+__all__ = [
+    "CollaborateursAffectablesView",
+    "ProjetAffectationDetailView",
+    "ProjetAffectationListCreateView",
+]
 
 
 class ProjetAffectationListCreateView(APIView):
     """`GET` et `POST /api/v1/projets/{projet_id}/affectations/`."""
 
-    permission_classes = [IsAuthenticated, MembreDuProjet]
     parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [
+                IsAuthenticated(),
+                GardePermissionProjet.pour("projets.affecter_membres")(),
+            ]
+        return [
+            IsAuthenticated(),
+            GardePermissionProjet.pour("projets.lire")(),
+        ]
 
     @extend_schema(
         summary="Lister les membres de l'équipe du chantier",
@@ -71,7 +59,7 @@ class ProjetAffectationListCreateView(APIView):
         self.check_object_permissions(request, projet)
         actifs_seulement = request.query_params.get("actifs_seulement", "false").lower() == "true"
         qs = lister_affectations_projet(projet, actifs_seulement=actifs_seulement)
-        serializer = AffectationProjetResponseSerializer(qs, many=True)
+        serializer = AffectationProjetResponseSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -83,9 +71,11 @@ class ProjetAffectationListCreateView(APIView):
     def post(self, request, projet_id):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
-        _verifier_droits_gestion_equipe(request.user, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 
-        serializer = AffectationProjetCreateSerializer(data=request.data)
+        verifier_statut_projet_pour_ecriture(projet)
+
+        serializer = AffectationProjetCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         try:
@@ -95,21 +85,33 @@ class ProjetAffectationListCreateView(APIView):
                 role_projet=serializer.validated_data["role_projet"],
                 date_debut=serializer.validated_data.get("date_debut"),
                 date_fin=serializer.validated_data.get("date_fin"),
-                role_personnalise=serializer.validated_data.get("role_instance"),
                 modifie_par=request.user,
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        return Response(AffectationProjetResponseSerializer(affectation).data, status=status.HTTP_201_CREATED)
+        return Response(
+            AffectationProjetResponseSerializer(affectation, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProjetAffectationDetailView(APIView):
     """`GET`, `PATCH` et `DELETE /api/v1/projets/{projet_id}/affectations/{pk}/`."""
 
-    permission_classes = [IsAuthenticated, MembreDuProjet]
     parser_classes = [JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in ("PATCH", "PUT", "DELETE"):
+            return [
+                IsAuthenticated(),
+                GardePermissionProjet.pour("projets.affecter_membres")(),
+            ]
+        return [
+            IsAuthenticated(),
+            GardePermissionProjet.pour("projets.lire")(),
+        ]
 
     @extend_schema(
         summary="Détail d'une affectation de chantier",
@@ -119,12 +121,15 @@ class ProjetAffectationDetailView(APIView):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur", "role"),
+            AffectationProjet.objects.select_related("utilisateur"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
         )
-        return Response(AffectationProjetResponseSerializer(affectation).data, status=status.HTTP_200_OK)
+        return Response(
+            AffectationProjetResponseSerializer(affectation, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary="Modifier une affectation ou désactiver un collaborateur",
@@ -134,10 +139,12 @@ class ProjetAffectationDetailView(APIView):
     def patch(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
-        _verifier_droits_gestion_equipe(request.user, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur", "role"),
+            AffectationProjet.objects.select_related("utilisateur"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
@@ -156,7 +163,10 @@ class ProjetAffectationDetailView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        return Response(AffectationProjetResponseSerializer(affectation).data, status=status.HTTP_200_OK)
+        return Response(
+            AffectationProjetResponseSerializer(affectation, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary="Révoquer ou supprimer une affectation de chantier",
@@ -165,7 +175,9 @@ class ProjetAffectationDetailView(APIView):
     def delete(self, request, projet_id, pk):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
-        _verifier_droits_gestion_equipe(request.user, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
             AffectationProjet,
@@ -187,3 +199,53 @@ class ProjetAffectationDetailView(APIView):
             raise ValidationError({"detail": msg}) from exc
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CollaborateursAffectablesView(APIView):
+    """`GET /api/v1/projets/{projet_id}/collaborateurs-affectables/` (L5-1 / C-05 puce 2)."""
+
+    permission_classes = [
+        IsAuthenticated,
+        GardePermissionProjet.pour("projets.affecter_membres"),
+    ]
+
+    @extend_schema(
+        summary="Liste réduite des collaborateurs affectables au chantier",
+        description=(
+            "Retourne la liste des collaborateurs actifs dont le rôle est à portée PROJET. "
+            "Champs limités à id, nom, role. Exclut toute information personnelle (email, téléphone) "
+            "et les rôles de portée ENTREPRISE (DG, AD, DO)."
+        ),
+        responses={200: serializers.ListSerializer(child=serializers.DictField())},
+    )
+    def get(self, request, projet_id):
+        projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
+
+        candidats = (
+            Utilisateur.objects.filter(
+                is_active=True,
+                statut=StatutUtilisateur.ACTIF,
+                supprime_le__isnull=True,
+            )
+            .select_related("role")
+            .order_by("nom", "prenom")
+        )
+
+        resultats = []
+        for u in candidats:
+            portee = obtenir_portee_role(u)
+            if portee == "ENTREPRISE":
+                continue
+
+            role_libelle = u.role.libelle if u.role else (u.role_global or "")
+            nom_complet = f"{u.prenom} {u.nom}".strip() or u.nom
+            resultats.append(
+                {
+                    "id": u.id,
+                    "nom": nom_complet,
+                    "role": role_libelle,
+                }
+            )
+
+        return Response(resultats, status=status.HTTP_200_OK)

@@ -18,14 +18,44 @@ from apps.core.enums import RoleGlobal
 
 __all__ = [
     "EstDirection",
+    "GardePermissionProjet",
+    "GardeProjet",
     "LectureSeule",
     "MembreDuProjet",
     "PermissionModule",
     "RoleRequis",
     "ScopedProjetQuerySetMixin",
     "filtrer_queryset_par_affectations",
+    "obtenir_portee_role",
     "obtenir_projets_ids_actifs_utilisateur",
 ]
+
+
+def obtenir_portee_role(user) -> str:
+    """Règle B-11 & D-01 : Lit la portée effective du rôle à chaque requête."""
+    if not user or not user.is_authenticated:
+        return "PROJET"
+    from apps.core.droits import est_dg
+    if user.is_superuser or est_dg(user):
+        return "ENTREPRISE"
+
+    from django.apps import apps as registre
+    try:
+        Role = registre.get_model("accounts", "Role")
+    except LookupError:
+        return "PROJET"
+
+    role = None
+    if getattr(user, "role_id", None):
+        role = Role.objects.filter(pk=user.role_id, supprime_le__isnull=True).first()
+    if not role:
+        role = getattr(user, "role", None)
+    if not role and getattr(user, "role_global", None):
+        role = Role.objects.filter(code=user.role_global, supprime_le__isnull=True).first()
+
+    if role:
+        return getattr(role, "portee", "PROJET") or "PROJET"
+    return "PROJET"
 
 
 def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
@@ -44,44 +74,168 @@ def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
     except LookupError:
         return []
 
-    # 1. Projets issus d'affectations actives
-    projets_ids = set(
+    # 1. Projets issus d'affectations actives exclusivement (Règles D-01, D-08, E-05)
+    projets_ids = list(
         AffectationProjet.objects.filter(
             utilisateur=user, est_actif=True, supprime_le__isnull=True
         ).values_list("projet_id", flat=True)
     )
 
-    # 2. Projets où l'utilisateur est désigné comme chef de projet ou conducteur de travaux direct
-    projets_geres = set(
-        Projet.objects.filter(
-            Q(chef_projet=user) | Q(conducteur_travaux=user),
-            supprime_le__isnull=True,
-        ).values_list("id", flat=True)
-    )
-
-    projets_ids = list(projets_ids.union(projets_geres))
     if request:
         request._rbac_projets_ids_actifs = projets_ids
     return projets_ids
 
 
 def filtrer_queryset_par_affectations(qs, user, champ_projet="id", request=None):
-    """Restreint un QuerySet aux seuls chantiers où l'utilisateur est affecté.
-
-    Pour ceux qui ont 'projets.voir_tous' (DG, Superuser, Administrateur) : vision consolidée sans restriction.
-    Pour les collaborateurs opérationnels : vision bornée aux chantiers affectés.
+    """Règle D-01 & D-06 :
+    Restreint un QuerySet aux seuls chantiers où l'utilisateur a accès :
+    - Portée ENTREPRISE (ou Superuser / DG) : vision consolidée sans restriction (tous projets, futurs compris).
+    - Portée PROJET : vision bornée aux chantiers affectés activement. Sans affectation : rien.
     """
     if not user or not user.is_authenticated:
         return qs.none()
 
-    from apps.core.droits import a_permission
+    from apps.core.droits import est_dg
+    if user.is_superuser or est_dg(user):
+        return qs
 
-    if a_permission(user, "projets.voir_tous", request=request):
+    if obtenir_portee_role(user) == "ENTREPRISE":
         return qs
 
     projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
     filtre = {f"{champ_projet}__in": projets_ids}
     return qs.filter(**filtre)
+
+
+class GardePermissionProjet(permissions.BasePermission):
+    """Garde unique du module Projets et objets rattachés (Règle D-08).
+
+    Une action est autorisée SSI :
+    1. Le code de permission requis est détenu par l'utilisateur (ex: 'projets.lire', 'projets.ecrire').
+    2. ET (le rôle de l'utilisateur a la portée ENTREPRISE OU l'utilisateur a une affectation ACTIVE au projet).
+
+    Usage :
+        permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+    """
+
+    code_permission: str | None = None
+    message = "Vous n'avez pas les droits nécessaires pour cette action."
+
+    @classmethod
+    def pour(cls, code_permission: str):
+        nom_classe = f"GardeProjet_{code_permission.replace('.', '_')}"
+        return type(nom_classe, (cls,), {"code_permission": code_permission})
+
+    def has_permission(self, request, view) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        from apps.core.droits import a_permission, est_dg
+
+        perm = getattr(self, "code_permission", None) or getattr(view, "permission_requise", None)
+        if not perm:
+            if request.method in permissions.SAFE_METHODS:
+                perm = "projets.lire"
+            else:
+                perm = "projets.ecrire"
+
+        if not a_permission(user, perm, request=request):
+            return False
+
+        if user.is_superuser or est_dg(user):
+            return True
+
+        if obtenir_portee_role(user) == "ENTREPRISE":
+            return True
+
+        # Résolution de projet_id depuis l'URL si applicable
+        projet_id = view.kwargs.get("projet_id") or view.kwargs.get("projet_pk")
+        if not projet_id and "pk" in view.kwargs:
+            view_name = view.__class__.__name__
+            if not request.path.startswith("/api/v1/lots/") and not request.path.startswith("/api/v1/activites/"):
+                if (
+                    view_name.startswith("Projet")
+                    and "equipe_id" not in view.kwargs
+                    and "affectation_id" not in view.kwargs
+                ) or any(
+                    seg in request.path
+                    for seg in (
+                        "/lots",
+                        "/equipes",
+                        "/affectations",
+                        "/statistiques",
+                        "/reprogrammer",
+                        "/historique-dates",
+                        "/sante",
+                        "/permissions-roles",
+                    )
+                ):
+                    projet_id = view.kwargs["pk"]
+
+        if projet_id:
+            projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+            if not ((projet_id in projets_ids) or (str(projet_id) in [str(pid) for pid in projets_ids])):
+                self.message = "Vous n'êtes pas affecté à ce projet."
+                return False
+
+        return True
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        from apps.core.droits import a_permission, est_dg
+
+        perm = getattr(self, "code_permission", None) or getattr(view, "permission_requise", None)
+        if not perm:
+            if request.method in permissions.SAFE_METHODS:
+                perm = "projets.lire"
+            else:
+                perm = "projets.ecrire"
+
+        if not a_permission(user, perm, request=request):
+            return False
+
+        if user.is_superuser or est_dg(user):
+            return True
+
+        if obtenir_portee_role(user) == "ENTREPRISE":
+            return True
+
+        projet_id = self._extraire_projet_id(obj)
+        if projet_id is None:
+            return True
+
+        projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
+        est_membre = (projet_id in projets_ids) or (str(projet_id) in [str(pid) for pid in projets_ids])
+        if not est_membre:
+            self.message = "Vous n'êtes pas affecté à ce projet."
+        return est_membre
+
+    @staticmethod
+    def _extraire_projet_id(obj):
+        if hasattr(obj, "projet_id") and obj.projet_id:
+            return obj.projet_id
+        if obj.__class__.__name__ == "Projet":
+            return obj.pk
+        if hasattr(obj, "projet") and obj.projet:
+            return obj.projet.pk
+        if hasattr(obj, "lot") and hasattr(obj.lot, "projet_id") and obj.lot.projet_id:
+            return obj.lot.projet_id
+        if hasattr(obj, "lot") and hasattr(obj.lot, "projet") and obj.lot.projet:
+            return obj.lot.projet.pk
+        if hasattr(obj, "activite") and hasattr(obj.activite, "lot"):
+            lot = obj.activite.lot
+            if hasattr(lot, "projet_id") and lot.projet_id:
+                return lot.projet_id
+            if hasattr(lot, "projet") and lot.projet:
+                return lot.projet.pk
+        return None
+
+
+GardeProjet = GardePermissionProjet
 
 
 class ScopedProjetQuerySetMixin:
@@ -264,22 +418,15 @@ class PermissionModule(permissions.BasePermission):
                     supprime_le__isnull=True,
                 ).first()
                 if rmp:
-                    if rmp.niveau == 0:
+                    if rmp.niveau == 0 and not rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True).exists():
                         return False
-                    has_m2m = (
-                        rmp.permissions_catalogue.filter(supprime_le__isnull=True).exists()
-                        or rmp.permissions.filter(supprime_le__isnull=True).exists()
-                    )
-                    if has_m2m:
-                        has_perm_m2m = (
-                            rmp.permissions_catalogue.filter(
-                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                            ).exists()
-                            or rmp.permissions.filter(
-                                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                            ).exists()
-                        )
-                        return has_perm_m2m
+                    if rmp.permissions_catalogue.filter(
+                        code__iexact=self.permission_requise, est_actif=True, supprime_le__isnull=True
+                    ).exists():
+                        return True
+                    if self.permission_requise in ("LECTURE", "ECRITURE", "VALIDATION"):
+                        if rmp.niveau is not None and rmp.niveau >= self.niveau_requis:
+                            return True
 
         from apps.core.droits import permissions_effectives
         from apps.core.registre_permissions import REGISTRE
@@ -315,7 +462,6 @@ class PermissionModule(permissions.BasePermission):
 
         try:
             AffectationProjet = registre.get_model("projets", "AffectationProjet")
-            ProjetRoleModuleOverride = registre.get_model("projets", "ProjetRoleModuleOverride")
             Role = registre.get_model("accounts", "Role")
             RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
         except LookupError:
@@ -332,51 +478,17 @@ class PermissionModule(permissions.BasePermission):
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        role = affectation.role
-        if not role:
-            role = Role.objects.filter(
-                code=affectation.role_projet, supprime_le__isnull=True
+        role = (
+            getattr(utilisateur, "role", None)
+            or getattr(utilisateur, "role_personnalise", None)
+            or Role.objects.filter(
+                code=utilisateur.role_global, supprime_le__isnull=True
             ).first()
-        if not role:
-            role = (
-                utilisateur.role_personnalise
-                or Role.objects.filter(
-                    code=utilisateur.role_global, supprime_le__isnull=True
-                ).first()
-            )
+        )
 
         if not role:
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
-
-        override = ProjetRoleModuleOverride.objects.filter(
-            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
-            projet_id=projet_id,
-            role=role,
-            supprime_le__isnull=True,
-        ).first()
-        if override:
-            if override.niveau == 0:
-                request._rbac_object_permissions_cache[cle_cache] = False
-                return False
-            has_perm = (
-                override.permissions_catalogue.filter(
-                    code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                ).exists()
-                or override.permissions.filter(
-                    code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                ).exists()
-            )
-            has_override_m2m = override.permissions_catalogue.exists() or override.permissions.exists()
-            if not has_perm and not has_override_m2m and override.niveau is not None and override.niveau > 0:
-                if self.permission_requise == "LECTURE" and override.niveau >= 1:
-                    has_perm = True
-                elif self.permission_requise == "ECRITURE" and override.niveau >= 2:
-                    has_perm = True
-                elif self.permission_requise == "VALIDATION" and override.niveau >= 3:
-                    has_perm = True
-            request._rbac_object_permissions_cache[cle_cache] = has_perm
-            return has_perm
 
         perm = RoleModulePermission.objects.filter(
             models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
@@ -387,15 +499,10 @@ class PermissionModule(permissions.BasePermission):
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        has_perm = (
-            perm.permissions_catalogue.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-            or perm.permissions.filter(
-                code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-            ).exists()
-        )
-        has_perm_m2m = perm.permissions_catalogue.exists() or perm.permissions.exists()
+        has_perm = perm.permissions_catalogue.filter(
+            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
+        ).exists()
+        has_perm_m2m = perm.permissions_catalogue.exists()
         if not has_perm and not has_perm_m2m and perm.niveau is not None and perm.niveau > 0:
             if self.permission_requise == "LECTURE" and perm.niveau >= 1:
                 has_perm = True

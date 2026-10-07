@@ -17,8 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
-from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Lot, Projet
 from apps.projets.serializers.lot import (
     ActivationSerializer,
@@ -36,7 +35,10 @@ ERREURS_LOTS = {
 
 
 class ProjetLotListCreateView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
 
     @extend_schema(
         tags=["lots"],
@@ -55,7 +57,7 @@ class ProjetLotListCreateView(APIView):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
         return Response(
-            LotResponseSerializer(projet.lots.prefetch_related("activites"), many=True).data
+            LotResponseSerializer(projet.lots.prefetch_related("activites"), many=True, context={"request": request}).data
         )
 
     @extend_schema(
@@ -99,10 +101,13 @@ class ProjetLotListCreateView(APIView):
     def post(self, request, pk):
         projet = get_object_or_404(Projet.objects.select_for_update(), pk=pk)
         self.check_object_permissions(request, projet)
-        serializer = LotCreationSerializer(data=request.data)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
+        serializer = LotCreationSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         lot = creer_lots(projet, [serializer.validated_data], request.user)[0]
-        return Response(LotResponseSerializer(lot).data, status=201)
+        return Response(LotResponseSerializer(lot, context={"request": request}).data, status=201)
 
 
 @extend_schema_field(OpenApiTypes.BINARY)
@@ -115,7 +120,11 @@ class LotImportSerializer(serializers.Serializer):
 
 
 class ProjetLotImportView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     parser_classes = [MultiPartParser]
 
     @extend_schema(
@@ -138,15 +147,18 @@ class ProjetLotImportView(APIView):
     def post(self, request, pk):
         projet = get_object_or_404(Projet.objects.select_for_update(), pk=pk)
         self.check_object_permissions(request, projet)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(projet)
         serializer = LotImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         donnees = lire_excel(serializer.validated_data["fichier"])
         lots = creer_lots(projet, donnees, request.user)
-        return Response(LotResponseSerializer(lots, many=True).data, status=201)
+        return Response(LotResponseSerializer(lots, many=True, context={"request": request}).data, status=201)
 
 
 class ProjetLotModeleView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     @extend_schema(
         tags=["lots"],
@@ -182,21 +194,18 @@ class LotDetailView(APIView):
     """Lecture, modification partielle et suppression logique d'un lot."""
 
     def get_permissions(self):
-        niveau = (
-            NiveauAcces.LECTURE
-            if self.request.method in ("GET", "HEAD", "OPTIONS")
-            else NiveauAcces.ECRITURE
-        )
-        return [
-            IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, niveau)(),
-            MembreDuProjet(),
-        ]
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
 
     def obtenir_lot(self, request, pk, verrou=False):
         queryset = Lot.objects.select_related("projet").filter(projet__supprime_le__isnull=True)
         lot = get_object_or_404(queryset, pk=pk)
         self.check_object_permissions(request, lot)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(lot.projet)
         if verrou:
             get_object_or_404(Projet.objects.select_for_update(), pk=lot.projet_id)
             lot = get_object_or_404(queryset.select_for_update(of=("self",)), pk=pk)
@@ -208,7 +217,7 @@ class LotDetailView(APIView):
         responses={200: LotResponseSerializer, **ERREURS_LOTS},
     )
     def get(self, request, pk):
-        return Response(LotResponseSerializer(self.obtenir_lot(request, pk)).data)
+        return Response(LotResponseSerializer(self.obtenir_lot(request, pk), context={"request": request}).data)
 
     @extend_schema(
         tags=["lots"],
@@ -229,7 +238,9 @@ class LotDetailView(APIView):
     @transaction.atomic
     def patch(self, request, pk):
         lot = self.obtenir_lot(request, pk, verrou=True)
-        serializer = LotModificationSerializer(lot, data=request.data, partial=True)
+        serializer = LotModificationSerializer(
+            lot, data=request.data, partial=True, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         lot_sauvegarde = serializer.save()
         if lot.projet_id:
@@ -240,7 +251,7 @@ class LotDetailView(APIView):
                 declencheur_type="LOT_MODIFICATION",
                 declencheur_id=lot.id,
             )
-        return Response(LotResponseSerializer(lot_sauvegarde).data)
+        return Response(LotResponseSerializer(lot_sauvegarde, context={"request": request}).data)
 
     @extend_schema(
         tags=["lots"],
@@ -307,4 +318,4 @@ class LotActivationView(LotDetailView):
                 declencheur_type="LOT_ACTIVATION",
                 declencheur_id=lot.id,
             )
-        return Response(LotResponseSerializer(lot).data)
+        return Response(LotResponseSerializer(lot, context={"request": request}).data)

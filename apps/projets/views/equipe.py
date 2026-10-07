@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import MembreDuProjet
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Activite, AffectationEquipeActivite, EquipeChantier, Projet
 from apps.projets.serializers.equipe import EquipeCreationSerializer, EquipeResponseSerializer
 from apps.projets.services.statistiques import pourcentage_realise
@@ -20,12 +20,16 @@ ERREURS_EQUIPES = {
 
 
 class BaseEquipeView(APIView):
-    permission_classes = [IsAuthenticated, MembreDuProjet]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     def projet(self, request, pk, verrou=False):
         qs = Projet.objects.select_for_update() if verrou else Projet.objects.all()
         projet = get_object_or_404(qs, pk=pk)
         self.check_object_permissions(request, projet)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(projet)
         return projet
 
 
@@ -36,6 +40,11 @@ def equipes_projet(projet):
 
 
 class ProjetEquipeListCreateView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Lister les équipes du projet",
@@ -91,6 +100,11 @@ class ProjetEquipeListCreateView(BaseEquipeView):
 
 
 class ProjetEquipeDetailView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method in ("DELETE", "PUT", "PATCH"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Consulter une équipe du projet",
@@ -157,6 +171,11 @@ class AffectationEquipeResponseSerializer(serializers.ModelSerializer):
 
 
 class ProjetEquipeAffectationView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Lister les affectations équipe-activité",
@@ -253,6 +272,11 @@ class ProjetEquipeAffectationView(BaseEquipeView):
 
 
 class ProjetEquipeAffectationDetailView(BaseEquipeView):
+    def get_permissions(self):
+        if self.request.method in ("DELETE", "PUT", "PATCH"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+
     @extend_schema(
         tags=["équipes"],
         summary="Retirer l'affectation d'une équipe",

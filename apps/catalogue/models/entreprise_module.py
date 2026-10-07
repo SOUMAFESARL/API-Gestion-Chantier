@@ -49,4 +49,6 @@ class EntrepriseModule(ModeleBase):
         ]
 
     def __str__(self) -> str:
-        return f"{self.entreprise.nom} — {self.module.code} ({'actif' if self.est_actif else 'inactif'})"
+        ent_nom = getattr(self.entreprise, "nom_commercial", None) or getattr(self.entreprise, "raison_sociale", "Entreprise")
+        mod_code = self.module.code if self.module else "?"
+        return f"{ent_nom} — {mod_code} ({'actif' if self.est_actif else 'inactif'})"

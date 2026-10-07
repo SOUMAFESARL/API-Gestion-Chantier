@@ -104,10 +104,14 @@ def test_creer_permission_et_propagation_ciblee_dg_admin(client_admin):
 
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
         for rmp in RoleModulePermission.objects.filter(role=role_dg):
-            if rmp.module.code in ["chantier", "ged"]:
-                assert rmp.permissions.filter(code="AUDIT").exists()
-            else:
-                assert not rmp.permissions.filter(code="AUDIT").exists()
+            assert not rmp.permissions.filter(code="AUDIT").exists()
+
+        from apps.accounts.models import Utilisateur
+        from apps.core.droits import permissions_effectives
+        u_dg = Utilisateur.objects.filter(role=role_dg, supprime_le__isnull=True).first()
+        if u_dg:
+            perms_dg = permissions_effectives(u_dg)
+            assert "audit" in [p.lower() for p in perms_dg]
 
 
 @pytest.mark.django_db
@@ -159,13 +163,8 @@ def test_affecter_modules_a_posteriori_et_revocation(client_admin):
 
     with schema_context(SCHEMA_CLIENT):
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
-        rmp_chantier = RoleModulePermission.objects.get(role=role_dg, module__code="chantier")
-        rmp_ged = RoleModulePermission.objects.get(role=role_dg, module__code="ged")
-        rmp_projets = RoleModulePermission.objects.get(role=role_dg, module__code="projets")
-
-        assert rmp_chantier.permissions.filter(code="METTRE_EN_LIGNE").exists()
-        assert rmp_ged.permissions.filter(code="METTRE_EN_LIGNE").exists()
-        assert not rmp_projets.permissions.filter(code="METTRE_EN_LIGNE").exists()
+        for rmp in RoleModulePermission.objects.filter(role=role_dg):
+            assert not rmp.permissions.filter(code="METTRE_EN_LIGNE").exists()
 
     # 3. Retrait du module 'ged' : seul 'chantier' est conservé
     rep_retrait = client_admin.post(

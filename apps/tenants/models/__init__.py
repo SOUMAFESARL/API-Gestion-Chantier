@@ -20,7 +20,7 @@ from django_tenants.models import DomainMixin, TenantMixin
 from apps.core.enums import StatutEntreprise
 from apps.core.models import ModeleBase
 
-__all__ = ["DemandeInscription", "Domaine", "Entreprise"]
+__all__ = ["DemandeInscription", "Domaine", "Entreprise", "RegistreEmail"]
 
 # Validité du lien d'activation — MLD §4.8 et workflow T1.
 DUREE_LIEN_ACTIVATION = timedelta(hours=48)
@@ -259,3 +259,45 @@ class DemandeInscription(ModeleBase):
     def empreinte_de(jeton) -> str:
         """SHA-256 hexadécimal — la seule forme qui entre en base."""
         return hashlib.sha256(str(jeton).encode()).hexdigest()
+
+
+class RegistreEmail(ModeleBase):
+    """Registre global des adresses e-mail du schéma public — C-03 / MLD §4.
+
+    Garantit l'unicité globale des e-mails sur l'ensemble de la plateforme et permet
+    l'aiguillage direct lors de la connexion sans balayer tous les schémas clients.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.CharField(
+        _("adresse e-mail"),
+        max_length=255,
+        unique=True,
+        db_index=True,
+    )
+    entreprise = models.ForeignKey(
+        "tenants.Entreprise",
+        on_delete=models.PROTECT,
+        related_name="registre_emails",
+        verbose_name=_("entreprise"),
+    )
+
+    class Meta:
+        db_table = "registre_email"
+        verbose_name = _("registre e-mail")
+        verbose_name_plural = _("registre e-mails")
+        ordering = ["-cree_le"]
+        constraints = [
+            models.UniqueConstraint(
+                models.functions.Lower("email"),
+                name="uq_registre_email_lower",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.email} -> {self.entreprise.schema_name}"

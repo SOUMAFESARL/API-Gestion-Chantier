@@ -15,7 +15,6 @@ from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 logger = logging.getLogger(__name__)
 SEUILS_EXPIRATION = (7, 3, 1, 0)
-ROLES_FACTURATION = (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
 
 
 def alerte_expiration(abonnement, aujourd_hui=None):
@@ -96,7 +95,7 @@ def envoyer_rappels_expiration():
                     with schema_context(abonnement.entreprise.schema_name):
                         destinataires = list(
                             Utilisateur.objects.filter(
-                                role_global__in=ROLES_FACTURATION,
+                                role_global__in=(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL),
                                 statut=StatutUtilisateur.ACTIF,
                                 is_active=True,
                             )

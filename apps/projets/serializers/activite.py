@@ -60,6 +60,18 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "cree_le",
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        user = getattr(request, "user", None) if request else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(user, request):
+            from apps.core.purger_montants import purger_montants_recursif
+
+            data = purger_montants_recursif(data)
+        return data
+
 
 class ActiviteCreationSerializer(serializers.ModelSerializer):
     """Création d'une activité rattachée à un lot."""
@@ -123,6 +135,12 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
             "ordre",
         ]
 
+    def validate_budget_initial_montant(self, value):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.purger_montants import valider_ecriture_montant
+
+        return valider_ecriture_montant(value, request=request, champ="budget_initial_montant")
+
     def to_internal_value(self, data):
         inconnus = set(data.keys()) - set(self.fields)
         if inconnus:
@@ -130,6 +148,13 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def validate(self, attrs):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(getattr(request, "user", None) if request else None, request):
+            if "budget_initial_montant" in attrs and attrs["budget_initial_montant"] is None:
+                attrs.pop("budget_initial_montant")
+
         lot = self.context.get("lot")
         if not lot:
             raise serializers.ValidationError("Le lot de rattachement est requis.")
@@ -207,6 +232,13 @@ class ActiviteModificationSerializer(ActiviteCreationSerializer):
     """Réutilise la validation métier sur l'état final d'une modification partielle."""
 
     def validate(self, attrs):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(getattr(request, "user", None) if request else None, request):
+            if "budget_initial_montant" in attrs and attrs["budget_initial_montant"] is None:
+                attrs.pop("budget_initial_montant")
+
         for champ in ("date_debut_prevue", "date_fin_prevue"):
             ancienne = getattr(self.instance, champ)
             if champ in attrs and ancienne is not None and attrs[champ] != ancienne:

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.catalogue.models import CatalogueModule as Module, CataloguePermission as Permission
+from apps.core.registre_permissions import REGISTRE
 
 __all__ = [
     "AdminModuleSimpleSerializer",
@@ -54,9 +55,13 @@ class AdminPermissionCreateSerializer(serializers.Serializer):
     )
 
     def validate_code(self, value: str) -> str:
-        code = value.strip().upper()
+        code = value.strip()
         if not code:
             raise serializers.ValidationError("Le code de la permission est obligatoire.")
+        if code not in REGISTRE:
+            raise serializers.ValidationError(
+                f"Le code '{code}' n'appartient pas au REGISTRE officiel des permissions."
+            )
         if Permission.objects.filter(code=code, supprime_le__isnull=True).exists():
             raise serializers.ValidationError(f"Une permission avec le code '{code}' existe déjà.")
         return code
@@ -78,6 +83,13 @@ class AdminPermissionUpdateSerializer(serializers.Serializer):
         required=False,
         help_text="Liste mise à jour des modules autorisés à porter cette permission.",
     )
+
+    def validate(self, attrs):
+        if "module" in self.initial_data:
+            raise serializers.ValidationError(
+                {"module": "Le module d'une permission est déterminé par son préfixe et ne peut pas être modifié."}
+            )
+        return attrs
 
 
 class AdminPermissionAffecterModulesSerializer(serializers.Serializer):

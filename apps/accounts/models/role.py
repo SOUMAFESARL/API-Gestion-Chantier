@@ -31,6 +31,13 @@ class Role(ModeleBase):
         help_text=_("Un rôle système ne peut pas être supprimé."),
     )
     est_actif = models.BooleanField(_("est actif"), default=True)
+    portee = models.CharField(
+        _("portée"),
+        max_length=20,
+        choices=[("ENTREPRISE", "Entreprise"), ("PROJET", "Projet")],
+        default="PROJET",
+        help_text=_("Portée d'intervention du rôle : ENTREPRISE (accès global) ou PROJET (accès par affectation)."),
+    )
 
     class Meta:
         db_table = "role"
@@ -49,6 +56,36 @@ class Role(ModeleBase):
         return self.libelle
 
 
+class RoleModulePermissionQuerySet(models.QuerySet):
+    """QuerySet supportant l'alias virtuel 'module_code' pour filtrer par code de module."""
+
+    def filter(self, *args, **kwargs):
+        new_args = list(args)
+        new_kwargs = {}
+        for k, v in kwargs.items():
+            if k == "module_code":
+                new_args.append(models.Q(module__code__iexact=v) | models.Q(module_catalogue__code__iexact=v))
+            elif k.startswith("module_code__"):
+                suffix = k[len("module_code__"):]
+                new_args.append(models.Q(**{f"module__code__{suffix}": v}) | models.Q(**{f"module_catalogue__code__{suffix}": v}))
+            else:
+                new_kwargs[k] = v
+        return super().filter(*new_args, **new_kwargs)
+
+    def exclude(self, *args, **kwargs):
+        new_args = list(args)
+        new_kwargs = {}
+        for k, v in kwargs.items():
+            if k == "module_code":
+                new_args.append(models.Q(module__code__iexact=v) | models.Q(module_catalogue__code__iexact=v))
+            elif k.startswith("module_code__"):
+                suffix = k[len("module_code__"):]
+                new_args.append(models.Q(**{f"module__code__{suffix}": v}) | models.Q(**{f"module_catalogue__code__{suffix}": v}))
+            else:
+                new_kwargs[k] = v
+        return super().exclude(*new_args, **new_kwargs)
+
+
 class RoleModulePermission(ModeleBase):
     """Niveau d'accès d'un rôle sur l'un des modules applicatifs dynamiques BTP.
 
@@ -57,6 +94,8 @@ class RoleModulePermission(ModeleBase):
     Intégrité référentielle stricte : la suppression d'un module supprime
     automatiquement en cascade ses habilitations associées.
     """
+
+    objects = RoleModulePermissionQuerySet.as_manager()
 
     role = models.ForeignKey(
         Role,
@@ -69,12 +108,8 @@ class RoleModulePermission(ModeleBase):
         on_delete=models.CASCADE,
         related_name="permissions_roles",
         verbose_name=_("module"),
-    )
-    permissions = models.ManyToManyField(
-        "accounts.Permission",
-        related_name="roles_modules",
+        null=True,
         blank=True,
-        verbose_name=_("permissions accordées"),
     )
     module_catalogue = models.ForeignKey(
         "catalogue.CatalogueModule",
@@ -119,3 +154,11 @@ class RoleModulePermission(ModeleBase):
     def __str__(self) -> str:
         mod_libelle = self.module.libelle if self.module_id else "?"
         return f"{self.role.libelle} — {mod_libelle}: {self.get_niveau_display()}"
+
+    @property
+    def module_code(self) -> str:
+        if self.module_id and self.module:
+            return (self.module.code or "").lower()
+        if self.module_catalogue_id and self.module_catalogue:
+            return (self.module_catalogue.code or "").lower()
+        return ""

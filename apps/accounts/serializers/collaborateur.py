@@ -55,23 +55,32 @@ class CollaborateurCreateSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=100, required=True)
     prenom = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     telephone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
-    role_global = serializers.ChoiceField(choices=RoleGlobal.choices, required=False)
-    role_propose = serializers.ChoiceField(choices=RoleGlobal.choices, required=False)
+    role_global = serializers.CharField(max_length=50, required=False)
+    role_propose = serializers.CharField(max_length=50, required=False)
     role_personnalise_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
     def validate(self, attrs):
-        role = attrs.get("role_global") or attrs.get("role_propose")
-        if not role:
-            raise serializers.ValidationError({"role_global": _("Le rôle global ou proposé est requis.")})
-        attrs["role_global"] = role
+        has_global = bool(attrs.get("role_global") or attrs.get("role_propose"))
+        has_perso = bool(attrs.get("role_personnalise_id"))
+
+        if has_global and has_perso:
+            raise serializers.ValidationError(
+                {"code": "role_ambigu", "detail": _("Fournir soit un rôle global, soit un rôle personnalisé, pas les deux.")}
+            )
+        if not has_global and not has_perso:
+            raise serializers.ValidationError({"role_global": _("Le rôle global ou un rôle personnalisé est requis.")})
+
+        if has_global:
+            role = attrs.get("role_global") or attrs.get("role_propose")
+            attrs["role_global"] = role
         return attrs
 
 
 class CollaborateurRattacherRoleSerializer(serializers.Serializer):
     """Sérialiseur pour la mise à jour ou le rattachement de rôle d'un collaborateur existant."""
 
-    role_global = serializers.ChoiceField(
-        choices=RoleGlobal.choices,
+    role_global = serializers.CharField(
+        max_length=50,
         required=False,
     )
     role_personnalise_id = serializers.UUIDField(
@@ -90,7 +99,7 @@ class CollaborateurRattacherRoleSerializer(serializers.Serializer):
                 )
             )
 
-        if role_global == RoleGlobal.DIRECTEUR_GENERAL:
+        if role_global in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
             raise serializers.ValidationError(
                 {
                     "role_global": _(

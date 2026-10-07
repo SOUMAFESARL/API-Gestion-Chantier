@@ -14,8 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
-from apps.core.permissions import MembreDuProjet, PermissionModule
+from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Activite, Lot, Projet
 from apps.projets.serializers import (
     ActiviteCreationSerializer,
@@ -41,7 +40,9 @@ class LotActiviteListCreateView(APIView):
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        return [IsAuthenticated(), MembreDuProjet()]
+        if self.request.method == "POST":
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.ecrire")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
 
     @extend_schema(
         summary="Lister les activités d'un lot",
@@ -55,7 +56,7 @@ class LotActiviteListCreateView(APIView):
         self.check_object_permissions(request, lot)
         activites = lot.activites.filter(supprime_le__isnull=True).order_by("ordre", "cree_le")
         return Response(
-            ActiviteSerializer(activites.prefetch_related("equipe"), many=True).data,
+            ActiviteSerializer(activites.prefetch_related("equipe"), many=True, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
 
@@ -115,6 +116,9 @@ class LotActiviteListCreateView(APIView):
             pk=lot_id,
         )
         self.check_object_permissions(request, lot)
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        verifier_statut_projet_pour_ecriture(lot.projet)
         if not lot.est_actif:
             from rest_framework.exceptions import ValidationError
 
@@ -133,7 +137,10 @@ class LotActiviteListCreateView(APIView):
             declencheur_type="ACTIVITE_CREATION",
             declencheur_id=activite.id,
         )
-        return Response(ActiviteSerializer(activite).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ActiviteSerializer(activite, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ActiviteDetailView(APIView):
@@ -145,13 +152,11 @@ class ActiviteDetailView(APIView):
         if self.request.method in ("DELETE", "PUT", "PATCH"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
-                MembreDuProjet(),
+                GardePermissionProjet.pour("projets.ecrire")(),
             ]
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
-            MembreDuProjet(),
+            GardePermissionProjet.pour("projets.lire")(),
         ]
 
     def obtenir_activite(self, request, pk, verrou=False):
@@ -161,6 +166,10 @@ class ActiviteDetailView(APIView):
         )
         activite = get_object_or_404(queryset, pk=pk)
         self.check_object_permissions(request, activite)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+            verifier_statut_projet_pour_ecriture(activite.lot.projet)
         if verrou:
             # Sérialise aussi les dépendances entre lots : projet, lot, activité.
             get_object_or_404(Projet.objects.select_for_update(), pk=activite.lot.projet_id)
@@ -182,7 +191,7 @@ class ActiviteDetailView(APIView):
     )
     def get(self, request, pk):
         activite = self.obtenir_activite(request, pk)
-        return Response(ActiviteSerializer(activite).data, status=status.HTTP_200_OK)
+        return Response(ActiviteSerializer(activite, context={"request": request}).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Supprimer logiquement une activité",
@@ -250,7 +259,7 @@ class ActiviteDetailView(APIView):
                 declencheur_type="ACTIVITE_MODIFICATION",
                 declencheur_id=activite.id,
             )
-        return Response(ActiviteSerializer(activite_modifiee).data)
+        return Response(ActiviteSerializer(activite_modifiee, context={"request": request}).data)
 
 
 class ActiviteActivationView(ActiviteDetailView):
@@ -288,4 +297,4 @@ class ActiviteActivationView(ActiviteDetailView):
                 declencheur_type="ACTIVITE_ACTIVATION",
                 declencheur_id=activite.id,
             )
-        return Response(ActiviteSerializer(activite).data)
+        return Response(ActiviteSerializer(activite, context={"request": request}).data)

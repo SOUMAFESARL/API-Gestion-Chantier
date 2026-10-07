@@ -8,18 +8,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.billing.serializers.expiration import NotificationExpirationSerializer
-from apps.billing.services.expiration import ROLES_FACTURATION, notifications_expiration
-from apps.core.permissions import RoleRequis
+from apps.billing.services.expiration import notifications_expiration
+from apps.core.droits import APermission
 
 
 class NotificationsExpirationView(APIView):
-    permission_classes = [IsAuthenticated, RoleRequis.pour(*ROLES_FACTURATION)]
+    permission_classes = [IsAuthenticated, APermission.pour("administration.factures_voir")]
 
     @extend_schema(
         tags=["Notifications d'abonnement"],
         summary="Consulter l'alerte d'expiration de son abonnement",
         description=(
-            "Roles AD, DG, DF. Tableau vide ou une alerte calculee a chaque lecture, "
+            "Roles DG, AD. Tableau vide ou une alerte calculee a chaque lecture, "
             "des J-7 et jusqu'au renouvellement. Paliers J-7, J-3, J-1, J0. "
             "Les essais gratuits conservent leur circuit de relance existant. "
             "Aucun email n'est envoye par cette requete."

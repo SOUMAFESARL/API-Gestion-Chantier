@@ -16,8 +16,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import RoleGlobal
-from apps.core.permissions import RoleRequis
+from apps.core.droits import APermission
 from apps.onboarding.serializers import ProgressionSerializer
 from apps.onboarding.services import lire_ou_creer, passer, terminer, valider
 
@@ -29,7 +28,7 @@ __all__ = [
     "TerminerView",
 ]
 
-AdministrateurSeul = RoleRequis.pour(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
+AdministrateurSeul = APermission.pour("administration.onboarding_suivre")
 
 PARAMETRE_CODE = OpenApiParameter(
     name="code",

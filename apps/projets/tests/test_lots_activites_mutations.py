@@ -269,7 +269,7 @@ def test_writer_needs_project_membership(contexte, ressource):
     data = {"nom" if ressource == "lots" else "libelle": "Autorisé"}
     assert client.patch(url, data, format="json").status_code == 403
     affectation = AffectationProjet.objects.create(
-        projet=projet, utilisateur=user, role=role, role_projet=RoleProjet.VISITEUR
+        projet=projet, utilisateur=user, role_projet=RoleProjet.VISITEUR
     )
     response = client.patch(url, data, format="json")
     assert response.status_code == 200, response.data

@@ -20,8 +20,8 @@ from apps.accounts.services.roles import (
     initialiser_modules_par_defaut,
     initialiser_permissions_par_defaut,
 )
+from apps.core.droits import APermission
 from apps.core.enums import ModuleChoix, RoleGlobal, StatutUtilisateur
-from apps.core.permissions import PermissionModule
 
 SCHEMA = "demo"
 HOTE = "demo.localhost"
@@ -129,13 +129,13 @@ def test_tableau_dynamique_modules_et_permissions_api(client_api):
 def test_non_hierarchie_permissions_validation_seule():
     """Vérifie qu'un rôle ayant VALIDATION seule NE PEUT PAS faire d'ECRITURE."""
     class VueActionEcriture(APIView):
-        permission_classes = [PermissionModule.pour("chantier", "ECRITURE")]
+        permission_classes = [APermission.pour("chantier.rediger")]
 
         def post(self, request):
             return Response({"action": "ecriture_reussie"})
 
     class VueActionValidation(APIView):
-        permission_classes = [PermissionModule.pour("chantier", "VALIDATION")]
+        permission_classes = [APermission.pour("chantier.valider")]
 
         def post(self, request):
             return Response({"action": "validation_reussie"})

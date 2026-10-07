@@ -8,11 +8,33 @@ from apps.core.models import ModeleBase
 __all__ = ["CataloguePermission"]
 
 
+class CataloguePermissionQuerySet(models.QuerySet):
+    """QuerySet supportant l'alias 'module' pour le champ ManyToMany 'modules'."""
+
+    def _adapter_kwargs(self, kwargs):
+        new_kwargs = {}
+        for k, v in kwargs.items():
+            if k == "module" or k.startswith("module__"):
+                new_k = "modules" + k[len("module"):]
+                new_kwargs[new_k] = v
+            else:
+                new_kwargs[k] = v
+        return new_kwargs
+
+    def filter(self, *args, **kwargs):
+        return super().filter(*args, **self._adapter_kwargs(kwargs))
+
+    def exclude(self, *args, **kwargs):
+        return super().exclude(*args, **self._adapter_kwargs(kwargs))
+
+
 class CataloguePermission(ModeleBase):
     """Autorisation granulaire dynamique de la plateforme.
 
     Stockée uniquement dans le schéma `public`.
     """
+
+    objects = CataloguePermissionQuerySet.as_manager()
 
     code = models.CharField(
         _("code"),
@@ -40,6 +62,11 @@ class CataloguePermission(ModeleBase):
         _("est actif"),
         default=True,
         help_text=_("Indique si cette permission est active et disponible."),
+    )
+    reservee_administration = models.BooleanField(
+        _("réservée administration"),
+        default=False,
+        help_text=_("Indique si cette permission est réservée à l'administration de l'entreprise."),
     )
     modules = models.ManyToManyField(
         "catalogue.CatalogueModule",

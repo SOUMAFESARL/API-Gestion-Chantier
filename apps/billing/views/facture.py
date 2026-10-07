@@ -13,8 +13,8 @@ from rest_framework.response import Response
 from apps.billing.models import Facture
 from apps.billing.serializers.facture import FactureSerializer
 from apps.billing.services.facture import generer_pdf_facture
+from apps.core.droits import APermission
 from apps.core.enums import RoleGlobal
-from apps.core.permissions import RoleRequis
 
 ERREURS_FACTURE = {
     401: OpenApiResponse(description="Jeton JWT absent ou invalide."),
@@ -22,7 +22,7 @@ ERREURS_FACTURE = {
     404: OpenApiResponse(description="Facture introuvable dans cette entreprise."),
 }
 DESCRIPTION_FACTURE = (
-    "Jeton JWT de l'entreprise requis. Roles autorises : AD, DG, DF. "
+    "Jeton JWT de l'entreprise requis. Roles autorises : DG, AD. "
     "Les montants JSON sont en centimes XOF. Les factures sont creees par "
     "l'initiation du paiement puis marquees PAYEE apres confirmation CinetPay."
 )
@@ -45,10 +45,7 @@ class FactureBaseView(GenericAPIView):
     filter_backends = []
     permission_classes = [
         IsAuthenticated,
-        RoleRequis.pour(
-            RoleGlobal.ADMIN,
-            RoleGlobal.DIRECTEUR_GENERAL,
-        ),
+        APermission.pour("administration.factures_voir"),
     ]
 
     def get_queryset(self):

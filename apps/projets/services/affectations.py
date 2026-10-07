@@ -23,7 +23,7 @@ def lister_affectations_projet(projet: Projet, actifs_seulement: bool = False):
     """Renvoie les affectations du projet avec chargement optimisé des relations."""
     qs = (
         AffectationProjet.objects.filter(projet=projet, supprime_le__isnull=True)
-        .select_related("utilisateur", "role")
+        .select_related("utilisateur")
         .order_by("role_projet", "utilisateur__nom", "utilisateur__prenom")
     )
     if actifs_seulement:
@@ -38,8 +38,8 @@ def affecter_collaborateur_projet(
     role_projet: str,
     date_debut=None,
     date_fin=None,
-    role_personnalise: Role | None = None,
     modifie_par: Utilisateur | None = None,
+    **kwargs,
 ) -> AffectationProjet:
     """Affecte ou réactive un collaborateur sur un chantier avec un rôle spécifique."""
     if role_projet not in RoleProjet.values:
@@ -59,8 +59,6 @@ def affecter_collaborateur_projet(
         if affectation:
             # Réactivation et mise à jour du rôle
             affectation.role_projet = role_projet
-            if role_personnalise is not None:
-                affectation.role = role_personnalise
             affectation.date_debut = date_debut_effective
             affectation.date_fin = date_fin
             affectation.est_actif = True
@@ -69,7 +67,6 @@ def affecter_collaborateur_projet(
             affectation.save(
                 update_fields=[
                     "role_projet",
-                    "role",
                     "date_debut",
                     "date_fin",
                     "est_actif",
@@ -83,7 +80,6 @@ def affecter_collaborateur_projet(
                 projet=projet,
                 utilisateur=utilisateur,
                 role_projet=role_projet,
-                role=role_personnalise,
                 date_debut=date_debut_effective,
                 date_fin=date_fin,
                 est_actif=True,
@@ -159,10 +155,6 @@ def modifier_affectation_projet(
         if c in donnees:
             setattr(affectation, c, donnees[c])
             champs.append(c)
-
-    if "role" in donnees:
-        affectation.role = donnees["role"]
-        champs.append("role")
 
     affectation.save(update_fields=champs)
     verifier_invariant_chef_projet(affectation.projet)

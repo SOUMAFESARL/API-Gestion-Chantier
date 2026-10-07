@@ -88,6 +88,7 @@ class Projet(ModeleBase):
         related_name="projets_chantiers",
         verbose_name=_("conducteur de travaux"),
     )
+    sans_chef_projet = models.BooleanField(_("sans chef de projet"), default=False)
 
     statut = models.CharField(
         _("statut"),
@@ -155,6 +156,8 @@ class Projet(ModeleBase):
 
     def save(self, *args, **kwargs):
         """Initialise la Baseline v0 à la première sauvegarde si non définie."""
+        if self.chef_projet_id is not None or self.chef_projet is not None:
+            self.sans_chef_projet = False
         if self.date_debut_baseline is None and self.date_debut_prevue:
             self.date_debut_baseline = self.date_debut_prevue
         if self.date_fin_baseline is None and self.date_fin_prevue:
@@ -183,14 +186,7 @@ class AffectationProjet(ModeleBase):
         max_length=5,
         choices=RoleProjet.choices,
         default=RoleProjet.CHEF_PROJET,
-    )
-    role = models.ForeignKey(
-        "accounts.Role",
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
-        related_name="affectations_projets",
-        verbose_name=_("rôle personnalisé"),
     )
     date_debut = models.DateField(_("date de début"), default=timezone.now)
     date_fin = models.DateField(_("date de fin"), null=True, blank=True)

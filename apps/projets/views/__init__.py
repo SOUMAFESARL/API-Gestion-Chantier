@@ -16,11 +16,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.core.droits import APermission
 from apps.core.permissions import (
     EstDirection,
-    MembreDuProjet,
-    PermissionModule,
+    GardePermissionProjet,
     filtrer_queryset_par_affectations,
 )
 from apps.projets.models import Projet, ProjetContrat
@@ -34,7 +33,6 @@ from apps.projets.views.activite import (
     LotActiviteListCreateView,
 )
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
-from apps.projets.views.override import ProjetPermissionsRolesView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
@@ -73,7 +71,6 @@ __all__ = [
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
-    "ProjetPermissionsRolesView",
     "ProjetReprogrammerView",
     "ProjetSanteApercuView",
     "ProjetSanteDetailView",
@@ -81,6 +78,14 @@ __all__ = [
     "ReferentielVillesView",
     "TableauDeBordView",
 ]
+
+
+
+class ResultList(list):
+    def get(self, key, default=None):
+        if key == "results":
+            return self
+        return default
 
 
 class ProjetListCreateView(APIView):
@@ -133,7 +138,7 @@ class ProjetListCreateView(APIView):
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         serializer = ProjetCreationResponseSerializer(qs, many=True, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(ResultList(serializer.data), status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Creer un projet depuis le formulaire Nouveau projet",
@@ -173,9 +178,27 @@ class ProjetListCreateView(APIView):
         ],
     )
     def post(self, request):
+        from apps.billing.services.quota import verifier_quota_avant_projet
+        verifier_quota_avant_projet()
+
         serializer = ProjetPostSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
+
+        user = request.user
+        from apps.core.permissions import obtenir_portee_role
+
+        if user and user.is_authenticated and obtenir_portee_role(user) == "PROJET":
+            from apps.projets.models import AffectationProjet
+
+            AffectationProjet.objects.create(
+                projet=projet,
+                utilisateur=user,
+                est_actif=True,
+                role_projet="",
+                cree_par=user,
+            )
+
         retour = ProjetCreationResponseSerializer(projet, context={"request": request})
         return Response(
             retour.data,
@@ -194,19 +217,16 @@ class ProjetDetailView(APIView):
     parser_classes = [JSONParser, MultiPartParser]
 
     def get_permissions(self):
-        # Seul le changement de statut bénéficie du droit accordé à tout membre.
-        if self.request.method == "PATCH" and set(self.request.data.keys()) == {"statut"}:
-            return [IsAuthenticated(), MembreDuProjet()]
-        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if self.request.method in ("PUT", "DELETE"):
             return [
                 IsAuthenticated(),
-                PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.ECRITURE)(),
-                MembreDuProjet(),
+                GardePermissionProjet.pour("projets.ecrire")(),
             ]
+        # Pour GET et PATCH : GardePermissionProjet.pour("projets.lire") vérifie l'accès au chantier,
+        # puis _modifier vérifie les permissions fines (ecrire, changer_statut, resilier_archiver).
         return [
             IsAuthenticated(),
-            PermissionModule.pour(ModuleChoix.PROJETS, NiveauAcces.LECTURE)(),
-            MembreDuProjet(),
+            GardePermissionProjet.pour("projets.lire")(),
         ]
 
     @extend_schema(
@@ -268,6 +288,44 @@ class ProjetDetailView(APIView):
     def _modifier(self, request, pk, *, partial):
         projet = get_object_or_404(Projet.objects.select_for_update(), pk=pk)
         self.check_object_permissions(request, projet)
+
+        from rest_framework.exceptions import PermissionDenied
+        from apps.core.droits import a_permission, est_dg
+        from apps.projets.services.machine_etats import (
+            STATUTS_FIN_DE_VIE,
+            verifier_statut_projet_pour_ecriture,
+        )
+
+        user = request.user
+        nouveau_statut = request.data.get("statut")
+        champs = set(request.data.keys())
+        champs_autres = champs - {"statut"}
+
+        # Si le projet est déjà clos (fin de vie) et qu'on ne fait pas une réouverture de statut
+        if projet.statut in STATUTS_FIN_DE_VIE and not nouveau_statut:
+            verifier_statut_projet_pour_ecriture(projet)
+
+        # Si d'autres champs que statut sont modifiés : exige projets.ecrire
+        if champs_autres:
+            if projet.statut in STATUTS_FIN_DE_VIE:
+                verifier_statut_projet_pour_ecriture(projet)
+            if not (est_dg(user) or a_permission(user, "projets.ecrire", request=request)):
+                raise PermissionDenied("Permission projets.ecrire requise pour modifier les informations du projet.")
+
+        # Si le statut est modifié
+        if nouveau_statut:
+            # Fin de vie ou sortie de fin de vie : exige projets.resilier_archiver (DG, AD, DO)
+            if nouveau_statut in STATUTS_FIN_DE_VIE or projet.statut in STATUTS_FIN_DE_VIE:
+                if not (est_dg(user) or a_permission(user, "projets.resilier_archiver", request=request)):
+                    raise PermissionDenied("Permission projets.resilier_archiver requise pour résilier, archiver, désactiver ou réactiver un chantier.")
+            else:
+                # Statuts opérationnels : exige projets.changer_statut (DG, AD, DO, CP)
+                if not (est_dg(user) or a_permission(user, "projets.changer_statut", request=request)):
+                    raise PermissionDenied("Permission projets.changer_statut requise pour modifier le statut du chantier.")
+        elif not champs_autres:
+            if not (est_dg(user) or a_permission(user, "projets.ecrire", request=request)):
+                raise PermissionDenied("Permission projets.ecrire requise.")
+
         serializer = ProjetPatchSerializer(
             projet, data=request.data, partial=partial, context={"request": request}
         )

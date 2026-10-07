@@ -144,7 +144,6 @@ class ProjetSerializer(serializers.ModelSerializer):
     conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
     lots = LotSimpleSerializer(many=True, read_only=True)
     duree_jours_ouvres = serializers.IntegerField(read_only=True)
-    budget_consomme_montant = serializers.SerializerMethodField()
 
     class Meta:
         model = Projet
@@ -162,7 +161,6 @@ class ProjetSerializer(serializers.ModelSerializer):
             "ville",
             "quartier",
             "budget_initial_montant",
-            "budget_consomme_montant",
             "date_debut_prevue",
             "date_fin_prevue",
             "date_debut_baseline",
@@ -172,6 +170,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             "date_fin_reelle",
             "chef_projet",
             "conducteur_travaux",
+            "sans_chef_projet",
             "statut",
             "avancement_reel",
             "avancement_theorique",
@@ -196,11 +195,17 @@ class ProjetSerializer(serializers.ModelSerializer):
             "logo_url": logo_url,
         }
 
-    def get_budget_consomme_montant(self, obj: Projet) -> int:
-        if not obj.budget_initial_montant:
-            return 0
-        ratio = 0.225
-        return int(obj.budget_initial_montant * ratio)
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        user = getattr(request, "user", None) if request else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(user, request):
+            from apps.core.purger_montants import purger_montants_recursif
+
+            data = purger_montants_recursif(data)
+        return data
 
 
 class LotCreationProjetSerializer(serializers.Serializer):
@@ -293,7 +298,20 @@ class ProjetCreationSerializer(serializers.Serializer):
         child=serializers.UUIDField(), required=False, default=list
     )
 
+    def validate_budget_initial_montant(self, value):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.purger_montants import valider_ecriture_montant
+
+        return valider_ecriture_montant(value, request=request, champ="budget_initial_montant")
+
     def validate(self, attrs):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.droits import peut_voir_montants
+
+        if not peut_voir_montants(getattr(request, "user", None) if request else None, request):
+            if "budget_initial_montant" in attrs and attrs["budget_initial_montant"] is None:
+                attrs.pop("budget_initial_montant")
+
         if "client" in attrs and "maitre_ouvrage" in attrs:
             raise serializers.ValidationError(
                 {

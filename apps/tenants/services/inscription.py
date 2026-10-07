@@ -521,7 +521,7 @@ def provisionner(identifiant) -> None:
             #
             # **Elle était semée paresseusement, au premier affichage de l'écran
             # des rôles.** Tant que personne n'y allait, le schéma n'avait aucun
-            # rôle — et `PermissionModule` refuse tout à qui n'a pas le sien.
+            # rôle — et le contrôle d'accès refuse tout à qui n'a pas le sien.
             # Le fondateur ne s'en apercevait pas : `AD`, `DG` et le propriétaire
             # court-circuitent la matrice. **Ses invités, eux, étaient refusés
             # partout** — un conducteur de travaux sans un seul module, sans

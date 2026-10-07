@@ -72,6 +72,11 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
     """Construit la représentation complète et sécurisée du profil utilisateur."""
     schema_name = getattr(connection, "schema_name", "public")
 
+    if getattr(utilisateur, "pk", None):
+        user_frais = Utilisateur.objects.filter(pk=utilisateur.pk).select_related("role").first()
+        if user_frais:
+            utilisateur = user_frais
+
     # 1. URL de l'avatar
     avatar_url = None
     if utilisateur.avatar and hasattr(utilisateur.avatar, "url"):
@@ -112,80 +117,79 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
                 "logo_url": logo_url,
             }
 
-    # 3. Matrice des habilitations par module et permissions effectives
-    from apps.core.droits import _obtenir_modules_actifs, permissions_effectives
+    # 3. Permissions effectives et habilitations dérivées (G-02)
+    from apps.core.droits import _obtenir_modules_actifs, est_dg, permissions_effectives
+    from apps.core.registre_permissions import REGISTRE
 
     modules_actifs = _obtenir_modules_actifs(tenant)
+    perms_effectives = sorted(
+        permissions_effectives(utilisateur, request=request, tenant=tenant)
+    )
+
+    is_dg_ou_super = est_dg(utilisateur) or bool(getattr(utilisateur, "is_superuser", False))
     habilitations = {}
-    role = (
-        utilisateur.role_personnalise
-        or Role.objects.filter(code=utilisateur.role_global, supprime_le__isnull=True).first()
-    )
-    if role:
-        try:
-            from apps.accounts.models import RoleModulePermission
-
-            for rmp in RoleModulePermission.objects.filter(
-                role=role, supprime_le__isnull=True
-            ).select_related("module", "module_catalogue"):
-                mod_code = None
-                if getattr(rmp, "module_catalogue_id", None) and rmp.module_catalogue:
-                    mod_code = rmp.module_catalogue.code
-                elif getattr(rmp, "module_id", None) and rmp.module:
-                    mod_code = rmp.module.code
-                if mod_code:
-                    m_key = mod_code.lower()
-                    # Si le module n'est pas souscrit par l'entreprise, forcer niveau: 0 (masquage frontend)
-                    if m_key not in modules_actifs and m_key != "administration":
-                        niveau = 0
-                        libelle = "Non souscrit"
-                    else:
-                        niveau = rmp.niveau if getattr(rmp, "niveau", None) is not None else 0
-                        libelle = (
-                            rmp.get_niveau_display()
-                            if hasattr(rmp, "get_niveau_display")
-                            else "Personnalisé"
-                        )
-
-                    habilitations[mod_code.upper()] = {
-                        "libelle": libelle,
-                        "niveau": niveau,
-                    }
-        except Exception:
-            pass
-
-    is_dg_ou_super = (
-        getattr(utilisateur, "is_owner", False)
-        or getattr(utilisateur, "is_dg", False)
-        or getattr(utilisateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG")
-        or getattr(utilisateur, "is_superuser", False)
-    )
 
     for mod_code, _mod_label in ModuleChoix.choices:
         m_upper = mod_code.upper()
         m_lower = mod_code.lower()
         est_souscrit = m_lower in modules_actifs or m_lower == "administration"
-        if m_upper not in habilitations or is_dg_ou_super:
-            if not est_souscrit:
-                habilitations[m_upper] = {"libelle": "Non souscrit", "niveau": 0}
-            elif is_dg_ou_super:
-                habilitations[m_upper] = {"libelle": "Validation", "niveau": 3}
-            else:
-                habilitations[m_upper] = habilitations.get(
-                    m_upper, {"libelle": "Aucun", "niveau": 0}
-                )
 
-    perms_effectives = sorted(
-        permissions_effectives(utilisateur, request=request, tenant=tenant)
+        if not est_souscrit:
+            habilitations[m_upper] = {"libelle": "Non souscrit", "niveau": 0}
+        elif is_dg_ou_super:
+            habilitations[m_upper] = {"libelle": "Validation", "niveau": 3}
+        else:
+            perms_du_module = [p for p in perms_effectives if p.startswith(f"{m_lower}.")]
+            if not perms_du_module:
+                habilitations[m_upper] = {"libelle": "Aucun", "niveau": 0}
+            else:
+                max_rang = 0
+                for p_code in perms_du_module:
+                    def_p = REGISTRE.get(p_code)
+                    if def_p:
+                        max_rang = max(max_rang, def_p.rang)
+                    elif p_code.endswith(".valider"):
+                        max_rang = max(max_rang, 3)
+                    elif p_code.endswith(".ecrire") or p_code.endswith(".rediger"):
+                        max_rang = max(max_rang, 2)
+                    elif p_code.endswith(".lire"):
+                        max_rang = max(max_rang, 1)
+
+                libelles_rang = {
+                    0: "Aucun",
+                    1: "Lecture",
+                    2: "Écriture",
+                    3: "Validation",
+                }
+                habilitations[m_upper] = {
+                    "libelle": libelles_rang.get(max_rang, "Personnalisé"),
+                    "niveau": max_rang,
+                }
+
+    # 4. Rôle unique & compatibilité frontend (G-02, B-02 : la base est la seule source de vérité)
+    if getattr(utilisateur, "pk", None):
+        user_frais = Utilisateur.objects.filter(pk=utilisateur.pk).select_related("role").first()
+        if user_frais:
+            utilisateur = user_frais
+
+    role_effectif = getattr(utilisateur, "role", None) or getattr(utilisateur, "role_personnalise", None)
+    if not role_effectif and getattr(utilisateur, "role_global", None):
+        from apps.accounts.models import Role
+        role_effectif = Role.objects.filter(code=utilisateur.role_global, supprime_le__isnull=True).first()
+
+    role_global_code = role_effectif.code if role_effectif else (utilisateur.role_global or "VISITEUR")
+    role_libelle = (
+        role_effectif.libelle
+        if role_effectif
+        else (utilisateur.get_role_global_display() if hasattr(utilisateur, "get_role_global_display") else role_global_code)
     )
 
-    # 4. Rôle personnalisé
     role_perso_info = None
-    if utilisateur.role_personnalise:
+    if role_effectif and not getattr(role_effectif, "est_systeme", False):
         role_perso_info = {
-            "id": str(utilisateur.role_personnalise.id),
-            "code": utilisateur.role_personnalise.code,
-            "libelle": utilisateur.role_personnalise.libelle,
+            "id": str(role_effectif.id),
+            "code": role_effectif.code,
+            "libelle": role_effectif.libelle,
         }
 
     return {
@@ -197,8 +201,8 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "telephone": utilisateur.telephone,
         "avatar_url": avatar_url,
         "initiales": utilisateur.initiales,
-        "role_global": utilisateur.role_global,
-        "role_libelle": utilisateur.get_role_global_display(),
+        "role_global": role_global_code,
+        "role_libelle": role_libelle,
         "role_personnalise": role_perso_info,
         "is_dg": utilisateur.is_dg,
         "is_owner": utilisateur.is_owner,

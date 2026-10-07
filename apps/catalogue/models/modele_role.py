@@ -38,6 +38,13 @@ class ModeleRole(ModeleBase):
         default=True,
         help_text=_("Indique si le modèle est disponible pour les nouvelles entreprises."),
     )
+    portee = models.CharField(
+        _("portée"),
+        max_length=20,
+        choices=[("ENTREPRISE", "Entreprise"), ("PROJET", "Projet")],
+        default="PROJET",
+        help_text=_("Portée par défaut : ENTREPRISE ou PROJET."),
+    )
 
     class Meta:
         db_table = "catalogue_modele_role"
@@ -83,17 +90,10 @@ class ModeleRoleModule(ModeleBase):
         default="",
         help_text=_("Code technique du module (ex: 'projets', 'administration')."),
     )
-    niveau_max = models.PositiveSmallIntegerField(
-        _("niveau d'accès maximum"),
-        choices=NiveauAcces.choices,
-        default=NiveauAcces.AUCUN,
-        help_text=_("Plafond non franchissable par le tenant : 0 Aucun, 1 Lecture, 2 Écriture, 3 Validation."),
-    )
-
     class Meta:
         db_table = "catalogue_modele_role_module"
-        verbose_name = _("plafond module du modèle de rôle")
-        verbose_name_plural = _("plafonds modules des modèles de rôles")
+        verbose_name = _("module du modèle de rôle")
+        verbose_name_plural = _("modules des modèles de rôles")
         ordering = ["modele_role", "module_code"]
         constraints = [
             models.UniqueConstraint(
@@ -105,7 +105,7 @@ class ModeleRoleModule(ModeleBase):
 
     def __str__(self) -> str:
         m_code = self.module_code or (self.module.code if self.module else "?")
-        return f"{self.modele_role.code} — {m_code}: max {self.niveau_max}"
+        return f"{self.modele_role.code} — {m_code}"
 
     def save(self, *args, **kwargs):
         if self.module and not self.module_code:

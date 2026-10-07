@@ -48,6 +48,7 @@ def creer_invitation(
     hote: str | None = None,
     nom_projet: str | None = None,
     projet_id: str | uuid.UUID | None = None,
+    verifier_quota: bool = True,
 ) -> Invitation:
     """Crée une invitation avec son empreinte SHA-256 (MLD §5.2) et expédie le lien.
 
@@ -56,7 +57,8 @@ def creer_invitation(
     de US-013 : la limite se dit au moment de l'invitation, pas au moment de
     l'activation, quand il n'y a plus personne à qui le dire.
     """
-    verifier_quota_avant_invitation()
+    if verifier_quota:
+        verifier_quota_avant_invitation()
 
     jeton = uuid.uuid4()
     empreinte = Invitation.empreinte_de(jeton)

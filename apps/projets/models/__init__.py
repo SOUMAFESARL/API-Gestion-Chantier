@@ -15,7 +15,6 @@ from .equipe import AffectationEquipeActivite, EquipeChantier, MembreEquipeChant
 from .historique_date import HistoriqueDate, TypeObjetHistorique
 from .lot import Lot
 from .motif_report import MotifReport
-from .override import ProjetRoleModuleOverride
 from .projet import AffectationProjet, Projet
 from .sante_snapshot import SanteProjetSnapshot
 
@@ -31,7 +30,6 @@ __all__ = [
     "MotifReport",
     "Projet",
     "ProjetContrat",
-    "ProjetRoleModuleOverride",
     "SanteProjetSnapshot",
     "TypeObjetHistorique",
 ]

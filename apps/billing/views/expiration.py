@@ -19,7 +19,7 @@ class NotificationsExpirationView(APIView):
         tags=["Notifications d'abonnement"],
         summary="Consulter l'alerte d'expiration de son abonnement",
         description=(
-            "Roles AD, DG, DF. Tableau vide ou une alerte calculee a chaque lecture, "
+            "Roles DG, AD. Tableau vide ou une alerte calculee a chaque lecture, "
             "des J-7 et jusqu'au renouvellement. Paliers J-7, J-3, J-1, J0. "
             "Les essais gratuits conservent leur circuit de relance existant. "
             "Aucun email n'est envoye par cette requete."

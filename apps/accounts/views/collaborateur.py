@@ -257,10 +257,6 @@ class ParametresCollaborateurListCreateView(APIView):
         elif role_global:
             mapped = "BAI" if role_global == "MOA" else ("VI" if role_global == "MOE" else role_global)
             role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
-            if not role_cible:
-                from apps.accounts.services.roles import initialiser_roles_par_defaut
-                initialiser_roles_par_defaut()
-                role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
 
         from apps.core.droits import est_dg
         # Règle B-09 : Seul le DG peut inviter ou nommer un DG
@@ -560,10 +556,6 @@ class ParametresCollaborateurDetailView(APIView):
         if not role_cible and role_global:
             mapped = "BAI" if role_global == "MOA" else ("VI" if role_global == "MOE" else role_global)
             role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
-            if not role_cible:
-                from apps.accounts.services.roles import initialiser_roles_par_defaut
-                initialiser_roles_par_defaut()
-                role_cible = Role.objects.filter(code=mapped, supprime_le__isnull=True).first()
 
         if not est_dg(request.user) and role_cible:
             from apps.core.droits import permissions_du_role, permissions_effectives

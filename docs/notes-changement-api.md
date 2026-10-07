@@ -127,5 +127,95 @@
   - Suppression définitive de la valeur de consommation fictive calculée en dur à `0.225` (22,5 %).
   - Impact frontend : la tuile « Dépensé » et la zone budget doivent prendre en compte l'absence de ces champs et le masquage par `voir_montants`.
 
+## Lot 8 : Visibilité multi-chantiers, affectations et parité des routes
+
+### Refus HTTP et validations
+- **[C-01] Cloisonnement par affectation chantier** : Un utilisateur avec une portée `CHANTIER` ne peut accéder qu'aux chantiers sur lesquels il est explicitement affecté. Tout accès à un autre chantier est rejeté avec `HTTP 403 Forbidden` ou masqué dans les listes.
+- **[C-02] Droits d'écriture par affectation** : Les écritures sont strictement restreintes aux collaborateurs affectés possédant la permission requise.
+- **[C-03] Cascade de visibilité sur les sous-ressources** : L'accès aux lots, activités, plannings et journaux de chantier hérite du contrôle d'affectation au niveau projet.
+- **[C-04] Règle d'affectation des collaborateurs** : Refus d'affectation si l'utilisateur est inactif ou dépourvu de rôle de projet valide.
+- **[C-05] Protection de la composition des équipes** : Refus de suppression de la dernière affectation requise sur un chantier actif.
+- **[F-03] Parité stricte des routes `/api/v1/projets/` et `/api/v1/chantiers/`** : Comportement, schémas et permissions identiques sur les deux chemins.
+- **[F-04] Alignement des filtres et pagination** : Les filtres par statut, dates et recherche textuelle sont rigoureusement alignés.
+- **[F-05] Égalité des permissions requises** : Application uniforme des vérifications `projets.creer`, `projets.ecrire`, `projets.voir`.
+- **[F-06] Alignement des réponses d'erreurs** : Mêmes statuts HTTP et formats de payload en cas d'erreur.
+- **[F-07] Nettoyage des routes orphelines** : Suppression des endpoints non maintenus.
+- **[F-08] Maintien des alias de compatibilité** : Conservation transparente des alias avec redirection ou traitement identique.
+
+### Codes d'erreur
+- `HTTP 403 Forbidden` : `permission_refusee`, `chantier_non_affecte`.
+- `HTTP 404 Not Found` : ressource inexistante ou hors périmètre d'affectation.
+- `HTTP 400 Bad Request` : affectation invalide ou doublon d'affectation.
+
+### Routes et endpoints concernés
+- `/api/v1/projets/` et alias `/api/v1/chantiers/`
+- `/api/v1/projets/{id}/affectations/`
+- `/api/v1/projets/{id}/lots/`
+- `/api/v1/projets/{id}/activites/`
+
+### Impact frontend
+- Filtrage automatique des sélecteurs de chantiers pour les rôles de chantier (Conducteur de Travaux, Chef de Chantier).
+- Les écrans de gestion des équipes s'appuient sur les endpoints d'affectation unifiés.
+
+### Règles couvertes
+- C-01, C-02, C-03, C-04, C-05, F-03, F-04, F-05, F-06, F-07, F-08
+
+## Lot 9 : Propagation super admin, plateforme et sessions d'assistance
+
+### Refus HTTP et contrôles d'accès plateforme
+- **[H-01] Contrôle strict de session d'assistance (Impersonation)** : Le jeton d'assistance super admin est en lecture seule stricte. Toute tentative d'écriture (POST, PUT, PATCH, DELETE) est rejetée avec `HTTP 403 Forbidden` et le code `ecriture_interdite_assistance`, à l'exception de la déconnexion explicite.
+- **[H-02] Cloisonnement de l'API plateforme** : Seuls les utilisateurs du schéma public ayant `is_staff=True` ou `is_superuser=True` peuvent accéder à l'API `/admins/`. Les requêtes non autorisées reçoivent `HTTP 403 Forbidden`.
+- **[A-05] Non-attribution automatique des nouvelles permissions** : Une nouvelle permission synchronisée dans le catalogue n'est ajoutée à aucun rôle stocké (y compris AD). Elle devient sélectionnable par le DG et est possédée par le DG par calcul dynamique.
+- **[A-06] Désactivation globale d'une permission catalogue** : La désactivation d'une permission retire instantanément son effet sur tous les rôles de toutes les entreprises.
+- **[A-07] Propagation idempotente des rôles système** : `propager_roles_systeme` ne crée que les rôles système manquants et n'écrase jamais un rôle existant.
+- **[A-08] Immutabilité rétroactive des modèles** : La modification d'un modèle de rôle n'impacte pas les rôles déjà instanciés dans les entreprises.
+- **[A-09] Résolution de conflit rôle système / rôle personnalisé** : En cas de collision de code ou nom, le rôle système l'emporte et le rôle personnalisé est automatiquement renommé avec le suffixe `_perso`.
+- **[A-10] Désactivation d'un module client** : Retire immédiatement les permissions associées des permissions effectives, tout en conservant les configurations intactes en base.
+- **[A-11] Activation d'un module client** : Initialise les permissions par défaut du modèle sur les rôles système et crée une ligne vide pour les rôles personnalisés.
+- **[A-14] Notification e-mail au Directeur Général** : Envoi d'un e-mail d'audit au DG lors de l'ouverture d'assistance, activation/désactivation de modules, propagation de rôle système ou désactivation de permission catalogue.
+
+### Codes d'erreur
+- `ecriture_interdite_assistance` : renvoyé en HTTP 403 lors d'une tentative d'écriture en mode assistance.
+- `HTTP 403 Forbidden` : accès refusé aux non-super-admins sur `/admins/`.
+- `HTTP 404 Not Found` : client ou module introuvable.
+
+### Routes plateforme et assistance
+- `/api/v1/admins/clients/{client_id}/modules/{module_id}/activer/`
+- `/api/v1/admins/clients/{client_id}/modules/{module_id}/desactiver/`
+- `/api/v1/admins/assistance/connexion/`
+- `/api/v1/admins/assistance/deconnexion/`
+- `/api/v1/admins/modeles-roles/`
+- `/api/v1/admins/catalogue-permissions/`
+
+### Impact frontend
+- Affichage de la bannière de session d'assistance en lecture seule.
+- Désactivation préventive des formulaires et boutons de soumission pour l'opérateur de support.
+
+### Règles couvertes
+- A-05, A-06, A-07, A-08, A-09, A-10, A-11, A-14, H-01, H-02
+
+## Lot 10 : Clôture, nettoyage, invariance et certification finale
+
+### Refus HTTP et préservation des contrats
+- **[F-09] Invariance météo et référentiels** : Les endpoints météo et villes préservent rigoureusement leur comportement historique. Si le projet n'est pas renseigné ou n'est pas visible, repli transparent sur la ville du siège de l'entreprise avec statut 200.
+- **[G-02] Compatibilité totale du contrat profil frontend** : L'endpoint `/api/v1/auth/profil/` garantit la présence et le typage exact de tous les champs attendus par le client web (`habilitations`, `role_personnalise`, `permissions_effectives`). Refus `HTTP 401 Unauthorized` pour tout utilisateur non authentifié.
+
+### Codes d'erreur
+- Aucun nouveau code d'erreur spécifique introduit.
+- Préservation des codes standards `HTTP 401 Unauthorized` et `HTTP 403 Forbidden`.
+
+### Routes stabilisées
+- `/api/v1/projets/meteo/`
+- `/api/v1/projets/referentiels/villes/`
+- `/api/v1/auth/profil/`
+
+### Impact frontend
+- **[F-10] Nettoyage et assainissement** : Suppression des anciennes constantes mortes (`ROLES_DIRECTION`, `ROLES_GESTION_CHANTIER`, `ROLES_VALIDATION_CHANTIER`) et élimination des mentions obsolètes de l'ancien rôle « DF » dans les docstrings et descriptions OpenAPI.
+- **[G-03] Documentation exhaustive des évolutions d'API** : Alignement de toutes les spécifications pour l'équipe frontend et zéro régression contractuelle.
+
+### Règles couvertes
+- F-09, F-10, G-02, G-03
+
+
 
 

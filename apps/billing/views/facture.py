@@ -22,7 +22,7 @@ ERREURS_FACTURE = {
     404: OpenApiResponse(description="Facture introuvable dans cette entreprise."),
 }
 DESCRIPTION_FACTURE = (
-    "Jeton JWT de l'entreprise requis. Roles autorises : AD, DG, DF. "
+    "Jeton JWT de l'entreprise requis. Roles autorises : DG, AD. "
     "Les montants JSON sont en centimes XOF. Les factures sont creees par "
     "l'initiation du paiement puis marquees PAYEE apres confirmation CinetPay."
 )

@@ -251,7 +251,7 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
                 continue
 
             mod_key = mod_code.lower()
-            if mod_key not in modules_actifs and mod_key != "administration":
+            if mod_key not in modules_actifs or mod_key == "administration":
                 continue
 
             codes_cochés = set(

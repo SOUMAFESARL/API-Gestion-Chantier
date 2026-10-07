@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.core.ip_restriction import extraire_ip_client
 from apps.platform_admin.models import JournalPlateforme
+from apps.platform_admin.permissions import EstSuperAdminPlateforme
 from apps.platform_admin.serializers.impersonation import (
     DeconnexionAssistanceRequestSerializer,
     DeconnexionAssistanceResponseSerializer,
@@ -114,6 +115,11 @@ class DeconnexionAssistanceView(APIView):
             payload = request.impersonation_payload
             super_admin_id = payload.get("impersonateur_id")
             super_admin_email = payload.get("impersonateur_email", "")
+            if not entreprise_id and payload.get("schema"):
+                from apps.tenants.models import Entreprise
+                ent = Entreprise.objects.filter(schema_name=payload.get("schema")).first()
+                if ent:
+                    entreprise_id = ent.id
 
         clore_session_assistance(
             super_admin_id=super_admin_id,
@@ -162,7 +168,7 @@ class ListerUtilisateursEntrepriseView(APIView):
 class JournalPlateformeListView(APIView):
     """Consultation du journal d'audit de la plateforme (MLD §4.6)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
 
     @extend_schema(
         tags=["admins"],

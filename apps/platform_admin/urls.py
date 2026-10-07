@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.platform_admin.views import (
+    ActiverModuleClientPlateformeView,
     AdminChangerMotDePasseMoiView,
     AdminModuleAffecterPermissionsView,
     AdminModuleDesactiverView,
@@ -14,6 +15,7 @@ from apps.platform_admin.views import (
     AdminProfilMoiView,
     ChangerPlanClientPlateformeView,
     ClientsPlateformeListView,
+    DesactiverModuleClientPlateformeView,
     ComptesAdministrateursListCreateView,
     ConnexionAdminView,
     DeconnexionAdminView,
@@ -155,6 +157,16 @@ urlpatterns = [
         "admins/clients/<uuid:client_id>/abonnement/",
         ChangerPlanClientPlateformeView.as_view(),
         name="admins-clients-plateforme-abonnement",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/modules/<uuid:module_id>/activer/",
+        ActiverModuleClientPlateformeView.as_view(),
+        name="admins-clients-modules-activer",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/modules/<uuid:module_id>/desactiver/",
+        DesactiverModuleClientPlateformeView.as_view(),
+        name="admins-clients-modules-desactiver",
     ),
     # Gestion Dynamique des Modules (Super Admin)
     path("admin/modules/", AdminModuleListCreateView.as_view(), name="admin-modules-liste-creer"),

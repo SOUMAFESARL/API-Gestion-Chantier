@@ -5,3 +5,6 @@ class TenantsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.tenants"
     verbose_name = "Entreprises clientes abonnées et cycle de vie de leur schéma PostgreSQL"
+
+    def ready(self):
+        import apps.tenants.signals  # noqa

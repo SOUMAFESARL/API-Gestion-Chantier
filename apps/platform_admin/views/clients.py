@@ -27,9 +27,24 @@ from apps.platform_admin.services.clients import (
     suspendre_client_plateforme,
 )
 
+from django.shortcuts import get_object_or_404
+from django.db import models, transaction
+from django_tenants.utils import schema_context
+from apps.catalogue.models import CatalogueModule, EntrepriseModule
+from apps.core.enums import NiveauAcces
+from apps.platform_admin.services.notifications import (
+    journaliser_plateforme,
+    journaliser_tenant,
+    notifier_dg_action_plateforme,
+    SUJET_MODIFICATION_PLATEFORME,
+)
+from apps.tenants.models import Entreprise
+
 __all__ = [
+    "ActiverModuleClientPlateformeView",
     "ChangerPlanClientPlateformeView",
     "ClientsPlateformeListView",
+    "DesactiverModuleClientPlateformeView",
     "FicheClientPlateformeView",
     "ReactiverClientPlateformeView",
     "SuspendreClientPlateformeView",
@@ -412,3 +427,182 @@ class ChangerPlanClientPlateformeView(APIView):
     def post(self, request, client_id):
         """Permet l'appel en POST ou PATCH indifféremment."""
         return self.patch(request, client_id)
+
+
+class ActiverModuleClientPlateformeView(APIView):
+    """`POST /api/v1/admins/clients/{client_id}/modules/{module_id}/activer/` — Active un module pour un client (A-11, A-14, H-02)."""
+
+    permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
+
+    def post(self, request, client_id, module_id):
+        with schema_context("public"):
+            entreprise = get_object_or_404(Entreprise, id=client_id)
+            module = get_object_or_404(CatalogueModule, id=module_id)
+
+            em, cree = EntrepriseModule.objects.get_or_create(
+                entreprise=entreprise, module=module, defaults={"est_actif": True}
+            )
+            deja_actif = (not cree) and em.est_actif
+            if not deja_actif:
+                em.est_actif = True
+                em.save(update_fields=["est_actif", "modifie_le"])
+
+        # Dans le schéma du tenant (A-11) :
+        with schema_context(entreprise.schema_name):
+            with transaction.atomic():
+                from apps.accounts.models import Module, Role, RoleModulePermission
+                from apps.catalogue.models import CataloguePermission, ModeleRoleModule
+
+                mod_local = Module.objects.filter(code__iexact=module.code, supprime_le__isnull=True).first()
+
+                # Pour chaque rôle non-DG existant
+                roles_non_dg = Role.objects.exclude(code__in=["DG", "DIRECTEUR_GENERAL"]).filter(
+                    supprime_le__isnull=True
+                )
+
+                for r in roles_non_dg:
+                    # S'il n'a pas encore de ligne pour ce module (par module ou module_catalogue)
+                    rmp_existant = RoleModulePermission.objects.filter(
+                        models.Q(role=r)
+                        & (
+                            models.Q(module_catalogue=module)
+                            | models.Q(module__code__iexact=module.code)
+                        ),
+                        supprime_le__isnull=True,
+                    ).first()
+
+                    if not rmp_existant:
+                        rmp = RoleModulePermission.objects.create(
+                            role=r,
+                            module=mod_local,
+                            module_catalogue=module,
+                            niveau=NiveauAcces.AUCUN,
+                        )
+                        # Rôle système : reçoit les défauts du modèle
+                        if r.est_systeme:
+                            mrm = ModeleRoleModule.objects.filter(
+                                modele_role__code__iexact=r.code,
+                                module_code__iexact=module.code,
+                                supprime_le__isnull=True,
+                            ).first()
+                            if mrm:
+                                perms_cat = list(
+                                    CataloguePermission.objects.filter(
+                                        modules=module, est_actif=True, supprime_le__isnull=True
+                                    )
+                                )
+                                if perms_cat:
+                                    rmp.permissions_catalogue.set(perms_cat)
+                        # Rôle personnalisé : reçoit une ligne explicite vide (permissions_catalogue reste vide)
+
+        adresse_ip = extraire_ip_client(request)
+        appareil = request.headers.get("User-Agent", "")[:255]
+
+        # Audit tenant (L9-1)
+        journaliser_tenant(
+            entreprise=entreprise,
+            action="MODIFICATION",
+            type_entite="EntrepriseModule",
+            entite_id=module.id,
+            valeur_apres={"module": module.code, "action": "ACTIVATION"},
+            acteur=request.user,
+            adresse_ip=adresse_ip,
+            appareil=appareil,
+        )
+
+        # Journal plateforme (H-02)
+        journaliser_plateforme(
+            action="ACTIVATION_MODULE",
+            acteur=request.user,
+            entreprise=entreprise,
+            detail={"module_code": module.code, "module_id": str(module.id)},
+            adresse_ip=adresse_ip,
+            appareil=appareil,
+        )
+
+        # Notification DG après commit si l'état a changé (A-14)
+        if not deja_actif:
+            email_admin = getattr(request.user, "email", "") or "admin@plateforme.local"
+            notifier_dg_action_plateforme(
+                entreprise=entreprise,
+                sujet=SUJET_MODIFICATION_PLATEFORME,
+                message=(
+                    f"Bonjour,\n\n"
+                    f"Le module '{module.libelle}' ({module.code}) a été activé sur votre espace par l'administration de la plateforme.\n"
+                    f"Super admin acteur : {email_admin}\n"
+                ),
+                super_admin_email=email_admin,
+            )
+
+        return Response(
+            {"detail": f"Module {module.code} activé avec succès pour l'entreprise {entreprise.raison_sociale}."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class DesactiverModuleClientPlateformeView(APIView):
+    """`POST /api/v1/admins/clients/{client_id}/modules/{module_id}/desactiver/` — Désactive un module pour un client (A-10, A-14, H-02)."""
+
+    permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
+
+    def post(self, request, client_id, module_id):
+        with schema_context("public"):
+            entreprise = get_object_or_404(Entreprise, id=client_id)
+            module = get_object_or_404(CatalogueModule, id=module_id)
+
+            em = EntrepriseModule.objects.filter(
+                entreprise=entreprise, module=module, supprime_le__isnull=True
+            ).first()
+            deja_inactif = (em is not None and not em.est_actif) or (em is None)
+
+            if em:
+                em.est_actif = False
+                em.save(update_fields=["est_actif", "modifie_le"])
+            else:
+                EntrepriseModule.objects.create(
+                    entreprise=entreprise, module=module, est_actif=False
+                )
+
+        adresse_ip = extraire_ip_client(request)
+        appareil = request.headers.get("User-Agent", "")[:255]
+
+        # Audit tenant (L9-1)
+        journaliser_tenant(
+            entreprise=entreprise,
+            action="MODIFICATION",
+            type_entite="EntrepriseModule",
+            entite_id=module.id,
+            valeur_apres={"module": module.code, "action": "DESACTIVATION"},
+            acteur=request.user,
+            adresse_ip=adresse_ip,
+            appareil=appareil,
+        )
+
+        # Journal plateforme (H-02)
+        journaliser_plateforme(
+            action="DESACTIVATION_MODULE",
+            acteur=request.user,
+            entreprise=entreprise,
+            detail={"module_code": module.code, "module_id": str(module.id)},
+            adresse_ip=adresse_ip,
+            appareil=appareil,
+        )
+
+        # Notification DG après commit si l'état a changé (A-14, L9-7)
+        if not deja_inactif:
+            email_admin = getattr(request.user, "email", "") or "admin@plateforme.local"
+            notifier_dg_action_plateforme(
+                entreprise=entreprise,
+                sujet=SUJET_MODIFICATION_PLATEFORME,
+                message=(
+                    f"Bonjour,\n\n"
+                    f"Le module '{module.libelle}' ({module.code}) a été désactivé sur votre espace par l'administration de la plateforme.\n"
+                    f"Super admin acteur : {email_admin}\n"
+                ),
+                super_admin_email=email_admin,
+            )
+
+        return Response(
+            {"detail": f"Module {module.code} désactivé avec succès pour l'entreprise {entreprise.raison_sociale}."},
+            status=status.HTTP_200_OK,
+        )

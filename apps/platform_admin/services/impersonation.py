@@ -208,6 +208,25 @@ def demarrer_session_assistance(
             appareil=appareil[:255] if appareil else "",
         )
 
+    # 3. Notification par courriel au DG de l'entreprise (H-01, A-14)
+    from apps.platform_admin.services.notifications import notifier_dg_action_plateforme, SUJET_ASSISTANCE
+    corps_email = (
+        f"Bonjour,\n\n"
+        f"Une session d'assistance a été ouverte sur votre espace par un administrateur de la plateforme.\n\n"
+        f"Détails de l'intervention :\n"
+        f"- Administrateur plateforme : {super_admin.email}\n"
+        f"- Motif : {motif_nettoye}\n"
+        f"- Mode : Lecture seule\n"
+        f"- Durée : 1 heure\n\n"
+        f"Cordialement,\nL'équipe Support CCD Digital."
+    )
+    notifier_dg_action_plateforme(
+        entreprise=entreprise,
+        sujet=SUJET_ASSISTANCE,
+        message=corps_email,
+        super_admin_email=super_admin.email,
+    )
+
     logger.info(
         "Session d'assistance ouverte : super_admin=%s entreprise=%s cible=%s motif=%s",
         super_admin.email,

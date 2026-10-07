@@ -2,7 +2,7 @@
 
 Version 1.0
 Statut : GELÉ
-Exceptions au gel : C-04 et H-01, à compléter après le lot 0.
+Exceptions au gel : C-04 (levée au lot 8) et H-01 (levée au lot 9).
 
 **Légende**
 - `[V]` : validé explicitement par Durel.
@@ -253,8 +253,12 @@ Exceptions au gel : C-04 et H-01, à compléter après le lot 0.
 
 ## H. Plateforme (super admin)
 
-**H-01 [V] Impersonation.** Lecture seule (le claim `read_only` existe et un middleware le lit). Début et fin de session journalisés dans l'audit. E-mail au DG au début de la session.
-- À vérifier d'abord : les méthodes réellement bloquées, ce qui est déjà journalisé.
+**H-01 [V] Impersonation (session d'assistance).**
+- Le super admin ouvre une session d'assistance sur une entreprise. Le jeton porte `is_impersonation` et `read_only`, vaut une heure et n'est pas renouvelable.
+- Toute requête POST, PUT, PATCH ou DELETE faite avec ce jeton est refusée en 403, code `ecriture_interdite_assistance`, sauf la déconnexion d'assistance. Les lectures passent.
+- Le début et la fin (déconnexion explicite) de la session sont journalisés dans `JournalPlateforme` et dans le `JournalAudit` de l'entreprise. L'expiration sans déconnexion n'écrit pas d'entrée de fin.
+- Au début de la session, un e-mail part au DG de l'entreprise (après validation de la transaction, A-14).
+- CA : une session ouverte produit une entrée de début, un e-mail au DG, et un refus 403 `ecriture_interdite_assistance` sur POST, PUT, PATCH et DELETE ; une session terminée produit une entrée de fin.
 
 **H-02 [D] Niveaux de super admin.** Un seul niveau. Toutes les actions sont journalisées.
 

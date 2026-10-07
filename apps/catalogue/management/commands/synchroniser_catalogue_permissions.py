@@ -92,6 +92,16 @@ class Command(BaseCommand):
             p.save(update_fields=["est_actif", "modifie_le"])
             desactives += 1
 
+        # Journalisation plateforme (L9-3 / H-02)
+        try:
+            from apps.platform_admin.services.notifications import journaliser_plateforme
+            journaliser_plateforme(
+                action="SYNCHRONISATION_CATALOGUE",
+                detail={"crees": crees, "mis_a_jour": mis_a_jour, "desactives": desactives},
+            )
+        except Exception:
+            pass
+
         self.stdout.write(
             self.style.SUCCESS(
                 f"Synchronisation terminée : {crees} créées, {mis_a_jour} mises à jour, {desactives} désactivées."

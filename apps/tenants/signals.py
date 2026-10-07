@@ -1,1 +1,2 @@
-"""Réactions aux événements du module. Branchés dans AppConfig.ready()."""
+"""Réactions aux événements du module tenants."""
+

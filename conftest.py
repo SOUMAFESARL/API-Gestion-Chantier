@@ -58,6 +58,22 @@ def django_db_setup(django_db_setup, django_db_blocker):
                 domain=HOTE_TEST, defaults={"tenant": entreprise, "is_primary": True}
             )
 
+            # Deuxième entreprise réelle pour les tests multi-tenants (Lot 9 / P3)
+            entreprise_b = Entreprise.objects.filter(schema_name="tenant_b").first()
+            if entreprise_b is None:
+                entreprise_b = Entreprise(
+                    schema_name="tenant_b",
+                    raison_sociale="Entreprise B Test",
+                    nom_commercial="Entreprise B",
+                    email_contact="contact@tenant-b.ci",
+                    statut=StatutEntreprise.ACTIF,
+                )
+                entreprise_b.save(verbosity=0)
+
+            Domaine.objects.get_or_create(
+                domain="tenant-b.localhost", defaults={"tenant": entreprise_b, "is_primary": True}
+            )
+
     return django_db_setup
 
 

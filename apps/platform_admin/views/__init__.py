@@ -4,8 +4,10 @@ from .auth import (
     RenouvellementAdminView,
 )
 from .clients import (
+    ActiverModuleClientPlateformeView,
     ChangerPlanClientPlateformeView,
     ClientsPlateformeListView,
+    DesactiverModuleClientPlateformeView,
     FicheClientPlateformeView,
     ReactiverClientPlateformeView,
     SuspendreClientPlateformeView,
@@ -49,6 +51,7 @@ from .permissions import (
 )
 
 __all__ = [
+    "ActiverModuleClientPlateformeView",
     "AdminChangerMotDePasseMoiView",
     "AdminModuleAffecterPermissionsView",
     "AdminModuleDesactiverView",
@@ -58,6 +61,7 @@ __all__ = [
     "AdminPermissionAffecterModulesView",
     "AdminPermissionDetailUpdateDeleteView",
     "AdminPermissionListCreateView",
+    "DesactiverModuleClientPlateformeView",
     "AdminPhotoMoiView",
     "AdminProfilMoiView",
     "ComptesAdministrateursListCreateView",

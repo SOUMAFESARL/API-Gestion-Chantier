@@ -431,7 +431,7 @@ def creer_role(
             m.code.lower(): m for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
         }
         all_cat_perms = {
-            p.code: p for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
+            p.code.lower(): p for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
         }
 
         # Invariant de complétude : Tout rôle est obligatoirement lié à TOUS les modules actifs
@@ -448,7 +448,7 @@ def creer_role(
                 cree_par=cree_par,
             )
             if perms_for_mod:
-                cat_perms = [all_cat_perms[c] for c in perms_for_mod if c in all_cat_perms]
+                cat_perms = [all_cat_perms[c.lower()] for c in perms_for_mod if c.lower() in all_cat_perms]
                 if cat_perms:
                     rmp.permissions_catalogue.set(cat_perms)
 
@@ -493,17 +493,34 @@ def modifier_role(
             m.code.lower(): m for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
         }
         all_cat_perms = {
-            p.code: p for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
+            p.code.lower(): p for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
         }
 
         # Garantir l'invariant de liaison à tous les modules
         for mod in modules_actifs:
             cat_mod = cat_modules_map.get(mod.code.lower())
-            RoleModulePermission.objects.get_or_create(
-                role=role,
-                module=mod,
-                defaults={"cree_par": modifie_par, "niveau": NiveauAcces.AUCUN, "module_catalogue": cat_mod},
-            )
+            filtre = Q(module=mod)
+            if cat_mod:
+                filtre |= Q(module_catalogue=cat_mod)
+            rmp = RoleModulePermission.objects.filter(role=role).filter(filtre).first()
+            if not rmp:
+                RoleModulePermission.objects.create(
+                    role=role,
+                    module=mod,
+                    module_catalogue=cat_mod,
+                    cree_par=modifie_par,
+                    niveau=NiveauAcces.AUCUN,
+                )
+            else:
+                modifie = False
+                if not rmp.module:
+                    rmp.module = mod
+                    modifie = True
+                if not rmp.module_catalogue and cat_mod:
+                    rmp.module_catalogue = cat_mod
+                    modifie = True
+                if modifie:
+                    rmp.save()
 
         if permissions_modules is not None:
             norm_perms = _normaliser_permissions_modules(permissions_modules)
@@ -512,15 +529,24 @@ def modifier_role(
                 mod_code = mod.code.lower()
                 if mod_code in norm_perms or is_full_list:
                     cat_mod = cat_modules_map.get(mod_code)
-                    rmp, _ = RoleModulePermission.objects.get_or_create(
-                        role=role,
-                        module=mod,
-                        defaults={"cree_par": modifie_par, "module_catalogue": cat_mod},
-                    )
+                    filtre = Q(module=mod)
+                    if cat_mod:
+                        filtre |= Q(module_catalogue=cat_mod)
+                    rmp = RoleModulePermission.objects.filter(role=role).filter(filtre).first()
+                    if not rmp:
+                        rmp = RoleModulePermission.objects.create(
+                            role=role,
+                            module=mod,
+                            module_catalogue=cat_mod,
+                            cree_par=modifie_par,
+                            niveau=NiveauAcces.AUCUN,
+                        )
                     if not rmp.module_catalogue and cat_mod:
                         rmp.module_catalogue = cat_mod
+                    if not rmp.module:
+                        rmp.module = mod
                     perms_list = norm_perms.get(mod_code, [])
-                    cat_perms = [all_cat_perms[c] for c in perms_list if c in all_cat_perms]
+                    cat_perms = [all_cat_perms[c.lower()] for c in perms_list if c.lower() in all_cat_perms]
                     rmp.permissions_catalogue.set(cat_perms)
                     niveau_scalaire = _calculer_niveau_scalaire(perms_list)
                     _verifier_plafond_modele(role.code, mod_code, niveau_scalaire)

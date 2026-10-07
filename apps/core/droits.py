@@ -75,21 +75,40 @@ def peut_voir_montants(utilisateur, request=None) -> bool:
 
 def _obtenir_modules_actifs(tenant=None) -> set[str]:
     """Retourne l'ensemble des codes de modules actifs pour l'entreprise courante."""
-    if tenant is None:
-        tenant = getattr(connection, "tenant", None)
+    from apps.tenants.models import Entreprise
+
+    if tenant is None or not isinstance(tenant, Entreprise):
+        schema = getattr(connection, "schema_name", "public")
+        if schema and schema != "public":
+            try:
+                tenant = Entreprise.objects.filter(schema_name=schema).first()
+            except Exception:
+                tenant = None
 
     # 1. Vérifier les souscriptions EntrepriseModule dans le schéma public
     if tenant and getattr(tenant, "schema_name", "public") != "public":
         try:
-            from apps.catalogue.models import EntrepriseModule
+            from apps.catalogue.models import EntrepriseModule, CatalogueModule
 
             em_qs = EntrepriseModule.objects.filter(entreprise=tenant, supprime_le__isnull=True)
             if em_qs.exists():
-                actifs = set(
-                    em_qs.filter(est_actif=True).values_list("module__code", flat=True)
-                )
-                actifs.update(MODULES_SYSTEME)
-                return {m.lower() for m in actifs}
+                inactifs = {
+                    m.lower()
+                    for m in em_qs.filter(est_actif=False).values_list("module__code", flat=True)
+                }
+                actifs_souscrits = {
+                    m.lower()
+                    for m in em_qs.filter(est_actif=True).values_list("module__code", flat=True)
+                }
+                tous_actifs = {
+                    m.lower()
+                    for m in CatalogueModule.objects.filter(
+                        est_actif=True, supprime_le__isnull=True
+                    ).values_list("code", flat=True)
+                }
+                resultats = (tous_actifs | actifs_souscrits) - inactifs
+                resultats.update(MODULES_SYSTEME)
+                return resultats
         except Exception:
             pass
 
@@ -144,18 +163,32 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
 
     # 2. DG ou Propriétaire : toutes les permissions actives des modules actifs + administration
     if est_dg(collaborateur):
-        perms_actives = set(
-            CataloguePermission.objects.filter(
+        perms: set[str] = set()
+        # Catalogue en base
+        try:
+            cat_perms_qs = CataloguePermission.objects.filter(
                 est_actif=True, supprime_le__isnull=True
-            ).values_list("code", flat=True)
-        )
-        if not perms_actives:
-            perms_actives = set(REGISTRE.keys())
-        perms = {
-            code for code, def_p in REGISTRE.items()
-            if (def_p.module in modules_actifs or def_p.module == "administration")
-            and code in perms_actives
-        }
+            ).prefetch_related("modules")
+            for cp in cat_perms_qs:
+                c_code = cp.code.lower()
+                c_mod = c_code.split(".")[0] if "." in c_code else ""
+                mods_cp = {m.code.lower() for m in cp.modules.all()}
+                if c_mod and c_mod not in modules_actifs and c_mod != "administration":
+                    continue
+                if (
+                    c_mod in modules_actifs
+                    or c_mod == "administration"
+                    or any(m in modules_actifs for m in mods_cp)
+                ):
+                    perms.add(c_code)
+        except Exception:
+            pass
+
+        # Compléter avec REGISTRE pour les modules actifs
+        for code, def_p in REGISTRE.items():
+            if def_p.module in modules_actifs or def_p.module == "administration":
+                perms.add(code.lower())
+
         if request:
             request._permissions_effectives_cache = perms
         return perms
@@ -200,8 +233,8 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
         ).select_related("module", "module_catalogue")
 
         if not rmps.exists() and (getattr(role, "est_systeme", False) or getattr(role, "code", "") in {"DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"}):
-            from apps.accounts.services.roles import appliquer_modeles_roles
-            appliquer_modeles_roles()
+            from apps.accounts.services.roles import initialiser_roles_par_defaut
+            initialiser_roles_par_defaut()
             rmps = RoleModulePermission.objects.filter(
                 role=role,
                 supprime_le__isnull=True,
@@ -228,8 +261,8 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
                 ).values_list("code", flat=True)
             )
 
-            # Restreint aux codes officiellement enregistrés dans REGISTRE
-            perms_accordees.update({c for c in codes_cochés if c in REGISTRE})
+            # Permissions actives cochées dans le catalogue (A-04, A-06)
+            perms_accordees.update({c.lower() for c in codes_cochés})
 
         # AD ou ADMIN : 6 droits d'administration fixes dans le code (Règle B-04)
         if code_role in (RoleGlobal.ADMIN, "AD") or getattr(role, "code", "") in (RoleGlobal.ADMIN, "AD"):

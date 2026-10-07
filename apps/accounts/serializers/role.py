@@ -260,8 +260,17 @@ class RoleCreationSerializer(serializers.Serializer):
         if not value:
             return value
         from apps.core.registre_permissions import REGISTRE
+        from apps.catalogue.models import CataloguePermission
+
+        perms_cat_valides = {
+            c.lower()
+            for c in CataloguePermission.objects.filter(
+                est_actif=True, supprime_le__isnull=True
+            ).values_list("code", flat=True)
+        }
+
         for perm in value:
-            p_str = str(perm).strip()
+            p_str = str(perm).strip().lower()
             if p_str.startswith("administration."):
                 raise serializers.ValidationError(
                     "Les permissions d'administration ne peuvent pas être cochées sur un rôle (B-05)."
@@ -271,9 +280,9 @@ class RoleCreationSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     "Les permissions réservées à l'administration ne peuvent pas être cochées sur un rôle (B-05)."
                 )
-            if p_str not in REGISTRE:
+            if p_str not in REGISTRE and p_str not in perms_cat_valides:
                 raise serializers.ValidationError(
-                    f"La permission '{p_str}' n'appartient pas au REGISTRE officiel (A-01)."
+                    f"La permission '{perm}' n'appartient pas au REGISTRE officiel ni au catalogue actif (A-01, A-05)."
                 )
         return value
 
@@ -322,8 +331,17 @@ class RoleModificationSerializer(serializers.Serializer):
         if not value:
             return value
         from apps.core.registre_permissions import REGISTRE
+        from apps.catalogue.models import CataloguePermission
+
+        perms_cat_valides = {
+            c.lower()
+            for c in CataloguePermission.objects.filter(
+                est_actif=True, supprime_le__isnull=True
+            ).values_list("code", flat=True)
+        }
+
         for perm in value:
-            p_str = str(perm).strip()
+            p_str = str(perm).strip().lower()
             if p_str.startswith("administration."):
                 raise serializers.ValidationError(
                     "Les permissions d'administration ne peuvent pas être cochées sur un rôle (B-05)."
@@ -333,9 +351,9 @@ class RoleModificationSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     "Les permissions réservées à l'administration ne peuvent pas être cochées sur un rôle (B-05)."
                 )
-            if p_str not in REGISTRE:
+            if p_str not in REGISTRE and p_str not in perms_cat_valides:
                 raise serializers.ValidationError(
-                    f"La permission '{p_str}' n'appartient pas au REGISTRE officiel (A-01)."
+                    f"La permission '{perm}' n'appartient pas au REGISTRE officiel ni au catalogue actif (A-01, A-05)."
                 )
         return value
 

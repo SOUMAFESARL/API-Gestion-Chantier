@@ -35,7 +35,7 @@ urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd-tenant"),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
     path("api/health/", sante, name="sante-tenant"),
-    path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/v1/schema/", SpectacularAPIView.as_view(urlconf="config.urls_tenant"), name="schema"),
     path("api/v1/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.referentiels.urls")),

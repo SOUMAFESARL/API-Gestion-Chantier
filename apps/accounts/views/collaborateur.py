@@ -619,6 +619,11 @@ class ParametresCollaborateurDetailView(APIView):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        summary="Modifier un collaborateur (alias du PATCH)",
+        request=CollaborateurRattacherRoleSerializer,
+        responses={200: CollaborateurResponseSerializer},
+    )
     def post(self, request, pk):
         return self.patch(request, pk)
 
@@ -685,6 +690,7 @@ class ParametresCollaborateurSuspendreView(APIView):
 
     @extend_schema(
         summary="Suspendre un collaborateur",
+        request=None,
         description="Coupe l'accès d'un compte actif sans effacer ses données ni ses affectations.",
         responses={200: CollaborateurResponseSerializer},
     )
@@ -776,6 +782,7 @@ class ParametresCollaborateurReactiverView(APIView):
 
     @extend_schema(
         summary="Réactiver un collaborateur",
+        request=None,
         description="Rétablit l'accès d'un compte collaborateur précédemment suspendu.",
         responses={200: CollaborateurResponseSerializer},
     )
@@ -844,4 +851,4 @@ class ParametresCollaborateurReactiverView(APIView):
             "avatar_url": avatar_url,
             "derniere_connexion": getattr(collaborateur, "derniere_connexion", getattr(collaborateur, "last_login", None)),
         }
-        return Response(CollaborateurResponseSerializer(reponse_data).data, status=status.HTTP_200_OK)
+        return Response(CollaborateurResponseSerializer(reponse_data).data, status=status.HTTP_200_OK)

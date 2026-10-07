@@ -434,6 +434,7 @@ class ActiverModuleClientPlateformeView(APIView):
 
     permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
 
+    @extend_schema(summary="Activer un module pour un client", request=None, responses={200: dict})
     def post(self, request, client_id, module_id):
         with schema_context("public"):
             entreprise = get_object_or_404(Entreprise, id=client_id)
@@ -545,6 +546,7 @@ class DesactiverModuleClientPlateformeView(APIView):
 
     permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
 
+    @extend_schema(summary="Désactiver un module pour un client", request=None, responses={200: dict})
     def post(self, request, client_id, module_id):
         with schema_context("public"):
             entreprise = get_object_or_404(Entreprise, id=client_id)

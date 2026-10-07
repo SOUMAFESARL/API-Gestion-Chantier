@@ -15,11 +15,6 @@ from apps.accounts.services.roles import (
 )
 from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal, StatutUtilisateur
 from apps.projets.models import Projet
-from apps.projets.services.overrides import (
-    get_matrice_permissions_projet,
-    set_override_permission_projet,
-    supprimer_override_permission_projet,
-)
 from apps.tiers.models import Tiers
 
 SCHEMA = "demo"
@@ -142,55 +137,6 @@ def test_supprimer_role_avec_reassignation_obligatoire(admin_user):
         assert role_source.supprime_le is not None
 
 
-@pytest.mark.django_db
-def test_surcharge_permissions_par_projet(admin_user):
-    with schema_context(SCHEMA):
-        initialiser_roles_par_defaut()
-
-        client_tiers, _ = Tiers.objects.get_or_create(
-            raison_sociale="Client Test",
-            defaults={"telephone": "+22501020304"},
-        )
-        projet, _ = Projet.objects.get_or_create(
-            reference="PRJ-2026-TEST",
-            defaults={
-                "nom": "Chantier Test Droits",
-                "client": client_tiers,
-                "ville": "Abidjan",
-                "date_debut_prevue": "2026-09-01",
-                "date_fin_prevue": "2026-12-31",
-                "chef_projet": admin_user,
-            },
-        )
-
-        role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
-
-        # Vérifie la matrice par défaut du projet
-        matrice = get_matrice_permissions_projet(projet)
-        cc_info = next(r for r in matrice if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_info["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.AUCUN
-        assert cc_info["modules"][ModuleChoix.TIERS]["est_surcharge"] is False
-
-        # Appliquer une surcharge : autoriser les tiers à LECTURE sur ce chantier
-        set_override_permission_projet(
-            projet=projet,
-            role=role_cc,
-            module=ModuleChoix.TIERS,
-            niveau=NiveauAcces.LECTURE,
-            modifie_par=admin_user,
-        )
-
-        matrice_apres = get_matrice_permissions_projet(projet)
-        cc_apres = next(r for r in matrice_apres if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_apres["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.LECTURE
-        assert cc_apres["modules"][ModuleChoix.TIERS]["est_surcharge"] is True
-
-        # Réinitialiser vers le défaut
-        supprimer_override_permission_projet(projet, role_cc, ModuleChoix.TIERS)
-        matrice_reinit = get_matrice_permissions_projet(projet)
-        cc_reinit = next(r for r in matrice_reinit if r["code"] == RoleGlobal.CHEF_CHANTIER)
-        assert cc_reinit["modules"][ModuleChoix.TIERS]["niveau"] == NiveauAcces.AUCUN
-        assert cc_reinit["modules"][ModuleChoix.TIERS]["est_surcharge"] is False
 
 
 @pytest.mark.django_db

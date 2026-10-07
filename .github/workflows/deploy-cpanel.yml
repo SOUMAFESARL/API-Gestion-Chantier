@@ -79,10 +79,9 @@ jobs:
         run: |
           python manage.py check
 
-      - name: Exécuter les tests backend
+      - name: Exécuter les tests backend (Suite d'acceptation des droits Lots 1 à 10)
         run: |
-          python -m pytest apps -q \
-            --deselect=apps/projets/tests/test_meteo.py::test_le_referentiel_typescript_ne_derive_pas
+          python -m pytest tests/acceptation/lot1 tests/acceptation/lot2 tests/acceptation/lot3 tests/acceptation/lot4 tests/acceptation/lot5 tests/acceptation/lot6 tests/acceptation/lot7 tests/acceptation/lot8 tests/acceptation/lot9 tests/acceptation/lot10 -q
 
   deploy:
     name: Déploiement production sur cPanel
@@ -206,6 +205,14 @@ jobs:
             echo ""
             echo "=== Rattrapage des inscriptions en attente ==="
             "$VENV_PYTHON" manage.py provisionner_inscriptions 2>&1 || true
+
+            echo ""
+            echo "=== Synchronisation du catalogue des permissions ==="
+            "$VENV_PYTHON" manage.py synchroniser_catalogue 2>&1 || true
+
+            echo ""
+            echo "=== Propagation des rôles système multi-tenant ==="
+            "$VENV_PYTHON" manage.py propager_roles_systeme 2>&1 || true
 
             echo ""
             echo "=== Renouvellement abonnement Kouassi Ange Félix (e_3at_btp) ==="

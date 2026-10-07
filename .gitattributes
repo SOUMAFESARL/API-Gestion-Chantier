@@ -1,2 +1,4 @@
 # Les offsets internes des PDF exigent de conserver exactement leurs octets.
 *.pdf binary
+# Ce fichier est déjà versionné en CRLF : préserver ses fins de ligne.
+apps/accounts/views/collaborateur.py -text whitespace=cr-at-eol

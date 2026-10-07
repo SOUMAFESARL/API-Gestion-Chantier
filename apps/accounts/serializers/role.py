@@ -153,7 +153,7 @@ class RoleSerializer(serializers.ModelSerializer):
     def get_nb_utilisateurs(self, obj: Role) -> int:
         return compter_utilisateurs_et_affectations(obj)["total"]
 
-    def get_modules(self, obj: Role):
+    def get_modules(self, obj: Role) -> list[dict]:
         return _construire_tableau_dynamique_modules(obj)
 
     def get_permissions_modules(self, obj: Role) -> dict[str, list[str]]:

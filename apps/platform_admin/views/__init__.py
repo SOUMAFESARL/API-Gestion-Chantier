@@ -23,6 +23,12 @@ from .indicateurs import (
     IndicateursPlateformeView,
     TendancesIndicateursView,
 )
+from .parametres import (
+    AdminIdentiteView,
+    AdminTarifsView,
+    IdentitePublicView,
+    TarifsPublicsView,
+)
 from .reinitialisation import (
     DemandeReinitialisationAdminView,
     ReinitialisationAdminView,
@@ -51,6 +57,10 @@ from .permissions import (
 )
 
 __all__ = [
+    "AdminIdentiteView",
+    "AdminTarifsView",
+    "IdentitePublicView",
+    "TarifsPublicsView",
     "ActiverModuleClientPlateformeView",
     "AdminChangerMotDePasseMoiView",
     "AdminModuleAffecterPermissionsView",

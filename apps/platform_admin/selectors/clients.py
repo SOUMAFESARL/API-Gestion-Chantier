@@ -10,6 +10,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.accounts.models import Utilisateur
 from apps.billing.models import Abonnement, PaiementAbonnement, Plan
+from apps.catalogue.models import CatalogueModule, EntrepriseModule
 from apps.core.enums import StatutEntreprise, StatutUtilisateur
 from apps.projets.models import Projet
 from apps.tenants.models import DemandeInscription, Entreprise
@@ -123,6 +124,7 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
         statut_client = "EN_ATTENTE"
 
     return {
+        "modules": modules_du_client(ent),
         "id": str(ent.id),
         "raison_sociale": ent.raison_sociale,
         "nom_commercial": ent.nom_commercial or ent.raison_sociale,
@@ -138,6 +140,30 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
         "nb_projets": nb_projets,
         "abonnement": charge_abonnement,
     }
+
+
+def modules_du_client(ent: Entreprise) -> list[dict]:
+    """Les modules du catalogue et leur état pour cette entreprise (A-10, A-11).
+
+    Un module qui n'a jamais été activé pour elle compte comme inactif : seul le
+    couple (entreprise, module) activé le rend disponible dans son espace.
+    """
+    actifs = set(
+        EntrepriseModule.objects.filter(
+            entreprise=ent, est_actif=True, supprime_le__isnull=True
+        ).values_list("module_id", flat=True)
+    )
+    return [
+        {
+            "id": str(m.id),
+            "code": m.code,
+            "libelle": m.libelle,
+            "actif": m.id in actifs,
+        }
+        for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True).order_by(
+            "ordre", "code"
+        )
+    ]
 
 
 def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:

@@ -61,6 +61,7 @@ class ProfilAdminSerializer(serializers.Serializer):
     prenom = serializers.CharField(read_only=True)
     role_global = serializers.CharField(read_only=True)
     role_libelle = serializers.CharField(read_only=True)
+    role = serializers.CharField(read_only=True, help_text="Rôle plateforme : SUPERVISEUR ou SUPPORT.")
     is_superuser = serializers.BooleanField(read_only=True)
     is_staff = serializers.BooleanField(read_only=True)
     langue = serializers.CharField(read_only=True)

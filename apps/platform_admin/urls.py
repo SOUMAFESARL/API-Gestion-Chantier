@@ -1,6 +1,10 @@
 from django.urls import path
 
 from apps.platform_admin.views import (
+    AdminIdentiteView,
+    AdminTarifsView,
+    IdentitePublicView,
+    TarifsPublicsView,
     ActiverModuleClientPlateformeView,
     AdminChangerMotDePasseMoiView,
     AdminModuleAffecterPermissionsView,
@@ -46,6 +50,11 @@ from apps.platform_admin.views.inscriptions import (
 app_name = "platform_admin"
 
 urlpatterns = [
+    # Paramètres de la plateforme : lecture publique, écriture du superviseur.
+    path("plateforme/tarifs/", TarifsPublicsView.as_view(), name="plateforme-tarifs"),
+    path("plateforme/identite/", IdentitePublicView.as_view(), name="plateforme-identite"),
+    path("admins/parametres/tarifs/", AdminTarifsView.as_view(), name="admins-parametres-tarifs"),
+    path("admins/parametres/identite/", AdminIdentiteView.as_view(), name="admins-parametres-identite"),
     path("admins/inscriptions/", DemandesInscriptionView.as_view(), name="inscriptions-liste"),
     path(
         "admins/inscriptions/<uuid:pk>/",

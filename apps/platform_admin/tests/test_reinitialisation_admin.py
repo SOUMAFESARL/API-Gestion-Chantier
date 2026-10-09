@@ -314,3 +314,42 @@ def test_reinitialisation_mot_de_passe_trop_faible(
             empreinte=JetonReinitialisation.empreinte_de(jeton)
         )
         assert db_jeton.utilise_le is None
+
+
+@pytest.mark.django_db
+def test_agent_support_peut_reinitialiser_son_mot_de_passe(
+    client_api, django_capture_on_commit_callbacks
+):
+    """Un agent SUPPORT (staff, non superuser) reçoit le lien et peut redéfinir son mot de passe."""
+    with schema_context(get_public_schema_name()):
+        Utilisateur.tous_objets.filter(email="support.reset@ccd-digital.ci").delete()
+        Utilisateur.objects.create_user(
+            email="support.reset@ccd-digital.ci",
+            password="AncienMotDePasse12!",
+            nom="Agent",
+            prenom="Support",
+            role_global=RoleGlobal.ADMIN,
+            statut=StatutUtilisateur.ACTIF,
+            is_staff=True,
+        )
+    mail.outbox.clear()
+    with django_capture_on_commit_callbacks(execute=True):
+        reponse = client_api.post(DEMANDE_URL, {"email": "support.reset@ccd-digital.ci"}, format="json")
+    assert reponse.status_code == status.HTTP_202_ACCEPTED
+    jeton = _extraire_jeton_email()
+
+    verif = client_api.post("/api/v1/admins/mot-de-passe/verifier/", {"jeton": jeton}, format="json")
+    assert verif.status_code == status.HTTP_200_OK
+
+    final = client_api.post(
+        "/api/v1/admins/mot-de-passe/reinitialiser/",
+        {"jeton": jeton, "mot_de_passe": "NouveauMotDePasse-2026!"},
+        format="json",
+    )
+    assert final.status_code == status.HTTP_200_OK
+    connexion = client_api.post(
+        "/api/v1/admins/connexion/",
+        {"email": "support.reset@ccd-digital.ci", "mot_de_passe": "NouveauMotDePasse-2026!"},
+        format="json",
+    )
+    assert connexion.status_code == status.HTTP_200_OK

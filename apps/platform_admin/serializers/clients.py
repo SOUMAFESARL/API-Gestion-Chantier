@@ -25,6 +25,15 @@ class AbonnementClientSerializer(serializers.Serializer):
     )
 
 
+class ModuleClientSerializer(serializers.Serializer):
+    """Un module du catalogue et son état pour une entreprise cliente."""
+
+    id = serializers.UUIDField(help_text="Identifiant du module du catalogue.")
+    code = serializers.CharField()
+    libelle = serializers.CharField()
+    actif = serializers.BooleanField(help_text="Le module est-il activé pour cette entreprise ?")
+
+
 class ClientPlateformeSerializer(serializers.Serializer):
     """Fiche synthétique d'une entreprise cliente pour le back-office éditeur."""
 
@@ -50,6 +59,7 @@ class ClientPlateformeSerializer(serializers.Serializer):
         help_text="Nombre total de chantiers créés dans le schéma client."
     )
     abonnement = AbonnementClientSerializer(help_text="Détail de l'abonnement en cours.")
+    modules = ModuleClientSerializer(many=True, help_text="Modules du catalogue et leur état pour ce client.")
 
 
 class SuspendreClientRequestSerializer(serializers.Serializer):

@@ -77,6 +77,7 @@ class ProfilCompletAdminSerializer(serializers.ModelSerializer):
 
     role_global = serializers.CharField(default="AD", read_only=True)
     role_libelle = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
     schema = serializers.CharField(default="public", read_only=True)
     langue = serializers.CharField(default="fr", read_only=True)
     photo_url = serializers.SerializerMethodField()
@@ -92,11 +93,16 @@ class ProfilCompletAdminSerializer(serializers.ModelSerializer):
             "photo_url",
             "role_global",
             "role_libelle",
+            "role",
             "is_superuser",
             "is_staff",
             "langue",
             "schema",
         ]
+
+    def get_role(self, obj: Utilisateur) -> str:
+        """Le rôle plateforme réel (SUPERVISEUR / SUPPORT), comme dans la liste des comptes."""
+        return "SUPERVISEUR" if obj.is_superuser else "SUPPORT"
 
     def get_role_libelle(self, obj: Utilisateur) -> str:
         return str(_("Superviseur Plateforme") if obj.is_superuser else _("Support Plateforme"))

@@ -393,3 +393,56 @@ def test_changer_plan_inconnu_400(client_api, super_admin_user, entreprise_test)
     reponse = client_api.patch(url, data=payload, format="json")
 
     assert reponse.status_code == status.HTTP_400_BAD_REQUEST
+
+
+# --------------------------------------------------------------------------
+# Modules d'un client et rôle du profil plateforme (lot 7 de l'alignement frontend)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_fiche_client_expose_ses_modules_et_leur_etat(client_api, super_admin_user, entreprise_test):
+    """La fiche liste les modules du catalogue avec l'état de chacun pour ce client (A-10, A-11)."""
+    from apps.catalogue.models import CatalogueModule
+
+    client_api.force_authenticate(user=super_admin_user)
+    with schema_context(get_public_schema_name()):
+        module = CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True).first()
+        assert module is not None, "le catalogue doit contenir au moins un module actif"
+
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/"
+    avant = {m["id"]: m for m in client_api.get(url).json()["modules"]}
+    assert str(module.id) in avant
+    assert set(avant[str(module.id)]) == {"id", "code", "libelle", "actif"}
+
+    assert (
+        client_api.post(f"{url}modules/{module.id}/activer/").status_code == status.HTTP_200_OK
+    )
+    apres = {m["id"]: m for m in client_api.get(url).json()["modules"]}
+    assert apres[str(module.id)]["actif"] is True
+
+    assert (
+        client_api.post(f"{url}modules/{module.id}/desactiver/").status_code == status.HTTP_200_OK
+    )
+    final = {m["id"]: m for m in client_api.get(url).json()["modules"]}
+    assert final[str(module.id)]["actif"] is False
+
+
+@pytest.mark.django_db
+def test_profil_admin_expose_le_vrai_role(client_api, super_admin_user):
+    """`/admins/moi/` donne SUPERVISEUR pour un superuser, SUPPORT pour un agent sans ce droit."""
+    client_api.force_authenticate(user=super_admin_user)
+    assert client_api.get("/api/v1/admins/moi/").json()["role"] == "SUPERVISEUR"
+
+    with schema_context(get_public_schema_name()):
+        agent = Utilisateur.objects.create_user(
+            email="agent.support@ccd-digital.ci",
+            password="Support12345!",
+            nom="Agent",
+            prenom="Support",
+            role_global=RoleGlobal.ADMIN,
+            statut=StatutUtilisateur.ACTIF,
+            is_staff=True,
+        )
+    client_api.force_authenticate(user=agent)
+    assert client_api.get("/api/v1/admins/moi/").json()["role"] == "SUPPORT"

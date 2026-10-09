@@ -1,7 +1,7 @@
 """Service d'authentification Super Admin — Plateforme CCD Digital (Control Plane).
 
 Règles de gestion :
-- Seul un compte présent dans le schéma `public` avec `is_superuser=True` peut s'authentifier.
+- Seul un compte présent dans le schéma `public` avec `is_superuser=True` (superviseur) ou `is_staff=True` (agent SUPPORT) peut s'authentifier.
 - Toute tentative infructueuse (compte inexistant, mot de passe erroné, utilisateur non superuser)
   renvoie 401 IdentifiantsInvalides avec une égalité temporelle stricte.
 - Traçabilité complète des connexions et déconnexions dans `JournalPlateforme` (schéma `public`).
@@ -65,7 +65,9 @@ def authentifier_super_admin(
             mot_de_passe_valide = candidat.check_password(mot_de_passe)
             est_valide = (
                 mot_de_passe_valide
-                and candidat.is_superuser
+                # Un agent SUPPORT (staff sans droit de superutilisateur) se connecte aussi :
+                # sans cela, un compte créé par `/admins/comptes/` ne pourrait jamais entrer.
+                and (candidat.is_superuser or candidat.is_staff)
                 and candidat.is_active
                 and not candidat.est_bloque
             )
@@ -109,7 +111,9 @@ def authentifier_super_admin(
         "prenom": super_admin.prenom,
         "role_global": super_admin.role_global,
         "role_libelle": super_admin.get_role_global_display(),
-        "is_superuser": True,
+        # Le rôle plateforme réel, comme dans la liste des comptes : SUPERVISEUR ou SUPPORT.
+        "role": "SUPERVISEUR" if super_admin.is_superuser else "SUPPORT",
+        "is_superuser": super_admin.is_superuser,
         "is_staff": super_admin.is_staff,
         "langue": super_admin.langue,
         "schema": "public",

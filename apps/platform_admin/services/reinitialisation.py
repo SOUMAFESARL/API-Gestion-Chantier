@@ -1,7 +1,7 @@
 """Service de réinitialisation du mot de passe Super Admin — Control Plane CCD Digital.
 
 Règles de gestion :
-- Seul un compte présent dans le schéma `public` avec `is_superuser=True` et `is_active=True`
+- Seul un compte présent dans le schéma `public` avec `is_superuser=True` ou `is_staff=True` (agent SUPPORT) et `is_active=True`
   peut réinitialiser son mot de passe par ce canal.
 - Toute demande pour un compte inexistant ou non superuser renvoie 202 Accepted
   sans émettre d'email, pour empêcher l'énumération d'adresses (silence défensif).
@@ -53,7 +53,7 @@ def demander_reinitialisation_super_admin(
     """Initie la demande de réinitialisation pour un Super Admin.
 
     Répond toujours avec succès (202) pour éviter l'énumération d'adresses.
-    Seuls les comptes ayant `is_superuser=True` dans `public` reçoivent un email.
+    Seuls les comptes de la plateforme (`is_superuser` ou `is_staff`) dans `public` reçoivent un email.
     """
     adresse = (email or "").strip().lower()
     public_schema = get_public_schema_name()
@@ -63,7 +63,7 @@ def demander_reinitialisation_super_admin(
 
         super_admin_valide = (
             candidat is not None
-            and candidat.is_superuser
+            and (candidat.is_superuser or candidat.is_staff)
             and candidat.is_active
             and not candidat.est_bloque
         )
@@ -155,7 +155,7 @@ def verifier_jeton_super_admin(jeton_clair: str) -> JetonReinitialisation:
             raise JetonExpire()
 
         utilisateur = jeton.utilisateur
-        if not (utilisateur.is_superuser and utilisateur.is_active):
+        if not ((utilisateur.is_superuser or utilisateur.is_staff) and utilisateur.is_active):
             raise JetonExpire()
 
         return jeton

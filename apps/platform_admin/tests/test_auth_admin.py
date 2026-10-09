@@ -220,3 +220,27 @@ def test_renouvellement_jeton_super_admin(client_api, superuser_admin):
     assert rep_refresh.status_code == status.HTTP_200_OK
     assert "access" in rep_refresh.data
     assert "refresh" in rep_refresh.data
+
+
+@pytest.mark.django_db
+def test_agent_support_se_connecte_et_recoit_son_role(client_api):
+    """Un compte SUPPORT créé par le back-office (staff, non superuser) peut se connecter (rôle SUPPORT)."""
+    with schema_context(get_public_schema_name()):
+        Utilisateur.objects.create_user(
+            email="support.login@ccd-digital.ci",
+            password="Support12345!",
+            nom="Agent",
+            prenom="Support",
+            role_global=RoleGlobal.ADMIN,
+            statut=StatutUtilisateur.ACTIF,
+            is_staff=True,
+        )
+    reponse = client_api.post(
+        "/api/v1/admins/connexion/",
+        {"email": "support.login@ccd-digital.ci", "mot_de_passe": "Support12345!"},
+        format="json",
+    )
+    assert reponse.status_code == status.HTTP_200_OK
+    utilisateur = reponse.json()["utilisateur"]
+    assert utilisateur["role"] == "SUPPORT"
+    assert utilisateur["is_superuser"] is False

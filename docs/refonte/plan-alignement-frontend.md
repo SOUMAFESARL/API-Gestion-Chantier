@@ -212,3 +212,37 @@ l'espace admin appelle donc `http://soumafe.com:8000` en local et échoue (« Co
 `statistiques` imbriquées, etc. ; le tableau de bord, les lots/activités, l'abonnement et le chantier restent
 aussi sur la simulation. Tests backend : 42 échecs sur `accounts` + `platform_admin` + `referentiels`
 (baseline avant lot : 44 ; aucun nouvel échec ; les 42 restants préexistent) à traiter à part.
+
+## Lot 9 — Domaine Projets aligné sur le serveur réel (9 octobre 2026)
+
+Contrats relevés sur l'OpenAPI et par appels réels, vérifiés ensuite dans le navigateur (backend local).
+
+**Vocabulaires remplacés par ceux du serveur** (types, listes de choix, libellés `fr.json`, tons) : statuts de
+projet (+ `RECEPTIONNE`, `BLOQUE`, `DESACTIVE`, `RESILIE`) ; types de projet (`BATIMENT_COMMERCIAL`, `TP_ROUTE`,
+`TP_GENIE_CIVIL`, `VRD`, `INFRASTRUCTURE_INDUSTRIELLE`, `BATIMENT_RESIDENTIEL`) ; mode d'exécution `REGIE` ;
+bordereau `FORFAIT | PRIX_UNITAIRE | MIXTE` ; unités `M2 ML M3 KG U FORFAIT` ; nature d'équipe `SOUS_TRAITANTE`.
+
+**Projets :** `versProjet` lit le vrai payload (`maitre_ouvrage` en chaîne, `chef_projet_id`,
+`avancement_reel` en %, plus de `client` ni de `chef_projet` objet) ; l'avancement théorique est **calculé** des dates
+prévues ; la consommation budgétaire n'existe pas côté serveur (reste 0 — à ne pas présenter comme une mesure) ;
+la création n'envoie plus `reference` (calculée par le serveur, qui répond 400 sinon — champ désormais en lecture
+seule) ; suspendre / reprendre = `PATCH statut` (`SUSPENDU` / `EN_COURS`), plus de routes dédiées ; planning et
+budget par `PATCH` ; chef de projet de la liste résolu par le tableau de bord, celui de la fiche par les
+affectations puis `collaborateurs-affectables`.
+**Lots et activités :** activités sous `/lots/{id}/activites/`, lot avec `date_*_prevue`, code d'activité composé
+(`L-01.01`), `quantite_prevue` décimal en chaîne ; **l'équipe d'une activité se lit dans
+`/projets/{id}/equipes/affectations/`** (le champ `equipe_ids` de l'activité ne reflète pas les affectations — défaut
+trouvé en test) et s'écrit par POST/DELETE sur cette même liste. Plus de champ « dépendance » (inexistant).
+**Équipes :** lecture/création conformes (`corps_etat`, chef et membres = collaborateur OU nom libre) ; le serveur
+n'a **aucune route** pour modifier la composition après création : ajout, changement de rôle et retrait de membre
+supprimés de l'interface (3 fenêtres + boutons de `FicheEquipe`).
+**Nettoyage :** `simulationProjets`, `simulationLots`, `simulationTableauDeBord` supprimés (et la validation de bons
+de paiement, qui visait des routes d'un module absent).
+
+**Vérifié dans le navigateur :** liste des projets (nouveaux statuts), création d'un projet, fiche, création de lot,
+lots/activités affichés avec codes/dates/budgets, équipes et affectation d'une équipe à une activité, fiche d'équipe,
+suspension puis reprise. **Non vérifié à l'écran** (vérifié par API seulement) : fixation du planning/budget par le chef
+de projet, création d'équipe depuis le tiroir, modification d'un projet.
+**Restes connus :** avancement/consommation budgétaires (aucune donnée serveur), échéances/alertes/QHSE du tableau de
+bord (le serveur n'envoie que `metriques`, `projets`, `bons_paiement_a_valider`, `receptions_materiaux`, `meteo`) ;
+`quartier` absent ; le domaine « chantier » (rapports) garde sa simulation (`simulationJournal`).

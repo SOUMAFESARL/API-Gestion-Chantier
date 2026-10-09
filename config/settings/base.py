@@ -201,6 +201,10 @@ DatabaseFeatures.minimum_database_version = (13,)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Photos compressées et documents embarqués du journal (5 + 3 fichiers de 2 Mio).
+# L'API journal contrôle aussi les nombres, types et tailles de chaque fichier.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 24 * 1024 * 1024
+
 
 # --------------------------------------------------------------------------
 # Authentification
@@ -356,14 +360,20 @@ SPECTACULAR_SETTINGS = {
         "**Authorize** (champ JWT, sans ajouter le mot Bearer).\n"
         "2. Mon profil et mon entreprise : `GET /api/v1/auth/profil/`.\n"
         "3. Page Projets : `GET /api/v1/projets/` (tableau non paginé).\n"
-        "4. Ouvrir Nouveau projet : `GET /api/v1/projets/contexte-creation/` "
-        "pour charger les collaborateurs, clients et listes de choix.\n"
+        "4. Charger les collaborateurs avec `GET /api/v1/parametres/collaborateurs/` "
+        "et les clients avec `GET /api/v1/tiers/` selon vos droits.\n"
         "5. Cliquer Créer : `POST /api/v1/projets/` avec informations, lots et équipe. "
         "Un exemple JSON complet figure dans cette opération.\n"
         "6. Ouvrir la fiche : `GET /api/v1/projets/{id}/`.\n\n"
         "Pour essayer une opération, ouvrir son bloc puis utiliser **Try it out** et "
         "**Execute**. Le POST crée réellement un projet : remplacer les UUID fictifs "
-        "de l'exemple par ceux du contexte.\n\n"
+        "de l'exemple par ceux de vos données.\n\n"
+        "### Journal de chantier\n"
+        "1. Préparer : `GET /api/v1/chantier/rapports/preparation/` avec `projet` et `date`.\n"
+        "2. Créer un brouillon : `POST /api/v1/chantier/rapports/` avec `projet_id` et `date`.\n"
+        "3. Lire, modifier ou supprimer le brouillon : `/api/v1/chantier/rapports/{id}/`.\n"
+        "4. Soumettre, valider CT et approuver CP via les actions dédiées.\n"
+        "La base métier doit être migrée avant d'exécuter ces opérations.\n\n"
         "### 1. Architecture Multi-Tenancy à Domaine Unique (Option A)\n"
         "- **Point d'accès unifié** : Toutes les requêtes (publiques et tenant) "
         "sont adressées au même domaine d'API (ex: `https://api.ccd-digital.ci` ou `http://localhost:8000`).\n"
@@ -376,7 +386,7 @@ SPECTACULAR_SETTINGS = {
         "### 2. Authentification JWT\n"
         "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
         "`Authorization: Bearer <access_token>`.\n"
-        "- Durée de validité du jeton d'accès : **15 minutes**.\n"
+        "- Durée de validité du jeton d'accès : **24 heures**.\n"
         "- Le rafraîchissement s'effectue via `POST /api/v1/auth/token/refresh/` avec le "
         "jeton de renouvellement (valide 8 heures).\n"
         "- La déconnexion `POST /api/v1/auth/deconnexion/` révoque instantanément les jetons "

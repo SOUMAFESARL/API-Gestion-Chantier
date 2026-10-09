@@ -203,6 +203,7 @@ class AdminModuleDesactiverView(APIView):
 
     @extend_schema(
         summary="Désactiver un module (Super Admin)",
+        request=None,
         description="Désactive le module dans le schéma public et tous les tenants.",
         responses={200: AdminModuleDetailSerializer, 409: dict},
     )
@@ -227,6 +228,7 @@ class AdminModuleReactiverView(APIView):
 
     @extend_schema(
         summary="Réactiver un module (Super Admin)",
+        request=None,
         description="Réactive le module dans le schéma public et tous les tenants.",
         responses={200: AdminModuleDetailSerializer, 409: dict},
     )

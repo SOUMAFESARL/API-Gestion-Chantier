@@ -8,8 +8,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import schema_context
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -97,6 +97,7 @@ class SuspendreCompteAdministrateurView(APIView):
 
     @extend_schema(
         summary="Suspendre un compte agent (Super Admin)",
+        request=None,
         responses={200: CompteAdministrateurSerializer},
     )
     def post(self, request, pk):
@@ -122,6 +123,7 @@ class ReactiverCompteAdministrateurView(APIView):
 
     @extend_schema(
         summary="Réactiver un compte agent (Super Admin)",
+        request=None,
         responses={200: CompteAdministrateurSerializer},
     )
     def post(self, request, pk):
@@ -182,6 +184,10 @@ class AdminPhotoMoiView(APIView):
 
     @extend_schema(
         summary="Modifier ou supprimer sa photo de profil",
+        request=inline_serializer(name="AdminPhotoRequest", fields={
+            "photo": serializers.ImageField(required=False),
+            "retirer_photo": serializers.BooleanField(required=False),
+        }),
         responses={200: ProfilCompletAdminSerializer},
     )
     def patch(self, request):
@@ -206,6 +212,10 @@ class AdminChangerMotDePasseMoiView(APIView):
 
     @extend_schema(
         summary="Changer son mot de passe (Super Admin)",
+        request=inline_serializer(name="AdminMotDePasseRequest", fields={
+            "ancien_mot_de_passe": serializers.CharField(write_only=True),
+            "nouveau_mot_de_passe": serializers.CharField(write_only=True),
+        }),
         responses={200: dict, 400: dict},
     )
     def post(self, request):

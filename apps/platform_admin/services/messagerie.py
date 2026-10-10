@@ -226,6 +226,67 @@ def _nettoyer(message: str) -> str:
     return message.replace(secret, "••••••") if secret else message
 
 
+def _contexte_ssl() -> ssl.SSLContext:
+    contexte = ssl.create_default_context()
+    if not getattr(settings, "EMAIL_SSL_CERT_VERIFY", True):
+        contexte.check_hostname = False
+        contexte.verify_mode = ssl.CERT_NONE
+    return contexte
+
+
+def sonder_connexion(
+    hote: str,
+    port: int,
+    chiffrement: str,
+    identifiant: str = "",
+    mot_de_passe: str = "",
+    delai: int = 12,
+) -> dict[str, Any]:
+    """Teste la connexion SMTP **étape par étape** pour dire laquelle casse.
+
+    Étapes : `tcp` (le port répond), `banniere` (le serveur dit bonjour), `chiffrement`
+    (STARTTLS / SSL), `authentification` (identifiant + mot de passe). « Connexion coupée »
+    seul ne dit rien ; « coupée juste après le bonjour » désigne un pare-feu.
+    """
+    etape = "tcp"
+    smtp = None
+    try:
+        socket.create_connection((hote, port), timeout=delai).close()
+        etape = "banniere"
+        if chiffrement == ParametresMessagerie.Chiffrement.SSL:
+            smtp = smtplib.SMTP_SSL(hote, port, timeout=delai, context=_contexte_ssl())
+        else:
+            smtp = smtplib.SMTP(hote, port, timeout=delai)
+            etape = "chiffrement"
+            smtp.ehlo()
+            if chiffrement == ParametresMessagerie.Chiffrement.STARTTLS:
+                smtp.starttls(context=_contexte_ssl())
+                smtp.ehlo()
+        if identifiant and mot_de_passe:
+            etape = "authentification"
+            smtp.login(identifiant, mot_de_passe)
+        return {"ok": True, "etape": None, "detail": None}
+    except Exception as exception:  # noqa: BLE001
+        return {"ok": False, "etape": etape, "detail": _nettoyer(f"{type(exception).__name__} : {exception}")}
+    finally:
+        if smtp is not None:
+            try:
+                smtp.quit()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _alternatives(reglage: dict[str, Any]) -> list[dict[str, Any]]:
+    """Les deux modes usuels de Gmail, quand celui qu'on utilise ne passe pas."""
+    resultats = []
+    for port, chiffrement in ((587, "STARTTLS"), (465, "SSL")):
+        if port == reglage["port"] and chiffrement == reglage["chiffrement"]:
+            continue
+        sonde = sonder_connexion(reglage["hote"], port, chiffrement)
+        resultats.append({"port": port, "chiffrement": chiffrement, **sonde})
+    return resultats
+
+
 def diagnostiquer_envoi(destinataire: str) -> dict[str, Any]:
     """Envoie un message de test et dit **où** ça casse — connexion ou envoi — et pourquoi."""
     from apps.core.emails import adresse_frontend
@@ -248,14 +309,55 @@ def diagnostiquer_envoi(destinataire: str) -> dict[str, Any]:
             connection=connexion,
         )
         message.send(fail_silently=False)
-        return {"succes": True, "etape": None, "erreur": None, "conseil": None, "reglage": reglage}
+        return {
+            "succes": True,
+            "etape": None,
+            "erreur": None,
+            "conseil": None,
+            "sonde": None,
+            "alternatives": [],
+            "reglage": reglage,
+        }
     except Exception as exception:  # noqa: BLE001 — c'est précisément ce qu'on veut montrer
         logger.warning("Diagnostic de messagerie en échec à l'étape %s : %s", etape, type(exception).__name__)
+        conseil = _conseil(exception, reglage)
+        sonde, alternatives = None, []
+        # Le serveur a répondu et refusé (identifiant, expéditeur) : ce n'est pas une panne réseau,
+        # la sonde et ses alternatives n'ont rien à apprendre.
+        refus = isinstance(
+            exception,
+            (smtplib.SMTPAuthenticationError, smtplib.SMTPSenderRefused, smtplib.SMTPRecipientsRefused),
+        )
+        if etape == "connexion" and not refus:
+            configuration = configuration_base()
+            sonde = sonder_connexion(
+                reglage["hote"],
+                reglage["port"],
+                reglage["chiffrement"],
+                (configuration or {}).get("username") or settings.EMAIL_HOST_USER,
+                (configuration or {}).get("password") or settings.EMAIL_HOST_PASSWORD,
+            )
+            alternatives = _alternatives(reglage)
+            ouverts = [a for a in alternatives if a["ok"]]
+            if ouverts:
+                autre = ouverts[0]
+                conseil = (
+                    f"Le port {reglage['port']} ne passe pas, mais le port {autre['port']} "
+                    f"({autre['chiffrement']}) répond : essayez ce réglage."
+                )
+            elif sonde and sonde["etape"] == "tcp":
+                conseil = (
+                    f"Le serveur n'atteint même pas {reglage['hote']}:{reglage['port']} : "
+                    "l'hébergeur bloque probablement les envois sortants. Demandez-lui d'ouvrir "
+                    "les ports SMTP sortants (465 et 587), ou utilisez un service d'envoi par API."
+                )
         return {
             "succes": False,
             "etape": etape,
             "erreur": _nettoyer(f"{type(exception).__name__} : {exception}"),
-            "conseil": _conseil(exception, reglage),
+            "conseil": conseil,
+            "sonde": sonde,
+            "alternatives": alternatives,
             "reglage": reglage,
         }
     finally:

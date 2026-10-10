@@ -57,6 +57,16 @@ def adresse_frontend() -> str:
     return adresse
 
 
+def _expediteur() -> str | None:
+    """L'expéditeur du réglage saisi par le superviseur, sinon `DEFAULT_FROM_EMAIL`."""
+    try:
+        from apps.platform_admin.services.messagerie import expediteur_actif
+
+        return expediteur_actif()
+    except Exception:  # noqa: BLE001
+        return getattr(settings, "DEFAULT_FROM_EMAIL", None)
+
+
 def _contexte_commun() -> dict[str, Any]:
     """Ce que tous les gabarits peuvent lire sans qu'on le leur passe."""
     from apps.billing.models import JOURS_ESSAI
@@ -108,7 +118,7 @@ def envoyer(
     message = EmailMultiAlternatives(
         subject=sujet,
         body=texte,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        from_email=_expediteur(),
         to=destinataires,
     )
     message.attach_alternative(html, "text/html")

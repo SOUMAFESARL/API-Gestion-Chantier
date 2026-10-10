@@ -37,7 +37,16 @@ else:
         "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
     }
 
-EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+# Le backend « maison » est une sous-classe du backend SMTP de Django qui lit en plus le serveur SMTP
+# saisi dans les paramètres de la plateforme. Le `.env` du serveur, copié de `.env.example`, nomme le
+# backend standard : sans cette substitution, l'envoi réel ignorait le réglage de la page Messagerie
+# pendant que le diagnostic (qui le lit) réussissait — l'écran disait « ça marche », rien ne partait.
+# Sans réglage saisi, la sous-classe se comporte exactement comme le backend standard.
+_BACKEND_SMTP_STANDARD = "django.core.mail.backends.smtp.EmailBackend"
+_BACKEND_SMTP_PLATEFORME = "apps.core.email_backend.ConfigurableEmailBackend"
+EMAIL_BACKEND = config("EMAIL_BACKEND", default=_BACKEND_SMTP_PLATEFORME)
+if EMAIL_BACKEND == _BACKEND_SMTP_STANDARD:
+    EMAIL_BACKEND = _BACKEND_SMTP_PLATEFORME
 # Les paramètres EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS,
 # DEFAULT_FROM_EMAIL sont définis de manière centralisée dans base.py (avec support SYSTEM_SMTP_USER/PASS)
 # et peuvent être surchargés individuellement dans .env si nécessaire.

@@ -318,6 +318,7 @@ def diagnostiquer_envoi(destinataire: str) -> dict[str, Any]:
             "conseil": None,
             "sonde": None,
             "alternatives": [],
+            "backend": settings.EMAIL_BACKEND,
             "reglage": reglage,
         }
     except Exception as exception:  # noqa: BLE001 — c'est précisément ce qu'on veut montrer
@@ -361,6 +362,7 @@ def diagnostiquer_envoi(destinataire: str) -> dict[str, Any]:
             "sonde": sonde,
             "alternatives": alternatives,
             "nom_ehlo": nom_ehlo(),
+            "backend": settings.EMAIL_BACKEND,
             "reglage": reglage,
         }
     finally:

@@ -170,6 +170,7 @@ def test_diagnostic_reussi_envoie_le_message_de_test(superviseur):
     reponse = superviseur.post(URL_TEST, {"destinataire": "durel@exemple.ci"}, format="json")
     assert reponse.status_code == 200
     assert reponse.json()["succes"] is True
+    assert reponse.json()["backend"] == settings.EMAIL_BACKEND
     assert [m.to for m in mail.outbox] == [["durel@exemple.ci"]]
     assert JournalPlateforme.objects.filter(action="TEST_MESSAGERIE").exists()
 

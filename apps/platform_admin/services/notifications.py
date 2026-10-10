@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from django.core.mail import send_mail
 from django.db import connection, transaction
 from django_tenants.utils import get_public_schema_name, schema_context
 
 from apps.accounts.models import Utilisateur
 from apps.audit.models import JournalAudit
 from apps.core.droits import est_dg
+from apps.core.emails import envoyer
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.platform_admin.models import JournalPlateforme
 from apps.tenants.models import Entreprise
@@ -60,17 +60,18 @@ def notifier_dg_action_plateforme(
     destinataire = dg.email
 
     def _envoyer():
-        try:
-            send_mail(
-                subject=sujet,
-                message=message,
-                from_email="support@plateforme.local",
-                recipient_list=[destinataire],
-                fail_silently=False,
-            )
-            logger.info("Courriel envoyé au DG (%s) de l'entreprise %s : %s", destinataire, entreprise.schema_name, sujet)
-        except Exception as exc:
-            logger.warning("Échec d'envoi du courriel au DG (%s) : %s", destinataire, exc)
+        # L'expéditeur est `DEFAULT_FROM_EMAIL` : l'ancien `support@plateforme.local` n'existait
+        # nulle part, et un relais SMTP authentifié refuse un expéditeur qui n'est pas le sien.
+        envoye = envoyer(
+            "notification_plateforme",
+            sujet,
+            destinataire,
+            {"sujet": sujet, "message": message, "raison_sociale": entreprise.raison_sociale},
+        )
+        if envoye:
+            logger.info("Courriel envoyé au DG de l'entreprise %s : %s", entreprise.schema_name, sujet)
+        else:
+            logger.error("Courriel au DG de l'entreprise %s NON envoyé : %s", entreprise.schema_name, sujet)
 
     transaction.on_commit(_envoyer)
 

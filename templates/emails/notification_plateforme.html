@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %}
+
+{% block titre_onglet %}{{ sujet }}{% endblock %}
+{% block preheader %}L'administration de la plateforme est intervenue sur l'espace de {{ raison_sociale }}.{% endblock %}
+{% block titre %}{{ sujet }}{% endblock %}
+{% block corps %}
+<p style="margin:0 0 14px 0;">Bonjour,</p>
+<p style="margin:0 0 14px 0;">{{ message|linebreaksbr }}</p>
+<p style="margin:0 0 14px 0;">Cette information vous est adressée parce que l'administration de la plateforme CCD Digital est intervenue sur l'espace de <strong style="color:#1E1D1B;">{{ raison_sociale }}</strong>.</p>
+{% endblock %}
+{% block apres %}
+<p style="margin:0 0 14px 0;"><span style="font-size:14px;color:#8A8680;">Si cette intervention vous surprend, contactez {{ email_commercial }}. Ne répondez pas à ce message&nbsp;: cette adresse n'est pas relevée.</span></p>
+{% endblock %}

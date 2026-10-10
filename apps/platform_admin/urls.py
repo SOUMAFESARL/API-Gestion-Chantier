@@ -46,6 +46,10 @@ from apps.platform_admin.views.inscriptions import (
     DemandesInscriptionView,
     RefuserInscriptionView,
 )
+from apps.platform_admin.views.suppression import (
+    ApercuSuppressionClientView,
+    SupprimerClientDefinitivementView,
+)
 
 app_name = "platform_admin"
 
@@ -176,6 +180,16 @@ urlpatterns = [
         "admins/clients/<uuid:client_id>/modules/<uuid:module_id>/desactiver/",
         DesactiverModuleClientPlateformeView.as_view(),
         name="admins-clients-modules-desactiver",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/suppression/apercu/",
+        ApercuSuppressionClientView.as_view(),
+        name="admins-client-suppression-apercu",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/supprimer-definitivement/",
+        SupprimerClientDefinitivementView.as_view(),
+        name="admins-client-supprimer-definitivement",
     ),
     # Gestion Dynamique des Modules (Super Admin)
     path("admin/modules/", AdminModuleListCreateView.as_view(), name="admin-modules-liste-creer"),

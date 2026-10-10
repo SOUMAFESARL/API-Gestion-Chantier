@@ -91,12 +91,20 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
     nb_utilisateurs = 0
     nb_projets = 0
     active_le = None
+    dirigeant = None
 
     if ent.schema_name and ent.schema_name != "public":
         try:
             with schema_context(ent.schema_name):
                 nb_utilisateurs = Utilisateur.objects.filter(statut=StatutUtilisateur.ACTIF).count()
                 nb_projets = Projet.objects.filter(supprime_le__isnull=True).count()
+                chef = (
+                    Utilisateur.objects.filter(Q(is_owner=True) | Q(role__code="DG"))
+                    .order_by("-is_owner", "cree_le")
+                    .first()
+                )
+                if chef:
+                    dirigeant = {"nom": f"{chef.prenom} {chef.nom}".strip(), "email": chef.email}
                 premier_connecte = (
                     Utilisateur.objects.filter(last_login__isnull=False)
                     .order_by("last_login")
@@ -139,6 +147,7 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
         "nb_utilisateurs": nb_utilisateurs,
         "nb_projets": nb_projets,
         "abonnement": charge_abonnement,
+        "dirigeant": dirigeant,
     }
 
 

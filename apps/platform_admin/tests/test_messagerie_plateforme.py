@@ -193,3 +193,44 @@ def test_diagnostic_en_echec_dit_l_etape_le_conseil_et_masque_le_mot_de_passe(su
     assert "mot de passe d'application" in corps["conseil"]
     assert SECRET not in reponse.content.decode()
     assert "SMTPAuthenticationError" in corps["erreur"]
+
+
+def test_sonde_dit_l_etape_qui_casse():
+    # Le port ne répond pas : l'étape est « tcp », pas un vague « connexion coupée ».
+    with mock.patch.object(service.socket, "create_connection", side_effect=ConnectionRefusedError("refusé")):
+        sonde = service.sonder_connexion("smtp.exemple.ci", 587, "STARTTLS")
+    assert sonde["ok"] is False and sonde["etape"] == "tcp"
+
+    # Le port répond mais le serveur raccroche avant de dire bonjour.
+    with mock.patch.object(service.socket, "create_connection"), mock.patch.object(
+        service.smtplib, "SMTP", side_effect=smtplib.SMTPServerDisconnected("coupée")
+    ):
+        sonde = service.sonder_connexion("smtp.exemple.ci", 587, "STARTTLS")
+    assert sonde["ok"] is False and sonde["etape"] == "banniere"
+    assert "SMTPServerDisconnected" in sonde["detail"]
+
+
+@pytest.mark.django_db
+def test_diagnostic_propose_le_port_qui_passe(superviseur):
+    superviseur.patch(URL, _corps(), format="json")
+
+    class _Connexion:
+        def open(self):
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+
+        def close(self):
+            pass
+
+    def _sonde(hote, port, chiffrement, *args, **kwargs):
+        if port == 465:
+            return {"ok": True, "etape": None, "detail": None}
+        return {"ok": False, "etape": "banniere", "detail": "coupée"}
+
+    with mock.patch.object(service, "get_connection", return_value=_Connexion()), mock.patch.object(
+        service, "sonder_connexion", side_effect=_sonde
+    ):
+        corps = superviseur.post(URL_TEST, {"destinataire": "durel@exemple.ci"}, format="json").json()
+
+    assert corps["succes"] is False and corps["sonde"]["etape"] == "banniere"
+    assert [a["port"] for a in corps["alternatives"]] == [465]
+    assert "465" in corps["conseil"] and "SSL" in corps["conseil"]

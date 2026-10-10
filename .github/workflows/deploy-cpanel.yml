@@ -25,9 +25,16 @@ concurrency:
 
 jobs:
   tests:
-    name: Tests Django
+    # Un job par lot, tous en parallèle : chacun a sa propre base PostgreSQL, donc aucun
+    # partage d'état entre lots. Le déploiement attend que **tous** réussissent.
+    name: Tests Django (${{ matrix.lot }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        lot: [lot1, lot2, lot3, lot4, lot5, lot6, lot7, lot8, lot9, lot10]
 
     services:
       postgres:
@@ -83,9 +90,9 @@ jobs:
         run: |
           python manage.py check
 
-      - name: Exécuter les tests backend (Suite d'acceptation des droits Lots 1 à 10)
+      - name: Exécuter les tests d'acceptation de ${{ matrix.lot }}
         run: |
-          python -m pytest tests/acceptation/lot1 tests/acceptation/lot2 tests/acceptation/lot3 tests/acceptation/lot4 tests/acceptation/lot5 tests/acceptation/lot6 tests/acceptation/lot7 tests/acceptation/lot8 tests/acceptation/lot9 tests/acceptation/lot10 -q
+          python -m pytest tests/acceptation/${{ matrix.lot }} -q
 
   deploy:
     name: Déploiement production sur cPanel

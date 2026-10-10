@@ -84,6 +84,10 @@ class AdminMessagerieView(APIView):
         )
         return Response(service.serialiser(parametres))
 
+    def patch(self, request):
+        """Alias de `PUT` : le client HTTP du frontend n'expose que PATCH pour les écritures."""
+        return self.put(request)
+
     @extend_schema(summary="Revenir au réglage du serveur (.env)", responses={200: dict})
     def delete(self, request):
         _exiger_superviseur(request)

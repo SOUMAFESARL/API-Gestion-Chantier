@@ -74,7 +74,7 @@ def test_support_consulte_mais_ne_modifie_ni_ne_teste(client_api):
     assert lecture.json()["effectif"]["source"] == "serveur"
     assert lecture.json()["saisi"]["mot_de_passe_defini"] is False
 
-    assert client_api.put(URL, _corps(), format="json").status_code == 403
+    assert client_api.patch(URL, _corps(), format="json").status_code == 403
     assert client_api.delete(URL).status_code == 403
     assert client_api.post(URL_TEST, {"destinataire": "a@exemple.ci"}, format="json").status_code == 403
     assert _ligne() is None
@@ -82,7 +82,7 @@ def test_support_consulte_mais_ne_modifie_ni_ne_teste(client_api):
 
 @pytest.mark.django_db
 def test_enregistrement_chiffre_le_mot_de_passe_et_ne_le_renvoie_jamais(superviseur):
-    reponse = superviseur.put(URL, _corps(), format="json")
+    reponse = superviseur.patch(URL, _corps(), format="json")
     assert reponse.status_code == 200, reponse.content
     assert SECRET not in reponse.content.decode()
 
@@ -104,14 +104,14 @@ def test_enregistrement_chiffre_le_mot_de_passe_et_ne_le_renvoie_jamais(supervis
 
 @pytest.mark.django_db
 def test_mot_de_passe_requis_la_premiere_fois_puis_conserve(superviseur):
-    sans_mdp = superviseur.put(URL, _corps(mot_de_passe=""), format="json")
+    sans_mdp = superviseur.patch(URL, _corps(mot_de_passe=""), format="json")
     assert sans_mdp.status_code == 400
     assert _ligne() is None
 
-    assert superviseur.put(URL, _corps(), format="json").status_code == 200
+    assert superviseur.patch(URL, _corps(), format="json").status_code == 200
     avant = _ligne().mot_de_passe_chiffre
     # Changer le port sans ressaisir le mot de passe : il est conservé.
-    assert superviseur.put(URL, _corps(port=465, chiffrement="SSL", mot_de_passe=""), format="json").status_code == 200
+    assert superviseur.patch(URL, _corps(port=465, chiffrement="SSL", mot_de_passe=""), format="json").status_code == 200
     ligne = _ligne()
     assert ligne.mot_de_passe_chiffre == avant and ligne.port == 465
 
@@ -131,7 +131,7 @@ def test_chiffrement_est_authentifie_et_aleatoire():
 def test_le_backend_smtp_utilise_le_reglage_saisi_puis_retombe_sur_le_env(superviseur):
     assert ConfigurableEmailBackend().host == settings.EMAIL_HOST
 
-    superviseur.put(URL, _corps(port=2525), format="json")
+    superviseur.patch(URL, _corps(port=2525), format="json")
     backend = ConfigurableEmailBackend()
     assert (backend.host, backend.port, backend.username, backend.password) == (
         "smtp.exemple.ci", 2525, "envoi@exemple.ci", SECRET,
@@ -145,7 +145,7 @@ def test_le_backend_smtp_utilise_le_reglage_saisi_puis_retombe_sur_le_env(superv
 
 @pytest.mark.django_db
 def test_mot_de_passe_illisible_retombe_sur_le_env(superviseur):
-    superviseur.put(URL, _corps(), format="json")
+    superviseur.patch(URL, _corps(), format="json")
     with schema_context(get_public_schema_name()):
         ParametresMessagerie.objects.filter(pk=1).update(mot_de_passe_chiffre="v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
     assert service.configuration_base() is None
@@ -154,7 +154,7 @@ def test_mot_de_passe_illisible_retombe_sur_le_env(superviseur):
 
 @pytest.mark.django_db
 def test_les_emails_partent_de_l_expediteur_saisi(superviseur):
-    superviseur.put(URL, _corps(expediteur="Soumafe <envoi@exemple.ci>"), format="json")
+    superviseur.patch(URL, _corps(expediteur="Soumafe <envoi@exemple.ci>"), format="json")
     mail.outbox = []
     assert envoyer(
         "notification_plateforme", "Sujet", "dest@exemple.ci",
@@ -175,7 +175,7 @@ def test_diagnostic_reussi_envoie_le_message_de_test(superviseur):
 
 @pytest.mark.django_db
 def test_diagnostic_en_echec_dit_l_etape_le_conseil_et_masque_le_mot_de_passe(superviseur):
-    superviseur.put(URL, _corps(), format="json")
+    superviseur.patch(URL, _corps(), format="json")
 
     class _Connexion:
         def open(self):

@@ -10,7 +10,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.accounts.models import Utilisateur
 from apps.billing.models import Abonnement, PaiementAbonnement, Plan
-from apps.catalogue.models import CatalogueModule, EntrepriseModule
+from apps.catalogue.models import CatalogueModule
 from apps.core.enums import StatutEntreprise, StatutUtilisateur
 from apps.projets.models import Projet
 from apps.tenants.models import DemandeInscription, Entreprise
@@ -145,20 +145,22 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
 def modules_du_client(ent: Entreprise) -> list[dict]:
     """Les modules du catalogue et leur état pour cette entreprise (A-10, A-11).
 
-    Un module qui n'a jamais été activé pour elle compte comme inactif : seul le
-    couple (entreprise, module) activé le rend disponible dans son espace.
+    **Une seule règle, celle des droits réels** (`core.droits._obtenir_modules_actifs`) :
+    tout module actif du catalogue est disponible, sauf ceux que le super admin a
+    explicitement désactivés pour cette entreprise. Une entreprise qui n'a aucune ligne de
+    souscription (un essai tout juste ouvert) a donc tous les modules.
     """
-    actifs = set(
-        EntrepriseModule.objects.filter(
-            entreprise=ent, est_actif=True, supprime_le__isnull=True
-        ).values_list("module_id", flat=True)
-    )
+    from apps.core.droits import _obtenir_modules_actifs
+
+    # La règle lit aussi les tables du client en repli : on la pose dans son schéma.
+    with schema_context(ent.schema_name):
+        actifs = _obtenir_modules_actifs(ent)
     return [
         {
             "id": str(m.id),
             "code": m.code,
             "libelle": m.libelle,
-            "actif": m.id in actifs,
+            "actif": m.code.lower() in actifs,
         }
         for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True).order_by(
             "ordre", "code"

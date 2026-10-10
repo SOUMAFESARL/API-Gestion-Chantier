@@ -407,7 +407,12 @@ def test_fiche_client_expose_ses_modules_et_leur_etat(client_api, super_admin_us
 
     client_api.force_authenticate(user=super_admin_user)
     with schema_context(get_public_schema_name()):
-        module = CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True).first()
+        # « Administration » est un module système : tout client l'a, on ne le bascule pas.
+        module = (
+            CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+            .exclude(code__iexact="administration")
+            .first()
+        )
         assert module is not None, "le catalogue doit contenir au moins un module actif"
 
     url = f"/api/v1/admins/clients/{entreprise_test.id}/"

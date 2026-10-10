@@ -246,3 +246,15 @@ de projet, création d'équipe depuis le tiroir, modification d'un projet.
 **Restes connus :** avancement/consommation budgétaires (aucune donnée serveur), échéances/alertes/QHSE du tableau de
 bord (le serveur n'envoie que `metriques`, `projets`, `bons_paiement_a_valider`, `receptions_materiaux`, `meteo`) ;
 `quartier` absent ; le domaine « chantier » (rapports) garde sa simulation (`simulationJournal`).
+
+## Règle unique des modules actifs (10 octobre 2026)
+
+Décision de Durel : **tout module actif du catalogue est disponible pour une entreprise, sauf ceux que le super admin
+a désactivés explicitement pour elle** (la règle de `core.droits._obtenir_modules_actifs`, déjà celle des droits réels).
+`GET /modules/` (catalogue du tenant, donc matrice des rôles) et la section « Modules » de la fiche client
+(`modules_du_client`) la reprennent au lieu de lire seulement les souscriptions explicites ; « Administration »
+(module système) reste hors du catalogue du tenant. Effet : une entreprise en essai sans ligne de souscription voit tous
+les modules, partout, de la même façon. Test : `TestRegleUniqueDesModulesActifs` (échoue avec l'ancien code).
+À noter : `_obtenir_modules_actifs` applique encore le repli « table Module du tenant » quand il n'y a aucune ligne de
+souscription, et le module GED (désactivé par défaut, A-15) devient actif dès qu'une ligne existe ; sans permission
+associée, cela n'a aucun effet sur les droits.

@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.catalogue.models import CatalogueModule, EntrepriseModule
+from apps.catalogue.models import CatalogueModule
 from apps.accounts.models import Module
 from apps.accounts.services.roles import (
     initialiser_modules_par_defaut,
@@ -44,27 +44,22 @@ class ModuleListView(APIView):
 
         tenant = getattr(request, "tenant", None)
         if tenant and getattr(tenant, "schema_name", "public") != "public":
-            modules_souscrits = EntrepriseModule.objects.filter(
-                entreprise=tenant,
-                est_actif=True,
-                supprime_le__isnull=True,
-            ).values_list("module_id", flat=True)
+            # Même règle que les droits réels : tout module actif du catalogue, sauf ceux que le
+            # super admin a désactivés pour cette entreprise. « Administration » n'est pas un
+            # module qu'on souscrit : il reste hors de cette liste.
+            from apps.core.droits import MODULES_SYSTEME, _obtenir_modules_actifs
 
+            codes_actifs = _obtenir_modules_actifs(tenant) - MODULES_SYSTEME
+            ids_actifs = [
+                m.id
+                for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+                if m.code.lower() in codes_actifs
+            ]
             modules_qs = (
-                CatalogueModule.objects.filter(
-                    id__in=modules_souscrits,
-                    est_actif=True,
-                    supprime_le__isnull=True,
-                )
+                CatalogueModule.objects.filter(id__in=ids_actifs)
                 .prefetch_related("permissions")
                 .order_by("ordre", "code")
             )
-            if not modules_qs.exists():
-                modules_qs = (
-                    CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-                    .prefetch_related("permissions")
-                    .order_by("ordre", "code")
-                )
         else:
             modules_qs = (
                 CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)

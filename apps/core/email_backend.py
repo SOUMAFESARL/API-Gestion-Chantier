@@ -22,6 +22,25 @@ class ConfigurableEmailBackend(EmailBackend):
     En production, la vérification stricte reste active par défaut.
     """
 
+    def __init__(self, *args, **kwargs):
+        # Le serveur SMTP saisi par le superviseur (paramètres de la plateforme) l'emporte sur le
+        # `.env` : changer un mot de passe d'application ne doit pas exiger l'accès au panneau
+        # d'hébergement. Sans réglage saisi, rien ne change. Jamais d'exception ici.
+        try:
+            from apps.platform_admin.services.messagerie import configuration_base
+
+            base = configuration_base()
+        except Exception:  # noqa: BLE001
+            base = None
+        if base:
+            kwargs.setdefault("host", base["host"])
+            kwargs.setdefault("port", base["port"])
+            kwargs.setdefault("username", base["username"])
+            kwargs.setdefault("password", base["password"])
+            kwargs.setdefault("use_tls", base["use_tls"])
+            kwargs.setdefault("use_ssl", base["use_ssl"])
+        super().__init__(*args, **kwargs)
+
     @cached_property
     def ssl_context(self):
         verify = getattr(settings, "EMAIL_SSL_CERT_VERIFY", True)

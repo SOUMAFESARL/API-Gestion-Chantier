@@ -1,5 +1,7 @@
 from django.urls import path
 
+from apps.platform_admin.views.messagerie import AdminMessagerieTestView, AdminMessagerieView
+
 from apps.platform_admin.views import (
     AdminIdentiteView,
     AdminTarifsView,
@@ -59,6 +61,8 @@ urlpatterns = [
     path("plateforme/identite/", IdentitePublicView.as_view(), name="plateforme-identite"),
     path("admins/parametres/tarifs/", AdminTarifsView.as_view(), name="admins-parametres-tarifs"),
     path("admins/parametres/identite/", AdminIdentiteView.as_view(), name="admins-parametres-identite"),
+    path("admins/parametres/messagerie/", AdminMessagerieView.as_view(), name="admins-parametres-messagerie"),
+    path("admins/parametres/messagerie/tester/", AdminMessagerieTestView.as_view(), name="admins-parametres-messagerie-tester"),
     path("admins/inscriptions/", DemandesInscriptionView.as_view(), name="inscriptions-liste"),
     path(
         "admins/inscriptions/<uuid:pk>/",

@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from django.conf import settings
+from django.test import override_settings
 from django.core import mail
 from django_tenants.utils import get_public_schema_name, schema_context
 from rest_framework.test import APIClient
@@ -193,6 +194,34 @@ def test_diagnostic_en_echec_dit_l_etape_le_conseil_et_masque_le_mot_de_passe(su
     assert "mot de passe d'application" in corps["conseil"]
     assert SECRET not in reponse.content.decode()
     assert "SMTPAuthenticationError" in corps["erreur"]
+
+
+def test_nom_ehlo_invalide_est_remplace_par_un_nom_que_gmail_accepte():
+    """Gmail coupe la connexion si l'EHLO est un identifiant interne : `srv_42`, `localhost`."""
+    from django.core.mail.utils import DNS_NAME
+
+    from apps.core.email_backend import nom_ehlo, nom_ehlo_valide
+
+    assert nom_ehlo_valide("mail.soumafe.com") and nom_ehlo_valide("soumafe.com")
+    for invalide in ("srv_42.hebergeur.net", "localhost", "serveur", "", "é.soumafe.com", "-a.com"):
+        assert not nom_ehlo_valide(invalide), invalide
+
+    avant = DNS_NAME._fqdn
+    try:
+        DNS_NAME._fqdn = "srv_42.hebergeur.net"
+        with override_settings(DOMAINE_PRINCIPAL="soumafe.com"):
+            assert nom_ehlo() == "soumafe.com"
+            ConfigurableEmailBackend()
+            assert DNS_NAME.get_fqdn() == "soumafe.com"
+        # Sans domaine exploitable : l'adresse IP entre crochets, comme `smtplib` par défaut.
+        DNS_NAME._fqdn = "serveur"
+        with override_settings(DOMAINE_PRINCIPAL="localhost"):
+            assert nom_ehlo().startswith("[") and nom_ehlo().endswith("]")
+        # Un nom déjà valide n'est jamais touché.
+        DNS_NAME._fqdn = "mail.soumafe.com"
+        assert nom_ehlo() == "mail.soumafe.com"
+    finally:
+        DNS_NAME._fqdn = avant
 
 
 def test_sonde_dit_l_etape_qui_casse():

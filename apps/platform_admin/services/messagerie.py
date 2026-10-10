@@ -291,6 +291,8 @@ def diagnostiquer_envoi(destinataire: str) -> dict[str, Any]:
     """Envoie un message de test et dit **où** ça casse — connexion ou envoi — et pourquoi."""
     from apps.core.emails import adresse_frontend
 
+    from apps.core.email_backend import nom_ehlo
+
     reglage = reglage_effectif()
     connexion = get_connection(fail_silently=False)
     etape = "connexion"
@@ -358,6 +360,7 @@ def diagnostiquer_envoi(destinataire: str) -> dict[str, Any]:
             "conseil": conseil,
             "sonde": sonde,
             "alternatives": alternatives,
+            "nom_ehlo": nom_ehlo(),
             "reglage": reglage,
         }
     finally:

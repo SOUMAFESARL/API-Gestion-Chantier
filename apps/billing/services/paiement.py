@@ -15,7 +15,7 @@ from apps.audit.services import journaliser
 from apps.billing.models import Abonnement, Facture, PaiementAbonnement, Plan
 from apps.billing.services.cinetpay import CinetPayClient, CinetPayError
 from apps.billing.services.facture import contexte_facturation
-from apps.core.emails import envoyer
+from apps.core.emails import adresse_frontend, envoyer
 from apps.core.enums import ActionAudit, StatutEntreprise
 
 logger = logging.getLogger(__name__)
@@ -231,7 +231,7 @@ class PaiementAbonnementService:
             c_return_url = (
                 return_url
                 or getattr(settings, "CINETPAY_RETURN_URL", None)
-                or "http://localhost:3000/abonnements/statut"
+                or f"{adresse_frontend()}/abonnements/statut"
             )
             c_notify_url = (
                 notify_url

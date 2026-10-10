@@ -31,11 +31,30 @@ from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
+from django.template import Context
+from django.template.loader import get_template, render_to_string
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["envoyer"]
+__all__ = ["envoyer", "adresse_frontend"]
+
+
+def adresse_frontend() -> str:
+    """L'adresse publique du frontend, sans barre finale — **la seule** que les liens d'e-mail utilisent.
+
+    Des liens écrits `http://localhost:3000` en dur dans trois services faisaient partir des
+    invitations et des réinitialisations dont le bouton ne menait nulle part hors du poste du
+    développeur. Une valeur locale en production est une panne silencieuse : l'e-mail part, le
+    rendu est correct, seul le clic échoue. On la signale donc bruyamment dans le journal.
+    """
+    adresse = str(getattr(settings, "FRONTEND_URL", "") or "http://localhost:3000").rstrip("/")
+    if not settings.DEBUG and ("localhost" in adresse or "127.0.0.1" in adresse):
+        logger.error(
+            "FRONTEND_URL vaut %r hors développement : les liens des e-mails seront inutilisables. "
+            "Renseignez FRONTEND_URL dans le .env du serveur (par exemple https://soumafe.com).",
+            adresse,
+        )
+    return adresse
 
 
 def _contexte_commun() -> dict[str, Any]:
@@ -73,7 +92,11 @@ def envoyer(
     donnees = {**_contexte_commun(), **(contexte or {})}
 
     try:
-        texte = render_to_string(f"emails/{gabarit}.txt", donnees)
+        # Le corps texte n'est pas du HTML : sans `autoescape=False`, « L'Entreprise » devenait
+        # `L&#x27;Entreprise` et une adresse portant `&` devenait `&amp;`, lien cassé compris.
+        texte = get_template(f"emails/{gabarit}.txt").template.render(
+            Context(donnees, autoescape=False)
+        )
         html = render_to_string(f"emails/{gabarit}.html", donnees)
     except Exception:
         # Un gabarit absent ou cassé est un défaut de développement, pas un

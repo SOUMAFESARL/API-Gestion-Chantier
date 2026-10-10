@@ -353,8 +353,9 @@ class VerificationJetonView(APIView):
         jeton = verifier(serializer.validated_data["jeton"])
         reste = int((jeton.expire_le - timezone.now()).total_seconds())
 
-        base_url = "http://localhost:3000"
-        url_connexion = f"{base_url}/connexion"
+        from apps.core.emails import adresse_frontend
+
+        url_connexion = f"{adresse_frontend()}/connexion"
 
         return Response(
             {

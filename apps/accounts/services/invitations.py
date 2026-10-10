@@ -14,7 +14,7 @@ from rest_framework import status
 from apps.accounts.models import Invitation, Utilisateur
 from apps.accounts.services.authentification import emettre_jetons, profil_de_connexion
 from apps.billing.services.quota import verifier_quota_avant_invitation
-from apps.core.emails import envoyer
+from apps.core.emails import adresse_frontend, envoyer
 from apps.core.enums import StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
 
@@ -75,7 +75,7 @@ def creer_invitation(
     invitation.jeton_clair = jeton
 
     # Construction du lien d'activation (avec fragment #jeton=... selon contrats R-30 / R-41)
-    base_url = "http://localhost:3000"
+    base_url = adresse_frontend()
 
     if projet_id:
         lien = (
@@ -96,7 +96,7 @@ def creer_invitation(
     else:
         sujet = "Invitation à rejoindre votre espace CCD Digital"
 
-    envoyer(
+    invitation.email_envoye = envoyer(
         "invitation",
         sujet,
         invitation.email,

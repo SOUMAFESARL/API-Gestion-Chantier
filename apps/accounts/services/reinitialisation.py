@@ -26,7 +26,7 @@ from apps.accounts.models import (
 )
 from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
-from apps.core.emails import envoyer
+from apps.core.emails import adresse_frontend, envoyer
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
 from apps.tenants.models import Entreprise
@@ -146,7 +146,7 @@ def _envoyer_lien(
     il n'atteint ni les journaux Nginx, ni l'en-tête `Referer` d'une page
     ouverte depuis le lien.
     """
-    base_frontend = "http://localhost:3000"
+    base_frontend = adresse_frontend()
     lien = f"{base_frontend}/mot-de-passe/definir#jeton={jeton}"
     bloque = motif == JetonReinitialisation.Motif.BLOCAGE
 

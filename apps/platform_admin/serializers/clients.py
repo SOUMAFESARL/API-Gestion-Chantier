@@ -34,6 +34,11 @@ class ModuleClientSerializer(serializers.Serializer):
     actif = serializers.BooleanField(help_text="Le module est-il activé pour cette entreprise ?")
 
 
+class DirigeantClientSerializer(serializers.Serializer):
+    nom = serializers.CharField()
+    email = serializers.EmailField()
+
+
 class ClientPlateformeSerializer(serializers.Serializer):
     """Fiche synthétique d'une entreprise cliente pour le back-office éditeur."""
 
@@ -59,6 +64,7 @@ class ClientPlateformeSerializer(serializers.Serializer):
         help_text="Nombre total de chantiers créés dans le schéma client."
     )
     abonnement = AbonnementClientSerializer(help_text="Détail de l'abonnement en cours.")
+    dirigeant = DirigeantClientSerializer(allow_null=True)
     modules = ModuleClientSerializer(many=True, help_text="Modules du catalogue et leur état pour ce client.")
 
 

@@ -53,8 +53,9 @@ DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 ENABLE_DJANGO_ADMIN = config("ENABLE_DJANGO_ADMIN", default=False, cast=bool)
 
 # Suppression définitive d'une entreprise cliente (espace super admin) : interrupteur de la phase
-# de test du MVP. Désactivé par défaut ; à activer dans le `.env` du serveur, à retirer au lancement.
-SUPPRESSION_ENTREPRISE_ACTIVEE = config("SUPPRESSION_ENTREPRISE_ACTIVEE", default=False, cast=bool)
+# de test du MVP. Activé par défaut (décision du 10 octobre 2026) ; mettre `False` dans le `.env`
+# pour l'éteindre, et retirer l'interrupteur au lancement. Le superviseur seul peut l'utiliser.
+SUPPRESSION_ENTREPRISE_ACTIVEE = config("SUPPRESSION_ENTREPRISE_ACTIVEE", default=True, cast=bool)
 
 # Jeton des endpoints /api/v1/maintenance/ : uniquement par variable
 MAINTENANCE_TOKEN = config("MAINTENANCE_TOKEN", default="ccd-migration-prod-2026-secure-token")

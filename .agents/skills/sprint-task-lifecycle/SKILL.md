@@ -65,8 +65,9 @@ git checkout -b feature/<nom-court-de-la-tache>
    la cause. Ne pas affaiblir le test pour le faire passer.
 
 Si la tâche demande un changement côté frontend (`../Application-Gestion-Chantier`), `AGENTS.md` §1
-s'applique : lire d'abord le `CLAUDE.md` du frontend, puis valider là-bas par `npm run lint` et
-`npm run typecheck`. Le frontend a sa propre branche feature et son propre commit.
+s'applique : lire d'abord son `CLAUDE.md`, puis suivre son propre cycle,
+`.agents/skills/sprint-task-lifecycle/SKILL.md` — et `brancher-api` pour un appel d'API. Le frontend
+a sa propre branche feature et son propre commit.
 
 ## Étape 5 — Intégration dans `develop`
 

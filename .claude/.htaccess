@@ -1,0 +1,9 @@
+# Code source : jamais servi directement par le serveur web (cPanel).
+# Les routes /api/... passent par Passenger, pas par ce dossier.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

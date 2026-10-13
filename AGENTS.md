@@ -52,6 +52,9 @@ Avant un push qui déploie, l'agent le dit et vérifie que les tests passent.
 | `django-expert-reference` | Écrire du Django/DRF conforme aux conventions de ce dépôt |
 | `revue-backend` | Relire un changement avant de le fusionner |
 
+Le frontend a les siens, construits sur le même modèle : `sprint-task-lifecycle`,
+`brancher-api` et `revue-frontend`, dans `../Application-Gestion-Chantier/.agents/skills/`.
+
 La source est `.agents/skills/`. `.claude/skills/` en est la copie lue par
 Claude Code ; elle ne se modifie jamais à la main. Après avoir modifié un skill :
 

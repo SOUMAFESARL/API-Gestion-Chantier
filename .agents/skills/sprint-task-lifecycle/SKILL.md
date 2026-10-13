@@ -1,82 +1,89 @@
 ---
 name: sprint-task-lifecycle
 description: >-
-  Workflow standard pour traiter toute nouvelle tâche ou fonctionnalité du sprint (Backend ou Frontend).
-  À déclencher dès que l'utilisateur confie une tâche du backlog ou demande d'implémenter une feature.
-  Impose un cycle strict : Cadrage & Brainstorming -> Génération du Manuel PDF d'Apprentissage Pratique
-  (Zéro code par l'agent, le développeur implémente manuellement) -> Branche Git -> Tests & Pre-Mortem ->
-  Consolidation Métacognitive et élévation au niveau Homo Docens.
+  Déroulé d'une tâche de sprint sur le backend CCD Digital : cadrage, plan dans le chat, branche
+  feature, implémentation et tests, merge dans develop. À utiliser dès que l'utilisateur confie une
+  tâche du backlog, une user story (« US-0xx », « T-0xx ») ou demande d'implémenter une fonctionnalité.
 ---
 
-# Cycle de Vie d'une Tâche de Sprint & Apprentissage Pratique
+# Cycle de vie d'une tâche de sprint
 
-Suivre scrupuleusement ces 5 étapes séquentielles pour chaque tâche de développement :
+Cinq étapes, dans l'ordre. Les deux premières ne modifient aucun fichier.
 
-## Étape 1 : Exploration & Cadrage Neurocognitif (Lecture seule)
-1. **Explorer le code existant** en rapport avec la tâche avant toute proposition.
-2. **Identifier les règles métier** (normes OHADA, contraintes BTP, flux CinetPay, architecture multi-tenant, etc.).
-3. **Mener le cadrage interactif avec l'utilisateur** :
-   - Cadrage narratif SCQA (Situation, Complication, Question, Orientation).
-   - Ensemencement du **Film Mental (Murphy)** : visualiser le livrable final accompli.
-   - Poser les questions d'arbitrage indispensables.
-   - **Règle d'or :** Aucun fichier de code n'est modifié durant cette étape.
+Qui écrit le code est fixé par `AGENTS.md` §3 : le développeur par défaut, l'agent sur demande
+expresse. Dans le doute, poser la question à la fin de l'étape 2, pas avant.
 
-## Étape 2 : Rédaction et Génération du « Manuel PDF d'Apprentissage par la Pratique »
-1. **Mode d'Implémentation :**
-   - Par défaut, le développeur implémente manuellement pour développer ses automatismes moteurs.
-   - Sur demande explicite du développeur (e.g. contraintes temporelles, refactoring lourd), l'agent est habilité à implémenter directement le code backend et ses tests.
-2. **Génération du Manuel PDF de Tâche :**
-   - L'agent génère un guide complet au format PDF via `reportlab` dans :
-     `Manuels_Apprentissage/MANUEL_SPRINT_<N>_TACHE_<ID>_<NOM>.pdf`
-   - Ce manuel structure l'apprentissage actif :
-     * *Section 1 : Film Mental & Objectif Sacré* (Visualisation subconsciente).
-     * *Section 2 : Architecture & Invariants (Pólya / Dehaene)* (Modèles de données, contrats d'API).
-     * *Section 3 : Guide d'Implémentation Pas-à-Pas* (Code commenté, explications profondes).
-     * *Section 4 : Signal d'Erreur Bayésien & Pre-Mortem (Dehaene P3 / Kahneman)* (Cas limites, pièges classiques).
-     * *Section 5 : Checklist de Tests & Validation*.
-     * *Section 6 : Défi Homo Docens* (Transmettre et enseigner la notion à un pair).
+## Étape 1 — Cadrage (lecture seule)
 
-## Étape 3 : Isolation Git sur Branche Feature
-1. Se repositionner sur la branche principale d'intégration et récupérer les dernières modifications :
+1. **Lire avant de proposer.** Le code du module concerné, et ce que la conception en dit dans
+   `../../04_Conception/` quand le dossier est présent sur la machine (MLD, conventions d'API,
+   spécification fonctionnelle). La conception fait foi sur le code : une divergence se signale,
+   elle ne se tranche pas en silence.
+2. **Vérifier ce qui existe déjà.** Une story du backlog est souvent à moitié faite : dire ce qui est
+   en place, ce qui manque, ce qui s'écarte.
+3. **Relever les règles métier en jeu** : OHADA, contraintes BTP, flux CinetPay, isolation
+   multi-tenant, Socle Commun.
+4. **Restituer le cadrage** en quatre temps — situation, complication, question, orientation —
+   suivi du résultat attendu décrit du point de vue de l'utilisateur final (le « film mental » :
+   ce qu'il voit et peut faire quand la tâche est finie).
+5. **Poser les questions d'arbitrage** qui changent l'implémentation. Seulement celles-là.
+
+## Étape 2 — Plan, dans le chat
+
+Le plan remplace l'ancien manuel PDF, abandonné le 13/10/2026 : **ne générer ni PDF ni script
+`generate_manual_*`**, même si le dépôt en contient des dizaines d'exemples.
+
+Le plan tient en un message :
+
+- les fichiers à créer ou modifier, dans l'ordre où les écrire ;
+- les modèles, les contrats d'API et les invariants à tenir ;
+- **les pièges de cette tâche précise** (deux ou trois, pas une liste générique), chacun avec le
+  test qui le révèle ;
+- les tests à écrire.
+
+Quand le développeur implémente lui-même, expliquer le *pourquoi* de chaque choix : c'est ce qu'il
+réutilisera sur la tâche suivante.
+
+## Étape 3 — Branche feature
+
+```bash
+git checkout develop
+git pull
+git checkout -b feature/<nom-court-de-la-tache>
+```
+
+## Étape 4 — Implémentation et tests
+
+1. Implémenter selon le plan. Pour les conventions du dépôt : skill `django-expert-reference`.
+2. Écrire les tests en même temps que le code, pas après.
+3. Valider :
    ```bash
-   git checkout develop
-   git pull
+   ruff check apps/<module>
+   pytest apps/<module>/tests/ -v
    ```
-2. Créer la branche dédiée à la tâche :
-   ```bash
-   git checkout -b feature/<nom-court-de-la-tache>
-   ```
+4. Quand un test ou une commande échoue : lire l'erreur, dire quelle hypothèse elle infirme, corriger
+   la cause. Ne pas affaiblir le test pour le faire passer.
 
-## Étape 4 : Implémentation du Code Métier & Tests
-1. **Implémentation :** Réalisée manuellement par le développeur ou directement par l'agent sur demande expresse.
-2. L'agent assure la validation continue et le soutien subconscient :
-   - Réfutation bienveillante des erreurs de compilation ou de test (Predictive Coding).
-   - Application de la Loi de l'Effort Inversé si blocage (respirer, décharger).
-3. Exécuter les commandes de validation :
-   - **Backend :**
-     ```bash
-     pytest apps/<module>/tests/ -v
-     ```
-   - **Frontend :**
-     ```bash
-     npx tsc --noEmit
-     npm run lint
-     ```
+Si la tâche demande un changement côté frontend (`../Application-Gestion-Chantier`), `AGENTS.md` §1
+s'applique : lire d'abord le `CLAUDE.md` du frontend, puis valider là-bas par `npm run lint` et
+`npm run typecheck`. Le frontend a sa propre branche feature et son propre commit.
 
-## Étape 5 : Intégration dans `develop`, Suppression de Branche & Ancrage Homo Docens
-1. Commiter les modifications sur la branche de feature avec un message conventionnel :
+## Étape 5 — Intégration dans `develop`
+
+1. Commiter sur la branche feature, message conventionnel :
    ```bash
    git add <fichiers-concernes>
    git commit -m "feat(<scope>): <description claire et concise>"
    ```
-2. Basculer sur `develop` et fusionner avec conservation de l'historique (merge commit) :
+2. Fusionner en conservant l'historique, puis supprimer la branche :
    ```bash
    git checkout develop
    git merge --no-ff feature/<nom-court-de-la-tache> -m "merge: feature/<nom-court-de-la-tache> into develop"
-   ```
-3. **Supprimer immédiatement la branche de feature** :
-   ```bash
    git branch -d feature/<nom-court-de-la-tache>
    ```
-4. **Attention frontend :** Sur le frontend (`Application-Gestion-Chantier`), l'exécution de `git push` est **strictement interdite** (se référer au skill `prevent-frontend-push`).
-5. **Clôture Métacognitive** : L'apprenant valide son défi *Homo Docens* et planifie sa consolidation nocturne (Replay à $20\times$).
+3. **Push : quand le développeur le demande.** Il est autorisé sur le backend comme sur le
+   frontend, mais `git push origin develop` sur le backend **déploie en production**
+   (`AGENTS.md` §2) : le rappeler avant de pousser.
+4. **Clôture.** Résumer ce qui a été livré, ce qui a été vérifié et ce qui ne l'a pas été. Puis poser
+   au développeur une question qui l'oblige à expliquer le mécanisme central de la tâche comme s'il
+   l'enseignait à un pair (le défi « Homo Docens ») — une seule, précise, sans réponse dans le code.

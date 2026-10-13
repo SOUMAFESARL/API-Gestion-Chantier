@@ -1,159 +1,132 @@
 ---
 name: django-expert-reference
 description: >-
-  Référence universelle d'ingénierie, d'architecture et de bonnes pratiques Django 5 & Django REST Framework
-  (issue de 'Django 5 By Example' par Antonio Melé, 2024). À activer systématiquement lors de toute question,
-  session d'apprentissage, audit de performance, conception d'API ou génération de manuel PDF impliquant Django.
-  Fournit les patrons de conception avancés (ORM sans N+1, Polymorphisme, ContentTypes, Cache Redis, Celery,
-  Channels WebSockets, WeasyPrint, Sécurité RBAC) et les checklists Pre-Mortem associées.
+  Conventions Django 5.2 / DRF propres au backend CCD Digital, et patrons de « Django 5 By Example »
+  (Melé, 2024) tels qu'ils s'y appliquent. À utiliser avant d'écrire ou de modifier un modèle, une
+  requête ORM, un serializer, une vue, une permission, une tâche Celery ou une clé de cache dans ce
+  dépôt, et pour expliquer pourquoi le code y est organisé ainsi.
 ---
 
-# Référence d'Ingénierie & d'Architecture Django 5 & DRF (Melé 2024)
+# Django / DRF dans ce dépôt
 
-Ce skill constitue la **mémoire technique et architecturale souveraine** pour tout développement Django 5 et Django REST Framework. Il distille les patterns industriels éprouvés du livre *Django 5 By Example* (Antonio Melé, 5ᵉ édition, 2024) et s'articule avec l'écosystème d'apprentissage neurocognitif (`learning-orchestrator`, `sprint-task-lifecycle`).
+Ce qui suit ne répète pas la documentation de Django : il dit **où ce projet s'en écarte**, et
+quels patrons généraux y comptent vraiment. Quand une règle du livre contredit une convention
+d'ici, c'est la convention d'ici qui s'applique.
 
----
+## 1. Ce que le multi-tenant change
 
-## 1. Les 8 Piliers d'Architecture Django 5 & DRF
+Un schéma PostgreSQL par entreprise cliente (django-tenants). L'isolation vient du `search_path`,
+pas d'un filtre.
 
-### Pilier 1 : Modélisation Avancée, Héritage & Polymorphisme
-* **Typologie des 3 Héritages de Modèles :**
-  1. **Modèle Abstrait (`abstract = True`) :** Factorisation de champs communs (`created_at`, `updated_at`, `is_active`) sans table physique en base de données.
-  2. **Héritage Multi-Tables (MTI) :** Table parente liée par relation OneToOne implicite aux tables enfants. Utiliser avec discernement (impact de jointure SQL à chaque requête).
-  3. **Modèle Proxy (`proxy = True`) :** Personnalisation du comportement Python (méthodes, tri par défaut, managers) sans altérer le schéma SQL ni créer de table supplémentaire.
-* **Framework `contenttypes` & Relations Génériques :**
-  * Utiliser `ContentType`, `object_id` et `GenericForeignKey` pour relier polymorphiquement des entités hétérogènes (ex: Journal d'audit universel, photos de chantier, pièces jointes, tags) sans multiplier les clés étrangères directes.
-* **Champs de Modèles Personnalisés (*Custom Model Fields*) :**
-  * Création de champs sur-mesure (ex: `OrderField` pour l'ordonnancement dynamique d'éléments au sein d'un parent spécifique) en surchargeant `pre_save()`.
-* **Énumérations Typées :**
-  * Utiliser `models.TextChoices` ou `models.IntegerChoices` pour des statuts stricts et lisibles.
+- **`SHARED_APPS` ou `TENANT_APPS`** (`config/settings/base.py`) : à trancher avant le premier
+  modèle d'une application. Une application métier dans `SHARED_APPS` met tous les clients dans la
+  même table, et cela ne se rattrape pas après la première migration.
+- **Pas de colonne `tenant_id`**, pas de filtre « par entreprise » dans les requêtes métier.
+- **Migrations** : `migrate_schemas --shared` puis `--tenant`. `migrate` seul ne fait rien d'utile.
+- **Une tâche Celery n'hérite pas du schéma.** Elle reçoit `schema_name` en argument et travaille
+  dans `with schema_context(schema_name):`. Sans cela elle tourne sur `public`, ne trouve rien et
+  ne lève rien. Modèle : `apps/projets/tasks.py`.
+- **Redis n'isole rien.** `CACHES` n'a pas de `KEY_FUNCTION` : une clé de cache qui porte une donnée
+  d'un client contient le nom du schéma. Une clé sans schéma n'est acceptable que pour une donnée
+  identique pour tous (ex. la météo d'une ville, `apps/projets/services/meteo.py`).
+- **Tests** : un test métier s'exécute dans un schéma — fixture `schema_demo` de `conftest.py`.
 
----
+## 2. Organisation d'une application
 
-### Pilier 2 : Maîtrise de l'ORM & Performance SQL Sans Faille
-* **Éradication Absolue du Problème $N+1$ :**
-  * **`select_related(*fields)` :** À utiliser pour les relations directes mono-valeur (`ForeignKey`, `OneToOne`). Génère une jointure SQL (`JOIN`) en une seule requête.
-  * **`prefetch_related(*lookups)` :** À utiliser pour les relations multi-valeurs (`ManyToManyField`, `ForeignKey` inverses). Exécute une requête SQL par table et réalise la fusion en mémoire Python.
-  * **`Prefetch()` objects :** Pour filtrer ou ordonner les relations préchargées avant leur jointure en mémoire.
-* **Évaluation Paresseuse & Optimisation des Requêtes :**
-  * Les QuerySets sont *lazy* : ils ne touchent la base de données qu'à l'itération, au découpage (*slicing*), à l'appel de `len()`, `list()` ou `bool()`.
-  * Utiliser `exists()` plutôt que `count() > 0` pour tester la présence d'un enregistrement.
-  * Utiliser `only()` ou `defer()` pour éviter de charger des champs lourds (ex: descriptions volumineuses) lorsque non requis.
-* **Requêtes Avancées :**
-  * Objets `Q` pour les requêtes combinatoires (`|` pour OR, `&` pour AND, `~` pour NOT).
-  * Expressions `F` pour manipuler et incrémenter des valeurs directement en base sans race condition (ex: `stock = F('stock') - 1`).
-* **Transactions Atomiques & Verrous :**
-  * Encapsuler toute opération multi-tables critique (commandes, décomptes financiers, déstockages) dans un bloc `with transaction.atomic():`.
-  * Verrous pessimistes avec `select_for_update()` pour empêcher les collisions concurrentes.
-* **Custom Managers & QuerySets :**
-  * Encapsuler la logique de requête métier dans des QuerySets chaînables (`models.QuerySet.as_manager()`).
+`models/`, `views/`, `serializers/`, `services/`, `selectors/` sont des **paquets**. Un `views.py`
+créé à côté du dossier `views/` est ignoré sans aucun message.
 
----
+| Couche | Rôle |
+|---|---|
+| `selectors/` | Lit, ne modifie rien. Porte les `select_related` / `prefetch_related` |
+| `services/` | Modifie l'état, porte la règle de gestion et la transaction |
+| `views/` | `APIView` sans logique : permission, validation, appel du service, réponse |
+| `serializers/` | Entrée (validation stricte) séparée de la sortie (représentation) |
 
-### Pilier 3 : Django REST Framework (DRF) & API Craftsman
-* **Sérialiseurs & Validation Robuste :**
-  * Séparation nette : Sérialiseur d'entrée (validation stricte des inputs) vs Sérialiseur de sortie (représentation optimisée).
-  * Validations chirurgicales : `validate_<champ>()` pour une règle unitaire, `validate(data)` pour les contraintes inter-champs.
-  * Utilisation de `SerializerMethodField` pour les calculs dynamiques (avec pré-calcul au niveau de l'ORM pour éviter les régressions de performance).
-* **ViewSets & Routers :**
-  * Utilisation de `ModelViewSet` pour les ressources CRUD standards.
-  * Exposition des routes métiers via le décorateur `@action(detail=True/False, methods=['post'])`.
-  * Routage clair et versionné via `DefaultRouter`.
-* **Sécurité & Contrôle d'Accès Fin (RBAC) :**
-  * Éviter de limiter la sécurité au niveau de la vue : implémenter des classes `BasePermission` dédiées.
-  * Surcharger `has_permission(request, view)` pour l'accès global et `has_object_permission(request, view, obj)` pour vérifier la propriété de l'objet (ex: appartenance au chantier ou à l'entreprise).
+Une règle de gestion écrite dans une vue sera réécrite le jour où une tâche Celery ou une commande
+d'administration en aura besoin.
 
----
+Pagination (`apps.core.pagination.PaginationStandard`), format d'erreur
+(`apps.core.exceptions.gestionnaire_erreurs`) et authentification sont globaux : ne pas les refaire
+par module. Une erreur métier est une sous-classe d'`ErreurMetier`, pas une `Response` construite à
+la main.
 
-### Pilier 4 : Asynchronisme Industriel & Tâches de Fond (Celery)
-* **Architecture Distribuée :**
-  * Message Broker : RabbitMQ ou Redis.
-  * Workers Celery avec `@shared_task(bind=True, max_retries=3, default_retry_delay=60)`.
-* **Idempotence & Résilience :**
-  * Toute tâche asynchrone doit être strictement **idempotente** (son exécution répétée avec les mêmes paramètres ne doit pas altérer l'état final).
-  * Ne jamais passer d'instances de modèles Django complexes en argument de tâche (risque de données obsolètes) ; passer uniquement des identifiants primitifs (`order_id`, `chantier_id`).
-* **Cas d'usage types :**
-  * Envoi d'e-mails transactionnels et SMS d'alerte.
-  * Génération lourde d'états financiers ou de bilans OHADA.
-  * Synchronisation périodique avec des services tiers (passerelles de paiement, webhooks).
+## 3. Modèles
 
----
+- **Hériter de `ModeleBase`** (`apps/core/models`) : UUID, horodatages, auteur, suppression logique.
+  Seule exception : `JournalAudit`, en insertion seule, dont l'ordre d'insertion est une information.
+- **La suppression physique n'existe pas.** `objet.delete()` pose `supprime_le`. `objects` masque
+  les lignes supprimées ; `tous_objets` les montre, et s'en servir est un choix à justifier.
+- **Montants : `MontantField`**, en centimes, sur `BigIntegerField`. Jamais de `float`, jamais de
+  francs. `PourcentageField` et `QuantiteField` pour le reste (`apps/core/fields.py`).
+- **Dates : UTC en base** (`TIMESTAMPTZ`), conversion à l'affichage.
+- **Statuts : `models.TextChoices`**, regroupés dans `apps/core/enums.py` quand ils sont partagés.
+- **Fichiers : la clé de stockage en base, jamais l'URL.** En production l'URL S3 est signée et
+  périme ; elle se calcule à la lecture. La clé commence par le nom du schéma.
+- **Héritage** : abstrait pour factoriser des champs, proxy pour changer un comportement sans
+  toucher au schéma ; l'héritage multi-tables coûte une jointure à chaque requête.
+- **Relations génériques** (`ContentType` + `GenericForeignKey`) pour rattacher une même entité à
+  des parents hétérogènes — journal d'audit, pièces jointes — plutôt qu'une clé étrangère par parent.
+- **Index** sur les champs filtrés ou triés souvent : `Meta.indexes`.
 
-### Pilier 5 : Stratégies de Cache Multi-Niveaux & Moteur Redis
-* **Backend de Cache :**
-  * Utiliser `django-redis` pour bénéficier de la rapidité mémoire et des structures de données natives de Redis.
-* **Les 4 Paliers de Mise en Cache :**
-  1. **Low-level Cache API :** `cache.get_or_set(key, callable, timeout)` pour les agrégats lourds (ex: solde global d'un chantier).
-  2. **Template Fragment Cache :** `{% cache timeout key %}` pour les blocs HTML complexes non dynamiques.
-  3. **View Cache :** Décorateur `@cache_page(timeout)` pour les endpoints publics peu changeants.
-  4. **Per-Site Cache :** `UpdateCacheMiddleware` et `FetchFromCacheMiddleware` pour les sites vitrines.
-* **Structures Redis Natives pour les Métriques :**
-  * Compteurs atomiques (`INCR`, `INCRBY`) pour les statistiques d'accès.
-  * Ensembles ordonnés (*Sorted Sets* : `ZADD`, `ZINCRBY`, `ZREVRANGE`) pour les classements et tableaux d'honneur en temps réel.
-* **Politique d'Invalidation :**
-  * Clés de cache déterministes et invalidation ciblée lors des signaux `post_save` / `post_delete`.
+## 4. ORM
 
----
+- **N+1** : `select_related` pour `ForeignKey` / `OneToOne`, `prefetch_related` pour les relations
+  multiples, `Prefetch()` pour filtrer ou trier ce qui est préchargé. À poser dans le selector, pas
+  dans le serializer.
+- Un `SerializerMethodField` qui interroge la base est un N+1 : annoter le queryset à la place.
+- `exists()` plutôt que `count() > 0` ; `only()` / `defer()` pour écarter un champ lourd.
+- `F()` pour incrémenter en base sans course ; `Q()` pour les conditions combinées.
+- **`transaction.atomic()`** autour de toute écriture multi-tables ; `select_for_update()` quand
+  deux requêtes peuvent modifier la même ligne (numérotation, stock, paiement).
+- `save(update_fields=[...])` : les noms sont des chaînes qu'aucun outil ne vérifie. Un test qui
+  appelle la fonction est la seule protection contre une faute de frappe.
 
-### Pilier 6 : Temps Réel avec Django Channels & WebSockets (ASGI)
-* **Architecture ASGI vs WSGI :**
-  * WSGI est synchrone (une requête bloque un thread).
-  * ASGI (piloté par Daphne) gère les connexions persistantes asynchrones par boucle d'événements.
-* **Consumers WebSockets :**
-  * Utiliser `AsyncWebsocketConsumer` pour une scalabilité maximale.
-  * Gérer explicitement les événements `connect()`, `disconnect()` et `receive()`.
-* **Channel Layers (Redis) :**
-  * Diffusion de messages par groupes (`group_add`, `group_discard`, `group_send`).
-  * Utilisation obligatoire de `database_sync_to_async` pour exécuter des requêtes Django ORM au sein d'un consumer asynchrone sans bloquer la boucle ASGI.
+## 5. Droits
 
----
+`DEFAULT_PERMISSION_CLASSES` impose l'authentification ; chaque vue déclare en plus qui a le droit.
 
-### Pilier 7 : Sécurité, Facturation & Médias Dynamiques
-* **Custom User Model :**
-  * Toujours définir un modèle héritant de `AbstractUser` dès l'initialisation du projet (`AUTH_USER_MODEL`).
-* **Gestion Sécurisée des Webhooks (Stripe / CinetPay) :**
-  * Vérification impérative de la signature cryptographique de la charge utile (*payload*).
-  * Traitement des événements avec protection contre le rejeu (*replay attack*) via vérification d'unicité de l'identifiant d'événement.
-* **Génération PDF Dynamique Haute Définition :**
-  * Compilation HTML/CSS Paged Media via `WeasyPrint` pour produire des factures, bordereaux de livraison et états comptables officiels.
-  * Intégration d'en-têtes, pieds de page, pagination dynamique (`counter(pages)`) et QR codes.
+- Les classes sont dans `apps/core/permissions.py` : `PermissionModule`, `RoleRequis`,
+  `EstDirection`, `MembreDuProjet`, `GardePermissionProjet`.
+- **Une liste se restreint aussi** : `filtrer_queryset_par_affectations` ou
+  `ScopedProjetQuerySetMixin`. Protéger le détail sans filtrer la liste laisse voir les projets des
+  autres.
+- `has_object_permission` n'est pas appelé par une vue qui ne passe pas par `get_object()` : dans
+  une `APIView`, appeler `self.check_object_permissions(request, obj)`.
 
----
+## 6. Celery
 
-### Pilier 8 : Production, Déploiement & DevOps
-* **Architecture des Paramètres Modulaires :**
-  * `config/settings/base.py` (paramètres communs).
-  * `config/settings/local.py` (développement avec debug et outils de profilage).
-  * `config/settings/production.py` (sécurité stricte, pas de secrets en dur, variables `.env`).
-* **Multiplexage Nginx + uWSGI/Gunicorn + Daphne :**
-  * Nginx en frontal : gère le SSL/TLS, sert les fichiers statiques (`STATIC_ROOT`) et médias (`MEDIA_ROOT`).
-  * Routage HTTP classique vers uWSGI/Gunicorn.
-  * Routage WebSocket (`/ws/`) avec mise à niveau des en-têtes (`Upgrade`, `Connection "Upgrade"`) vers Daphne.
-* **Audit de Durcissement :**
-  * Validation pré-livraison obligatoire : `python manage.py check --deploy`.
-  * Activation de HSTS, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`.
+- Arguments **primitifs** : identifiants et nom de schéma, jamais une instance de modèle.
+- Tâches **idempotentes** : rejouées avec les mêmes arguments, elles laissent le même état.
+- `bind=True, max_retries=…` pour ce qui dépend d'un service tiers (email, CinetPay).
+- Une tâche planifiée « tous tenants » boucle sur les entreprises actives et ouvre un
+  `schema_context` par entreprise.
 
----
+## 7. Paiement et webhooks (CinetPay)
 
-## 2. Table des Pre-Mortems & Anti-Patterns Fréquents
+- Vérifier la signature de la charge utile avant tout traitement.
+- Protéger contre le rejeu : un identifiant d'événement ne se traite qu'une fois.
+- Ne jamais faire confiance au montant reçu : le relire côté serveur.
 
-| Anti-Pattern Détecté | Conséquence Système | Solution Architecturale (Melé / Django 5) |
-| :--- | :--- | :--- |
-| **Requête SQL dans la boucle du Serializer** | Explosion du nombre de requêtes ($N+1$), latence $\times 20$. | Utiliser `select_related()` ou `prefetch_related()` en amont dans le `get_queryset()` du ViewSet. |
-| **Appel ORM synchrone dans un `AsyncWebsocketConsumer`** | Blocage brutal de la boucle d'événements Daphne pour tous les utilisateurs. | Encapsuler l'appel dans `database_sync_to_async(fonction)`. |
-| **Opération bancaire / stock sans transaction atomique** | Incohérence des données en cas d'erreur réseau intermédiaire. | Encapsuler dans `with transaction.atomic():` avec `select_for_update()`. |
-| **Passage d'un objet modèle lourd à une tâche Celery** | Désynchronisation de données (*race condition*) et échec de sérialisation. | Passer uniquement la clé primaire `instance.id` et recharger l'objet dans le worker. |
-| **Oubli de signature sur un endpoint Webhook** | Falsification possible de paiements par injection de requêtes forgées. | Valider systématiquement le HMAC/Signature envoyé dans l'en-tête de la passerelle. |
-| **Indexation absente sur les champs filtrés fréquemment** | Scans complets de table (*Full Table Scans*) écroulant PostgreSQL. | Ajouter explicitement `models.Index(fields=['statut', 'date_debut'])` dans `Meta.indexes`. |
+## 8. Avant de livrer
 
----
+- Tout texte montré à l'utilisateur passe par `_("…")` (Socle Commun §1.1).
+- `@extend_schema` à jour sur les vues modifiées : le frontend lit ce contrat.
+- `ruff check`, `pytest apps/<module>/tests/`, et `python manage.py check --deploy` pour un
+  changement de réglages.
+- Le déploiement est cPanel + Passenger (`passenger_wsgi.py`, `docs/deploiement-cpanel.md`) : pas de
+  Nginx ni d'ASGI à supposer.
 
-## 3. Guide de Transposition pour les Manuels PDF (`sprint-task-lifecycle`)
+## 9. Anti-patterns, et ce qu'ils provoquent ici
 
-Lorsqu'un manuel PDF de tâche de sprint backend est généré pour le développeur, **ce skill garantit que le contenu technique intègre** :
-
-1. **Section Film Mental :** Visualisation précise du flux de données et du comportement de l'API sous charge.
-2. **Section Architecture & Invariants :** Schéma relationnel rigoureux, contraintes de validation et contrats d'interfaces JSON normalisés.
-3. **Section Guide Pas-à-Pas :** Code exemplaire, documenté selon les idiomes Django 5 (évitement des fonctions dépréciées, utilisation des génériques).
-4. **Section Pre-Mortem :** Les 3 pièges subtils de la tâche et comment les tester.
-5. **Section Défi Homo Docens :** Question de réflexion profonde forçant l'apprenant à expliquer la mécanique sous le capot (ex: *"Comment Django gère-t-il la relation inverse sans table physique ?"*).
+| Anti-pattern | Conséquence | Parade |
+|---|---|---|
+| Requête dans la boucle d'un serializer | N+1, latence multipliée | `select_related` / `prefetch_related` dans le selector |
+| Tâche Celery sans `schema_context` | Tourne sur `public`, ne trouve rien, ne lève rien | Passer `schema_name`, ouvrir le contexte |
+| Clé de cache sans le schéma | Un client lit la donnée d'un autre | Schéma dans la clé |
+| Instance de modèle passée à une tâche | Donnée périmée, échec de sérialisation | Passer l'identifiant, recharger dans la tâche |
+| Écriture multi-tables sans transaction | État incohérent si une étape échoue | `transaction.atomic()` + `select_for_update()` |
+| Règle de gestion dans la vue | Réécrite ailleurs, puis divergente | La mettre dans `services/` |
+| URL de fichier stockée en base | Lien mort à l'expiration de la signature | Stocker la clé, calculer l'URL à la lecture |
+| Webhook sans vérification de signature | Paiement falsifiable | Valider la signature, refuser le rejeu |
+| Champ filtré souvent, sans index | Parcours complet de table | `models.Index` dans `Meta.indexes` |

@@ -16,9 +16,27 @@ from apps.chantier.views.journal import (
     JournalValiderView,
     JournalView,
 )
+from apps.chantier.views.synthese import (
+    SyntheseApprouverView,
+    SyntheseRedactionView,
+    SyntheseRejeterView,
+    SyntheseSoumettreView,
+    SyntheseSuiviView,
+    SyntheseView,
+)
 
 app_name = "journal_chantier"
 urlpatterns = [
+    path("syntheses/", SyntheseView.as_view(), name="synthese"),
+    path("syntheses/suivi/", SyntheseSuiviView.as_view(), name="synthese-suivi"),
+    path("syntheses/redaction/", SyntheseRedactionView.as_view(), name="synthese-redaction"),
+    path("syntheses/soumettre/", SyntheseSoumettreView.as_view(), name="synthese-soumettre"),
+    path(
+        "syntheses/<uuid:pk>/approuver/",
+        SyntheseApprouverView.as_view(),
+        name="synthese-approuver",
+    ),
+    path("syntheses/<uuid:pk>/rejeter/", SyntheseRejeterView.as_view(), name="synthese-rejeter"),
     path("alertes/", JournalNotificationsView.as_view(), name="notifications"),
     path("journal/", JournalView.as_view(), name="journal"),
     path("journal/<str:identifiant>/relancer/", JournalRelancerView.as_view(), name="relancer"),

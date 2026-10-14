@@ -11,8 +11,16 @@ Entités MCD  : RapportJournalier, LigneAvancement, ProductionIntervenant, Photo
 # réexportés ici. Voir 04_Conception/architecture_base_donnees/MLD_CCD_Digital.md
 
 from .blocage import Blocage
-from .rapport_journalier import RapportJournalier
 from .journal import AlerteJournal, JournalChantier
+from .rapport_journalier import RapportJournalier
 from .relance import RelanceJournal
+from .synthese import SynthesePeriodique
 
-__all__ = ["Blocage", "RapportJournalier", "JournalChantier", "AlerteJournal", "RelanceJournal"]
+__all__ = [
+    "AlerteJournal",
+    "Blocage",
+    "JournalChantier",
+    "RapportJournalier",
+    "RelanceJournal",
+    "SynthesePeriodique",
+]

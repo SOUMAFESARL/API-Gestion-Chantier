@@ -23,6 +23,7 @@ from apps.core.permissions import (
     filtrer_queryset_par_affectations,
 )
 from apps.projets.models import Projet, ProjetContrat
+from apps.projets.selectors.encadrement import prefetch_encadrement
 from apps.projets.serializers.swagger import (
     ProjetCreationResponseSerializer,
     ProjetPatchSerializer,
@@ -134,7 +135,7 @@ class ProjetListCreateView(APIView):
         qs = (
             Projet.objects.all()
             .select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
-            .prefetch_related("contrats", "lots__activites")
+            .prefetch_related("contrats", "lots__activites", prefetch_encadrement())
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         serializer = ProjetCreationResponseSerializer(qs, many=True, context={"request": request})
@@ -261,7 +262,7 @@ class ProjetDetailView(APIView):
         projet = get_object_or_404(
             Projet.objects.select_related(
                 "client", "chef_projet", "conducteur_travaux", "cree_par"
-            ).prefetch_related("contrats", "lots__activites"),
+            ).prefetch_related("contrats", "lots__activites", prefetch_encadrement()),
             pk=pk,
         )
         self.check_object_permissions(request, projet)

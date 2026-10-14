@@ -7,7 +7,8 @@ from rest_framework import serializers
 
 from apps.core.enums import StatutProjet, TypeProjet
 from apps.projets.models import Projet, ProjetContrat
-from apps.projets.serializers import ProjetCreationSerializer
+from apps.projets.selectors.encadrement import chefs_chantier, conducteurs_travaux
+from apps.projets.serializers import ChefProjetEnrichiSerializer, ProjetCreationSerializer
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.contrats import (
     MAX_LOT,
@@ -44,6 +45,10 @@ CHAMPS_REPONSE = (
     "indice_sante",
     "statistiques",
     "sans_chef_projet",
+    # L'encadrement, en lecture : le frontend en déduit qui voit le chantier.
+    "chef_projet",
+    "conducteurs_travaux",
+    "chefs_chantier",
 )
 
 
@@ -163,7 +168,37 @@ class ContratProjetSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(path) if request else path
 
 
+class ChefChantierProjetSerializer(serializers.Serializer):
+    """Un chef de chantier du projet. `zone` n'est pas encore saisie côté serveur."""
+
+    utilisateur = ChefProjetEnrichiSerializer()
+    zone = serializers.CharField(allow_null=True)
+
+
 class ProjetCreationResponseSerializer(serializers.ModelSerializer):
+    chef_projet = ChefProjetEnrichiSerializer(
+        read_only=True,
+        allow_null=True,
+        help_text="Le chef de projet désigné, en clair ; null si le projet n'en a pas.",
+    )
+    conducteurs_travaux = serializers.SerializerMethodField(
+        help_text="Le conducteur principal puis les conducteurs affectés et en vigueur."
+    )
+    chefs_chantier = serializers.SerializerMethodField(
+        help_text="Les chefs de chantier affectés et en vigueur."
+    )
+
+    @extend_schema_field(ChefProjetEnrichiSerializer(many=True))
+    def get_conducteurs_travaux(self, obj) -> list:
+        return ChefProjetEnrichiSerializer(conducteurs_travaux(obj), many=True).data
+
+    @extend_schema_field(ChefChantierProjetSerializer(many=True))
+    def get_chefs_chantier(self, obj) -> list:
+        return [
+            {"utilisateur": ChefProjetEnrichiSerializer(chef).data, "zone": None}
+            for chef in chefs_chantier(obj)
+        ]
+
     statistiques = serializers.SerializerMethodField(
         help_text="Compteurs et avancement des lots et activités actifs du projet."
     )

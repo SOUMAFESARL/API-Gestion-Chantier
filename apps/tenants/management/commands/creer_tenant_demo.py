@@ -111,7 +111,7 @@ class Command(BaseCommand):
             if options["acces_django"]:
                 self._creer_compte_technique()
 
-            self._creer_donnees_metier_demo(utilisateur)
+            self._creer_donnees_metier_demo(options["motdepasse"])
 
         self.stdout.write("")
         self.stdout.write(self.style.WARNING(f"  Ouvrir  http://{DOMAINE}:8000/api/health/"))
@@ -196,11 +196,33 @@ class Command(BaseCommand):
             )
         )
 
-    def _creer_donnees_metier_demo(self, admin_user) -> None:
+    def _collaborateur_demo(self, email, nom, prenom, role_global, mot_de_passe):
+        """Un collaborateur de démonstration, créé une fois et laissé tel quel ensuite."""
+        from apps.accounts.models import Role, Utilisateur
+
+        utilisateur = Utilisateur.objects.filter(email=email).first()
+        if utilisateur is None:
+            utilisateur = Utilisateur.objects.create_user(
+                email=email,
+                password=mot_de_passe,
+                nom=nom,
+                prenom=prenom,
+                role=Role.objects.filter(code=role_global).first(),
+                role_global=role_global,
+                statut=StatutUtilisateur.ACTIF,
+            )
+            self.stdout.write(self.style.SUCCESS(f"  Collaborateur créé : {email}"))
+        return utilisateur
+
+    def _creer_donnees_metier_demo(self, mot_de_passe) -> None:
         """Peuple des données de chantiers, lots, rapports, bons de paiement et réceptions.
 
         Garantit que le tableau de bord affiche des métriques BTP réelles et vivantes
         (aucun bouchon ou valeur codée en dur).
+
+        **Le DG ne tient aucune fonction sur les chantiers** (décision du
+        14/10/2026) : un chef de projet et un chef de chantier de démonstration
+        les tiennent à sa place. Ils se connectent avec le même mot de passe.
         """
         from datetime import date
         from decimal import Decimal
@@ -220,6 +242,16 @@ class Command(BaseCommand):
         from apps.tiers.models import RoleTiers, Tiers
 
         self.stdout.write("  Génération / vérification des données métier démo...")
+
+        from apps.accounts.services.roles import initialiser_roles_par_defaut
+
+        initialiser_roles_par_defaut()
+        chef_projet = self._collaborateur_demo(
+            "cp@demo.ci", "Kouamé", "Djatchi", RoleGlobal.CHEF_PROJET, mot_de_passe
+        )
+        chef_chantier = self._collaborateur_demo(
+            "cc@demo.ci", "Sidibé", "Gbané", RoleGlobal.CHEF_CHANTIER, mot_de_passe
+        )
 
         # 1. Tiers
         t_client1, _ = Tiers.objects.get_or_create(
@@ -291,7 +323,7 @@ class Command(BaseCommand):
         RoleTiers.objects.get_or_create(tiers=t_fourn2, role=RoleTiersChoix.FOURNISSEUR)
 
         # 2. Projets
-        p1, _ = Projet.objects.get_or_create(
+        p1, cree_p1 = Projet.objects.get_or_create(
             reference="CHANT-2026-001",
             defaults={
                 "nom": "Résidence Les Jardins d'Angré",
@@ -303,18 +335,15 @@ class Command(BaseCommand):
                 "date_debut_prevue": date(2026, 1, 15),
                 "date_fin_prevue": date(2026, 11, 30),
                 "date_debut_reelle": date(2026, 1, 15),
-                "chef_projet": admin_user,
+                "chef_projet": chef_projet,
                 "statut": StatutProjet.EN_COURS,
                 "avancement_reel": Decimal("68.00"),
                 "avancement_theorique": Decimal("65.00"),
                 "indice_sante": 85,
             },
         )
-        AffectationProjet.objects.get_or_create(
-            utilisateur=admin_user, projet=p1, defaults={"role_projet": RoleProjet.CHEF_PROJET}
-        )
 
-        p2, _ = Projet.objects.get_or_create(
+        p2, cree_p2 = Projet.objects.get_or_create(
             reference="CHANT-2026-002",
             defaults={
                 "nom": "Immeuble R+5 Le Phare",
@@ -326,18 +355,15 @@ class Command(BaseCommand):
                 "date_debut_prevue": date(2026, 2, 1),
                 "date_fin_prevue": date(2026, 12, 15),
                 "date_debut_reelle": date(2026, 2, 10),
-                "chef_projet": admin_user,
+                "chef_projet": chef_projet,
                 "statut": StatutProjet.EN_COURS,
                 "avancement_reel": Decimal("42.00"),
                 "avancement_theorique": Decimal("40.00"),
                 "indice_sante": 78,
             },
         )
-        AffectationProjet.objects.get_or_create(
-            utilisateur=admin_user, projet=p2, defaults={"role_projet": RoleProjet.CHEF_PROJET}
-        )
 
-        p3, _ = Projet.objects.get_or_create(
+        p3, cree_p3 = Projet.objects.get_or_create(
             reference="CHANT-2026-003",
             defaults={
                 "nom": "Centre Commercial Riviera",
@@ -349,16 +375,24 @@ class Command(BaseCommand):
                 "date_debut_prevue": date(2025, 10, 1),
                 "date_fin_prevue": date(2026, 2, 28),  # Délai dépassé
                 "date_debut_reelle": date(2025, 10, 5),
-                "chef_projet": admin_user,
+                "chef_projet": chef_projet,
                 "statut": StatutProjet.EN_RETARD,
                 "avancement_reel": Decimal("82.00"),
                 "avancement_theorique": Decimal("100.00"),
                 "indice_sante": 45,
             },
         )
-        AffectationProjet.objects.get_or_create(
-            utilisateur=admin_user, projet=p3, defaults={"role_projet": RoleProjet.CHEF_PROJET}
-        )
+
+        # L'encadrement d'un chantier neuf. Un chantier déjà présent garde le sien :
+        # `retirer_dg_des_chantiers` remet en conformité les données antérieures.
+        for projet, cree in ((p1, cree_p1), (p2, cree_p2), (p3, cree_p3)):
+            if cree:
+                AffectationProjet.objects.create(
+                    utilisateur=chef_projet, projet=projet, role_projet=RoleProjet.CHEF_PROJET
+                )
+                AffectationProjet.objects.create(
+                    utilisateur=chef_chantier, projet=projet, role_projet=RoleProjet.CHEF_CHANTIER
+                )
 
         # 3. Lots
         lot1_p1, _ = Lot.objects.get_or_create(
@@ -418,7 +452,7 @@ class Command(BaseCommand):
             projet=p1,
             date_rapport=today,
             defaults={
-                "auteur": admin_user,
+                "auteur": chef_chantier,
                 "meteo": Meteo.ENSOLEILLE,
                 "effectif_regie": 12,
                 "effectif_tacherons": 20,
@@ -433,7 +467,7 @@ class Command(BaseCommand):
             projet=p2,
             date_rapport=today,
             defaults={
-                "auteur": admin_user,
+                "auteur": chef_chantier,
                 "meteo": Meteo.PLUIE,
                 "effectif_regie": 8,
                 "effectif_tacherons": 14,
@@ -448,7 +482,7 @@ class Command(BaseCommand):
             projet=p3,
             date_rapport=today,
             defaults={
-                "auteur": admin_user,
+                "auteur": chef_chantier,
                 "meteo": Meteo.ENSOLEILLE,
                 "effectif_regie": 4,
                 "effectif_tacherons": 10,

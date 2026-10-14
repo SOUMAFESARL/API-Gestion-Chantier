@@ -64,11 +64,10 @@ def verifier_signataire(journal, utilisateur, role):
     Une signature identifie un intervenant réel du circuit, jamais un simple
     droit : les permissions RBAC, vérifiées par la vue, ne suffisent pas.
 
-    **Le directeur général n'a pas de dérogation** (décision du 14/10/2026) :
-    il signe l'étape dont il tient la fonction — chef de projet désigné d'un
-    chantier, par exemple, dans une petite structure — et aucune autre. Le
-    super-administrateur de la plateforme, qui n'appartient pas à
-    l'entreprise, ne signe jamais.
+    **Le directeur général ne signe pas** (décisions du 14/10/2026) : il
+    garde ses attributions et ne tient aucune fonction sur un chantier — il
+    consulte et relance. Le super-administrateur de la plateforme, qui
+    n'appartient pas à l'entreprise, ne signe jamais non plus.
     """
     if journal.rapport.auteur_id == utilisateur.id:
         raise PermissionDenied("L'auteur ne peut pas valider son propre rapport.")
@@ -80,13 +79,19 @@ def verifier_fonction(projet, utilisateur, role):
 
     Le chef de projet désigné la tient sans affectation ; sinon, il faut une
     affectation en vigueur avec ce rôle. Même règle pour le rapport et la
-    synthèse (option 3, décision du 14/10/2026).
+    synthèse.
     """
     if not tient_fonction(projet, utilisateur, role):
         raise PermissionDenied(f"Cette signature exige l'affectation {role} sur le chantier.")
 
 
 def tient_fonction(projet, utilisateur, role) -> bool:
+    from apps.core.droits import est_dg
+
+    # Une donnée antérieure à la règle peut encore désigner le DG : elle ne
+    # lui donne pas de fonction pour autant.
+    if est_dg(utilisateur):
+        return False
     if role == "CP" and projet.chef_projet_id == utilisateur.id:
         return True
     return (

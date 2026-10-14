@@ -12,7 +12,16 @@ from .clients import (
     ReactiverClientPlateformeView,
     SuspendreClientPlateformeView,
 )
+from .comptes import (
+    AdminChangerMotDePasseMoiView,
+    AdminPhotoMoiView,
+    AdminProfilMoiView,
+    ComptesAdministrateursListCreateView,
+    ReactiverCompteAdministrateurView,
+    SuspendreCompteAdministrateurView,
+)
 from .impersonation import (
+    ActionsJournalPlateformeView,
     DeconnexionAssistanceView,
     DemarrerAssistanceView,
     JournalPlateformeListView,
@@ -23,26 +32,6 @@ from .indicateurs import (
     IndicateursPlateformeView,
     TendancesIndicateursView,
 )
-from .parametres import (
-    AdminIdentiteView,
-    AdminTarifsView,
-    IdentitePublicView,
-    TarifsPublicsView,
-)
-from .reinitialisation import (
-    DemandeReinitialisationAdminView,
-    ReinitialisationAdminView,
-    VerificationJetonAdminView,
-)
-
-from .comptes import (
-    AdminChangerMotDePasseMoiView,
-    AdminPhotoMoiView,
-    AdminProfilMoiView,
-    ComptesAdministrateursListCreateView,
-    ReactiverCompteAdministrateurView,
-    SuspendreCompteAdministrateurView,
-)
 from .modules import (
     AdminModuleAffecterPermissionsView,
     AdminModuleDesactiverView,
@@ -50,19 +39,28 @@ from .modules import (
     AdminModuleListCreateView,
     AdminModuleReactiverView,
 )
+from .parametres import (
+    AdminIdentiteView,
+    AdminTarifsView,
+    IdentitePublicView,
+    TarifsPublicsView,
+)
 from .permissions import (
     AdminPermissionAffecterModulesView,
     AdminPermissionDetailUpdateDeleteView,
     AdminPermissionListCreateView,
 )
+from .reinitialisation import (
+    DemandeReinitialisationAdminView,
+    ReinitialisationAdminView,
+    VerificationJetonAdminView,
+)
 
 __all__ = [
-    "AdminIdentiteView",
-    "AdminTarifsView",
-    "IdentitePublicView",
-    "TarifsPublicsView",
+    "ActionsJournalPlateformeView",
     "ActiverModuleClientPlateformeView",
     "AdminChangerMotDePasseMoiView",
+    "AdminIdentiteView",
     "AdminModuleAffecterPermissionsView",
     "AdminModuleDesactiverView",
     "AdminModuleDetailUpdateDeleteView",
@@ -71,28 +69,31 @@ __all__ = [
     "AdminPermissionAffecterModulesView",
     "AdminPermissionDetailUpdateDeleteView",
     "AdminPermissionListCreateView",
-    "DesactiverModuleClientPlateformeView",
     "AdminPhotoMoiView",
     "AdminProfilMoiView",
-    "ComptesAdministrateursListCreateView",
-    "ReactiverCompteAdministrateurView",
-    "SuspendreCompteAdministrateurView",
+    "AdminTarifsView",
     "ChangerPlanClientPlateformeView",
     "ClientsPlateformeListView",
+    "ComptesAdministrateursListCreateView",
     "ConnexionAdminView",
     "DeconnexionAdminView",
     "DeconnexionAssistanceView",
     "DemandeReinitialisationAdminView",
     "DemarrerAssistanceView",
+    "DesactiverModuleClientPlateformeView",
     "EvolutionAbonnementsView",
     "FicheClientPlateformeView",
+    "IdentitePublicView",
     "IndicateursPlateformeView",
     "JournalPlateformeListView",
     "ListerUtilisateursEntrepriseView",
     "ReactiverClientPlateformeView",
+    "ReactiverCompteAdministrateurView",
     "ReinitialisationAdminView",
     "RenouvellementAdminView",
     "SuspendreClientPlateformeView",
+    "SuspendreCompteAdministrateurView",
+    "TarifsPublicsView",
     "TendancesIndicateursView",
     "VerificationJetonAdminView",
 ]

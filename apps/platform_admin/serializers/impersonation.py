@@ -10,6 +10,7 @@ __all__ = [
     "DeconnexionAssistanceResponseSerializer",
     "DemandeAssistanceSerializer",
     "ErreurPlateformeResponseSerializer",
+    "FiltresJournalPlateformeSerializer",
     "JournalPlateformeSerializer",
     "ReponseAssistanceSerializer",
     "UtilisateurCibleSerializer",
@@ -68,6 +69,36 @@ class ReponseAssistanceSerializer(serializers.Serializer):
     url_redirection = serializers.CharField()
 
 
+class FiltresJournalPlateformeSerializer(serializers.Serializer):
+    """Validation des paramètres de filtrage du journal plateforme."""
+
+    du = serializers.DateField(
+        required=False,
+        error_messages={"invalid": "Date invalide : format attendu AAAA-MM-JJ."},
+    )
+    au = serializers.DateField(
+        required=False,
+        error_messages={"invalid": "Date invalide : format attendu AAAA-MM-JJ."},
+    )
+    utilisateur_id = serializers.UUIDField(
+        required=False,
+        error_messages={"invalid": "Identifiant invalide."},
+    )
+    entreprise_id = serializers.UUIDField(
+        required=False,
+        error_messages={"invalid": "Identifiant invalide."},
+    )
+    action = serializers.CharField(required=False, max_length=50)
+
+    def validate(self, donnees):
+        du, au = donnees.get("du"), donnees.get("au")
+        if du and au and du > au:
+            raise serializers.ValidationError(
+                {"au": "La date de fin doit être postérieure ou égale à la date de début."}
+            )
+        return donnees
+
+
 class JournalPlateformeSerializer(serializers.ModelSerializer):
     """Sérialiseur du journal plateforme pour consultation Super Admin."""
 
@@ -91,6 +122,10 @@ class JournalPlateformeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_utilisateur_nom(self, obj: JournalPlateforme) -> str:
+        if obj.utilisateur_id:
+            nom_contexte = self.context.get("noms_agents", {}).get(str(obj.utilisateur_id))
+            if nom_contexte:
+                return nom_contexte
         detail = obj.detail or {}
         return (
             detail.get("super_admin_nom")
@@ -99,10 +134,15 @@ class JournalPlateformeSerializer(serializers.ModelSerializer):
         )
 
     def get_entreprise_nom(self, obj: JournalPlateforme) -> str:
+        if obj.entreprise_id:
+            nom_contexte = self.context.get("noms_entreprises", {}).get(str(obj.entreprise_id))
+            if nom_contexte:
+                return nom_contexte
         detail = obj.detail or {}
         return (
             detail.get("entreprise_nom")
             or detail.get("entreprise_schema")
+            or detail.get("raison_sociale")
             or str(obj.entreprise_id or "")
         )
 

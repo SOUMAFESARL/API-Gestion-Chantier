@@ -401,3 +401,53 @@ class JournalView(APIView):
                 "resultats": journal_periode(request, debut, fin, projet_id=params.get("projet")),
             }
         )
+
+
+class JournalRelancerView(APIView):
+    """`POST /chantier/journal/{id}/relancer/` — relance une ligne du journal.
+
+    `id` est celui de la ligne : l'identifiant du rapport s'il existe, sinon
+    `{projet}_{AAAA-MM-JJ}` pour un rapport manquant — c'est la forme que
+    `GET /chantier/journal/` renvoie.
+    """
+
+    permission_classes = [IsAuthenticated, PeutValiderRapports]
+
+    @extend_schema(
+        tags=["Journal de chantier"],
+        request=None,
+        responses=OpenApiTypes.OBJECT,
+        summary="Relancer par e-mail la personne qu'attend une ligne du journal",
+        operation_id="journal_relancer",
+    )
+    def post(self, request, identifiant):
+        from datetime import date
+        from uuid import UUID
+
+        from apps.chantier.services.relance import relancer
+
+        projet_id, _, jour = identifiant.partition("_")
+        if jour:
+            try:
+                projet = get_object_or_404(projets_visibles(request), pk=UUID(projet_id))
+                date_rapport = date.fromisoformat(jour)
+            except ValueError:
+                raise ValidationError({"identifiant": "Ligne de journal inconnue."}) from None
+        else:
+            try:
+                UUID(identifiant)
+            except ValueError:
+                raise ValidationError({"identifiant": "Ligne de journal inconnue."}) from None
+            journal = charger_journal(request, identifiant)
+            projet, date_rapport = journal.rapport.projet, journal.rapport.date_rapport
+        self.check_object_permissions(request, projet)
+        relance = relancer(projet=projet, date_rapport=date_rapport, utilisateur=request.user)
+        return Response(
+            {
+                "relance_le": relance.cree_le.isoformat(),
+                "etape": relance.etape,
+                "destinataires": [
+                    f"{p.prenom} {p.nom}".strip() for p in relance.destinataires.all()
+                ],
+            }
+        )

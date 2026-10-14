@@ -11,6 +11,7 @@ from apps.chantier.views.journal import (
     JournalRapportDetailView,
     JournalRapportsView,
     JournalRejeterView,
+    JournalRelancerView,
     JournalSoumettreView,
     JournalValiderView,
     JournalView,
@@ -20,6 +21,7 @@ app_name = "journal_chantier"
 urlpatterns = [
     path("alertes/", JournalNotificationsView.as_view(), name="notifications"),
     path("journal/", JournalView.as_view(), name="journal"),
+    path("journal/<str:identifiant>/relancer/", JournalRelancerView.as_view(), name="relancer"),
     path("rapports/", JournalRapportsView.as_view(), name="rapports"),
     path("rapports/preparation/", JournalPreparationView.as_view(), name="preparation"),
     path("rapports/<uuid:pk>/", JournalRapportDetailView.as_view(), name="detail"),

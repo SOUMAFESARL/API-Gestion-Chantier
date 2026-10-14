@@ -13,5 +13,6 @@ Entités MCD  : RapportJournalier, LigneAvancement, ProductionIntervenant, Photo
 from .blocage import Blocage
 from .rapport_journalier import RapportJournalier
 from .journal import AlerteJournal, JournalChantier
+from .relance import RelanceJournal
 
-__all__ = ["Blocage", "RapportJournalier", "JournalChantier", "AlerteJournal"]
+__all__ = ["Blocage", "RapportJournalier", "JournalChantier", "AlerteJournal", "RelanceJournal"]

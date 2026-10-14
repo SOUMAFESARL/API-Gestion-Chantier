@@ -532,6 +532,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.projets.tasks.evaluer_sante_projets_quotidien_tous_tenants",
         "schedule": crontab(hour=0, minute=15),
     },
+    # Le journal promet « relance automatique à 17 h 30 » : c'est elle. Heure
+    # du chantier (CELERY_TIMEZONE). Sans Celery Beat — sur cPanel —, le cron
+    # appelle `manage.py relancer_rapports_manquants` à la même heure.
+    "relance_rapports_journaliers_manquants": {
+        "task": "apps.chantier.tasks.relancer_rapports_manquants_tous_tenants",
+        "schedule": crontab(hour=17, minute=30, day_of_week="1-5"),
+    },
 }
 
 # --------------------------------------------------------------------------

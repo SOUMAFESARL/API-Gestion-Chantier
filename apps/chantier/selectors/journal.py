@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from django.db.models import Prefetch, Q
 
-from apps.chantier.models import JournalChantier
+from apps.chantier.models import JournalChantier, RelanceJournal
 from apps.chantier.services.journal import (
     affectations_actives,
     aujourdhui,
@@ -177,6 +177,24 @@ def contexte_projet(projet, jour):
     }
 
 
+#: Marque « non fourni » : `None` voudrait dire « pas de relance aujourd'hui ».
+_A_LIRE = object()
+
+
+def relances_du_jour(projet_ids, debut, fin) -> dict:
+    """La relance envoyée aujourd'hui pour chaque ligne (chantier, jour) de la période.
+
+    Seule celle du jour compte : une ligne relancée hier peut l'être de nouveau
+    aujourd'hui (une relance par ligne et par jour), l'écran rend donc le bouton.
+    """
+    return {
+        (r.projet_id, r.date_rapport): r.cree_le.isoformat()
+        for r in RelanceJournal.objects.filter(
+            projet_id__in=projet_ids, date_rapport__range=[debut, fin], jour=aujourdhui()
+        )
+    }
+
+
 def existant(journal):
     return {
         "id": str(journal.rapport_id),
@@ -279,9 +297,16 @@ def circuit(journal, contexte):
     ]
 
 
-def document(journal, *, contexte=None):
-    """Projection ChargeRapport, calculée sans requête par ligne de rubrique."""
+def document(journal, *, contexte=None, relance_le=_A_LIRE):
+    """Projection ChargeRapport, calculée sans requête par ligne de rubrique.
+
+    `relance_le` : la relance du jour, déjà lue par l'appelant ; sinon lue ici.
+    """
     r, saisie = journal.rapport, journal.saisie
+    if relance_le is _A_LIRE:
+        relance_le = relances_du_jour([r.projet_id], r.date_rapport, r.date_rapport).get(
+            (r.projet_id, r.date_rapport)
+        )
     contexte = contexte or journal.photographie or contexte_projet(r.projet, r.date_rapport)
     quantites = defaultdict(float)
     for ligne in saisie["activites"] + saisie["production"]:
@@ -384,7 +409,7 @@ def document(journal, *, contexte=None):
         "nb_photos": len(saisie["photos"]),
         "soumis_le": r.soumis_le.isoformat() if r.soumis_le else None,
         "dernier_rapport_le": None,
-        "relance_le": journal.relance_le.isoformat() if journal.relance_le else None,
+        "relance_le": relance_le,
         "note_chef_chantier": saisie["note_cc"],
         "circuit": circuit(journal, contexte),
         "localisation": contexte["localisation"],
@@ -471,12 +496,12 @@ ENTREE_CHAMPS = (
 )
 
 
-def entree(journal, *, contexte=None):
-    charge = document(journal, contexte=contexte)
+def entree(journal, *, contexte=None, relance_le=_A_LIRE):
+    charge = document(journal, contexte=contexte, relance_le=relance_le)
     return {cle: charge[cle] for cle in ENTREE_CHAMPS}
 
 
-def entree_manquante(projet, jour, contexte, *, dernier=None):
+def entree_manquante(projet, jour, contexte, *, dernier=None, relance_le=None):
     return {
         "id": f"{projet.id}_{jour.isoformat()}",
         "reference": None,
@@ -498,7 +523,7 @@ def entree_manquante(projet, jour, contexte, *, dernier=None):
         "nb_photos": None,
         "soumis_le": None,
         "dernier_rapport_le": dernier,
-        "relance_le": None,
+        "relance_le": relance_le,
         "note_chef_chantier": None,
         "circuit": [],
     }
@@ -514,6 +539,9 @@ def journal_periode(request, debut, fin, *, projet_id=None):
         qs = qs.filter(rapport__projet_id=projet_id)
     rapports = list(qs)
     par_jour = {(j.rapport.projet_id, j.rapport.date_rapport): j for j in rapports}
+    relances = relances_du_jour(
+        {p.id for p in projets} | {j.rapport.projet_id for j in rapports}, debut, fin
+    )
     charges = []
     for projet in projets:
         contexte = contexte_projet(projet, fin)
@@ -531,12 +559,23 @@ def journal_periode(request, debut, fin, *, projet_id=None):
             j = par_jour.pop((projet.id, jour), None)
             if j and (j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == request.user.id):
                 # Une photographie d'une soumission a priorité sur le contexte vivant.
-                charges.append(entree(j, contexte=j.photographie or contexte))
+                charges.append(
+                    entree(
+                        j,
+                        contexte=j.photographie or contexte,
+                        relance_le=relances.get((projet.id, jour)),
+                    )
+                )
             else:
-                charges.append(entree_manquante(projet, jour, contexte))
+                charges.append(
+                    entree_manquante(
+                        projet, jour, contexte, relance_le=relances.get((projet.id, jour))
+                    )
+                )
     for j in par_jour.values():
         if j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == request.user.id:
-            charges.append(entree(j))
+            cle = (j.rapport.projet_id, j.rapport.date_rapport)
+            charges.append(entree(j, relance_le=relances.get(cle)))
     return sorted(
         charges, key=lambda c: (c["date"], c["chantier"]["projet_reference"]), reverse=True
     )

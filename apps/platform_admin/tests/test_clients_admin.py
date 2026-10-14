@@ -401,36 +401,167 @@ def test_changer_plan_inconnu_400(client_api, super_admin_user, entreprise_test)
 
 
 @pytest.mark.django_db
-def test_fiche_client_expose_ses_modules_et_leur_etat(client_api, super_admin_user, entreprise_test):
+def test_fiche_client_expose_ses_modules_et_leur_etat(
+    client_api, super_admin_user, entreprise_test
+):
     """La fiche liste les modules du catalogue avec l'état de chacun pour ce client (A-10, A-11)."""
     from apps.catalogue.models import CatalogueModule
 
     client_api.force_authenticate(user=super_admin_user)
     with schema_context(get_public_schema_name()):
         # « Administration » est un module système : tout client l'a, on ne le bascule pas.
+        # « Projets » est le module socle : on ne le désactive pas (B3).
         module = (
             CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
             .exclude(code__iexact="administration")
+            .exclude(code__iexact="projets")
             .first()
         )
-        assert module is not None, "le catalogue doit contenir au moins un module actif"
+        assert module is not None, "le catalogue doit contenir au moins un module actif non socle"
 
     url = f"/api/v1/admins/clients/{entreprise_test.id}/"
     avant = {m["id"]: m for m in client_api.get(url).json()["modules"]}
     assert str(module.id) in avant
-    assert set(avant[str(module.id)]) == {"id", "code", "libelle", "actif"}
+    assert set(avant[str(module.id)]) == {"id", "code", "libelle", "actif", "desactivable"}
 
-    assert (
-        client_api.post(f"{url}modules/{module.id}/activer/").status_code == status.HTTP_200_OK
-    )
+    rep_act = client_api.post(f"{url}modules/{module.id}/activer/")
+    assert rep_act.status_code == status.HTTP_200_OK
+    assert "modules" in rep_act.json()
     apres = {m["id"]: m for m in client_api.get(url).json()["modules"]}
     assert apres[str(module.id)]["actif"] is True
 
-    assert (
-        client_api.post(f"{url}modules/{module.id}/desactiver/").status_code == status.HTTP_200_OK
-    )
+    rep_desact = client_api.post(f"{url}modules/{module.id}/desactiver/")
+    assert rep_desact.status_code == status.HTTP_200_OK
+    assert "modules" in rep_desact.json()
     final = {m["id"]: m for m in client_api.get(url).json()["modules"]}
     assert final[str(module.id)]["actif"] is False
+
+
+@pytest.mark.django_db
+def test_module_projets_ne_se_desactive_pas(client_api, super_admin_user, entreprise_test):
+    """Le module projets ne peut pas être désactivé (409) et aucune ligne de journal n'est créée."""
+    from apps.catalogue.models import CatalogueModule, EntrepriseModule
+    from apps.platform_admin.models import JournalPlateforme
+
+    client_api.force_authenticate(user=super_admin_user)
+    with schema_context(get_public_schema_name()):
+        mod_projets = CatalogueModule.objects.filter(code__iexact="projets").first()
+        if not mod_projets:
+            pytest.skip("catalogue non peuplé")
+
+        nb_journal_avant = JournalPlateforme.objects.filter(
+            action="DESACTIVATION_MODULE"
+        ).count()
+        em_avant = EntrepriseModule.objects.filter(
+            entreprise=entreprise_test, module=mod_projets
+        ).first()
+        etat_actif_avant = em_avant.est_actif if em_avant else None
+
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/modules/{mod_projets.id}/desactiver/"
+    rep = client_api.post(url)
+    assert rep.status_code == status.HTTP_409_CONFLICT
+    rep_json = rep.json()
+    message = rep_json.get("erreur", {}).get("message") or rep_json.get("detail", "")
+    assert "socle" in message.lower()
+
+    with schema_context(get_public_schema_name()):
+        nb_journal_apres = JournalPlateforme.objects.filter(
+            action="DESACTIVATION_MODULE"
+        ).count()
+        assert nb_journal_apres == nb_journal_avant
+
+        em_apres = EntrepriseModule.objects.filter(
+            entreprise=entreprise_test, module=mod_projets
+        ).first()
+        etat_actif_apres = em_apres.est_actif if em_apres else None
+        assert etat_actif_apres == etat_actif_avant
+
+
+@pytest.mark.django_db
+def test_fiche_dit_quels_modules_sont_desactivables(client_api, super_admin_user, entreprise_test):
+    """Dans la fiche client, projets a desactivable=False et les autres ont desactivable=True."""
+    client_api.force_authenticate(user=super_admin_user)
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/"
+    rep = client_api.get(url)
+    assert rep.status_code == status.HTTP_200_OK
+
+    modules = rep.json()["modules"]
+    modules_par_code = {m["code"].lower(): m for m in modules}
+    assert "projets" in modules_par_code
+    assert modules_par_code["projets"]["desactivable"] is False
+
+    autres = [m for code, m in modules_par_code.items() if code != "projets"]
+    for m in autres:
+        assert m["desactivable"] is True, f"Le module {m['code']} devrait être désactivable"
+
+
+@pytest.mark.django_db
+def test_desactiver_puis_activer_renvoie_la_fiche(client_api, super_admin_user, entreprise_test):
+    """Sur un module non socle, la réponse 200 de désactiver/activer renvoie la fiche complète."""
+    from apps.catalogue.models import CatalogueModule
+
+    client_api.force_authenticate(user=super_admin_user)
+    with schema_context(get_public_schema_name()):
+        module = (
+            CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+            .exclude(code__iexact="administration")
+            .exclude(code__iexact="projets")
+            .first()
+        )
+        if not module:
+            pytest.skip("Aucun module actif autre que projets")
+
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/"
+
+    # Désactiver
+    rep_desact = client_api.post(f"{url}modules/{module.id}/desactiver/")
+    assert rep_desact.status_code == status.HTTP_200_OK
+    fiche_desact = rep_desact.json()
+    assert fiche_desact["id"] == str(entreprise_test.id)
+    assert "modules" in fiche_desact
+    mod_desact = next(m for m in fiche_desact["modules"] if m["id"] == str(module.id))
+    assert mod_desact["actif"] is False
+
+    # Activer
+    rep_act = client_api.post(f"{url}modules/{module.id}/activer/")
+    assert rep_act.status_code == status.HTTP_200_OK
+    fiche_act = rep_act.json()
+    assert fiche_act["id"] == str(entreprise_test.id)
+    assert "modules" in fiche_act
+    mod_act = next(m for m in fiche_act["modules"] if m["id"] == str(module.id))
+    assert mod_act["actif"] is True
+
+
+@pytest.mark.django_db
+def test_desactivation_conserve_les_donnees(client_api, super_admin_user, entreprise_test):
+    """Désactiver puis réactiver un module conserve l'intégralité des données du tenant."""
+    from apps.catalogue.models import CatalogueModule
+    from apps.projets.models import Projet
+
+    client_api.force_authenticate(user=super_admin_user)
+    with schema_context(entreprise_test.schema_name):
+        nb_projets_initial = Projet.objects.count()
+
+    with schema_context(get_public_schema_name()):
+        module = (
+            CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+            .exclude(code__iexact="administration")
+            .exclude(code__iexact="projets")
+            .first()
+        )
+        if not module:
+            pytest.skip("Aucun module actif autre que projets")
+
+    url = f"/api/v1/admins/clients/{entreprise_test.id}/"
+    rep_desact = client_api.post(f"{url}modules/{module.id}/desactiver/")
+    assert rep_desact.status_code == status.HTTP_200_OK
+
+    rep_act = client_api.post(f"{url}modules/{module.id}/activer/")
+    assert rep_act.status_code == status.HTTP_200_OK
+
+    with schema_context(entreprise_test.schema_name):
+        nb_projets_final = Projet.objects.count()
+        assert nb_projets_final == nb_projets_initial
 
 
 @pytest.mark.django_db

@@ -52,10 +52,16 @@ except UndefinedValueError as exc:  # pragma: no cover
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 ENABLE_DJANGO_ADMIN = config("ENABLE_DJANGO_ADMIN", default=False, cast=bool)
 
-# Suppression définitive d'une entreprise cliente (espace super admin) : interrupteur de la phase
-# de test du MVP. Activé par défaut (décision du 10 octobre 2026) ; mettre `False` dans le `.env`
-# pour l'éteindre, et retirer l'interrupteur au lancement. Le superviseur seul peut l'utiliser.
-SUPPRESSION_ENTREPRISE_ACTIVEE = config("SUPPRESSION_ENTREPRISE_ACTIVEE", default=True, cast=bool)
+# Suppression définitive d'une entreprise cliente (espace super admin) : coupée en production
+# tant que la Direction ne l'a pas allumée. Le superviseur seul peut l'utiliser.
+SUPPRESSION_ENTREPRISE_ACTIVEE = config("SUPPRESSION_ENTREPRISE_ACTIVEE", default=False, cast=bool)
+
+# Sauvegarde d'un schéma avant sa suppression définitive (tâche 2.4).
+SAUVEGARDES_SUPPRESSION_DIR = config(
+    "SAUVEGARDES_SUPPRESSION_DIR", default=str(BASE_DIR / "sauvegardes" / "suppressions")
+)
+SAUVEGARDES_SUPPRESSION_JOURS = config("SAUVEGARDES_SUPPRESSION_JOURS", default=30, cast=int)
+PG_DUMP_CHEMIN = config("PG_DUMP_CHEMIN", default="pg_dump")
 
 # Jeton des endpoints /api/v1/maintenance/ : uniquement par variable
 MAINTENANCE_TOKEN = config("MAINTENANCE_TOKEN", default="ccd-migration-prod-2026-secure-token")

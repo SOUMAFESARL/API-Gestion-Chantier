@@ -1,20 +1,24 @@
-"""Service centralisé de notification et de traçabilité des actions Super Admin (A-14, H-01, H-02, L9-1).
+"""Service centralisé de notification et de traçabilité des actions Super Admin (A-14, H-01).
 
 Règles de gestion :
-- A-14 & H-01 : Notification par courriel du Directeur Général (DG) de l'entreprise concernée.
+- A-14 & H-01 : Notification par courriel du Directeur Général (DG) de l'entreprise.
   * Sujet assistance : "Session d'assistance ouverte sur votre espace"
   * Sujet modifications : "Modification de votre espace par l'administration de la plateforme"
-  * Un seul courriel par entreprise et par action, envoyé après validation de transaction (transaction.on_commit).
+  * Un seul courriel par entreprise et par action, envoyé après validation de transaction
+    (transaction.on_commit).
   * Aucun courriel si la transaction échoue ou si l'entreprise n'a aucun DG actif.
-- H-02 : Chaque action d'écriture du Super Admin crée exactement une entrée dans JournalPlateforme (schéma public).
-- L9-1 : Chaque action modifiant l'espace d'une entreprise crée exactement une entrée dans JournalAudit (schéma tenant).
+- H-02 : Chaque action d'écriture du Super Admin crée exactement une entrée dans
+  JournalPlateforme (schéma public).
+- L9-1 : Chaque action modifiant l'espace d'une entreprise crée exactement une entrée dans
+  JournalAudit (schéma tenant).
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
-from django.db import connection, transaction
+
+from django.db import transaction
 from django_tenants.utils import get_public_schema_name, schema_context
 
 from apps.accounts.models import Utilisateur
@@ -29,10 +33,11 @@ logger = logging.getLogger(__name__)
 
 SUJET_ASSISTANCE = "Session d'assistance ouverte sur votre espace"
 SUJET_MODIFICATION_PLATEFORME = "Modification de votre espace par l'administration de la plateforme"
+SUJET_SUPPRESSION_ENTREPRISE = "Suppression de votre espace CCD Digital"
 
 
 def trouver_dg_actif_entreprise(entreprise: Entreprise) -> Utilisateur | None:
-    """Trouve l'utilisateur actif faisant office de Directeur Général dans le schéma de l'entreprise."""
+    """Trouve l'utilisateur actif faisant office de DG dans le schéma de l'entreprise."""
     with schema_context(entreprise.schema_name):
         candidats = Utilisateur.objects.filter(
             supprime_le__isnull=True,
@@ -51,10 +56,13 @@ def notifier_dg_action_plateforme(
     message: str,
     super_admin_email: str = "",
 ) -> None:
-    """Planifie l'envoi d'un courriel au DG de l'entreprise après commit de la transaction courante (A-14, H-01)."""
+    """Planifie l'envoi d'un courriel au DG de l'entreprise après commit (A-14, H-01)."""
     dg = trouver_dg_actif_entreprise(entreprise)
     if not dg or not dg.email:
-        logger.info("Aucun DG actif trouvé pour l'entreprise %s : aucun e-mail envoyé.", entreprise.schema_name)
+        logger.info(
+            "Aucun DG actif trouvé pour l'entreprise %s : aucun e-mail envoyé.",
+            entreprise.schema_name,
+        )
         return
 
     destinataire = dg.email
@@ -69,9 +77,17 @@ def notifier_dg_action_plateforme(
             {"sujet": sujet, "message": message, "raison_sociale": entreprise.raison_sociale},
         )
         if envoye:
-            logger.info("Courriel envoyé au DG de l'entreprise %s : %s", entreprise.schema_name, sujet)
+            logger.info(
+                "Courriel envoyé au DG de l'entreprise %s : %s",
+                entreprise.schema_name,
+                sujet,
+            )
         else:
-            logger.error("Courriel au DG de l'entreprise %s NON envoyé : %s", entreprise.schema_name, sujet)
+            logger.error(
+                "Courriel au DG de l'entreprise %s NON envoyé : %s",
+                entreprise.schema_name,
+                sujet,
+            )
 
     transaction.on_commit(_envoyer)
 

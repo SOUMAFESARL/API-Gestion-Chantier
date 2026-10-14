@@ -1,0 +1,10 @@
+Bonjour {{ prenom }},
+
+{% if etape == "CC" %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) pour le {{ date_rapport|date:"d/m/Y" }} n'a pas encore été remis. Merci de le rédiger et de le soumettre.{% elif etape == "CT" %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) du {{ date_rapport|date:"d/m/Y" }} attend votre validation de conducteur de travaux.{% else %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) du {{ date_rapport|date:"d/m/Y" }}, validé par le conducteur de travaux, attend votre approbation de chef de projet.{% endif %}
+
+{{ lien }}
+
+{% if automatique %}Cette relance part automatiquement à 17 h 30 pour chaque rapport du jour non remis.{% else %}Cette relance vous est adressée depuis le journal de chantier.{% endif %}
+
+— CCD Digital
+Merci de ne pas répondre à ce message : cette adresse n'est pas relevée.

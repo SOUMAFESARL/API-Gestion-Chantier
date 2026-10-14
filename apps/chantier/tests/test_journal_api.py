@@ -651,6 +651,10 @@ def test_le_directeur_ne_signe_pas_une_etape_dont_il_ne_tient_pas_la_fonction(te
     soumettre(terrain, identifiant)
     rep = _client(dg).post(f"{API}/rapports/{identifiant}/valider/", {}, format="json")
     assert rep.status_code == 403
+    # Le motif atteint l'écran, pas seulement le texte générique du 403.
+    assert (
+        rep.data["erreur"]["message"] == "Cette signature exige l'affectation CT sur le chantier."
+    )
     rep = _client(dg).post(
         f"{API}/rapports/{identifiant}/rejeter/",
         {"motif": "Le directeur n'est pas conducteur de travaux ici."},

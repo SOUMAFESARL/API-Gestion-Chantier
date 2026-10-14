@@ -202,13 +202,32 @@ def gestionnaire_erreurs(exc, context):
         return reponse
 
     details = reponse.data if isinstance(reponse.data, dict) else {"detail": reponse.data}
-    reponse.data = _enveloppe(
-        CODES.get(code_http, "erreur"),
-        MESSAGES.get(code_http, "La requête n'a pas pu être traitée."),
-        details,
-        trace_id,
-    )
+    message = MESSAGES.get(code_http, "La requête n'a pas pu être traitée.")
+    if code_http == status.HTTP_403_FORBIDDEN:
+        message = _motif_explicite(exc) or message
+    reponse.data = _enveloppe(CODES.get(code_http, "erreur"), message, details, trace_id)
     return reponse
+
+
+def _motif_explicite(exc) -> str | None:
+    """Le motif précis d'un refus, quand le code en a écrit un.
+
+    Le `message` d'une erreur est une phrase affichable telle quelle
+    (conventions d'API §5). Un refus qui sait pourquoi — « Vous n'êtes pas
+    affecté à ce projet », « Cette signature exige l'affectation CT sur le
+    chantier » — perdait ce motif au profit du texte générique du 403 : il ne
+    survivait que dans `details`, que l'écran n'affiche pas.
+
+    Limité au 403 levé par DRF avec un texte propre. Le texte par défaut d'une
+    exception reste générique, et un 404 garde le sien : celui de
+    `get_object_or_404` est en anglais et nomme un modèle interne.
+    """
+    detail = getattr(exc, "detail", None)
+    if not isinstance(exc, APIException) or not isinstance(detail, str):
+        return None
+    if str(detail) == str(type(exc).default_detail):
+        return None
+    return str(detail)
 
 
 def _enveloppe(code: str, message: str, details: dict, trace_id: str | None) -> dict:

@@ -15,8 +15,84 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Role, Utilisateur
+from apps.core.droits import est_dg
 from apps.core.enums import RoleProjet
+from apps.core.exceptions import DgNonAssignableCommeCp
 from apps.projets.models import AffectationProjet, Projet
+
+
+def verifier_affectable(utilisateur: Utilisateur | None) -> None:
+    """Le Directeur Général ne tient aucune fonction sur un chantier.
+
+    Décision du 14/10/2026 : le DG a ses attributions, chaque fonction de
+    chantier a les siennes, et il ne se substitue à aucune. Il voit tous les
+    chantiers sans affectation (portée entreprise) ; une affectation ne lui
+    donnerait qu'une fonction qu'il n'a pas à tenir.
+
+    **Seul point de contrôle** : la création de projet, sa modification et les
+    routes d'affectation passent toutes par ici.
+    """
+    if utilisateur is not None and est_dg(utilisateur):
+        raise DgNonAssignableCommeCp()
+
+
+def retirer_dg_des_chantiers(*, appliquer: bool = False) -> list[str]:
+    """Met les données antérieures à la règle en conformité : le DG quitte ses fonctions.
+
+    À appeler dans le schéma de l'entreprise. Pour chaque DG désigné chef de
+    projet ou conducteur de travaux d'un chantier, ou affecté à un chantier :
+    la désignation est retirée (le chantier passe « sans chef de projet ») et
+    l'affectation désactivée — la même chose que la désactivation d'un
+    collaborateur (`accounts.services.utilisateurs`). Rien n'est supprimé.
+
+    Sans `appliquer`, ne fait que décrire ce qui changerait.
+    """
+    from apps.audit.services import journaliser
+    from apps.core.enums import ActionAudit
+
+    affectations = AffectationProjet.objects.filter(est_actif=True, supprime_le__isnull=True)
+    candidats = (
+        set(affectations.values_list("utilisateur_id", flat=True))
+        | set(Projet.objects.exclude(chef_projet=None).values_list("chef_projet_id", flat=True))
+        | set(
+            Projet.objects.exclude(conducteur_travaux=None).values_list(
+                "conducteur_travaux_id", flat=True
+            )
+        )
+    )
+    constats = []
+    for dg in Utilisateur.objects.filter(pk__in=candidats).select_related("role"):
+        if not est_dg(dg):
+            continue
+        chef_de = list(Projet.objects.filter(chef_projet=dg).values_list("reference", flat=True))
+        conducteur_de = list(
+            Projet.objects.filter(conducteur_travaux=dg).values_list("reference", flat=True)
+        )
+        affecte = affectations.filter(utilisateur=dg)
+        constats.append(
+            f"{dg.email} : chef de projet de {chef_de or 'aucun chantier'}, "
+            f"conducteur de travaux de {conducteur_de or 'aucun chantier'}, "
+            f"{affecte.count()} affectation(s) active(s)"
+        )
+        if not appliquer:
+            continue
+        with transaction.atomic():
+            maintenant = timezone.now()
+            affecte.update(est_actif=False, modifie_le=maintenant)
+            Projet.objects.filter(chef_projet=dg).update(
+                chef_projet=None, sans_chef_projet=True, modifie_le=maintenant
+            )
+            Projet.objects.filter(conducteur_travaux=dg).update(
+                conducteur_travaux=None, modifie_le=maintenant
+            )
+            journaliser(
+                action=ActionAudit.MODIFICATION,
+                type_entite="Utilisateur",
+                entite_id=dg.id,
+                valeur_avant={"chef_projet_de": chef_de, "conducteur_travaux_de": conducteur_de},
+                valeur_apres={"evenement": "DG_RETIRE_DES_FONCTIONS_DE_CHANTIER"},
+            )
+    return constats
 
 
 def lister_affectations_projet(projet: Projet, actifs_seulement: bool = False):
@@ -42,6 +118,7 @@ def affecter_collaborateur_projet(
     **kwargs,
 ) -> AffectationProjet:
     """Affecte ou réactive un collaborateur sur un chantier avec un rôle spécifique."""
+    verifier_affectable(utilisateur)
     if role_projet not in RoleProjet.values:
         raise ValidationError(_("Le rôle de projet spécifié n'est pas valide."))
 

@@ -152,9 +152,19 @@ class ActionReserveeDg(ErreurMetier):
 
 
 class DgNonAssignableCommeCp(ErreurMetier):
+    """Le DG ne tient aucune fonction sur un chantier (décision du 14/10/2026).
+
+    Le code garde son nom d'origine pour ne pas casser le contrat d'API ; la
+    règle, elle, couvre toutes les fonctions de chantier, pas seulement le CP.
+    """
+
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     code_metier = "dg_non_assignable_comme_cp"
-    default_detail = "Le Directeur Général ne peut pas s'auto-désigner comme Chef de projet."
+    default_detail = (
+        "Le Directeur Général garde ses attributions : il ne peut pas être affecté à un "
+        "chantier, ni comme chef de projet, ni comme conducteur de travaux, ni comme chef "
+        "de chantier."
+    )
 
 
 class ChefProjetRequis(ErreurMetier):

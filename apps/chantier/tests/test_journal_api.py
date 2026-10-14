@@ -664,8 +664,12 @@ def test_le_directeur_ne_signe_pas_une_etape_dont_il_ne_tient_pas_la_fonction(te
     assert JournalChantier.objects.get(rapport_id=identifiant).valide_ct_le is None
 
 
-def test_le_directeur_chef_de_projet_designe_approuve(terrain):
-    """Petite structure : le DG tient la fonction de chef de projet sur ce chantier."""
+def test_un_directeur_reste_designe_chef_de_projet_ne_signe_pas(terrain):
+    """Décision du 14/10/2026 : le DG ne tient aucune fonction sur un chantier.
+
+    Une donnée antérieure à la règle peut encore le désigner chef de projet :
+    elle ne lui donne pas de signature.
+    """
     dg = _personne("DG", is_owner=True)
     projet = terrain["projet"]
     projet.chef_projet = dg
@@ -675,8 +679,8 @@ def test_le_directeur_chef_de_projet_designe_approuve(terrain):
     rep = terrain["clients"]["CT"].post(f"{API}/rapports/{identifiant}/valider/", {}, format="json")
     assert rep.status_code == 200, rep.data
     rep = _client(dg).post(f"{API}/rapports/{identifiant}/approuver/", {}, format="json")
-    assert rep.status_code == 200, rep.data
-    assert rep.data["statut"] == "APPROUVE_CP"
+    assert rep.status_code == 403
+    assert JournalChantier.objects.get(rapport_id=identifiant).rapport.statut == "SOUMIS"
 
 
 def test_le_super_administrateur_de_la_plateforme_ne_signe_jamais(terrain):

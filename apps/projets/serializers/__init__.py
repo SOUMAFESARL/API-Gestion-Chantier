@@ -19,14 +19,13 @@ from apps.core.enums import (
     TypeBordereau,
     TypeProjet,
 )
-from apps.core.exceptions import DgNonAssignableCommeCp
 from apps.projets.models import AffectationProjet, Lot, Projet
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
 from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
     ReferentielVillesResponseSerializer,
 )
-from apps.projets.services.affectations import affecter_collaborateur_projet
+from apps.projets.services.affectations import affecter_collaborateur_projet, verifier_affectable
 from apps.projets.services.references import generer_reference_projet
 from apps.projets.serializers.activite import (
     ActiviteCreationSerializer,
@@ -467,116 +466,47 @@ class ProjetCreationSerializer(serializers.Serializer):
                     )
                 codes_vus.add(c_clean)
 
-        # Si création d'un projet, assignation Chef de Projet optionnelle et règles DG
+        if (
+            self.instance is None
+            and attrs.get("chef_projet_id")
+            and attrs.get("chef_projet_invite")
+        ):
+            raise serializers.ValidationError(
+                {
+                    "chef_projet": _(
+                        "Veuillez spécifier soit chef_projet_id, "
+                        "soit chef_projet_invite, pas les deux."
+                    )
+                }
+            )
+
+        # Le DG ne tient aucune fonction sur un chantier (décision du 14/10/2026) :
+        # ni chef de projet, ni conducteur de travaux, ni chef de chantier.
+        introuvables = {
+            "chef_projet_id": _("Utilisateur introuvable."),
+            "conducteur_travaux_id": _("Conducteur de travaux introuvable."),
+        }
+        for champ, message in introuvables.items():
+            pk = attrs.get(champ)
+            if not pk:
+                continue
+            cible = Utilisateur.objects.filter(id=pk, supprime_le__isnull=True).first()
+            if cible is None:
+                raise serializers.ValidationError({champ: message})
+            verifier_affectable(cible)
         if self.instance is None:
-            chef_projet_id = attrs.get("chef_projet_id")
-            chef_projet_invite = attrs.get("chef_projet_invite")
-            conducteur_travaux_id = attrs.get("conducteur_travaux_id")
-            conducteur_travaux_invite = attrs.get("conducteur_travaux_invite")
-
-            if chef_projet_id and chef_projet_invite:
-                raise serializers.ValidationError(
-                    {
-                        "chef_projet": _(
-                            "Veuillez spécifier soit chef_projet_id, "
-                            "soit chef_projet_invite, pas les deux."
-                        )
-                    }
+            for invite in (attrs.get("chef_projet_invite"), attrs.get("conducteur_travaux_invite")):
+                if invite:
+                    email = invite.get("email", "").strip().lower()
+                    verifier_affectable(
+                        Utilisateur.objects.filter(
+                            email__iexact=email, supprime_le__isnull=True
+                        ).first()
+                    )
+            for pk in [*attrs.get("chefs_chantier_ids", []), *attrs.get("visiteurs_ids", [])]:
+                verifier_affectable(
+                    Utilisateur.objects.filter(pk=pk, supprime_le__isnull=True).first()
                 )
-
-            request = self.context.get("request")
-            user_connecte = getattr(request, "user", None)
-
-            # Vérification du Chef de Projet
-            if chef_projet_id:
-                try:
-                    target_cp = Utilisateur.objects.get(id=chef_projet_id, supprime_le__isnull=True)
-                except Utilisateur.DoesNotExist:
-                    raise serializers.ValidationError(
-                        {"chef_projet_id": _("Utilisateur introuvable.")}
-                    ) from None
-
-                # Règle R-DEMO-03 : Le DG ne peut jamais être sélectionné comme CP
-                if target_cp.is_dg or getattr(target_cp, "is_owner", False):
-                    raise DgNonAssignableCommeCp()
-
-                if (
-                    user_connecte
-                    and (
-                        getattr(user_connecte, "is_dg", False)
-                        or getattr(user_connecte, "is_owner", False)
-                    )
-                    and target_cp.id == user_connecte.id
-                ):
-                    raise DgNonAssignableCommeCp()
-
-            if chef_projet_invite:
-                email_invite = chef_projet_invite.get("email", "").strip().lower()
-                if (
-                    user_connecte
-                    and user_connecte.email.strip().lower() == email_invite
-                    and (
-                        getattr(user_connecte, "is_dg", False)
-                        or getattr(user_connecte, "is_owner", False)
-                    )
-                ):
-                    raise DgNonAssignableCommeCp()
-
-                existing = Utilisateur.objects.filter(
-                    email__iexact=email_invite, supprime_le__isnull=True
-                ).first()
-                if existing and (existing.is_dg or getattr(existing, "is_owner", False)):
-                    raise DgNonAssignableCommeCp()
-
-            # Vérification du Conducteur de Travaux (s'il est spécifié)
-            if conducteur_travaux_id:
-                try:
-                    target_ct = Utilisateur.objects.get(
-                        id=conducteur_travaux_id, supprime_le__isnull=True
-                    )
-                except Utilisateur.DoesNotExist:
-                    raise serializers.ValidationError(
-                        {"conducteur_travaux_id": _("Conducteur de travaux introuvable.")}
-                    ) from None
-
-                if target_ct.is_dg or getattr(target_ct, "is_owner", False):
-                    raise DgNonAssignableCommeCp()
-
-            if conducteur_travaux_invite:
-                email_invite_ct = conducteur_travaux_invite.get("email", "").strip().lower()
-                existing_ct = Utilisateur.objects.filter(
-                    email__iexact=email_invite_ct, supprime_le__isnull=True
-                ).first()
-                if existing_ct and (existing_ct.is_dg or getattr(existing_ct, "is_owner", False)):
-                    raise DgNonAssignableCommeCp()
-
-        else:
-            # En cas de modification (PATCH)
-            chef_projet_id = attrs.get("chef_projet_id")
-            if chef_projet_id:
-                try:
-                    target_cp = Utilisateur.objects.get(id=chef_projet_id, supprime_le__isnull=True)
-                except Utilisateur.DoesNotExist:
-                    raise serializers.ValidationError(
-                        {"chef_projet_id": _("Utilisateur introuvable.")}
-                    ) from None
-
-                if target_cp.is_dg or getattr(target_cp, "is_owner", False):
-                    raise DgNonAssignableCommeCp()
-
-            conducteur_travaux_id = attrs.get("conducteur_travaux_id")
-            if conducteur_travaux_id:
-                try:
-                    target_ct = Utilisateur.objects.get(
-                        id=conducteur_travaux_id, supprime_le__isnull=True
-                    )
-                except Utilisateur.DoesNotExist:
-                    raise serializers.ValidationError(
-                        {"conducteur_travaux_id": _("Conducteur de travaux introuvable.")}
-                    ) from None
-
-                if target_ct.is_dg or getattr(target_ct, "is_owner", False):
-                    raise DgNonAssignableCommeCp()
 
         if self.instance is None:
             # Tous les UUID sont résolus dans le schéma de l'entreprise courante.

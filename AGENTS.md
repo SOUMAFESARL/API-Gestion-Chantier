@@ -22,8 +22,8 @@ de cela.
 | Dépôt | Branche poussée | Effet |
 |---|---|---|
 | Backend (`API-Gestion-Chantier`) | `develop` | Tests puis **déploiement cPanel de production** (`.github/workflows/deploy-cpanel.yml`) |
-| Frontend (`Application-Gestion-Chantier`) | `main` | **Déploiement cPanel de production** |
-| Frontend | `develop` | Aucun déploiement |
+| Frontend (`Application-Gestion-Chantier`) | `develop` | Lint, typage, build puis **déploiement cPanel de production** (depuis le 14/10/2026, `b50d20f`) |
+| Frontend | `main` | Aucun déploiement |
 
 Avant un push qui déploie, l'agent le dit et vérifie que les tests passent.
 

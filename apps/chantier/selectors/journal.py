@@ -529,7 +529,14 @@ def entree_manquante(projet, jour, contexte, *, dernier=None, relance_le=None):
     }
 
 
-def journal_periode(request, debut, fin, *, projet_id=None):
+def journal_periode(request, debut, fin, *, projet_id=None, brouillons_visibles=True):
+    """Les lignes du journal, rapports manquants compris.
+
+    `brouillons_visibles` : l'auteur d'un brouillon le voit dans son journal ;
+    une synthèse, elle, doit lire la même chose quel que soit son lecteur, et
+    passe `False` — un brouillon y compte pour un rapport manquant.
+    """
+    lecteur = request.user.id if brouillons_visibles else None
     projets = projets_visibles(request).filter(statut__in=["EN_COURS", "EN_RETARD", "CRITIQUE"])
     if projet_id:
         projets = projets.filter(pk=projet_id)
@@ -557,7 +564,7 @@ def journal_periode(request, debut, fin, *, projet_id=None):
             if jour.weekday() >= 5 and (projet.id, jour) not in par_jour:
                 continue
             j = par_jour.pop((projet.id, jour), None)
-            if j and (j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == request.user.id):
+            if j and (j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == lecteur):
                 # Une photographie d'une soumission a priorité sur le contexte vivant.
                 charges.append(
                     entree(
@@ -573,7 +580,7 @@ def journal_periode(request, debut, fin, *, projet_id=None):
                     )
                 )
     for j in par_jour.values():
-        if j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == request.user.id:
+        if j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == lecteur:
             cle = (j.rapport.projet_id, j.rapport.date_rapport)
             charges.append(entree(j, relance_le=relances.get(cle)))
     return sorted(

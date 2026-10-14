@@ -70,17 +70,28 @@ def verifier_signataire(journal, utilisateur, role):
     super-administrateur de la plateforme, qui n'appartient pas à
     l'entreprise, ne signe jamais.
     """
-    projet = journal.rapport.projet
     if journal.rapport.auteur_id == utilisateur.id:
         raise PermissionDenied("L'auteur ne peut pas valider son propre rapport.")
-    if role == "CP" and projet.chef_projet_id == utilisateur.id:
-        return
-    if (
-        not affectations_actives(journal.rapport.projet_id)
-        .filter(utilisateur=utilisateur, role_projet=role)
-        .exists()
-    ):
+    verifier_fonction(journal.rapport.projet, utilisateur, role)
+
+
+def verifier_fonction(projet, utilisateur, role):
+    """L'utilisateur tient-il la fonction `role` (CT ou CP) sur ce chantier ?
+
+    Le chef de projet désigné la tient sans affectation ; sinon, il faut une
+    affectation en vigueur avec ce rôle. Même règle pour le rapport et la
+    synthèse (option 3, décision du 14/10/2026).
+    """
+    if not tient_fonction(projet, utilisateur, role):
         raise PermissionDenied(f"Cette signature exige l'affectation {role} sur le chantier.")
+
+
+def tient_fonction(projet, utilisateur, role) -> bool:
+    if role == "CP" and projet.chef_projet_id == utilisateur.id:
+        return True
+    return (
+        affectations_actives(projet.id).filter(utilisateur=utilisateur, role_projet=role).exists()
+    )
 
 
 def statut_journal(journal):

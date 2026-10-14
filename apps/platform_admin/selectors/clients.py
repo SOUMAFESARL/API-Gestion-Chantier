@@ -151,6 +151,10 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
     }
 
 
+# Le socle de l'espace d'une entreprise : sans lui, plus aucun module n'a de quoi s'accrocher.
+MODULES_SOCLE = frozenset({"projets"})
+
+
 def modules_du_client(ent: Entreprise) -> list[dict]:
     """Les modules du catalogue et leur état pour cette entreprise (A-10, A-11).
 
@@ -170,6 +174,7 @@ def modules_du_client(ent: Entreprise) -> list[dict]:
             "code": m.code,
             "libelle": m.libelle,
             "actif": m.code.lower() in actifs,
+            "desactivable": m.code.lower() not in MODULES_SOCLE,
         }
         for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True).order_by(
             "ordre", "code"

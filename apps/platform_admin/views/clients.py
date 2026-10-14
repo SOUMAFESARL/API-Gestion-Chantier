@@ -1,15 +1,22 @@
 """Vues pour la gestion des entreprises clientes de la plateforme par le Super Admin."""
 
+from django.db import models, transaction
+from django.shortcuts import get_object_or_404
+from django_tenants.utils import schema_context
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.catalogue.models import CatalogueModule, EntrepriseModule
+from apps.core.enums import NiveauAcces
+from apps.core.exceptions import ErreurConflit
 from apps.core.ip_restriction import extraire_ip_client
 from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.selectors.clients import (
+    MODULES_SOCLE,
     lister_clients_plateforme,
     obtenir_fiche_client,
 )
@@ -28,17 +35,11 @@ from apps.platform_admin.services.clients import (
     reactiver_client_plateforme,
     suspendre_client_plateforme,
 )
-
-from django.shortcuts import get_object_or_404
-from django.db import models, transaction
-from django_tenants.utils import schema_context
-from apps.catalogue.models import CatalogueModule, EntrepriseModule
-from apps.core.enums import NiveauAcces
 from apps.platform_admin.services.notifications import (
+    SUJET_MODIFICATION_PLATEFORME,
     journaliser_plateforme,
     journaliser_tenant,
     notifier_dg_action_plateforme,
-    SUJET_MODIFICATION_PLATEFORME,
 )
 from apps.tenants.models import Entreprise
 
@@ -471,7 +472,14 @@ class ActiverModuleClientPlateformeView(APIView):
 
     permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
 
-    @extend_schema(summary="Activer un module pour un client", request=None, responses={200: dict})
+    @extend_schema(
+        summary="Activer un module pour un client",
+        request=None,
+        responses={
+            200: ClientPlateformeSerializer,
+            404: OpenApiResponse(description="Client ou module introuvable"),
+        },
+    )
     def post(self, request, client_id, module_id):
         with schema_context("public"):
             entreprise = get_object_or_404(Entreprise, id=client_id)
@@ -573,7 +581,7 @@ class ActiverModuleClientPlateformeView(APIView):
             )
 
         return Response(
-            {"detail": f"Module {module.code} activé avec succès pour l'entreprise {entreprise.raison_sociale}."},
+            ClientPlateformeSerializer(obtenir_fiche_client(client_id)).data,
             status=status.HTTP_200_OK,
         )
 
@@ -583,11 +591,27 @@ class DesactiverModuleClientPlateformeView(APIView):
 
     permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
 
-    @extend_schema(summary="Désactiver un module pour un client", request=None, responses={200: dict})
+    @extend_schema(
+        summary="Désactiver un module pour un client",
+        request=None,
+        responses={
+            200: ClientPlateformeSerializer,
+            404: OpenApiResponse(description="Client ou module introuvable"),
+            409: OpenApiResponse(description="Module socle non désactivable"),
+        },
+    )
     def post(self, request, client_id, module_id):
         with schema_context("public"):
             entreprise = get_object_or_404(Entreprise, id=client_id)
             module = get_object_or_404(CatalogueModule, id=module_id)
+
+            if module.code.lower() in MODULES_SOCLE:
+                raise ErreurConflit(
+                    detail=(
+                        f"Le module {module.libelle} est le socle de l'espace d'une entreprise : "
+                        "il ne peut pas être désactivé."
+                    )
+                )
 
             em = EntrepriseModule.objects.filter(
                 entreprise=entreprise, module=module, supprime_le__isnull=True
@@ -642,6 +666,6 @@ class DesactiverModuleClientPlateformeView(APIView):
             )
 
         return Response(
-            {"detail": f"Module {module.code} désactivé avec succès pour l'entreprise {entreprise.raison_sociale}."},
+            ClientPlateformeSerializer(obtenir_fiche_client(client_id)).data,
             status=status.HTTP_200_OK,
         )

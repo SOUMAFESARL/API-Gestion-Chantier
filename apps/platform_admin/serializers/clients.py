@@ -32,6 +32,9 @@ class ModuleClientSerializer(serializers.Serializer):
     code = serializers.CharField()
     libelle = serializers.CharField()
     actif = serializers.BooleanField(help_text="Le module est-il activé pour cette entreprise ?")
+    desactivable = serializers.BooleanField(
+        help_text="Faux pour un module socle, qui ne se désactive jamais."
+    )
 
 
 class DirigeantClientSerializer(serializers.Serializer):
@@ -65,7 +68,10 @@ class ClientPlateformeSerializer(serializers.Serializer):
     )
     abonnement = AbonnementClientSerializer(help_text="Détail de l'abonnement en cours.")
     dirigeant = DirigeantClientSerializer(allow_null=True)
-    modules = ModuleClientSerializer(many=True, help_text="Modules du catalogue et leur état pour ce client.")
+    modules = ModuleClientSerializer(
+        many=True,
+        help_text="Modules du catalogue et leur état pour ce client.",
+    )
 
 
 class SuspendreClientRequestSerializer(serializers.Serializer):

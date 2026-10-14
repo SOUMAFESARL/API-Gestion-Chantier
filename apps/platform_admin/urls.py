@@ -1,14 +1,10 @@
 from django.urls import path
 
-from apps.platform_admin.views.messagerie import AdminMessagerieTestView, AdminMessagerieView
-
 from apps.platform_admin.views import (
-    AdminIdentiteView,
-    AdminTarifsView,
-    IdentitePublicView,
-    TarifsPublicsView,
+    ActionsJournalPlateformeView,
     ActiverModuleClientPlateformeView,
     AdminChangerMotDePasseMoiView,
+    AdminIdentiteView,
     AdminModuleAffecterPermissionsView,
     AdminModuleDesactiverView,
     AdminModuleDetailUpdateDeleteView,
@@ -19,17 +15,19 @@ from apps.platform_admin.views import (
     AdminPermissionListCreateView,
     AdminPhotoMoiView,
     AdminProfilMoiView,
+    AdminTarifsView,
     ChangerPlanClientPlateformeView,
     ClientsPlateformeListView,
-    DesactiverModuleClientPlateformeView,
     ComptesAdministrateursListCreateView,
     ConnexionAdminView,
     DeconnexionAdminView,
     DeconnexionAssistanceView,
     DemandeReinitialisationAdminView,
     DemarrerAssistanceView,
+    DesactiverModuleClientPlateformeView,
     EvolutionAbonnementsView,
     FicheClientPlateformeView,
+    IdentitePublicView,
     IndicateursPlateformeView,
     JournalPlateformeListView,
     ListerUtilisateursEntrepriseView,
@@ -39,6 +37,7 @@ from apps.platform_admin.views import (
     RenouvellementAdminView,
     SuspendreClientPlateformeView,
     SuspendreCompteAdministrateurView,
+    TarifsPublicsView,
     TendancesIndicateursView,
     VerificationJetonAdminView,
 )
@@ -48,6 +47,7 @@ from apps.platform_admin.views.inscriptions import (
     DemandesInscriptionView,
     RefuserInscriptionView,
 )
+from apps.platform_admin.views.messagerie import AdminMessagerieTestView, AdminMessagerieView
 from apps.platform_admin.views.suppression import (
     ApercuSuppressionClientView,
     SupprimerClientDefinitivementView,
@@ -128,6 +128,11 @@ urlpatterns = [
         name="assistance-deconnexion",
     ),
     # Journal de Plateforme
+    path(
+        "admins/journal-plateforme/actions/",
+        ActionsJournalPlateformeView.as_view(),
+        name="journal-plateforme-actions",
+    ),
     path(
         "admins/journal-plateforme/",
         JournalPlateformeListView.as_view(),

@@ -2,6 +2,7 @@
 
 import logging
 
+from django_tenants.utils import get_public_schema_name, schema_context
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -9,14 +10,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.models import Utilisateur
 from apps.core.ip_restriction import extraire_ip_client
-from apps.platform_admin.models import JournalPlateforme
+from apps.core.pagination import PaginationStandard
 from apps.platform_admin.permissions import EstSuperAdminPlateforme
+from apps.platform_admin.selectors import codes_actions_journal, journal_plateforme
 from apps.platform_admin.serializers.impersonation import (
     DeconnexionAssistanceRequestSerializer,
     DeconnexionAssistanceResponseSerializer,
     DemandeAssistanceSerializer,
     ErreurPlateformeResponseSerializer,
+    FiltresJournalPlateformeSerializer,
     JournalPlateformeSerializer,
     ReponseAssistanceSerializer,
     UtilisateurCibleSerializer,
@@ -27,10 +31,12 @@ from apps.platform_admin.services.impersonation import (
     lister_utilisateurs_entreprise,
     verifier_super_admin,
 )
+from apps.tenants.models import Entreprise
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ActionsJournalPlateformeView",
     "DeconnexionAssistanceView",
     "DemarrerAssistanceView",
     "JournalPlateformeListView",
@@ -173,8 +179,32 @@ class JournalPlateformeListView(APIView):
     @extend_schema(
         tags=["admins"],
         summary="Consulter le journal d'audit plateforme",
-        description="Consulte les 200 derniers événements immuables de support et d'administration enregistrés sur la plateforme (MLD §4.6).",
+        description=(
+            "Consulte le journal d'audit de la plateforme filtré par période, agent, entreprise "
+            "ou action, paginé (20 par page par défaut, 100 max)."
+        ),
         parameters=[
+            OpenApiParameter(
+                name="du",
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                description="Date de début incluse (format AAAA-MM-JJ).",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="au",
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                description="Date de fin incluse (format AAAA-MM-JJ).",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="utilisateur_id",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description="Filtrer les événements par identifiant de l'agent.",
+                required=False,
+            ),
             OpenApiParameter(
                 name="entreprise_id",
                 type=OpenApiTypes.UUID,
@@ -186,29 +216,83 @@ class JournalPlateformeListView(APIView):
                 name="action",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description="Filtrer par code d'action (ex: CONNEXION_ASSISTANCE, DECONNEXION_ASSISTANCE, TENTATIVE_ECRITURE_BLOQUEE).",
+                description="Filtrer par code d'action exact.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Numéro de page.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="taille_page",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description="Nombre d'éléments par page (max 100).",
                 required=False,
             ),
         ],
         responses={
-            200: JournalPlateformeSerializer(many=True),
+            200: PaginationStandard().get_paginated_response_schema(
+                JournalPlateformeSerializer(many=True).data
+            ),
+            400: ErreurPlateformeResponseSerializer,
             403: ErreurPlateformeResponseSerializer,
         },
     )
     def get(self, request):
         verifier_super_admin(request.user)
+        filtres = FiltresJournalPlateformeSerializer(data=request.query_params)
+        filtres.is_valid(raise_exception=True)
 
-        qs = JournalPlateforme.objects.all().order_by("-horodatage")
+        with schema_context(get_public_schema_name()):
+            qs = journal_plateforme(**filtres.validated_data)
+            pagination = PaginationStandard()
+            page = pagination.paginate_queryset(qs, request, view=self)
 
-        entreprise_id = request.query_params.get("entreprise_id")
-        if entreprise_id:
-            qs = qs.filter(entreprise_id=entreprise_id)
+            ids_agents = {e.utilisateur_id for e in page if e.utilisateur_id}
+            ids_entreprises = {e.entreprise_id for e in page if e.entreprise_id}
+            noms_agents = {
+                str(u.id): (f"{u.prenom} {u.nom}".strip() or u.email)
+                for u in Utilisateur.tous_objets.filter(id__in=ids_agents).only(
+                    "id", "prenom", "nom", "email"
+                )
+            }
+            noms_entreprises = {
+                str(e.id): (e.nom_commercial or e.raison_sociale)
+                for e in Entreprise.objects.filter(id__in=ids_entreprises).only(
+                    "id", "nom_commercial", "raison_sociale"
+                )
+            }
 
-        action = request.query_params.get("action")
-        if action:
-            qs = qs.filter(action=action)
+            contexte = {
+                "noms_agents": noms_agents,
+                "noms_entreprises": noms_entreprises,
+            }
+            donnees = JournalPlateformeSerializer(page, many=True, context=contexte).data
+            return pagination.get_paginated_response(donnees)
 
-        # Limitation à 200 entrées les plus récentes pour l'affichage réactif
-        qs = qs[:200]
-        serializer = JournalPlateformeSerializer(qs, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ActionsJournalPlateformeView(APIView):
+    """`GET /api/v1/admins/journal-plateforme/actions/` — les codes d'action présents au journal."""
+
+    permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
+
+    @extend_schema(
+        tags=["admins"],
+        summary="Lister les codes d'action du journal plateforme",
+        description="Retourne la liste triée des codes d'action distincts présents au journal.",
+        responses={
+            200: OpenApiTypes.OBJECT,
+            403: ErreurPlateformeResponseSerializer,
+        },
+    )
+    def get(self, request):
+        verifier_super_admin(request.user)
+        with schema_context(get_public_schema_name()):
+            return Response(
+                {"actions": codes_actions_journal()},
+                status=status.HTTP_200_OK,
+            )

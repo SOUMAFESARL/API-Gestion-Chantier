@@ -3,7 +3,7 @@
 Valide :
 - R-128 : L'impersonification est en lecture seule absolue et tracée des deux côtés.
 - Test 10 : Une impersonification écrit dans les deux journaux (JournalPlateforme & JournalAudit).
-- Test 11 : Une écriture tentée pendant une impersonification est systématiquement refusée (HTTP 403).
+- Test 11 : Une écriture pendant une impersonification est systématiquement refusée (403).
 - Session limitée à 1 heure (3600 secondes), non renouvelable.
 """
 
@@ -162,7 +162,7 @@ def test_demande_assistance_refusee_si_non_super_admin(client_api, client_dg_use
 def test_mode_assistance_bloque_toute_ecriture_et_autorise_lecture(
     client_api, super_admin_user, client_dg_user, entreprise_demo
 ):
-    """Test 11 & R-128 : Toute écriture tentée pendant une impersonification est refusée (HTTP 403)."""
+    """Test 11 & R-128 : Toute écriture tentée pendant une impersonification est refusée (403)."""
     # 1. Obtenir un jeton d'assistance
     client_api.force_authenticate(user=super_admin_user)
     url_assistance = f"/api/v1/admins/entreprises/{entreprise_demo.id}/assistance/"
@@ -226,8 +226,8 @@ def test_clore_session_assistance_et_journal_plateforme(
     # Consultation du journal plateforme
     rep_journal = client_api.get("/api/v1/admins/journal-plateforme/")
     assert rep_journal.status_code == status.HTTP_200_OK
-    assert isinstance(rep_journal.data, list)
-    actions = [entree["action"] for entree in rep_journal.data]
+    assert "resultats" in rep_journal.data
+    actions = [entree["action"] for entree in rep_journal.data["resultats"]]
     assert "DECONNEXION_ASSISTANCE" in actions
 
 
@@ -235,7 +235,8 @@ def test_clore_session_assistance_et_journal_plateforme(
 def test_lister_utilisateurs_entreprise(
     client_api, super_admin_user, client_dg_user, entreprise_demo
 ):
-    """Vérifie que le Super Admin peut lister les utilisateurs d'une entreprise pour cibler l'assistance."""
+    """Vérifie que le Super Admin peut lister les utilisateurs d'une entreprise
+    pour cibler l'assistance."""
     client_api.force_authenticate(user=super_admin_user)
     url = f"/api/v1/admins/entreprises/{entreprise_demo.id}/utilisateurs/"
 

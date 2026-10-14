@@ -100,6 +100,29 @@ def test_la_modification_du_projet_ne_designe_pas_le_dg(entreprise):
         assert rep.json()["erreur"]["code"] == CODE
 
 
+def test_le_dg_cree_un_projet_sans_y_prendre_de_fonction(entreprise):
+    """Créer un projet est un acte de direction : le DG le fait, et n'y est affecté à rien."""
+    with schema_context(SCHEMA):
+        rep = entreprise["client"].post(
+            "/api/v1/projets/",
+            {
+                "nom": "Chantier créé par le DG",
+                "type_projet": "BATIMENT_RESIDENTIEL",
+                "maitre_ouvrage": "Client",
+                "ville": "Abidjan",
+                "chef_projet_id": str(entreprise["cp"].id),
+            },
+            format="json",
+            HTTP_HOST=HOTE,
+        )
+        assert rep.status_code == 201, rep.content
+        projet = Projet.objects.get(pk=rep.json()["id"])
+        assert projet.chef_projet_id == entreprise["cp"].id
+        assert not AffectationProjet.objects.filter(
+            projet=projet, utilisateur=entreprise["dg"]
+        ).exists()
+
+
 def test_la_creation_ne_fait_pas_du_dg_un_conducteur_de_travaux(entreprise):
     with schema_context(SCHEMA):
         rep = entreprise["client"].post(

@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalogue.models import CatalogueModule as Module
-from apps.platform_admin.permissions import EstSuperAdminPlateforme
+from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.serializers.modules import (
     AdminModuleAffecterPermissionsSerializer,
     AdminModuleCreateSerializer,
@@ -64,6 +64,7 @@ class AdminModuleListCreateView(APIView):
         responses={201: AdminModuleDetailSerializer},
     )
     def post(self, request):
+        exiger_superviseur(request)
         with schema_context("public"):
             serializer = AdminModuleCreateSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -117,6 +118,7 @@ class AdminModuleDetailUpdateDeleteView(APIView):
         responses={200: AdminModuleDetailSerializer},
     )
     def patch(self, request, pk):
+        exiger_superviseur(request)
         serializer = AdminModuleUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -146,6 +148,7 @@ class AdminModuleDetailUpdateDeleteView(APIView):
         responses={200: dict},
     )
     def delete(self, request, pk):
+        exiger_superviseur(request)
         try:
             resultat = propager_suppression_module(
                 module_id=pk,
@@ -177,6 +180,7 @@ class AdminModuleAffecterPermissionsView(APIView):
         responses={200: AdminModuleDetailSerializer},
     )
     def put(self, request, pk):
+        exiger_superviseur(request)
         serializer = AdminModuleAffecterPermissionsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -208,6 +212,7 @@ class AdminModuleDesactiverView(APIView):
         responses={200: AdminModuleDetailSerializer, 409: dict},
     )
     def post(self, request, pk):
+        exiger_superviseur(request)
         with schema_context("public"):
             module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
             if not module.est_actif:
@@ -233,6 +238,7 @@ class AdminModuleReactiverView(APIView):
         responses={200: AdminModuleDetailSerializer, 409: dict},
     )
     def post(self, request, pk):
+        exiger_superviseur(request)
         with schema_context("public"):
             module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
             if module.est_actif:

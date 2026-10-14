@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalogue.models import CataloguePermission as Permission
-from apps.platform_admin.permissions import EstSuperAdminPlateforme
+from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.serializers.permissions import (
     AdminPermissionAffecterModulesSerializer,
     AdminPermissionCreateSerializer,
@@ -61,6 +61,7 @@ class AdminPermissionListCreateView(APIView):
         responses={201: AdminPermissionSerializer},
     )
     def post(self, request):
+        exiger_superviseur(request)
         with schema_context("public"):
             serializer = AdminPermissionCreateSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -107,6 +108,7 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
         responses={200: AdminPermissionSerializer},
     )
     def patch(self, request, pk):
+        exiger_superviseur(request)
         serializer = AdminPermissionUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -132,6 +134,7 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
         responses={200: dict},
     )
     def delete(self, request, pk):
+        exiger_superviseur(request)
         try:
             resultat = propager_suppression_permission(
                 permission_id=pk,
@@ -163,6 +166,7 @@ class AdminPermissionAffecterModulesView(APIView):
         responses={200: AdminPermissionSerializer},
     )
     def post(self, request, pk):
+        exiger_superviseur(request)
         serializer = AdminPermissionAffecterModulesSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

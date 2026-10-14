@@ -17,7 +17,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutUtilisateur
-from apps.platform_admin.permissions import EstSuperAdminPlateforme
+from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.serializers.comptes import (
     CompteAdministrateurSerializer,
     CreerCompteAdministrateurSerializer,
@@ -61,6 +61,7 @@ class ComptesAdministrateursListCreateView(APIView):
         responses={201: CompteAdministrateurSerializer},
     )
     def post(self, request):
+        exiger_superviseur(request)
         serializer = CreerCompteAdministrateurSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -101,6 +102,7 @@ class SuspendreCompteAdministrateurView(APIView):
         responses={200: CompteAdministrateurSerializer},
     )
     def post(self, request, pk):
+        exiger_superviseur(request)
         with schema_context("public"):
             agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
             if str(agent.id) == str(request.user.id):
@@ -127,6 +129,7 @@ class ReactiverCompteAdministrateurView(APIView):
         responses={200: CompteAdministrateurSerializer},
     )
     def post(self, request, pk):
+        exiger_superviseur(request)
         with schema_context("public"):
             agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
             agent.is_active = True

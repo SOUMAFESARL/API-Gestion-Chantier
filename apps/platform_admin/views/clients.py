@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.ip_restriction import extraire_ip_client
-from apps.platform_admin.permissions import EstSuperAdminPlateforme
+from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.selectors.clients import (
     lister_clients_plateforme,
     obtenir_fiche_client,
@@ -246,6 +246,7 @@ class SuspendreClientPlateformeView(APIView):
         ],
     )
     def post(self, request, client_id):
+        exiger_superviseur(request)
         serializer = SuspendreClientRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -312,6 +313,7 @@ class ReactiverClientPlateformeView(APIView):
         ],
     )
     def post(self, request, client_id):
+        exiger_superviseur(request)
         adresse_ip = extraire_ip_client(request)
         appareil = request.headers.get("User-Agent", "")[:255]
 
@@ -382,6 +384,7 @@ class ChangerPlanClientPlateformeView(APIView):
         ],
     )
     def patch(self, request, client_id):
+        exiger_superviseur(request)
         serializer = ChangerPlanClientRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

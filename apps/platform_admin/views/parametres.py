@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import get_public_schema_name, schema_context
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from apps.billing.models import Plan
 from apps.platform_admin.models import JournalPlateforme
 from apps.platform_admin.models.identite import IdentitePlateforme
-from apps.platform_admin.permissions import EstSuperAdminPlateforme
+from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.serializers.parametres import (
     CODES_FORFAITS,
     OCTETS_LOGO_MAX,
@@ -22,11 +22,7 @@ from apps.platform_admin.serializers.parametres import (
     tarif_public,
 )
 
-
-def _exiger_superviseur(request) -> None:
-    """Seul un superviseur règle la plateforme ; un agent SUPPORT la consulte."""
-    if not getattr(request.user, "is_superuser", False):
-        raise PermissionDenied(_("Seul un superviseur de la plateforme peut modifier ce réglage."))
+_exiger_superviseur = exiger_superviseur
 
 
 def _journaliser(request, action: str, detail: dict) -> None:

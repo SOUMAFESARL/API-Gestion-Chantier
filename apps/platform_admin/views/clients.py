@@ -16,6 +16,7 @@ from apps.platform_admin.selectors.clients import (
 from apps.platform_admin.serializers.clients import (
     ChangerPlanClientRequestSerializer,
     ClientPlateformeSerializer,
+    ModifierEcheanceClientRequestSerializer,
     SuspendreClientRequestSerializer,
 )
 from apps.platform_admin.serializers.impersonation import (
@@ -23,6 +24,7 @@ from apps.platform_admin.serializers.impersonation import (
 )
 from apps.platform_admin.services.clients import (
     changer_plan_client_plateforme,
+    modifier_echeance_client_plateforme,
     reactiver_client_plateforme,
     suspendre_client_plateforme,
 )
@@ -151,7 +153,7 @@ class ClientsPlateformeListView(APIView):
 
 
 class FicheClientPlateformeView(APIView):
-    """`GET /api/v1/clients/{client_id}/` — Consultation détaillée de la fiche client."""
+    """`GET` et `PATCH /api/v1/admins/clients/{client_id}/` — Consultation et mise à jour de la fiche client."""
 
     permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
     serializer_class = ClientPlateformeSerializer
@@ -192,6 +194,38 @@ class FicheClientPlateformeView(APIView):
         donnees = obtenir_fiche_client(client_id)
         serializer = self.serializer_class(donnees)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=["admins-clients"],
+        summary="Modifier l'échéance de l'abonnement d'une entreprise cliente",
+        description=(
+            "Repousse ou avance la date de fin de l'abonnement en cours. Pendant un essai, "
+            "la fin de l'essai suit. Motif obligatoire (10 caractères au moins), journalisé ; "
+            "le Directeur Général est prévenu par courriel. Réservé au superviseur."
+        ),
+        parameters=[PARAM_CLIENT_ID],
+        request=ModifierEcheanceClientRequestSerializer,
+        responses={
+            200: ClientPlateformeSerializer,
+            400: ErreurPlateformeResponseSerializer,
+            403: ErreurPlateformeResponseSerializer,
+            404: ErreurPlateformeResponseSerializer,
+            409: ErreurPlateformeResponseSerializer,
+        },
+    )
+    def patch(self, request, client_id):
+        exiger_superviseur(request)
+        serializer = ModifierEcheanceClientRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        client = modifier_echeance_client_plateforme(
+            entreprise_id=client_id,
+            date_fin=serializer.validated_data["abonnement"]["date_fin"],
+            motif=serializer.validated_data["motif"],
+            admin_user=request.user,
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
+        return Response(ClientPlateformeSerializer(client).data, status=status.HTTP_200_OK)
 
 
 class SuspendreClientPlateformeView(APIView):

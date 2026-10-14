@@ -95,3 +95,24 @@ class ChangerPlanClientRequestSerializer(serializers.Serializer):
         },
         help_text=_("Code du plan cible (ex: BATISSEUR, MAITRE_OEUVRE, PROMOTEUR)."),
     )
+
+
+class EcheanceAbonnementSerializer(serializers.Serializer):
+    date_fin = serializers.DateField()
+
+
+class ModifierEcheanceClientRequestSerializer(serializers.Serializer):
+    """Corps de `PATCH /admins/clients/{id}/` : l'échéance, et pourquoi on la change."""
+
+    abonnement = EcheanceAbonnementSerializer()
+    motif = serializers.CharField(
+        max_length=500,
+        allow_blank=True,
+        trim_whitespace=True,
+        error_messages={"required": _("Le motif doit contenir au moins 10 caractères.")},
+    )
+
+    def validate_motif(self, valeur: str) -> str:
+        if len(valeur) < 10:
+            raise serializers.ValidationError(_("Le motif doit contenir au moins 10 caractères."))
+        return valeur

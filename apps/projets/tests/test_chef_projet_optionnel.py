@@ -136,7 +136,11 @@ def test_creation_projet_sans_chef_projet_succes_dg(client_tenant, env_test):
     projet_id = rep["Location"].rstrip("/").split("/")[-1]
 
     assert data["nom"] == "Villa Riviera Sans CP"
-    assert "chef_projet" not in data
+    # L'encadrement est exposé en lecture depuis le 14/10/2026 (alignement du
+    # frontend, tâche 1.2 bis) : sans chef de projet, la clé vaut null.
+    assert data["chef_projet"] is None
+    assert data["conducteurs_travaux"] == []
+    assert data["chefs_chantier"] == []
     assert "conducteur_travaux" not in data
 
     with schema_context(SCHEMA):

@@ -624,3 +624,61 @@ def test_routes_historiques_ne_contournent_pas_le_circuit(terrain):
     )
     assert rep.status_code == 422
     assert RapportJournalier.objects.get(pk=identifiant).statut == "SOUMIS"
+
+
+def _client(utilisateur):
+    client = APIClient(HTTP_HOST="demo.localhost")
+    client.force_authenticate(user=utilisateur)
+    return client
+
+
+def _personne(code, **champs):
+    return Utilisateur.objects.create_user(
+        email=f"journal-{code.lower()}-{uuid4().hex[:8]}@demo.ci",
+        nom=code,
+        prenom="Signature",
+        role=Role.objects.get(code=code),
+        role_global=code,
+        statut="ACTIF",
+        **champs,
+    )
+
+
+def test_le_directeur_ne_signe_pas_une_etape_dont_il_ne_tient_pas_la_fonction(terrain):
+    """Décision du 14/10/2026 : le DG n'a plus de dérogation au circuit."""
+    dg = _personne("DG", is_owner=True)
+    identifiant = creer(terrain)
+    soumettre(terrain, identifiant)
+    rep = _client(dg).post(f"{API}/rapports/{identifiant}/valider/", {}, format="json")
+    assert rep.status_code == 403
+    rep = _client(dg).post(
+        f"{API}/rapports/{identifiant}/rejeter/",
+        {"motif": "Le directeur n'est pas conducteur de travaux ici."},
+        format="json",
+    )
+    assert rep.status_code == 403
+    assert JournalChantier.objects.get(rapport_id=identifiant).valide_ct_le is None
+
+
+def test_le_directeur_chef_de_projet_designe_approuve(terrain):
+    """Petite structure : le DG tient la fonction de chef de projet sur ce chantier."""
+    dg = _personne("DG", is_owner=True)
+    projet = terrain["projet"]
+    projet.chef_projet = dg
+    projet.save(update_fields=["chef_projet"])
+    identifiant = creer(terrain)
+    soumettre(terrain, identifiant)
+    rep = terrain["clients"]["CT"].post(f"{API}/rapports/{identifiant}/valider/", {}, format="json")
+    assert rep.status_code == 200, rep.data
+    rep = _client(dg).post(f"{API}/rapports/{identifiant}/approuver/", {}, format="json")
+    assert rep.status_code == 200, rep.data
+    assert rep.data["statut"] == "APPROUVE_CP"
+
+
+def test_le_super_administrateur_de_la_plateforme_ne_signe_jamais(terrain):
+    admin = _personne("DG", is_superuser=True, is_staff=True)
+    identifiant = creer(terrain)
+    soumettre(terrain, identifiant)
+    rep = _client(admin).post(f"{API}/rapports/{identifiant}/valider/", {}, format="json")
+    assert rep.status_code == 403
+    assert JournalChantier.objects.get(rapport_id=identifiant).valide_ct_le is None

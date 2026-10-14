@@ -59,15 +59,21 @@ def verifier_auteur(rapport, utilisateur):
 
 
 def verifier_signataire(journal, utilisateur, role):
-    from apps.core.droits import est_dg
+    """Signe celui qui tient la fonction sur le chantier — et lui seul.
 
+    Une signature identifie un intervenant réel du circuit, jamais un simple
+    droit : les permissions RBAC, vérifiées par la vue, ne suffisent pas.
+
+    **Le directeur général n'a pas de dérogation** (décision du 14/10/2026) :
+    il signe l'étape dont il tient la fonction — chef de projet désigné d'un
+    chantier, par exemple, dans une petite structure — et aucune autre. Le
+    super-administrateur de la plateforme, qui n'appartient pas à
+    l'entreprise, ne signe jamais.
+    """
+    projet = journal.rapport.projet
     if journal.rapport.auteur_id == utilisateur.id:
         raise PermissionDenied("L'auteur ne peut pas valider son propre rapport.")
-        # Les permissions RBAC sont également vérifiées par la vue. Une signature
-        # identifie un intervenant réel du circuit, jamais un simple droit d'édition.
-    if utilisateur.is_superuser or est_dg(utilisateur):
-        return
-    if role == "CP" and journal.rapport.projet.chef_projet_id == utilisateur.id:
+    if role == "CP" and projet.chef_projet_id == utilisateur.id:
         return
     if (
         not affectations_actives(journal.rapport.projet_id)

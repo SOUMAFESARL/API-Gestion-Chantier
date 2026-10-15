@@ -331,6 +331,26 @@ class ProjetCreationSerializer(serializers.Serializer):
         if self.instance is None:
             budget_projet = attrs.get("budget_initial_montant")
             lots = attrs.get("lots", [])
+            if lots:
+                debut_p = attrs.get("date_debut_prevue")
+                fin_p = attrs.get("date_fin_prevue")
+                if not debut_p or not fin_p:
+                    from apps.projets.services.calendrier import MSG_EXIGER_DATES_PROJET
+
+                    raise serializers.ValidationError({"lots": MSG_EXIGER_DATES_PROJET})
+                from apps.projets.services.calendrier import formater_date
+
+                for lot in lots:
+                    debut_l = lot.get("date_debut_prevue")
+                    fin_l = lot.get("date_fin_prevue")
+                    if debut_l and debut_p and debut_l < debut_p:
+                        raise serializers.ValidationError(
+                            {"lots": f"Le lot ne peut pas commencer avant le début du projet ({formater_date(debut_p)})."}
+                        )
+                    if fin_l and fin_p and fin_l > fin_p:
+                        raise serializers.ValidationError(
+                            {"lots": f"Le lot ne peut pas finir après la fin du projet ({formater_date(fin_p)})."}
+                        )
             if budget_projet is not None and lots:
                 somme_lots = sum(
                     lot.get("budget_initial_montant")
@@ -355,6 +375,34 @@ class ProjetCreationSerializer(serializers.Serializer):
             nouveaux = LotCreationProjetSerializer(data=self.initial_data["lots"], many=True)
             nouveaux.is_valid(raise_exception=True)
             attrs["lots"] = nouveaux.validated_data
+            if attrs["lots"]:
+                if not self.instance.date_debut_prevue or not self.instance.date_fin_prevue:
+                    from apps.projets.services.calendrier import MSG_EXIGER_DATES_PROJET
+
+                    raise serializers.ValidationError({"lots": MSG_EXIGER_DATES_PROJET})
+                from apps.projets.services.calendrier import formater_date
+
+                for lot in attrs["lots"]:
+                    debut_l = lot.get("date_debut_prevue")
+                    fin_l = lot.get("date_fin_prevue")
+                    if (
+                        debut_l
+                        and self.instance.date_debut_prevue
+                        and debut_l < self.instance.date_debut_prevue
+                    ):
+                        d_proj = formater_date(self.instance.date_debut_prevue)
+                        raise serializers.ValidationError(
+                            {"lots": f"Le lot ne peut pas commencer avant le début du projet ({d_proj})."}
+                        )
+                    if (
+                        fin_l
+                        and self.instance.date_fin_prevue
+                        and fin_l > self.instance.date_fin_prevue
+                    ):
+                        f_proj = formater_date(self.instance.date_fin_prevue)
+                        raise serializers.ValidationError(
+                            {"lots": f"Le lot ne peut pas finir après la fin du projet ({f_proj})."}
+                        )
             from apps.projets.services.budgets import verifier_budgets_lots_a_creer
 
             verifier_budgets_lots_a_creer(

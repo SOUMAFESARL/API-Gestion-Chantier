@@ -29,7 +29,11 @@ COLONNES = (
 def creer_lots(projet, donnees, utilisateur):
     """L'appelant possède transaction.atomic et le verrou select_for_update du projet."""
     from apps.projets.services.budgets import verifier_budgets_lots_a_creer
+    from apps.projets.services.calendrier import exiger_dates_projet, verifier_lot_dans_projet
 
+    exiger_dates_projet(projet)
+    for d in donnees:
+        verifier_lot_dans_projet(projet, d.get("date_debut_prevue"), d.get("date_fin_prevue"))
     verifier_budgets_lots_a_creer(projet, [d.get("budget_initial_montant") for d in donnees])
     existants = list(projet.lots.all())
     codes = {lot.code.upper() for lot in existants}
@@ -67,7 +71,7 @@ def normaliser(valeur):
     return "_".join(texte.replace("(", " ").replace(")", " ").split())
 
 
-def lire_excel(fichier):
+def lire_excel(fichier, request=None, projet=None):
     if not fichier.name.lower().endswith(".xlsx") or not 0 < fichier.size <= MAX_FICHIER:
         raise ValidationError({"fichier": "Fichier .xlsx requis, de 5 Mo maximum."})
     contenu = fichier.read(MAX_FICHIER + 1)
@@ -140,7 +144,12 @@ def lire_excel(fichier):
                 except (ValueError, InvalidOperation, OverflowError):
                     erreurs[str(numero)] = {"budget_fcfa": "Montant invalide."}
                     continue
-            serializer = LotCreationSerializer(data=data)
+            context = {}
+            if request:
+                context["request"] = request
+            if projet:
+                context["projet"] = projet
+            serializer = LotCreationSerializer(data=data, context=context)
             if serializer.is_valid():
                 resultats.append(serializer.validated_data)
             else:

@@ -27,6 +27,7 @@ pytestmark = pytest.mark.django_db
 def environnement_chantier(schema_demo):
     """Prépare un environnement complet avec DG, CP, projet, lot, activité et motifs."""
     from apps.accounts.services.roles import initialiser_roles_par_defaut
+
     initialiser_roles_par_defaut()
 
     def user(nom, role):
@@ -209,7 +210,7 @@ def test_coherence_hierarchique_activite_lot(environnement_chantier):
     assert res.status_code == 400
     details = _details(res)
     assert "date_fin_prevue" in details
-    assert "Reprogrammez d'abord le lot parent" in str(details["date_fin_prevue"])
+    assert "Reprogrammez d'abord le lot" in str(details["date_fin_prevue"])
 
 
 def test_coherence_hierarchique_lot_projet(environnement_chantier):
@@ -236,7 +237,9 @@ def test_coherence_hierarchique_lot_projet(environnement_chantier):
 
 
 @patch("apps.projets.services.reprogrammation.notifier_dg_derive_delai.delay")
-def test_reprogrammation_valide_sans_alerte_si_derive_inf_ou_egale_30j(mock_celery, environnement_chantier):
+def test_reprogrammation_valide_sans_alerte_si_derive_inf_ou_egale_30j(
+    mock_celery, environnement_chantier
+):
     """Report valide avec dérive <= 30 jours : Historique créé, Baseline intacte, pas de Celery."""
     env = environnement_chantier
     client = env["client_cp"]
@@ -277,7 +280,9 @@ def test_reprogrammation_valide_sans_alerte_si_derive_inf_ou_egale_30j(mock_cele
 
 
 @patch("apps.projets.services.reprogrammation.notifier_dg_derive_delai.delay")
-def test_reprogrammation_avec_alerte_celery_si_derive_sup_30_jours(mock_celery, environnement_chantier):
+def test_reprogrammation_avec_alerte_celery_si_derive_sup_30_jours(
+    mock_celery, environnement_chantier
+):
     """US-033 : Dérive > 30 jours par rapport à la Baseline v0 déclenche une notification Celery au DG."""
     env = environnement_chantier
     client = env["client_cp"]

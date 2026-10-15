@@ -57,7 +57,9 @@ class ProjetLotListCreateView(APIView):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
         return Response(
-            LotResponseSerializer(projet.lots.prefetch_related("activites"), many=True, context={"request": request}).data
+            LotResponseSerializer(
+                projet.lots.prefetch_related("activites"), many=True, context={"request": request}
+            ).data
         )
 
     @extend_schema(
@@ -104,7 +106,9 @@ class ProjetLotListCreateView(APIView):
         from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 
         verifier_statut_projet_pour_ecriture(projet)
-        serializer = LotCreationSerializer(data=request.data, context={"request": request})
+        serializer = LotCreationSerializer(
+            data=request.data, context={"request": request, "projet": projet}
+        )
         serializer.is_valid(raise_exception=True)
         lot = creer_lots(projet, [serializer.validated_data], request.user)[0]
         return Response(LotResponseSerializer(lot, context={"request": request}).data, status=201)
@@ -150,11 +154,16 @@ class ProjetLotImportView(APIView):
         from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 
         verifier_statut_projet_pour_ecriture(projet)
+        from apps.projets.services.calendrier import exiger_dates_projet
+
+        exiger_dates_projet(projet)
         serializer = LotImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        donnees = lire_excel(serializer.validated_data["fichier"])
+        donnees = lire_excel(serializer.validated_data["fichier"], request=request, projet=projet)
         lots = creer_lots(projet, donnees, request.user)
-        return Response(LotResponseSerializer(lots, many=True, context={"request": request}).data, status=201)
+        return Response(
+            LotResponseSerializer(lots, many=True, context={"request": request}).data, status=201
+        )
 
 
 class ProjetLotModeleView(APIView):
@@ -217,7 +226,9 @@ class LotDetailView(APIView):
         responses={200: LotResponseSerializer, **ERREURS_LOTS},
     )
     def get(self, request, pk):
-        return Response(LotResponseSerializer(self.obtenir_lot(request, pk), context={"request": request}).data)
+        return Response(
+            LotResponseSerializer(self.obtenir_lot(request, pk), context={"request": request}).data
+        )
 
     @extend_schema(
         tags=["lots"],
@@ -308,7 +319,13 @@ class LotActivationView(LotDetailView):
         lot = self.obtenir_lot(request, pk, verrou=True)
         serializer = ActivationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        lot.est_actif = serializer.validated_data["est_actif"]
+        etat = serializer.validated_data["est_actif"]
+        if etat and (not lot.projet.date_debut_prevue or not lot.projet.date_fin_prevue):
+            from apps.core.exceptions import RequeteRefusee
+            from apps.projets.services.calendrier import MSG_EXIGER_DATES_PROJET
+
+            raise RequeteRefusee(MSG_EXIGER_DATES_PROJET)
+        lot.est_actif = etat
         lot.save(update_fields=["est_actif", "modifie_le"])
         if lot.projet_id:
             from apps.projets.services.sante_declencheur import declencher_recalcul_sante

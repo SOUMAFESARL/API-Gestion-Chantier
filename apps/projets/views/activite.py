@@ -23,7 +23,6 @@ from apps.projets.serializers import (
 )
 from apps.projets.serializers.lot import ActivationSerializer
 
-
 __all__ = ["ActiviteDetailView", "LotActiviteListCreateView"]
 
 ERREURS_ACTIVITES = {
@@ -56,7 +55,9 @@ class LotActiviteListCreateView(APIView):
         self.check_object_permissions(request, lot)
         activites = lot.activites.filter(supprime_le__isnull=True).order_by("ordre", "cree_le")
         return Response(
-            ActiviteSerializer(activites.prefetch_related("equipe"), many=True, context={"request": request}).data,
+            ActiviteSerializer(
+                activites.prefetch_related("equipe"), many=True, context={"request": request}
+            ).data,
             status=status.HTTP_200_OK,
         )
 
@@ -191,7 +192,10 @@ class ActiviteDetailView(APIView):
     )
     def get(self, request, pk):
         activite = self.obtenir_activite(request, pk)
-        return Response(ActiviteSerializer(activite, context={"request": request}).data, status=status.HTTP_200_OK)
+        return Response(
+            ActiviteSerializer(activite, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary="Supprimer logiquement une activité",
@@ -285,8 +289,14 @@ class ActiviteActivationView(ActiviteDetailView):
         serializer = ActivationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         etat = serializer.validated_data["est_actif"]
-        if etat and not activite.lot.est_actif:
-            raise ValidationError({"lot": "Réactivez le lot avant l'activité."})
+        if etat:
+            if not activite.lot.date_debut_prevue or not activite.lot.date_fin_prevue:
+                from apps.core.exceptions import RequeteRefusee
+                from apps.projets.services.calendrier import MSG_EXIGER_DATES_LOT
+
+                raise RequeteRefusee(MSG_EXIGER_DATES_LOT)
+            if not activite.lot.est_actif:
+                raise ValidationError({"lot": "Réactivez le lot avant l'activité."})
         activite.est_actif = etat
         activite.save(update_fields=["est_actif", "modifie_le"])
         if activite.lot and activite.lot.projet_id:

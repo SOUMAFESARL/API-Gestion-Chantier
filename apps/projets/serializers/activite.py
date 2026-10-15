@@ -212,6 +212,11 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
         if unite == UniteMesure.FORFAIT and quantite != Decimal("1.000"):
             attrs["quantite_prevue"] = Decimal("1.000")
 
+        if self.instance is None and "budget_initial_montant" in attrs:
+            from apps.projets.services.budgets import verifier_budget_activite
+
+            verifier_budget_activite(lot, attrs.get("budget_initial_montant"))
+
         return attrs
 
     def create(self, validated_data):
@@ -264,5 +269,13 @@ class ActiviteModificationSerializer(ActiviteCreationSerializer):
         # FORFAIT normalise la quantité à 1 ; les autres valeurs absentes restent intactes.
         if valeurs["quantite_prevue"] != self.instance.quantite_prevue:
             attrs["quantite_prevue"] = valeurs["quantite_prevue"]
+
+        if "budget_initial_montant" in attrs:
+            from apps.projets.services.budgets import verifier_budget_activite
+
+            lot = self.context.get("lot") or getattr(self.instance, "lot", None)
+            verifier_budget_activite(
+                lot, attrs["budget_initial_montant"], activite_exclue=self.instance
+            )
         return attrs
 

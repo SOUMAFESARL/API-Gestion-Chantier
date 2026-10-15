@@ -69,3 +69,14 @@ class QuantiteField(models.DecimalField):
         nom, chemin, args, kwargs = super().deconstruct()
         kwargs.pop("validators", None)
         return nom, chemin, args, kwargs
+
+
+def formater_fcfa(centimes: int | None) -> str:
+    """Formate un montant en centimes de FCFA en francs avec espaces ordinaires.
+
+    Exemple : 1_200_000_000 centimes -> '12 000 000 FCFA'.
+    """
+    if centimes is None:
+        return "0 FCFA"
+    francs = centimes // 100
+    return f"{francs:,}".replace(",", " ") + " FCFA"

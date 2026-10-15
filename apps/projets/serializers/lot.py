@@ -98,6 +98,15 @@ class LotModificationSerializer(LotCreationSerializer):
             raise serializers.ValidationError(
                 {"date_fin_prevue": "Une activité finit après cette date."}
             )
+        if "budget_initial_montant" in attrs:
+            from apps.projets.services.budgets import (
+                verifier_budget_lot,
+                verifier_budget_parent_lot,
+            )
+
+            nouveau = attrs["budget_initial_montant"]
+            verifier_budget_lot(self.instance.projet, nouveau, lot_exclu=self.instance)
+            verifier_budget_parent_lot(self.instance, nouveau)
         return attrs
 
     def update(self, instance, validated_data):

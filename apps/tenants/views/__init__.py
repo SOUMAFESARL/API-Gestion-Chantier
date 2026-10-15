@@ -412,10 +412,7 @@ class EntrepriseView(APIView):
     def get(self, request):
         tenant = getattr(request, "tenant", None)
         if tenant is None or tenant.schema_name == "public":
-            return Response(
-                {"detail": _("Aucun tenant résolu.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise RequeteRefusee(_("Aucun tenant résolu."))
         serializer = EntrepriseSerializer(tenant, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -456,10 +453,7 @@ class ConfigurationEntrepriseView(APIView):
     def get(self, request):
         tenant = getattr(request, "tenant", None)
         if tenant is None or tenant.schema_name == "public":
-            return Response(
-                {"detail": _("Aucun tenant résolu.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise RequeteRefusee(_("Aucun tenant résolu."))
         serializer = EntrepriseSerializer(tenant, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 

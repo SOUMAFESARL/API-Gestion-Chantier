@@ -100,7 +100,10 @@ class LotModificationSerializer(LotCreationSerializer):
         debut = valeurs.get("date_debut_prevue")
         fin = valeurs.get("date_fin_prevue")
         projet = self.context.get("projet") or getattr(self.instance, "projet", None)
-        if projet:
+        # Seules les dates **écrites** se contrôlent : un lot déjà hors cadre en base (données
+        # antérieures à la règle D4) doit rester modifiable pour son nom ou son budget.
+        dates_ecrites = "date_debut_prevue" in attrs or "date_fin_prevue" in attrs
+        if projet and dates_ecrites:
             from apps.projets.services.calendrier import verifier_lot_dans_projet
 
             verifier_lot_dans_projet(projet, debut, fin)

@@ -14,6 +14,7 @@ from apps.accounts.models import Utilisateur
 from apps.audit.services import journaliser
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.core.exceptions import RequeteRefusee
+from apps.core.ip_restriction import extraire_ip_client
 from apps.core.permissions import GardePermissionProjet, obtenir_portee_role
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.permissions import PeutRetirerDuProjet
@@ -222,32 +223,19 @@ class ProjetAffectationDetailView(APIView):
         hard_param = request.query_params.get("hard", "true").lower()
         suppression_physique = hard_param != "false"
 
-        journaliser(
-            action=ActionAudit.SUPPRESSION,
-            type_entite="affectation_projet",
-            entite_id=affectation.pk,
-            utilisateur_id=request.user.pk,
-            valeur_avant={
-                "projet_id": str(projet.pk),
-                "projet_reference": projet.reference,
-                "utilisateur_id": str(affectation.utilisateur_id),
-                "utilisateur_email": getattr(affectation.utilisateur, "email", ""),
-                "role_projet": affectation.role_projet,
-                "zone": affectation.zone,
-                "fonction_membre": affectation.fonction_membre,
-            },
-            valeur_apres={"physique": suppression_physique},
-            adresse_ip=(
-                getattr(request, "META", {}).get("REMOTE_ADDR")
-                if getattr(request, "META", None)
-                else None
-            ),
-            appareil=(
-                getattr(request, "META", {}).get("HTTP_USER_AGENT", "")[:255]
-                if getattr(request, "META", None)
-                else ""
-            ),
-        )
+        # L'instantané d'avant est pris maintenant : après un effacement physique, la ligne
+        # n'existe plus. La trace, elle, ne s'écrit qu'**après** un retrait réussi — sinon un
+        # refus du service laisserait au journal une suppression qui n'a pas eu lieu.
+        avant = {
+            "projet_id": str(projet.pk),
+            "projet_reference": projet.reference,
+            "utilisateur_id": str(affectation.utilisateur_id),
+            "utilisateur_email": getattr(affectation.utilisateur, "email", ""),
+            "role_projet": affectation.role_projet,
+            "zone": affectation.zone,
+            "fonction_membre": affectation.fonction_membre,
+        }
+        identifiant = affectation.pk
 
         try:
             revoquer_affectation_projet(
@@ -258,6 +246,17 @@ class ProjetAffectationDetailView(APIView):
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise RequeteRefusee(msg) from exc
+
+        journaliser(
+            action=ActionAudit.SUPPRESSION,
+            type_entite="affectation_projet",
+            entite_id=identifiant,
+            utilisateur_id=request.user.pk,
+            valeur_avant=avant,
+            valeur_apres={"physique": suppression_physique},
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 

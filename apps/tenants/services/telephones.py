@@ -85,6 +85,16 @@ def remplacer_telephones(
                 )
             )
             existants_par_id = {str(item.id): item for item in existants}
+            # L'état d'avant, figé **avant** toute écriture : les objets de `existants` sont
+            # modifiés en place plus bas, et un « avant » relu après coup égalerait l'« après »
+            # — une modification de libellé ou de numéro ne serait alors jamais journalisée.
+            valeur_avant = [
+                {"libelle": item.libelle, "numero": item.numero, "principal": item.est_principal}
+                for item in sorted(
+                    existants,
+                    key=lambda x: (-int(x.est_principal), x.ordre, x.cree_le),
+                )
+            ]
 
             for t in telephones:
                 tid = t.get("id")
@@ -176,17 +186,6 @@ def remplacer_telephones(
                 entreprise.save(update_fields=["telephone_contact"])
 
         # 5. Journaliser dans le schéma de l'entreprise si quelque chose a changé
-        valeur_avant = [
-            {
-                "libelle": item.libelle,
-                "numero": item.numero,
-                "principal": item.est_principal,
-            }
-            for item in sorted(
-                existants,
-                key=lambda x: (-int(x.est_principal), x.ordre, x.cree_le),
-            )
-        ]
         valeur_apres = [
             {
                 "libelle": item.libelle,

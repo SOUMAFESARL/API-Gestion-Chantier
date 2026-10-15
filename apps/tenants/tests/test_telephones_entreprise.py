@@ -395,6 +395,45 @@ def test_journal_audit(client, utilisateur_dg):
 
 
 @pytest.mark.django_db
+def test_journal_audit_modification_d_un_numero_existant(client, utilisateur_dg):
+    """Changer le libellé d'un numéro déjà enregistré se journalise, avec le vrai « avant »."""
+    client.force_authenticate(user=utilisateur_dg)
+    url = "/api/v1/parametres/configuration/"
+    rep = client.patch(
+        url,
+        {"telephones": [{"libelle": "MOBILE", "numero": "+2250799887766", "principal": True}]},
+        format="json",
+    )
+    assert rep.status_code == status.HTTP_200_OK, rep.content
+    identifiant = rep.json()["telephones"][0]["id"]
+    with schema_context(SCHEMA):
+        nb_avant = JournalAudit.objects.filter(type_entite="telephone_entreprise").count()
+
+    rep = client.patch(
+        url,
+        {
+            "telephones": [
+                {
+                    "id": identifiant,
+                    "libelle": "WHATSAPP",
+                    "numero": "+2250799887766",
+                    "principal": True,
+                }
+            ]
+        },
+        format="json",
+    )
+    assert rep.status_code == status.HTTP_200_OK, rep.content
+
+    with schema_context(SCHEMA):
+        entrees = JournalAudit.objects.filter(type_entite="telephone_entreprise")
+        assert entrees.count() == nb_avant + 1
+        derniere = entrees.order_by("-id").first()
+        assert derniere.valeur_avant[0]["libelle"] == "MOBILE"
+        assert derniere.valeur_apres[0]["libelle"] == "WHATSAPP"
+
+
+@pytest.mark.django_db
 def test_fiche_back_office_expose_les_numeros(client_admin, super_admin):
     client_admin.force_authenticate(user=super_admin)
     with schema_context(get_public_schema_name()):

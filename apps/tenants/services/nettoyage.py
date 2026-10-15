@@ -258,6 +258,13 @@ def supprimer_entreprise_proprement(identifiant: str) -> dict[str, Any]:
             )
             rapport["tables_nettoyees"]["demande_inscription_par_entreprise"] = cursor.rowcount
 
+            # telephone_entreprise
+            cursor.execute(
+                "DELETE FROM public.telephone_entreprise WHERE entreprise_id = ANY(%s);",
+                [ent_ids],
+            )
+            rapport["tables_nettoyees"]["telephone_entreprise"] = cursor.rowcount
+
             # entreprise_cliente
             cursor.execute("DELETE FROM public.entreprise_cliente WHERE id = ANY(%s);", [ent_ids])
             rapport["tables_nettoyees"]["entreprise_cliente"] = cursor.rowcount

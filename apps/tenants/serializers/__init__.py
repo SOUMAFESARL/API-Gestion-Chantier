@@ -1,24 +1,28 @@
-"""Formes des requêtes d'inscription — contrat T-021 §2, §3, §4 et §5."""
+import json
 
 from django.core.files.storage import default_storage
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from apps.tenants.models import TelephoneEntreprise
 from apps.tenants.serializers.responses import (
     EtatProvisionnementResponseSerializer,
     RenvoiActivationResponseSerializer,
 )
+from apps.tenants.services.telephones import est_e164, normaliser_telephone
 
 __all__ = [
     "AccuseActivationSerializer",
     "AccuseInscriptionSerializer",
     "ActivationSerializer",
+    "ChampListeTelephones",
     "ContenuJetonInscriptionSerializer",
     "DepotInscriptionSerializer",
     "EntrepriseSerializer",
     "EtatProvisionnementResponseSerializer",
     "RenvoiActivationResponseSerializer",
     "RenvoiSerializer",
+    "TelephoneEntrepriseEcritureSerializer",
     "VerificationJetonInscriptionSerializer",
 ]
 
@@ -192,6 +196,74 @@ class AccuseActivationSerializer(serializers.Serializer):
     statut = serializers.CharField()
 
 
+class TelephoneEntrepriseEcritureSerializer(serializers.Serializer):
+    """Validation d'un numéro de contact à l'écriture."""
+
+    id = serializers.UUIDField(required=False, allow_null=True)
+    libelle = serializers.ChoiceField(
+        choices=TelephoneEntreprise.Libelle.choices,
+        error_messages={"invalid_choice": _("Choisissez à quoi sert ce numéro.")},
+    )
+    numero = serializers.CharField(max_length=30)
+    principal = serializers.BooleanField()
+
+    def validate_numero(self, valeur: str) -> str:
+        norm = normaliser_telephone(valeur)
+        if not est_e164(norm):
+            raise serializers.ValidationError(
+                _(
+                    "Saisissez le numéro au format international : + suivi de l'indicatif "
+                    "du pays et du numéro, par exemple +225 07 00 00 00 00."
+                )
+            )
+        return norm
+
+
+class ChampListeTelephones(serializers.Field):
+    """Champ gérant la liste des numéros en JSON ou sous forme de chaîne JSON (multipart)."""
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except (json.JSONDecodeError, ValueError):
+                raise serializers.ValidationError(_("Liste de numéros illisible.")) from None
+
+        if not isinstance(data, list):
+            raise serializers.ValidationError(_("Liste de numéros illisible."))
+
+        serializer = TelephoneEntrepriseEcritureSerializer(data=data, many=True)
+        if not serializer.is_valid():
+            raise serializers.ValidationError(serializer.errors)
+        return serializer.validated_data
+
+    def to_representation(self, value):
+        if hasattr(value, "all"):
+            items = value.all()
+        elif isinstance(value, list):
+            items = value
+        else:
+            items = []
+        return [
+            {
+                "id": str(t.id) if hasattr(t, "id") else t.get("id"),
+                "libelle": t.libelle if hasattr(t, "libelle") else t.get("libelle"),
+                "libelle_affiche": (
+                    t.get_libelle_display()
+                    if hasattr(t, "get_libelle_display")
+                    else t.get("libelle_affiche", t.get("libelle"))
+                ),
+                "numero": t.numero if hasattr(t, "numero") else t.get("numero"),
+                "principal": (
+                    t.est_principal
+                    if hasattr(t, "est_principal")
+                    else t.get("principal", False)
+                ),
+            }
+            for t in items
+        ]
+
+
 class EntrepriseSerializer(serializers.Serializer):
     """Lecture et mise à jour du profil de l'entreprise cliente — Étape 1 du Wizard."""
 
@@ -226,8 +298,22 @@ class EntrepriseSerializer(serializers.Serializer):
     # vide qu'un formulaire peut envoyer sans le vouloir.
     retirer_logo = serializers.BooleanField(required=False, write_only=True, default=False)
     email_contact = serializers.EmailField(required=False, allow_blank=True)
-    telephone_contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    telephone_contact = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    telephones = ChampListeTelephones(required=False)
     statut = serializers.CharField(read_only=True)
+
+    def validate_telephone_contact(self, valeur: str) -> str:
+        if not valeur:
+            return valeur
+        norm = normaliser_telephone(valeur)
+        if not est_e164(norm):
+            raise serializers.ValidationError(
+                _(
+                    "Saisissez le numéro au format international : + suivi de l'indicatif "
+                    "du pays et du numéro, par exemple +225 07 00 00 00 00."
+                )
+            )
+        return norm
 
     def validate_email_contact(self, valeur: str) -> str:
         if not valeur:

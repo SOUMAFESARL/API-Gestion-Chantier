@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import timedelta
 
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django_tenants.utils import get_public_schema_name, schema_context
 from rest_framework.exceptions import NotFound
 
@@ -13,7 +13,7 @@ from apps.billing.models import Abonnement, PaiementAbonnement, Plan
 from apps.catalogue.models import CatalogueModule
 from apps.core.enums import StatutEntreprise, StatutUtilisateur
 from apps.projets.models import Projet
-from apps.tenants.models import DemandeInscription, Entreprise
+from apps.tenants.models import DemandeInscription, Entreprise, TelephoneEntreprise
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +141,15 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
         "ville": ent.ville,
         "email_contact": ent.email_contact,
         "telephone_contact": ent.telephone_contact,
+        "telephones": [
+            {
+                "libelle": t.libelle,
+                "libelle_affiche": t.get_libelle_display(),
+                "numero": t.numero,
+                "principal": t.est_principal,
+            }
+            for t in ent.telephones.all()
+        ],
         "statut": statut_client,
         "cree_le": ent.date_inscription.isoformat(),
         "active_le": active_le,
@@ -187,7 +196,11 @@ def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
     public_schema = get_public_schema_name()
     qs = (
         Entreprise.objects.exclude(schema_name=public_schema)
-        .prefetch_related("abonnements__plan", "abonnements__factures__paiements")
+        .prefetch_related(
+            "abonnements__plan",
+            "abonnements__factures__paiements",
+            Prefetch("telephones", queryset=TelephoneEntreprise.objects.all()),
+        )
         .order_by("-date_inscription")
     )
 
@@ -207,7 +220,16 @@ def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
 def obtenir_fiche_client(client_id: uuid.UUID | str) -> dict:
     """Retourne la fiche détaillée d'une entreprise cliente."""
     public_schema = get_public_schema_name()
-    ent = Entreprise.objects.filter(pk=client_id).exclude(schema_name=public_schema).first()
+    ent = (
+        Entreprise.objects.filter(pk=client_id)
+        .exclude(schema_name=public_schema)
+        .prefetch_related(
+            "abonnements__plan",
+            "abonnements__factures__paiements",
+            Prefetch("telephones", queryset=TelephoneEntreprise.objects.all()),
+        )
+        .first()
+    )
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
     return formater_client_plateforme(ent)

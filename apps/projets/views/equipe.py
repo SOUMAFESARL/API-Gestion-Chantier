@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
@@ -8,8 +9,24 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import GardePermissionProjet
-from apps.projets.models import Activite, AffectationEquipeActivite, EquipeChantier, Projet
-from apps.projets.serializers.equipe import EquipeCreationSerializer, EquipeResponseSerializer
+from apps.projets.models import (
+    Activite,
+    AffectationEquipeActivite,
+    EquipeChantier,
+    MembreEquipeChantier,
+    Projet,
+)
+from apps.projets.serializers.equipe import (
+    EquipeCreationSerializer,
+    EquipeResponseSerializer,
+    MembreEquipeCreateSerializer,
+    MembreEquipeUpdateSerializer,
+)
+from apps.projets.services.equipes import (
+    ajouter_membre_equipe,
+    modifier_role_membre,
+    retirer_membre_equipe,
+)
 from apps.projets.services.statistiques import pourcentage_realise
 
 ERREURS_EQUIPES = {
@@ -128,6 +145,87 @@ class ProjetEquipeDetailView(BaseEquipeView):
         return Response(status=204)
 
 
+class ProjetEquipeMembreListCreateView(BaseEquipeView):
+    def get_permissions(self):
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+
+    @extend_schema(
+        tags=["équipes"],
+        summary="Ajouter un membre à une équipe de chantier",
+        request=MembreEquipeCreateSerializer,
+        responses={
+            201: EquipeResponseSerializer,
+            400: OpenApiResponse(description="Champs invalides, personne non affectée ou doublon."),
+            **ERREURS_EQUIPES,
+        },
+    )
+    @transaction.atomic
+    def post(self, request, pk, equipe_id):
+        projet = self.projet(request, pk, verrou=True)
+        equipe = get_object_or_404(
+            EquipeChantier, pk=equipe_id, projet=projet, supprime_le__isnull=True
+        )
+        serializer = MembreEquipeCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ajouter_membre_equipe(
+            equipe,
+            utilisateur=serializer.validated_data.get("utilisateur"),
+            prenom=serializer.validated_data.get("prenom", ""),
+            nom=serializer.validated_data.get("nom", ""),
+            role=serializer.validated_data.get("role", "OUVRIER"),
+            createur=request.user,
+        )
+        equipe.refresh_from_db()
+        return Response(EquipeResponseSerializer(equipe).data, status=201)
+
+
+class ProjetEquipeMembreDetailView(BaseEquipeView):
+    def get_permissions(self):
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+
+    @extend_schema(
+        tags=["équipes"],
+        summary="Modifier le rôle d'un membre d'équipe",
+        request=MembreEquipeUpdateSerializer,
+        responses={
+            200: EquipeResponseSerializer,
+            400: OpenApiResponse(description="Rôle invalide."),
+            **ERREURS_EQUIPES,
+        },
+    )
+    @transaction.atomic
+    def patch(self, request, pk, equipe_id, membre_id):
+        projet = self.projet(request, pk, verrou=True)
+        equipe = get_object_or_404(
+            EquipeChantier, pk=equipe_id, projet=projet, supprime_le__isnull=True
+        )
+        membre = get_object_or_404(
+            MembreEquipeChantier, pk=membre_id, equipe=equipe, supprime_le__isnull=True
+        )
+        serializer = MembreEquipeUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        modifier_role_membre(membre, serializer.validated_data["role"])
+        equipe.refresh_from_db()
+        return Response(EquipeResponseSerializer(equipe).data, status=200)
+
+    @extend_schema(
+        tags=["équipes"],
+        summary="Retirer un membre d'une équipe de chantier",
+        responses={204: OpenApiResponse(description="Membre retiré."), **ERREURS_EQUIPES},
+    )
+    @transaction.atomic
+    def delete(self, request, pk, equipe_id, membre_id):
+        projet = self.projet(request, pk, verrou=True)
+        equipe = get_object_or_404(
+            EquipeChantier, pk=equipe_id, projet=projet, supprime_le__isnull=True
+        )
+        membre = get_object_or_404(
+            MembreEquipeChantier, pk=membre_id, equipe=equipe, supprime_le__isnull=True
+        )
+        retirer_membre_equipe(membre)
+        return Response(status=204)
+
+
 class AffectationEquipeSerializer(serializers.Serializer):
     equipe_id = serializers.UUIDField()
     activite_id = serializers.UUIDField()
@@ -150,7 +248,7 @@ class AffectationEquipeResponseSerializer(serializers.ModelSerializer):
     effectif = serializers.SerializerMethodField()
 
     def get_effectif(self, obj) -> int:
-        return 1 + len(obj.equipe.membres.all())
+        return obj.equipe.membres.filter(supprime_le__isnull=True).count()
 
     class Meta:
         model = AffectationEquipeActivite
@@ -261,8 +359,18 @@ class ProjetEquipeAffectationView(BaseEquipeView):
         )
         if pourcentage_realise(activite) >= 100:
             raise serializers.ValidationError({"activite_id": "Activité déjà terminée."})
-        if AffectationEquipeActivite.objects.filter(equipe=equipe, activite=activite).exists():
-            raise serializers.ValidationError("Équipe déjà affectée à cette activité.")
+
+        # Décision 4.11 : une seule équipe par activité.
+        # Si une autre équipe était déjà affectée, la remplacer dans la même transaction.
+        affectation_existante = AffectationEquipeActivite.objects.filter(
+            activite=activite, supprime_le__isnull=True
+        ).first()
+        if affectation_existante:
+            if affectation_existante.equipe_id == equipe.id:
+                raise serializers.ValidationError("Équipe déjà affectée à cette activité.")
+            affectation_existante.supprime_le = timezone.now()
+            affectation_existante.save(update_fields=["supprime_le"])
+
         affectation = AffectationEquipeActivite.objects.create(
             equipe=equipe,
             activite=activite,
@@ -311,20 +419,24 @@ class ProjetEquipeStatistiquesView(BaseEquipeView):
     )
     def get(self, request, pk):
         projet = self.projet(request, pk)
-        equipes = list(equipes_projet(projet).filter(est_actif=True))
+        equipes = list(equipes_projet(projet).filter(est_actif=True).prefetch_related("membres"))
         personnes = set()
         for equipe in equipes:
-            personnes.add(
-                ("id", equipe.chef_utilisateur_id)
-                if equipe.chef_utilisateur_id
-                else ("chef_libre", equipe.pk)
-            )
-            for membre in equipe.membres.all():
+            membres_actifs = [m for m in equipe.membres.all() if m.supprime_le is None]
+            has_chef_in_membres = False
+            for membre in membres_actifs:
+                if membre.fonction == "CHEF_EQUIPE":
+                    has_chef_in_membres = True
                 personnes.add(
                     ("id", membre.utilisateur_id)
                     if membre.utilisateur_id
                     else ("membre_libre", membre.pk)
                 )
+            if not has_chef_in_membres:
+                if equipe.chef_utilisateur_id:
+                    personnes.add(("id", equipe.chef_utilisateur_id))
+                elif equipe.chef_nom and equipe.chef_nom.strip():
+                    personnes.add(("chef_libre", equipe.pk))
         activites = Activite.objects.filter(
             lot__projet=projet, est_actif=True, lot__est_actif=True, lot__supprime_le__isnull=True
         )

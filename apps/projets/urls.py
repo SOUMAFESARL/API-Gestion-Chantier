@@ -29,6 +29,8 @@ from apps.projets.views.equipe import (
     ProjetEquipeAffectationView,
     ProjetEquipeDetailView,
     ProjetEquipeListCreateView,
+    ProjetEquipeMembreDetailView,
+    ProjetEquipeMembreListCreateView,
     ProjetEquipeStatistiquesView,
 )
 from apps.projets.views.lot import (
@@ -87,6 +89,16 @@ urlpatterns = [
         "projets/<uuid:pk>/equipes/<uuid:equipe_id>/",
         ProjetEquipeDetailView.as_view(),
         name="projet-equipe-detail",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/<uuid:equipe_id>/membres/",
+        ProjetEquipeMembreListCreateView.as_view(),
+        name="projet-equipe-membres",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/<uuid:equipe_id>/membres/<uuid:membre_id>/",
+        ProjetEquipeMembreDetailView.as_view(),
+        name="projet-equipe-membre-detail",
     ),
     path(
         "projets/<uuid:pk>/statistiques/",

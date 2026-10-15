@@ -19,11 +19,35 @@ class ActiviteSerializer(serializers.ModelSerializer):
 
     unite_libelle = serializers.CharField(source="get_unite_display", read_only=True)
     statut = serializers.CharField(read_only=True)
-    avancement = serializers.SerializerMethodField()
+    # Attention : equipe_ids désigne les collaborateurs (Utilisateur) de l'activité,
+    # distincts des équipes de chantier (EquipeChantier). Ne pas le modifier.
     equipe_ids = serializers.PrimaryKeyRelatedField(source="equipe", many=True, read_only=True)
+    equipe_chantier = serializers.SerializerMethodField()
 
     def get_avancement(self, obj) -> float:
         return float(round(pourcentage_realise(obj), 2))
+
+    def get_equipe_chantier(self, obj) -> dict | None:
+        """L'équipe de chantier affectée à cette activité, avec son affectation active."""
+        aff = (
+            obj.affectations_equipes.filter(
+                supprime_le__isnull=True,
+                equipe__supprime_le__isnull=True,
+                equipe__est_actif=True,
+            )
+            .select_related("equipe")
+            .first()
+        )
+        if not aff or not aff.equipe:
+            return None
+        equipe = aff.equipe
+        effectif = equipe.membres.filter(supprime_le__isnull=True).count()
+        return {
+            "id": str(equipe.id),
+            "nom": equipe.nom,
+            "effectif": effectif,
+            "affectation_id": str(aff.id),
+        }
 
     class Meta:
         model = Activite
@@ -35,6 +59,7 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "statut",
             "responsable_id",
             "equipe_ids",
+            "equipe_chantier",
             "budget_initial_montant",
             "unite",
             "unite_libelle",
@@ -55,6 +80,7 @@ class ActiviteSerializer(serializers.ModelSerializer):
             "lot_id",
             "quantite_realisee",
             "avancement",
+            "equipe_chantier",
             "date_debut_baseline",
             "date_fin_baseline",
             "cree_le",

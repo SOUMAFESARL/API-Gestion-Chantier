@@ -302,6 +302,7 @@ class ProjetJournalReportsConsolideView(APIView, JournalReportsFiltreMixin):
     ]
 
     @extend_schema(
+        operation_id="projets_journal_reports_consolide_list",
         summary="Journal d'audit consolidé des reports d'un chantier",
         tags=["reprogrammation"],
         responses={200: HistoriqueDateSerializer(many=True)},
@@ -341,6 +342,7 @@ class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
     ]
 
     @extend_schema(
+        operation_id="projets_global_journal_reports_list",
         summary="Journal d'audit global des reports de dates (multi-chantiers)",
         tags=["reprogrammation"],
         responses={200: HistoriqueDateSerializer(many=True)},

@@ -4,8 +4,8 @@ import logging
 
 from django_tenants.utils import get_public_schema_name, schema_context
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -235,8 +235,16 @@ class JournalPlateformeListView(APIView):
             ),
         ],
         responses={
-            200: PaginationStandard().get_paginated_response_schema(
-                JournalPlateformeSerializer(many=True).data
+            200: inline_serializer(
+                name="JournalPlateformePaginatedResponse",
+                fields={
+                    "total": serializers.IntegerField(),
+                    "page": serializers.IntegerField(),
+                    "nombre_pages": serializers.IntegerField(),
+                    "suivant": serializers.URLField(allow_null=True),
+                    "precedent": serializers.URLField(allow_null=True),
+                    "resultats": JournalPlateformeSerializer(many=True),
+                },
             ),
             400: ErreurPlateformeResponseSerializer,
             403: ErreurPlateformeResponseSerializer,

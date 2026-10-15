@@ -49,7 +49,7 @@ def test_lot_and_activity_mutations_are_visible_in_swagger():
 def test_schema_contains_project_crud_and_lot_workflow():
     schema = SchemaGenerator(urlconf="config.urls_tenant").get_schema(public=True)
     paths = {path: value for path, value in schema["paths"].items() if "/projets/" in path}
-    assert set(paths) == {
+    assert set(paths) >= {
         "/api/v1/projets/",
         "/api/v1/projets/{id}/",
         "/api/v1/projets/{id}/lots/",

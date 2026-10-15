@@ -105,7 +105,9 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
     )
     responsable_id = serializers.PrimaryKeyRelatedField(
         source="colaborateur",
-        queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF, supprime_le__isnull=True),
+        queryset=Utilisateur.objects.filter(
+            is_active=True, statut=StatutUtilisateur.ACTIF, supprime_le__isnull=True
+        ),
         required=False,
         allow_null=True,
         help_text="UUID du responsable actif affecté au projet, ou null.",
@@ -187,25 +189,11 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
                 {"equipe_ids": "Collaborateur non affecté au projet."}
             )
 
-        # Vérification des bornes du Lot parent
-        if lot.date_debut_prevue and debut and debut < lot.date_debut_prevue:
-            raise serializers.ValidationError(
-                {
-                    "date_debut_prevue": (
-                        f"L'activité ne peut pas débuter avant la date de début du lot "
-                        f"({lot.date_debut_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
-        if lot.date_fin_prevue and fin and fin > lot.date_fin_prevue:
-            raise serializers.ValidationError(
-                {
-                    "date_fin_prevue": (
-                        f"L'activité ne peut pas se terminer après la date de fin du lot "
-                        f"({lot.date_fin_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
+        from apps.projets.services.calendrier import exiger_dates_lot, verifier_activite_dans_lot
+
+        if self.instance is None:
+            exiger_dates_lot(lot)
+        verifier_activite_dans_lot(lot, debut, fin)
 
         unite = attrs.get("unite", UniteMesure.UNITE)
         quantite = attrs.get("quantite_prevue")
@@ -278,4 +266,3 @@ class ActiviteModificationSerializer(ActiviteCreationSerializer):
                 lot, attrs["budget_initial_montant"], activite_exclue=self.instance
             )
         return attrs
-

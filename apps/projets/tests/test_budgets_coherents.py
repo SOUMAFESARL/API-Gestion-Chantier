@@ -1,5 +1,4 @@
-"""Tests de cohérence des budgets projet / lot / activité et journalisation (B1 - US 3.4, 3.9)."""
-
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 
@@ -15,6 +14,9 @@ from apps.core.enums import ActionAudit, RoleGlobal, RoleProjet
 from apps.core.fields import formater_fcfa
 from apps.projets.models import Activite, AffectationProjet, Lot, Projet
 from apps.projets.serializers import ProjetCreationSerializer
+
+D_DEBUT = date(2026, 10, 1)
+D_FIN = date(2026, 12, 31)
 
 pytestmark = pytest.mark.django_db
 
@@ -68,6 +70,8 @@ def test_somme_des_lots_bornee_par_le_projet(contexte):
         nom="Projet B1",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,  # 100 M FCFA
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -127,6 +131,8 @@ def test_lot_modifie_compare_aux_autres(contexte):
         nom="Projet B1-02",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -165,6 +171,8 @@ def test_somme_des_activites_bornee_par_le_lot(contexte):
         nom="Projet B1-03",
         ville="Abidjan",
         budget_initial_montant=50_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -175,6 +183,8 @@ def test_somme_des_activites_bornee_par_le_lot(contexte):
         code="L-01",
         libelle="Lot 1",
         budget_initial_montant=10_000_000_00,  # 10 M
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     Activite.objects.create(
         lot=lot,
@@ -223,6 +233,8 @@ def test_projet_ne_descend_pas_sous_ses_lots(contexte):
         nom="Projet B1-04",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -251,13 +263,20 @@ def test_lot_ne_descend_pas_sous_ses_activites(contexte):
         nom="Projet B1-05",
         ville="Abidjan",
         budget_initial_montant=50_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
     )
 
     lot = Lot.objects.create(
-        projet=projet, code="L-01", libelle="Lot 1", budget_initial_montant=10_000_000_00
+        projet=projet,
+        code="L-01",
+        libelle="Lot 1",
+        budget_initial_montant=10_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     Activite.objects.create(
         lot=lot, libelle="A1", budget_initial_montant=6_000_000_00, quantite_prevue=Decimal("1")
@@ -285,6 +304,8 @@ def test_parent_sans_budget_ne_borne_rien(contexte):
         nom="Projet Sans Budget",
         ville="Abidjan",
         budget_initial_montant=None,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -297,6 +318,8 @@ def test_parent_sans_budget_ne_borne_rien(contexte):
             "mode_execution": "REGIE",
             "type_bordereau": "FORFAIT",
             "budget_initial_montant": 500_000_000_00,
+            "date_debut_prevue": D_DEBUT.isoformat(),
+            "date_fin_prevue": D_FIN.isoformat(),
         },
         format="json",
     )
@@ -322,6 +345,8 @@ def test_enfant_sans_budget_compte_zero(contexte):
         nom="Projet B1-07",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -354,6 +379,8 @@ def test_lots_supprimes_ignores(contexte):
         nom="Projet B1-08",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -393,6 +420,8 @@ def test_import_refuse_en_bloc(contexte):
         nom="Projet B1-09",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -426,6 +455,8 @@ def test_creation_projet_avec_lots(contexte):
         "type_projet": "BATIMENT_RESIDENTIEL",
         "ville": "Abidjan",
         "maitre_ouvrage": "MOA Test",
+        "date_debut_prevue": "2026-10-01",
+        "date_fin_prevue": "2026-12-31",
         "budget_initial_montant": 100_000_000_00,  # 100 M
         "lots": [
             {
@@ -461,6 +492,8 @@ def test_patch_sans_budget_ne_controle_pas(contexte):
         nom="Projet Incohérent Initial",
         ville="Abidjan",
         budget_initial_montant=50_000_000_00,  # 50 M
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET
@@ -489,6 +522,8 @@ def test_budget_projet_journalise(contexte):
         nom="Projet Audit",
         ville="Abidjan",
         budget_initial_montant=100_000_000_00,
+        date_debut_prevue=D_DEBUT,
+        date_fin_prevue=D_FIN,
     )
     AffectationProjet.objects.create(
         projet=projet, utilisateur=dg, role_projet=RoleProjet.CHEF_PROJET

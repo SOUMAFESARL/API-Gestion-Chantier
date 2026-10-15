@@ -62,6 +62,16 @@ class LotCreationSerializer(serializers.Serializer):
         fin_reelle = attrs.get("date_fin_reelle")
         if debut_reel and fin_reelle and fin_reelle < debut_reel:
             raise serializers.ValidationError({"date_fin_reelle": "Fin avant début interdite."})
+
+        projet = self.context.get("projet")
+        if projet:
+            from apps.projets.services.calendrier import (
+                exiger_dates_projet,
+                verifier_lot_dans_projet,
+            )
+
+            exiger_dates_projet(projet)
+            verifier_lot_dans_projet(projet, debut, fin)
         return attrs
 
 
@@ -89,6 +99,11 @@ class LotModificationSerializer(LotCreationSerializer):
         super().validate(valeurs)
         debut = valeurs.get("date_debut_prevue")
         fin = valeurs.get("date_fin_prevue")
+        projet = self.context.get("projet") or getattr(self.instance, "projet", None)
+        if projet:
+            from apps.projets.services.calendrier import verifier_lot_dans_projet
+
+            verifier_lot_dans_projet(projet, debut, fin)
         activites = self.instance.activites.all()
         if debut and activites.filter(date_debut_prevue__lt=debut).exists():
             raise serializers.ValidationError(

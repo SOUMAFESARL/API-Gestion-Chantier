@@ -5,6 +5,7 @@ Module CDC : 1 (Gestion des Projets).
 """
 
 from datetime import date
+
 from django.db import connection, transaction
 from rest_framework import serializers
 
@@ -54,7 +55,9 @@ def reprogrammer_date_instance(
     try:
         motif = MotifReport.objects.get(id=motif_id, supprime_le__isnull=True)
     except (MotifReport.DoesNotExist, ValueError):
-        raise serializers.ValidationError({"motif_id": "Le motif de report spécifié est introuvable."})
+        raise serializers.ValidationError(
+            {"motif_id": "Le motif de report spécifié est introuvable."}
+        )
 
     if not motif.est_actif:
         raise serializers.ValidationError(
@@ -72,122 +75,51 @@ def reprogrammer_date_instance(
 
     if fin_cible <= debut_cible:
         raise serializers.ValidationError(
-            {"date_fin_prevue": "La date de fin prévisionnelle doit être strictement postérieure à la date de début."}
+            {
+                "date_fin_prevue": "La date de fin prévisionnelle doit être strictement postérieure à la date de début."
+            }
         )
 
     # 4. Validation hiérarchique temporelle stricte
+    from apps.projets.services.calendrier import (
+        verifier_activite_dans_lot,
+        verifier_enfants_contenus,
+        verifier_lot_dans_projet,
+    )
+
     if isinstance(instance, Activite):
         type_objet = TypeObjetHistorique.ACTIVITE
-        lot = instance.lot
-        if lot.date_debut_prevue and debut_cible < lot.date_debut_prevue:
-            raise serializers.ValidationError(
-                {
-                    "date_debut_prevue": (
-                        f"L'activité ne peut pas débuter avant son lot "
-                        f"({lot.date_debut_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
-        if lot.date_fin_prevue and fin_cible > lot.date_fin_prevue:
-            raise serializers.ValidationError(
-                {
-                    "date_fin_prevue": (
-                        f"L'activité ne peut pas se terminer après son lot "
-                        f"({lot.date_fin_prevue.strftime('%d/%m/%Y')}). "
-                        "Reprogrammez d'abord le lot parent."
-                    )
-                }
-            )
+        verifier_activite_dans_lot(
+            instance.lot,
+            debut_cible,
+            fin_cible,
+            suffixe=" Reprogrammez d'abord le lot.",
+        )
 
     elif isinstance(instance, Lot):
         type_objet = TypeObjetHistorique.LOT
-        projet = instance.projet
-        if projet.date_debut_prevue and debut_cible < projet.date_debut_prevue:
-            raise serializers.ValidationError(
-                {
-                    "date_debut_prevue": (
-                        f"Le lot ne peut pas débuter avant le projet "
-                        f"({projet.date_debut_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
-        if projet.date_fin_prevue and fin_cible > projet.date_fin_prevue:
-            raise serializers.ValidationError(
-                {
-                    "date_fin_prevue": (
-                        f"Le lot ne peut pas se terminer après le projet "
-                        f"({projet.date_fin_prevue.strftime('%d/%m/%Y')}). "
-                        "Reprogrammez d'abord le projet."
-                    )
-                }
-            )
-
-        # Contrôle sur les activités enfants
-        act_avant = instance.activites.filter(
-            supprime_le__isnull=True,
-            date_debut_prevue__lt=debut_cible,
-        ).first()
-        if act_avant:
-            raise serializers.ValidationError(
-                {
-                    "date_debut_prevue": (
-                        f"Le lot ne peut pas débuter après son activité '{act_avant.libelle}' "
-                        f"({act_avant.date_debut_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
-        act_apres = instance.activites.filter(
-            supprime_le__isnull=True,
-            date_fin_prevue__gt=fin_cible,
-        ).first()
-        if act_apres:
-            raise serializers.ValidationError(
-                {
-                    "date_fin_prevue": (
-                        f"Le lot ne peut pas se terminer avant son activité '{act_apres.libelle}' "
-                        f"({act_apres.date_fin_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
+        verifier_lot_dans_projet(
+            instance.projet,
+            debut_cible,
+            fin_cible,
+            suffixe=" Reprogrammez d'abord le projet.",
+        )
+        verifier_enfants_contenus(instance, debut_cible, fin_cible)
 
     elif isinstance(instance, Projet):
         type_objet = TypeObjetHistorique.PROJET
-        # Contrôle sur les lots enfants
-        lot_avant = instance.lots.filter(
-            supprime_le__isnull=True,
-            date_debut_prevue__lt=debut_cible,
-        ).first()
-        if lot_avant:
-            raise serializers.ValidationError(
-                {
-                    "date_debut_prevue": (
-                        f"Le projet ne peut pas débuter après son lot '{lot_avant.libelle}' "
-                        f"({lot_avant.date_debut_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
-        lot_apres = instance.lots.filter(
-            supprime_le__isnull=True,
-            date_fin_prevue__gt=fin_cible,
-        ).first()
-        if lot_apres:
-            raise serializers.ValidationError(
-                {
-                    "date_fin_prevue": (
-                        f"Le projet ne peut pas se terminer avant son lot '{lot_apres.libelle}' "
-                        f"({lot_apres.date_fin_prevue.strftime('%d/%m/%Y')})."
-                    )
-                }
-            )
+        verifier_enfants_contenus(instance, debut_cible, fin_cible)
     else:
-        raise ValueError(f"Type d'entité non pris en charge pour la reprogrammation : {type(instance)}")
+        raise ValueError(
+            f"Type d'entité non pris en charge pour la reprogrammation : {type(instance)}"
+        )
 
     # 5. Détection des changements réels
     ancien_debut = instance.date_debut_prevue
     ancienne_fin = instance.date_fin_prevue
 
-    debut_modifie = (ancien_debut != debut_cible)
-    fin_modifiee = (ancienne_fin != fin_cible)
+    debut_modifie = ancien_debut != debut_cible
+    fin_modifiee = ancienne_fin != fin_cible
 
     if not debut_modifie and not fin_modifiee:
         raise serializers.ValidationError(
@@ -198,12 +130,12 @@ def reprogrammer_date_instance(
     historiques_crees = []
 
     kwargs_lien = {
-        "projet": instance if type_objet == TypeObjetHistorique.PROJET else (
-            instance.projet if type_objet == TypeObjetHistorique.LOT else instance.lot.projet
-        ),
-        "lot": instance if type_objet == TypeObjetHistorique.LOT else (
-            instance.lot if type_objet == TypeObjetHistorique.ACTIVITE else None
-        ),
+        "projet": instance
+        if type_objet == TypeObjetHistorique.PROJET
+        else (instance.projet if type_objet == TypeObjetHistorique.LOT else instance.lot.projet),
+        "lot": instance
+        if type_objet == TypeObjetHistorique.LOT
+        else (instance.lot if type_objet == TypeObjetHistorique.ACTIVITE else None),
         "activite": instance if type_objet == TypeObjetHistorique.ACTIVITE else None,
     }
 
@@ -241,7 +173,10 @@ def reprogrammer_date_instance(
     champs_maj = ["date_debut_prevue", "date_fin_prevue", "modifie_le"]
 
     from apps.projets.services.machine_etats import retablir_statut_apres_decalage_si_necessaire
-    statut_retabli = retablir_statut_apres_decalage_si_necessaire(instance, nouvelle_date_fin=fin_cible)
+
+    statut_retabli = retablir_statut_apres_decalage_si_necessaire(
+        instance, nouvelle_date_fin=fin_cible
+    )
     if statut_retabli:
         champs_maj.append("statut")
 

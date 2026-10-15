@@ -1,5 +1,4 @@
-"""Création multi-lots, accès projet et import Excel transactionnel."""
-
+from datetime import date
 from io import BytesIO
 
 import pytest
@@ -16,17 +15,27 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def contexte(schema_demo):
+    from apps.accounts.services.roles import initialiser_roles_par_defaut
+
+    initialiser_roles_par_defaut()
+
     user = Utilisateur.objects.create_user(
-        email="lots.visiteur@demo.ci",
+        email="lots.cp@demo.ci",
         password="Test12345!",
-        nom="Visiteur",
-        role_global=RoleGlobal.VISITEUR,
+        nom="Chef Projet",
+        role_global=RoleGlobal.CHEF_PROJET,
     )
-    projet = Projet.objects.create(reference="PRJ-LOTS", nom="Projet", ville="Man")
+    projet = Projet.objects.create(
+        reference="PRJ-LOTS",
+        nom="Projet",
+        ville="Man",
+        date_debut_prevue=date(2026, 10, 1),
+        date_fin_prevue=date(2026, 12, 31),
+    )
     AffectationProjet.objects.create(
         projet=projet,
         utilisateur=user,
-        role_projet=RoleProjet.VISITEUR,
+        role_projet=RoleProjet.CHEF_PROJET,
     )
     client = APIClient(HTTP_HOST="demo.localhost")
     client.force_authenticate(user)

@@ -20,15 +20,6 @@ MAPPING_PERM_VERS_ACCES = {
     "VALIDATION": "validation",
 }
 
-MAPPING_ACCES_VERS_PERM = {
-    "lecture": "LECTURE",
-    "saisie": "ECRITURE",
-    "ecriture": "ECRITURE",
-    "validation": "VALIDATION",
-    "suppression": "SUPPRESSION",
-}
-
-
 class AdminPermissionSimpleSerializer(serializers.ModelSerializer):
     """Représentation allégée d'une permission liée à un module."""
 
@@ -141,12 +132,8 @@ class AdminModuleCreateSerializer(serializers.Serializer):
         if statut:
             attrs["est_actif"] = (statut.upper() == "ACTIF")
 
-        # 3. Gestion de acces_par_defaut -> permissions
-        acces_par_defaut = attrs.get("acces_par_defaut")
-        if acces_par_defaut and not attrs.get("permissions"):
-            attrs["permissions"] = [
-                MAPPING_ACCES_VERS_PERM.get(a.lower(), a.upper()) for a in acces_par_defaut
-            ]
+        # 3. `acces_par_defaut` est accepté sans effet (voir `AdminModuleUpdateSerializer`).
+        attrs.pop("acces_par_defaut", None)
 
         return attrs
 
@@ -176,11 +163,10 @@ class AdminModuleUpdateSerializer(serializers.Serializer):
         if statut:
             attrs["est_actif"] = (statut.upper() == "ACTIF")
 
-        acces_par_defaut = attrs.get("acces_par_defaut")
-        if acces_par_defaut is not None and "permissions" not in attrs:
-            attrs["permissions"] = [
-                MAPPING_ACCES_VERS_PERM.get(a.lower(), a.upper()) for a in acces_par_defaut
-            ]
+        # `acces_par_defaut` ne touche plus aux permissions : traduit en LECTURE / ECRITURE /
+        # VALIDATION, il remplaçait les permissions fines du module (`projets.lire`…) à chaque
+        # modification faite depuis le back-office. Le champ reste accepté, sans effet.
+        attrs.pop("acces_par_defaut", None)
         return attrs
 
 

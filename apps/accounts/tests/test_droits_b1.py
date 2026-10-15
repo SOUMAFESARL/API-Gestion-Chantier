@@ -225,3 +225,14 @@ def test_rattachement_des_permissions_d_un_module_en_patch(settings):
     )
     assert retrait.status_code == 200, retrait.content
     assert retrait.json()["permissions_codes"] == ["B1_LIRE"]
+
+    # `acces_par_defaut`, que l'écran du back-office envoie à chaque modification, ne remplace
+    # plus les permissions du module.
+    modification = client.patch(
+        f"/api/v1/admins/modules/{creation.json()['id']}/",
+        {"description": "Nouvelle description", "acces_par_defaut": ["lecture", "saisie"]},
+        format="json",
+    )
+    assert modification.status_code == 200, modification.content
+    assert modification.json()["permissions_codes"] == ["B1_LIRE"]
+    assert modification.json()["description"] == "Nouvelle description"

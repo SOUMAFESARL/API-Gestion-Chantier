@@ -13,21 +13,25 @@ from rest_framework import status
 
 from apps.accounts.models import Invitation, Utilisateur
 from apps.accounts.services.authentification import emettre_jetons, profil_de_connexion
+from apps.audit.services import journaliser
 from apps.billing.services.quota import verifier_quota_avant_invitation
 from apps.core.emails import adresse_frontend, envoyer
-from apps.core.enums import StatutUtilisateur
-from apps.core.exceptions import ErreurMetier
+from apps.core.enums import ActionAudit, StatutUtilisateur
+from apps.core.exceptions import ErreurConflit, ErreurMetier
 
 logger = logging.getLogger(__name__)
 
 DUREE_INVITATION = timedelta(hours=72)
+DELAI_ENTRE_RENVOIS = timedelta(seconds=60)
 
 __all__ = [
+    "DELAI_ENTRE_RENVOIS",
     "DUREE_INVITATION",
     "JetonInvitationExpire",
     "accepter_invitation",
     "creer_invitation",
     "obtenir_invitation_par_jeton",
+    "renvoyer_invitation",
 ]
 
 
@@ -107,6 +111,69 @@ def creer_invitation(
             "role_libelle": invitation.get_role_propose_display(),
             "lien": lien,
             "heures_validite": int(DUREE_INVITATION.total_seconds() // 3600),
+        },
+    )
+
+    return invitation
+
+
+@transaction.atomic
+def renvoyer_invitation(
+    collaborateur: Utilisateur,
+    *,
+    emetteur: Utilisateur,
+    hote: str | None = None,
+) -> Invitation:
+    """Révoque les invitations encore ouvertes de cette adresse et en émet une nouvelle.
+
+    L'ancien lien doit cesser de valoir : deux liens valides pour un même compte, c'est deux
+    personnes qui peuvent l'activer.
+    """
+    ouvertes = Invitation.objects.select_for_update().filter(
+        email__iexact=collaborateur.email,
+        statut=Invitation.Statut.ENVOYEE,
+        utilise_le__isnull=True,
+    )
+
+    maintenant = timezone.now()
+    if ouvertes.filter(cree_le__gt=maintenant - DELAI_ENTRE_RENVOIS).exists():
+        raise ErreurConflit(
+            _(
+                "Une invitation vient d'être envoyée à cette adresse : patientez une minute "
+                "avant de la renvoyer."
+            )
+        )
+
+    nb_revoquees = ouvertes.update(
+        statut=Invitation.Statut.REVOQUEE,
+        modifie_le=maintenant,
+    )
+
+    role_propose = (
+        collaborateur.role.code
+        if collaborateur.role
+        else (collaborateur.role_global or "VISITEUR")
+    )
+    nom = f"{collaborateur.prenom} {collaborateur.nom}".strip()
+
+    invitation = creer_invitation(
+        email=collaborateur.email,
+        role_propose=role_propose,
+        nom=nom,
+        emetteur=emetteur,
+        hote=hote,
+        verifier_quota=False,
+    )
+
+    journaliser(
+        action=ActionAudit.MODIFICATION,
+        type_entite="invitation",
+        entite_id=invitation.pk,
+        utilisateur_id=emetteur.pk,
+        valeur_apres={
+            "geste": "RENVOI",
+            "email": collaborateur.email,
+            "invitations_revoquees": nb_revoquees,
         },
     )
 

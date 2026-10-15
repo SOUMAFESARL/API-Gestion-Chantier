@@ -10,6 +10,7 @@ from apps.accounts.views import (
     ParametresCollaborateurListCreateView,
     ParametresCollaborateurDetailView,
     ParametresCollaborateurReactiverView,
+    ParametresCollaborateurRenvoyerInvitationView,
     ParametresCollaborateurSuspendreView,
     ParametresRoleDetailUpdateView,
     ParametresRoleListCreateView,
@@ -99,5 +100,10 @@ urlpatterns = [
         "parametres/collaborateurs/<uuid:pk>/reactiver/",
         ParametresCollaborateurReactiverView.as_view(),
         name="parametres-collaborateur-reactiver",
+    ),
+    path(
+        "parametres/collaborateurs/<uuid:pk>/renvoyer-invitation/",
+        ParametresCollaborateurRenvoyerInvitationView.as_view(),
+        name="parametres-collaborateur-renvoyer-invitation",
     ),
 ]

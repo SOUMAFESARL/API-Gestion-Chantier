@@ -531,3 +531,51 @@ def test_creation_projet_avec_lot_hors_dates_refusee(environnement):
     assert "Le lot ne peut pas finir après la fin du projet (31/12/2026)." in str(
         serializer.errors["lots"]
     )
+
+
+def test_lot_deja_hors_cadre_reste_modifiable(environnement):
+    """D4 ne vise que les dates écrites : un lot hors cadre en base garde son PATCH de nom."""
+    client = environnement["client"]
+    p_avec = environnement["projet_avec_dates"]
+    lot = Lot.objects.create(
+        projet=p_avec,
+        code="L-09",
+        libelle="Lot ancien",
+        date_debut_prevue=date(2026, 9, 1),  # avant le début du projet (01/10/2026)
+        date_fin_prevue=date(2026, 11, 30),
+        est_actif=True,
+    )
+
+    res = client.patch(f"/api/v1/lots/{lot.id}/", {"nom": "Lot ancien renommé"}, format="json")
+    assert res.status_code == 200, res.content
+    lot.refresh_from_db()
+    assert lot.libelle == "Lot ancien renommé"
+
+
+def test_activite_deja_hors_cadre_reste_modifiable(environnement):
+    """D5 ne vise que les dates écrites : une activité hors cadre en base garde son PATCH."""
+    client = environnement["client"]
+    p_avec = environnement["projet_avec_dates"]
+    lot = Lot.objects.create(
+        projet=p_avec,
+        code="L-10",
+        libelle="Lot cadré",
+        date_debut_prevue=date(2026, 10, 1),
+        date_fin_prevue=date(2026, 11, 30),
+        est_actif=True,
+    )
+    act = Activite.objects.create(
+        lot=lot,
+        libelle="Activité ancienne",
+        quantite_prevue=Decimal("1.000"),
+        date_debut_prevue=date(2026, 10, 1),
+        date_fin_prevue=date(2026, 12, 15),  # après la fin du lot
+        est_actif=True,
+    )
+
+    res = client.patch(
+        f"/api/v1/activites/{act.id}/", {"libelle": "Activité renommée"}, format="json"
+    )
+    assert res.status_code == 200, res.content
+    act.refresh_from_db()
+    assert act.libelle == "Activité renommée"

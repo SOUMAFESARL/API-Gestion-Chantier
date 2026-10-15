@@ -219,7 +219,12 @@ class ActiviteCreationSerializer(serializers.ModelSerializer):
 
         if self.instance is None:
             exiger_dates_lot(lot)
-        verifier_activite_dans_lot(lot, debut, fin)
+        # En modification, seules les dates **écrites** se contrôlent : une activité déjà hors
+        # cadre en base (données antérieures à la règle D5) reste modifiable pour le reste.
+        initiales = getattr(self, "initial_data", None) or {}
+        dates_ecrites = "date_debut_prevue" in initiales or "date_fin_prevue" in initiales
+        if self.instance is None or dates_ecrites:
+            verifier_activite_dans_lot(lot, debut, fin)
 
         unite = attrs.get("unite", UniteMesure.UNITE)
         quantite = attrs.get("quantite_prevue")

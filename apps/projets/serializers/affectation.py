@@ -1,11 +1,22 @@
-"""Sérialiseurs pour l'API d'affectation des collaborateurs aux projets (US-04 / E-05 / C-05)."""
-
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleProjet, StatutUtilisateur
 from apps.core.permissions import obtenir_portee_role
 from apps.projets.models import AffectationProjet
+
+
+class IntervenantAffectationSerializer(serializers.Serializer):
+    """Représentation de l'utilisateur affecté."""
+
+    id = serializers.UUIDField()
+    nom = serializers.CharField()
+    prenom = serializers.CharField(allow_blank=True)
+    nom_complet = serializers.CharField()
+    statut = serializers.CharField()
+    email = serializers.EmailField(required=False)
+    telephone = serializers.CharField(required=False, allow_blank=True)
 
 
 class AffectationProjetResponseSerializer(serializers.ModelSerializer):
@@ -31,6 +42,7 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
             "modifie_le",
         ]
 
+    @extend_schema_field(IntervenantAffectationSerializer)
     def get_utilisateur(self, obj):
         u = obj.utilisateur
         if not u:

@@ -45,6 +45,7 @@ CHAMPS_REPONSE = (
     "indice_sante",
     "statistiques",
     "sans_chef_projet",
+    "peut_renommer",
     # L'encadrement, en lecture : le frontend en déduit qui voit le chantier.
     "chef_projet",
     "conducteurs_travaux",
@@ -181,6 +182,19 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Le chef de projet désigné, en clair ; null si le projet n'en a pas.",
     )
+    peut_renommer = serializers.SerializerMethodField(
+        help_text="Indique si l'utilisateur connecté peut renommer le projet (DG ou AD)."
+    )
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_peut_renommer(self, obj) -> bool:
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        user = getattr(request, "user", None) if request else None
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        from apps.core.droits import est_administrateur, est_dg
+
+        return bool(est_dg(user) or est_administrateur(user))
     conducteurs_travaux = serializers.SerializerMethodField(
         help_text="Le conducteur principal puis les conducteurs affectés et en vigueur."
     )

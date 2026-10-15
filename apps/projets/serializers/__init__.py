@@ -143,6 +143,7 @@ class ProjetSerializer(serializers.ModelSerializer):
     conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
     lots = LotSimpleSerializer(many=True, read_only=True)
     duree_jours_ouvres = serializers.IntegerField(read_only=True)
+    peut_renommer = serializers.SerializerMethodField()
 
     class Meta:
         model = Projet
@@ -152,6 +153,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             "entreprise",
             "reference",
             "nom",
+            "peut_renommer",
             "type_projet",
             "description",
             "client",
@@ -176,6 +178,16 @@ class ProjetSerializer(serializers.ModelSerializer):
             "indice_sante",
             "lots",
         ]
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_peut_renommer(self, obj) -> bool:
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        user = getattr(request, "user", None) if request else None
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        from apps.core.droits import est_administrateur, est_dg
+
+        return bool(est_dg(user) or est_administrateur(user))
 
     def get_maitre_ouvrage(self, obj) -> str:
         return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")
@@ -438,6 +450,19 @@ class ProjetCreationSerializer(serializers.Serializer):
                         )
                     }
                 )
+            if "nom" in attrs and attrs["nom"] != self.instance.nom:
+                from rest_framework.exceptions import PermissionDenied
+
+                from apps.core.droits import est_administrateur, est_dg
+
+                request = self.context.get("request") if getattr(self, "context", None) else None
+                user = getattr(request, "user", None) if request else None
+                if not (est_dg(user) or est_administrateur(user)):
+                    msg = (
+                        "Seuls le Directeur Général et l'administrateur de "
+                        "l'entreprise peuvent renommer un projet."
+                    )
+                    raise PermissionDenied(msg)
             non_modifiables = {
                 "equipe",
                 "chefs_chantier_ids",
@@ -877,10 +902,27 @@ class ProjetCreationSerializer(serializers.Serializer):
                     role_projet=role,
                     modifie_par=user,
                 )
+        ancien_nom = instance.nom
         ancien_budget = instance.budget_initial_montant
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
         instance.save()
+        if "nom" in validated_data and ancien_nom != instance.nom:
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            request = self.context.get("request") if getattr(self, "context", None) else None
+            user = getattr(request, "user", None) if request else None
+            journaliser(
+                action=ActionAudit.MODIFICATION,
+                type_entite="projet",
+                entite_id=instance.pk,
+                utilisateur_id=user.pk if user and user.is_authenticated else None,
+                valeur_avant={"nom": ancien_nom},
+                valeur_apres={"nom": instance.nom},
+                adresse_ip=getattr(request, "META", {}).get("REMOTE_ADDR") if request else None,
+                appareil=getattr(request, "META", {}).get("HTTP_USER_AGENT", "") if request else "",
+            )
         if (
             "budget_initial_montant" in validated_data
             and ancien_budget != instance.budget_initial_montant

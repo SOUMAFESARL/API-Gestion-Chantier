@@ -703,10 +703,9 @@ class ParametresCollaborateurDetailView(APIView):
             )
 
         # Règle B-06 : Un AD ne peut ni supprimer un autre AD ni lui-même (403)
-        is_cible_ad = (
-            collaborateur.role_global in (RoleGlobal.ADMIN, "AD")
-            or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
-        )
+        from apps.core.droits import est_administrateur
+
+        is_cible_ad = est_administrateur(collaborateur)
         if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
             return Response(
                 {

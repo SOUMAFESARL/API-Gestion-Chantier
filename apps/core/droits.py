@@ -19,6 +19,7 @@ __all__ = [
     "permissions_effectives",
     "permissions_du_role",
     "est_dg",
+    "est_administrateur",
     "peut_voir_montants",
     "DROITS_ADMIN_AD",
     "DROITS_ADMIN_RESERVES_DG",
@@ -58,6 +59,19 @@ def est_dg(utilisateur) -> bool:
     if getattr(utilisateur, "role_global", None) in (RoleGlobal.DIRECTEUR_GENERAL, "DG", "DIRECTEUR_GENERAL"):
         return True
     return False
+
+
+def est_administrateur(utilisateur) -> bool:
+    """Détermine si l'utilisateur est administrateur de l'entreprise (rôle système AD)."""
+    if not utilisateur or not getattr(utilisateur, "is_authenticated", False):
+        return False
+    if getattr(utilisateur, "role_global", None) in (RoleGlobal.ADMIN, "AD", "ADMIN"):
+        return True
+    role = getattr(utilisateur, "role", None)
+    if role and getattr(role, "code", "") in (RoleGlobal.ADMIN, "AD", "ADMIN"):
+        return True
+    role_p = getattr(utilisateur, "role_personnalise", None)
+    return bool(role_p and getattr(role_p, "code", "") in (RoleGlobal.ADMIN, "AD", "ADMIN"))
 
 
 def peut_voir_montants(utilisateur, request=None) -> bool:

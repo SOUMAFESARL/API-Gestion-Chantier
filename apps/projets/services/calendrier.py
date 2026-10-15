@@ -49,12 +49,14 @@ def verifier_lot_dans_projet(
     """
     if not projet:
         return
-    if debut and projet.date_debut_prevue and debut < projet.date_debut_prevue:
-        date_str = formater_date(projet.date_debut_prevue)
+    date_deb_proj = getattr(projet, "date_debut_prevue", None)
+    if debut and date_deb_proj and debut < date_deb_proj:
+        date_str = formater_date(date_deb_proj)
         msg = f"Le lot ne peut pas commencer avant le début du projet ({date_str}).{suffixe}"
         raise ValidationError({"date_debut_prevue": msg})
-    if fin and projet.date_fin_prevue and fin > projet.date_fin_prevue:
-        date_str = formater_date(projet.date_fin_prevue)
+    date_fin_proj = getattr(projet, "date_fin_prevue", None)
+    if fin and date_fin_proj and fin > date_fin_proj:
+        date_str = formater_date(date_fin_proj)
         msg = f"Le lot ne peut pas finir après la fin du projet ({date_str}).{suffixe}"
         raise ValidationError({"date_fin_prevue": msg})
 
@@ -71,12 +73,14 @@ def verifier_activite_dans_lot(
     """
     if not lot:
         return
-    if debut and lot.date_debut_prevue and debut < lot.date_debut_prevue:
-        date_str = formater_date(lot.date_debut_prevue)
+    date_deb_lot = getattr(lot, "date_debut_prevue", None)
+    if debut and date_deb_lot and debut < date_deb_lot:
+        date_str = formater_date(date_deb_lot)
         msg = f"L'activité ne peut pas commencer avant le début du lot ({date_str}).{suffixe}"
         raise ValidationError({"date_debut_prevue": msg})
-    if fin and lot.date_fin_prevue and fin > lot.date_fin_prevue:
-        date_str = formater_date(lot.date_fin_prevue)
+    date_fin_lot = getattr(lot, "date_fin_prevue", None)
+    if fin and date_fin_lot and fin > date_fin_lot:
+        date_str = formater_date(date_fin_lot)
         msg = f"L'activité ne peut pas finir après la fin du lot ({date_str}).{suffixe}"
         raise ValidationError({"date_fin_prevue": msg})
 

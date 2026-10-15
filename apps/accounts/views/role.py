@@ -116,9 +116,12 @@ class RoleListCreateView(APIView):
 
         _verifier_ad_ne_donne_que_ce_qu_il_possede(request.user, request.data, request=request)
 
+        # `permissions` a une valeur par défaut (liste vide) dans le serializer de création : il
+        # figure donc toujours dans `validated_data`. Seule sa présence dans la **requête** dit
+        # que le client a choisi cette forme ; sinon, c'est la matrice `permissions_modules`.
         perms_input = (
             serializer.validated_data.get("permissions")
-            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            if "permissions" in request.data
             else serializer.validated_data.get("permissions_modules", {})
         )
 
@@ -213,11 +216,19 @@ class RoleDetailUpdateView(APIView):
                         statut=StatutUtilisateur.ACTIF,
                         supprime_le__isnull=True,
                     ).count()
+                    message = _("Confirmation requise pour le changement de portée.")
+                    # Les clés à la racine restent (test d'acceptation lot2/D-03 et clients
+                    # existants) ; `erreur` est le format du produit, le seul que le frontend lit.
                     return Response(
                         {
                             "code": "confirmation_requise",
                             "personnes_touchees": personnes_touchees,
-                            "message": _("Confirmation requise pour le changement de portée."),
+                            "message": message,
+                            "erreur": {
+                                "code": "confirmation_requise",
+                                "message": str(message),
+                                "details": {"personnes_touchees": personnes_touchees},
+                            },
                         },
                         status=status.HTTP_409_CONFLICT,
                     )
@@ -229,7 +240,7 @@ class RoleDetailUpdateView(APIView):
 
         perms_input = (
             serializer.validated_data.get("permissions")
-            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            if "permissions" in request.data
             else serializer.validated_data.get("permissions_modules")
         )
 
@@ -357,9 +368,12 @@ class ParametresRoleListCreateView(APIView):
 
         _verifier_ad_ne_donne_que_ce_qu_il_possede(request.user, request.data, request=request)
 
+        # `permissions` a une valeur par défaut (liste vide) dans le serializer de création : il
+        # figure donc toujours dans `validated_data`. Seule sa présence dans la **requête** dit
+        # que le client a choisi cette forme ; sinon, c'est la matrice `permissions_modules`.
         perms_input = (
             serializer.validated_data.get("permissions")
-            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            if "permissions" in request.data
             else serializer.validated_data.get("permissions_modules", {})
         )
 
@@ -454,11 +468,19 @@ class ParametresRoleDetailUpdateView(APIView):
                         statut=StatutUtilisateur.ACTIF,
                         supprime_le__isnull=True,
                     ).count()
+                    message = _("Confirmation requise pour le changement de portée.")
+                    # Les clés à la racine restent (test d'acceptation lot2/D-03 et clients
+                    # existants) ; `erreur` est le format du produit, le seul que le frontend lit.
                     return Response(
                         {
                             "code": "confirmation_requise",
                             "personnes_touchees": personnes_touchees,
-                            "message": _("Confirmation requise pour le changement de portée."),
+                            "message": message,
+                            "erreur": {
+                                "code": "confirmation_requise",
+                                "message": str(message),
+                                "details": {"personnes_touchees": personnes_touchees},
+                            },
                         },
                         status=status.HTTP_409_CONFLICT,
                     )
@@ -470,7 +492,7 @@ class ParametresRoleDetailUpdateView(APIView):
 
         perms_input = (
             serializer.validated_data.get("permissions")
-            if "permissions" in serializer.validated_data and serializer.validated_data["permissions"] is not None
+            if "permissions" in request.data
             else serializer.validated_data.get("permissions_modules")
         )
 

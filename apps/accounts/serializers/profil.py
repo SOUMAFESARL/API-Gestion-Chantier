@@ -51,6 +51,14 @@ class ProfilDetailResponseSerializer(serializers.Serializer):
     schema = serializers.CharField(read_only=True)
     entreprise = ProfilEntrepriseSerializer(read_only=True, allow_null=True)
     habilitations = serializers.DictField(read_only=True)
+    permissions = serializers.ListField(
+        child=serializers.CharField(), read_only=True,
+        help_text="Codes des permissions effectives (ex. projets.voir_montants).",
+    )
+    portee = serializers.ChoiceField(
+        choices=["ENTREPRISE", "PROJET"], read_only=True,
+        help_text="ENTREPRISE : tous les chantiers ; PROJET : ceux où la personne est affectée.",
+    )
     derniere_connexion = serializers.DateTimeField(read_only=True, allow_null=True)
     cree_le = serializers.DateTimeField(read_only=True, allow_null=True)
     modifie_le = serializers.DateTimeField(read_only=True, allow_null=True)

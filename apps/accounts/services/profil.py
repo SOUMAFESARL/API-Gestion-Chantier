@@ -25,6 +25,7 @@ from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
 from apps.core.enums import ActionAudit, ModuleChoix, RoleGlobal
 from apps.core.exceptions import ErreurMetier
+from apps.core.permissions import obtenir_portee_role
 from apps.tenants.models import Entreprise
 
 __all__ = [
@@ -216,6 +217,8 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "entreprise": entreprise_info,
         "habilitations": habilitations,
         "permissions": perms_effectives,
+        # ENTREPRISE : tous les chantiers ; PROJET : ceux où la personne est affectée.
+        "portee": obtenir_portee_role(utilisateur),
         "derniere_connexion": utilisateur.last_login.isoformat()
         if utilisateur.last_login
         else None,

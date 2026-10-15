@@ -42,6 +42,15 @@ class DirigeantClientSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class TelephoneClientSerializer(serializers.Serializer):
+    """Un numéro de contact d'une entreprise cliente."""
+
+    libelle = serializers.CharField()
+    libelle_affiche = serializers.CharField()
+    numero = serializers.CharField()
+    principal = serializers.BooleanField()
+
+
 class ClientPlateformeSerializer(serializers.Serializer):
     """Fiche synthétique d'une entreprise cliente pour le back-office éditeur."""
 
@@ -53,6 +62,11 @@ class ClientPlateformeSerializer(serializers.Serializer):
     ville = serializers.CharField(allow_blank=True, help_text="Ville du siège de l'entreprise.")
     email_contact = serializers.EmailField(help_text="Email principal de contact.")
     telephone_contact = serializers.CharField(allow_blank=True, help_text="Téléphone de contact.")
+    telephones = TelephoneClientSerializer(
+        many=True,
+        required=False,
+        help_text="Numéros de contact de l'entreprise cliente.",
+    )
     statut = serializers.CharField(
         help_text="Statut de l'entreprise (EN_ATTENTE, ACTIF, SUSPENDU, RESILIE)."
     )

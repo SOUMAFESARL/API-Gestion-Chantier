@@ -20,7 +20,13 @@ from django_tenants.models import DomainMixin, TenantMixin
 from apps.core.enums import StatutEntreprise
 from apps.core.models import ModeleBase
 
-__all__ = ["DemandeInscription", "Domaine", "Entreprise", "RegistreEmail"]
+__all__ = [
+    "DemandeInscription",
+    "Domaine",
+    "Entreprise",
+    "RegistreEmail",
+    "TelephoneEntreprise",
+]
 
 # Validité du lien d'activation — MLD §4.8 et workflow T1.
 DUREE_LIEN_ACTIVATION = timedelta(hours=48)
@@ -301,3 +307,56 @@ class RegistreEmail(ModeleBase):
 
     def __str__(self) -> str:
         return f"{self.email} -> {self.entreprise.schema_name}"
+
+
+class TelephoneEntreprise(ModeleBase):
+    """Un numéro de contact d'une entreprise — MLD §4.1.1 (v1.7).
+
+    `cree_par` et `supprime_par` restent nuls : les utilisateurs d'une entreprise vivent dans son
+    schéma, pas dans `public.utilisateur`, et une clé étrangère vers eux casserait à l'écriture.
+    L'auteur est dans le journal d'audit de l'entreprise.
+    """
+
+    class Libelle(models.TextChoices):
+        MOBILE = "MOBILE", _("Mobile")
+        FIXE = "FIXE", _("Fixe")
+        WHATSAPP = "WHATSAPP", _("WhatsApp")
+        STANDARD = "STANDARD", _("Standard")
+        COMPTABILITE = "COMPTABILITE", _("Comptabilité")
+        AUTRE = "AUTRE", _("Autre")
+
+    entreprise = models.ForeignKey(
+        Entreprise,
+        on_delete=models.CASCADE,
+        related_name="telephones",
+        verbose_name=_("entreprise"),
+    )
+    libelle = models.CharField(_("libellé"), max_length=20, choices=Libelle.choices)
+    numero = models.CharField(_("numéro"), max_length=16)
+    est_principal = models.BooleanField(_("principal"), default=False)
+    ordre = models.PositiveSmallIntegerField(_("ordre"), default=0)
+
+    class Meta:
+        db_table = "telephone_entreprise"
+        verbose_name = _("téléphone d'entreprise")
+        verbose_name_plural = _("téléphones d'entreprise")
+        ordering = ["-est_principal", "ordre", "cree_le"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["entreprise"],
+                condition=models.Q(est_principal=True, supprime_le__isnull=True),
+                name="uq_telephone_entreprise_principal",
+            ),
+            models.UniqueConstraint(
+                fields=["entreprise", "numero"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_telephone_entreprise_numero",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(numero__regex=r"^\+[1-9][0-9]{7,14}$"),
+                name="chk_telephone_entreprise_e164",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.numero} ({self.get_libelle_display()})"

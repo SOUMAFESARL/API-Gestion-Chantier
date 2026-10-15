@@ -14,7 +14,7 @@ from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutEntreprise, StatutUtilisateur
 from apps.platform_admin.models import JournalPlateforme
 from apps.platform_admin.services.notifications import SUJET_SUPPRESSION_ENTREPRISE
-from apps.tenants.models import Entreprise, RegistreEmail
+from apps.tenants.models import Entreprise, RegistreEmail, TelephoneEntreprise
 from apps.tenants.services.sauvegarde_schema import SauvegardeImpossible
 
 HOTE = "localhost"
@@ -159,6 +159,15 @@ def test_suppression_complete_avec_temoin_et_adresse_liberee(
     assert EMAIL_A in apercu["adresses"]
     assert any(d["email"] == EMAIL_A for d in apercu["dirigeants"])
 
+    with schema_context(get_public_schema_name()):
+        TelephoneEntreprise.objects.create(
+            entreprise=ent,
+            libelle="STANDARD",
+            numero="+2250701020304",
+            est_principal=True,
+            ordre=0,
+        )
+
     url = f"/api/v1/admins/clients/{ent.id}/supprimer-definitivement/"
     mauvais = client_api.post(
         url, {"confirmation": "autre", "motif": MOTIF_VALIDE}, format="json"
@@ -179,6 +188,7 @@ def test_suppression_complete_avec_temoin_et_adresse_liberee(
         ).exists()
         assert not RegistreEmail.objects.filter(email__iexact=EMAIL_A).exists()
         assert not Utilisateur.tous_objets.filter(email__iexact=EMAIL_A).exists()
+        assert not TelephoneEntreprise.objects.filter(entreprise_id=ent.id).exists()
         assert JournalPlateforme.objects.filter(
             action="SUPPRESSION_DEFINITIVE_ENTREPRISE"
         ).exists()

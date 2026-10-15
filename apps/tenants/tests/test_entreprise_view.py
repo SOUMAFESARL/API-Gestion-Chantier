@@ -8,9 +8,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Utilisateur
-from apps.tenants.models import Entreprise
-
 from apps.core.enums import RoleGlobal
+from apps.tenants.models import Entreprise
 
 HOTE = "demo.localhost"
 SCHEMA = "demo"
@@ -119,7 +118,7 @@ def test_retrait_du_logo(client, utilisateur_demo, settings, tmp_path):
     "role,statut_attendu",
     [
         (RoleGlobal.DIRECTEUR_GENERAL, status.HTTP_200_OK),
-        (RoleGlobal.ADMIN, status.HTTP_200_OK),
+        (RoleGlobal.ADMIN, status.HTTP_403_FORBIDDEN),
         (RoleGlobal.CHEF_PROJET, status.HTTP_403_FORBIDDEN),
         (RoleGlobal.CONDUCTEUR_TRAVAUX, status.HTTP_403_FORBIDDEN),
         (RoleGlobal.CHEF_CHANTIER, status.HTTP_403_FORBIDDEN),
@@ -129,7 +128,7 @@ def test_retrait_du_logo(client, utilisateur_demo, settings, tmp_path):
     ],
 )
 def test_modification_entreprise_par_role(client, role, statut_attendu):
-    """Seuls DG et AD peuvent modifier l'entreprise via PATCH /entreprise/."""
+    """Seul le DG peut modifier l'entreprise via PATCH /entreprise/ (B-04)."""
     with schema_context(SCHEMA):
         user, _ = Utilisateur.objects.get_or_create(
             email=f"user.{role.lower()}@ccd-digital.ci",

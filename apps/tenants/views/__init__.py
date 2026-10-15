@@ -13,6 +13,7 @@ from datetime import timedelta
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ValidationDjango
+from django.db import transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -25,7 +26,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.core.enums import RoleGlobal
+from apps.core.exceptions import RequeteRefusee
+from apps.core.ip_restriction import extraire_ip_client
 from apps.tenants.models import DUREE_LIEN_ACTIVATION, DemandeInscription
 from apps.tenants.serializers import (
     AccuseActivationSerializer,
@@ -40,6 +42,10 @@ from apps.tenants.serializers import (
     VerificationJetonInscriptionSerializer,
 )
 from apps.tenants.services.inscription import activer, deposer, renvoyer, verifier
+from apps.tenants.services.telephones import (
+    definir_telephone_principal,
+    remplacer_telephones,
+)
 
 __all__ = [
     "ActivationView",
@@ -305,10 +311,7 @@ class EtatProvisionnementView(APIView):
 
 def _sauvegarder_entreprise(tenant, request) -> Response:
     if tenant is None or tenant.schema_name == "public":
-        return Response(
-            {"detail": _("Aucun tenant résolu.")},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        raise RequeteRefusee(_("Aucun tenant résolu."))
 
     serializer = EntrepriseSerializer(
         instance=tenant,
@@ -321,36 +324,64 @@ def _sauvegarder_entreprise(tenant, request) -> Response:
     donnees = dict(serializer.validated_data)
     fichier_logo = donnees.pop("fichier_logo", None)
     retirer_logo = donnees.pop("retirer_logo", False)
+    telephones = donnees.pop("telephones", None)
+    telephone_contact_envoye = donnees.pop("telephone_contact", None)
     fond_retire = None
 
-    if fichier_logo:
-        from apps.tenants.services.images import traiter_logo_entreprise
+    with transaction.atomic():
+        if fichier_logo:
+            from apps.tenants.services.images import traiter_logo_entreprise
 
-        resultat_logo = traiter_logo_entreprise(
-            fichier_ou_flux=fichier_logo,
-            tenant_schema=tenant.schema_name,
-            nom_origine=fichier_logo.name,
+            resultat_logo = traiter_logo_entreprise(
+                fichier_ou_flux=fichier_logo,
+                tenant_schema=tenant.schema_name,
+                nom_origine=fichier_logo.name,
+            )
+            # Les trois variantes sont conservées. Le 24 px et le 48 px sont
+            # taillés pour les deux densités d'écran de la barre ; l'original
+            # recadré sert aux documents. Le service les produisait déjà tous
+            # les trois — seul le 48 était retenu.
+            tenant.logo = resultat_logo["cle_2x"]
+            tenant.logo_1x = resultat_logo["cle_1x"]
+            tenant.logo_original = resultat_logo["cle_original"]
+            fond_retire = resultat_logo["fond_retire"]
+            if not donnees.get("couleur_primaire"):
+                tenant.couleur_primaire = resultat_logo["dominant_color"]
+
+        elif retirer_logo:
+            tenant.logo = ""
+            tenant.logo_1x = ""
+            tenant.logo_original = ""
+
+        for champ, valeur in donnees.items():
+            setattr(tenant, champ, valeur)
+
+        tenant.save()
+
+        auteur_id = (
+            request.user.pk
+            if getattr(request, "user", None) and request.user.is_authenticated
+            else None
         )
-        # Les trois variantes sont conservées. Le 24 px et le 48 px sont
-        # taillés pour les deux densités d'écran de la barre ; l'original
-        # recadré sert aux documents. Le service les produisait déjà tous
-        # les trois — seul le 48 était retenu.
-        tenant.logo = resultat_logo["cle_2x"]
-        tenant.logo_1x = resultat_logo["cle_1x"]
-        tenant.logo_original = resultat_logo["cle_original"]
-        fond_retire = resultat_logo["fond_retire"]
-        if not donnees.get("couleur_primaire"):
-            tenant.couleur_primaire = resultat_logo["dominant_color"]
+        ip_client = extraire_ip_client(request)
+        appareil = request.META.get("HTTP_USER_AGENT", "")[:255]
 
-    elif retirer_logo:
-        tenant.logo = ""
-        tenant.logo_1x = ""
-        tenant.logo_original = ""
-
-    for champ, valeur in donnees.items():
-        setattr(tenant, champ, valeur)
-
-    tenant.save()
+        if telephones is not None:
+            remplacer_telephones(
+                tenant,
+                telephones,
+                auteur_id=auteur_id,
+                adresse_ip=ip_client,
+                appareil=appareil,
+            )
+        elif telephone_contact_envoye is not None:
+            definir_telephone_principal(
+                tenant,
+                telephone_contact_envoye,
+                auteur_id=auteur_id,
+                adresse_ip=ip_client,
+                appareil=appareil,
+            )
 
     retour = EntrepriseSerializer(tenant, context={"request": request})
     corps = dict(retour.data)

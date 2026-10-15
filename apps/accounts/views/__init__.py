@@ -56,6 +56,7 @@ from .collaborateur import (
     ParametresCollaborateurDetailView,
     ParametresCollaborateurListCreateView,
     ParametresCollaborateurReactiverView,
+    ParametresCollaborateurRenvoyerInvitationView,
     ParametresCollaborateurSuspendreView,
 )
 from .profil import AvatarProfilView, ChangerMotDePasseView, ProfilView
@@ -81,6 +82,7 @@ __all__ = [
     "ParametresCollaborateurListCreateView",
     "ParametresCollaborateurDetailView",
     "ParametresCollaborateurReactiverView",
+    "ParametresCollaborateurRenvoyerInvitationView",
     "ParametresCollaborateurSuspendreView",
     "ParametresRoleDetailUpdateView",
     "ParametresRoleListCreateView",

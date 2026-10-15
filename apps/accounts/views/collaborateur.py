@@ -21,7 +21,7 @@ from apps.accounts.serializers.collaborateur import (
     CollaborateurResponseSerializer,
     CollaborateurRattacherRoleSerializer,
 )
-from apps.accounts.services.invitations import creer_invitation
+from apps.accounts.services.invitations import creer_invitation, renvoyer_invitation
 from apps.accounts.services import (
     desactiver_collaborateur_plateforme,
     rattacher_collaborateur_a_role,
@@ -46,6 +46,7 @@ __all__ = [
     "ParametresCollaborateurDetailView",
     "ParametresCollaborateurListCreateView",
     "ParametresCollaborateurReactiverView",
+    "ParametresCollaborateurRenvoyerInvitationView",
     "ParametresCollaborateurSuspendreView",
 ]
 
@@ -426,6 +427,51 @@ def _obtenir_projets_collaborateur(collaborateur):
         }
 
     return list(projets_dict.values())
+
+
+def _charge_collaborateur(collaborateur, request=None, lien_activation=None):
+    """Construit le dictionnaire de données pour CollaborateurResponseSerializer."""
+    avatar_url = None
+    if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
+        try:
+            avatar_url = (
+                request.build_absolute_uri(collaborateur.avatar.url)
+                if request
+                else collaborateur.avatar.url
+            )
+        except Exception:
+            avatar_url = collaborateur.avatar.url
+
+    rp_data = None
+    if collaborateur.role_personnalise:
+        rp_data = {
+            "id": collaborateur.role_personnalise.id,
+            "code": collaborateur.role_personnalise.code,
+            "libelle": collaborateur.role_personnalise.libelle,
+        }
+
+    return {
+        "id": collaborateur.id,
+        "email": collaborateur.email,
+        "nom": collaborateur.nom,
+        "prenom": collaborateur.prenom,
+        "nom_complet": collaborateur.nom_complet,
+        "telephone": collaborateur.telephone,
+        "role_global": collaborateur.role_global,
+        "role_global_libelle": collaborateur.get_role_global_display(),
+        "role_personnalise": rp_data,
+        "statut": collaborateur.statut,
+        "is_owner": collaborateur.is_owner,
+        "cree_le": collaborateur.cree_le,
+        "projets": _obtenir_projets_collaborateur(collaborateur),
+        "lien_activation": lien_activation,
+        "avatar_url": avatar_url,
+        "derniere_connexion": getattr(
+            collaborateur,
+            "derniere_connexion",
+            getattr(collaborateur, "last_login", None),
+        ),
+    }
 
 
 class ParametresCollaborateurDetailView(APIView):
@@ -850,37 +896,66 @@ class ParametresCollaborateurReactiverView(APIView):
             appareil=request.headers.get("User-Agent", "")[:255],
         )
 
-        avatar_url = None
-        if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
-            try:
-                avatar_url = request.build_absolute_uri(collaborateur.avatar.url) if request else collaborateur.avatar.url
-            except Exception:
-                avatar_url = collaborateur.avatar.url
+        reponse_data = _charge_collaborateur(collaborateur, request)
+        return Response(
+            CollaborateurResponseSerializer(reponse_data).data,
+            status=status.HTTP_200_OK,
+        )
 
-        rp_data = None
-        if collaborateur.role_personnalise:
-            rp_data = {
-                "id": collaborateur.role_personnalise.id,
-                "code": collaborateur.role_personnalise.code,
-                "libelle": collaborateur.role_personnalise.libelle,
-            }
 
-        reponse_data = {
-            "id": collaborateur.id,
-            "email": collaborateur.email,
-            "nom": collaborateur.nom,
-            "prenom": collaborateur.prenom,
-            "nom_complet": collaborateur.nom_complet,
-            "telephone": collaborateur.telephone,
-            "role_global": collaborateur.role_global,
-            "role_global_libelle": collaborateur.get_role_global_display(),
-            "role_personnalise": rp_data,
-            "statut": collaborateur.statut,
-            "is_owner": collaborateur.is_owner,
-            "cree_le": collaborateur.cree_le,
-            "projets": _obtenir_projets_collaborateur(collaborateur),
-            "lien_activation": None,
-            "avatar_url": avatar_url,
-            "derniere_connexion": getattr(collaborateur, "derniere_connexion", getattr(collaborateur, "last_login", None)),
-        }
-        return Response(CollaborateurResponseSerializer(reponse_data).data, status=status.HTTP_200_OK)
+class ParametresCollaborateurRenvoyerInvitationView(APIView):
+    """`POST /api/v1/parametres/collaborateurs/{id}/renvoyer-invitation/` :
+    un nouveau lien, l'ancien révoqué.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Renvoyer l'invitation d'un collaborateur",
+        request=None,
+        responses={200: CollaborateurResponseSerializer},
+    )
+    def post(self, request, pk):
+        _autoriser_parametres_collaborateurs(request.user, request=request)
+
+        collaborateur = get_object_or_404(
+            Utilisateur.tous_objets,
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+
+        from apps.core.droits import est_dg
+
+        is_cible_ad = (
+            collaborateur.role_global in (RoleGlobal.ADMIN, "AD")
+            or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
+        )
+        if not est_dg(request.user) and is_cible_ad:
+            raise PermissionDenied(
+                _("Seul le Directeur Général a autorité pour inviter un administrateur.")
+            )
+
+        if collaborateur.statut != StatutUtilisateur.INVITE:
+            raise ErreurConflit(
+                _(
+                    "Ce collaborateur a déjà activé son compte : "
+                    "il n'y a pas d'invitation à renvoyer."
+                )
+            )
+
+        invitation = renvoyer_invitation(
+            collaborateur,
+            emetteur=request.user,
+            hote=request.get_host(),
+        )
+
+        jeton = getattr(invitation, "jeton_clair", None)
+        lien_activation = f"/invitation#jeton={jeton}" if jeton else None
+
+        reponse_data = _charge_collaborateur(
+            collaborateur, request, lien_activation=lien_activation
+        )
+        data = CollaborateurResponseSerializer(reponse_data).data
+        data["email_envoye"] = bool(getattr(invitation, "email_envoye", False))
+
+        return Response(data, status=status.HTTP_200_OK)

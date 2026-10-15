@@ -84,3 +84,60 @@ def chefs_chantier(projet) -> list:
             chefs.append(affectation.utilisateur)
             vus.add(affectation.utilisateur_id)
     return chefs
+
+
+def chef_projet_affectation(projet) -> AffectationProjet | None:
+    """L'affectation active de chef de projet en cours aujourd'hui."""
+    if not projet.chef_projet_id:
+        return None
+    for affectation in affectations_en_cours(projet):
+        if (
+            affectation.role_projet == RoleProjet.CHEF_PROJET
+            and affectation.utilisateur_id == projet.chef_projet_id
+        ):
+            return affectation
+    return None
+
+
+def conducteurs_travaux_avec_affectations(projet) -> list[tuple]:
+    """Les conducteurs de travaux du projet avec leur affectation active si présente."""
+    resultats = []
+    vus = set()
+    affectations_ct = {
+        aff.utilisateur_id: aff
+        for aff in affectations_en_cours(projet)
+        if aff.role_projet == RoleProjet.CONDUCTEUR_TRAVAUX
+    }
+    if projet.conducteur_travaux_id and projet.conducteur_travaux:
+        resultats.append(
+            (projet.conducteur_travaux, affectations_ct.get(projet.conducteur_travaux_id))
+        )
+        vus.add(projet.conducteur_travaux_id)
+    for user_id, aff in affectations_ct.items():
+        if user_id not in vus:
+            resultats.append((aff.utilisateur, aff))
+            vus.add(user_id)
+    return resultats
+
+
+def chefs_chantier_affectations(projet) -> list[AffectationProjet]:
+    """Les affectations actives de chefs de chantier en cours aujourd'hui, sans doublon."""
+    chefs, vus = [], set()
+    for affectation in affectations_en_cours(projet):
+        role = affectation.role_projet
+        if role == RoleProjet.CHEF_CHANTIER and affectation.utilisateur_id not in vus:
+            chefs.append(affectation)
+            vus.add(affectation.utilisateur_id)
+    return chefs
+
+
+def autres_membres_affectations(projet) -> list[AffectationProjet]:
+    """Les affectations actives des autres membres (consultants/invités VI) en cours aujourd'hui."""
+    membres, vus = [], set()
+    for affectation in affectations_en_cours(projet):
+        role = affectation.role_projet
+        if role == RoleProjet.VISITEUR and affectation.utilisateur_id not in vus:
+            membres.append(affectation)
+            vus.add(affectation.utilisateur_id)
+    return membres
+

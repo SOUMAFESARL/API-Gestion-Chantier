@@ -190,6 +190,24 @@ class AffectationProjet(ModeleBase):
     )
     date_debut = models.DateField(_("date de début"), default=timezone.now)
     date_fin = models.DateField(_("date de fin"), null=True, blank=True)
+    # Le périmètre d'un chef de chantier : « Lot 02 — Gros œuvre », « Bâtiment B ».
+    # Vide : tout le chantier.
+    zone = models.CharField(_("zone"), max_length=120, blank=True, default="")
+    # Ce que fait un « autre membre » de l'encadrement, porté par le rôle consultant (VI).
+    fonction_membre = models.CharField(
+        _("fonction"),
+        max_length=20,
+        blank=True,
+        default="",
+        choices=[
+            ("FINANCIER", _("Financier")),
+            ("INGENIEUR", _("Ingénieur")),
+            ("DOCUMENTALISTE", _("Documentaliste")),
+            ("METREUR", _("Métreur")),
+            ("QHSE", _("QHSE")),
+            ("AUTRE", _("Autre")),
+        ],
+    )
     est_actif = models.BooleanField(_("est actif"), default=True)
 
     class Meta:

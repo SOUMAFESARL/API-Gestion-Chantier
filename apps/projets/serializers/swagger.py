@@ -7,7 +7,12 @@ from rest_framework import serializers
 
 from apps.core.enums import StatutProjet, TypeProjet
 from apps.projets.models import Projet, ProjetContrat
-from apps.projets.selectors.encadrement import chefs_chantier, conducteurs_travaux
+from apps.projets.selectors.encadrement import (
+    autres_membres_affectations,
+    chef_projet_affectation,
+    chefs_chantier_affectations,
+    conducteurs_travaux_avec_affectations,
+)
 from apps.projets.serializers import ChefProjetEnrichiSerializer, ProjetCreationSerializer
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.contrats import (
@@ -50,6 +55,7 @@ CHAMPS_REPONSE = (
     "chef_projet",
     "conducteurs_travaux",
     "chefs_chantier",
+    "autres_membres",
 )
 
 
@@ -170,18 +176,43 @@ class ContratProjetSerializer(serializers.ModelSerializer):
 
 
 class ChefChantierProjetSerializer(serializers.Serializer):
-    """Un chef de chantier du projet. `zone` n'est pas encore saisie côté serveur."""
+    """Un chef de chantier du projet."""
 
     utilisateur = ChefProjetEnrichiSerializer()
     zone = serializers.CharField(allow_null=True)
+    affectation_id = serializers.UUIDField(allow_null=True)
+
+
+class AutreMembreProjetSerializer(serializers.Serializer):
+    """Un autre membre de l'encadrement (consultant/invité VI)."""
+
+    id = serializers.UUIDField()
+    nom = serializers.CharField()
+    prenom = serializers.CharField()
+    nom_complet = serializers.CharField()
+    email = serializers.CharField(allow_blank=True, default="")
+    telephone = serializers.CharField(allow_blank=True, default="")
+    statut = serializers.CharField(default="")
+    lien_whatsapp = serializers.CharField(allow_null=True, default=None)
+    fonction = serializers.CharField()
+    affectation_id = serializers.UUIDField()
+    utilisateur = ChefProjetEnrichiSerializer(required=False)
 
 
 class ProjetCreationResponseSerializer(serializers.ModelSerializer):
-    chef_projet = ChefProjetEnrichiSerializer(
-        read_only=True,
-        allow_null=True,
+    chef_projet = serializers.SerializerMethodField(
         help_text="Le chef de projet désigné, en clair ; null si le projet n'en a pas.",
     )
+
+    @extend_schema_field(ChefProjetEnrichiSerializer(allow_null=True))
+    def get_chef_projet(self, obj) -> dict | None:
+        if not obj.chef_projet:
+            return None
+        data = ChefProjetEnrichiSerializer(obj.chef_projet, context=self.context).data
+        aff = chef_projet_affectation(obj)
+        data["affectation_id"] = str(aff.id) if aff else None
+        return data
+
     peut_renommer = serializers.SerializerMethodField(
         help_text="Indique si l'utilisateur connecté peut renommer le projet (DG ou AD)."
     )
@@ -195,23 +226,56 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
         from apps.core.droits import est_administrateur, est_dg
 
         return bool(est_dg(user) or est_administrateur(user))
+
     conducteurs_travaux = serializers.SerializerMethodField(
         help_text="Le conducteur principal puis les conducteurs affectés et en vigueur."
     )
     chefs_chantier = serializers.SerializerMethodField(
         help_text="Les chefs de chantier affectés et en vigueur."
     )
+    autres_membres = serializers.SerializerMethodField(
+        help_text="Les autres membres de l'encadrement affectés (consultants/invités VI)."
+    )
 
     @extend_schema_field(ChefProjetEnrichiSerializer(many=True))
     def get_conducteurs_travaux(self, obj) -> list:
-        return ChefProjetEnrichiSerializer(conducteurs_travaux(obj), many=True).data
+        resultats = []
+        for u, aff in conducteurs_travaux_avec_affectations(obj):
+            data = ChefProjetEnrichiSerializer(u, context=self.context).data
+            data["affectation_id"] = str(aff.id) if aff else None
+            resultats.append(data)
+        return resultats
 
     @extend_schema_field(ChefChantierProjetSerializer(many=True))
     def get_chefs_chantier(self, obj) -> list:
-        return [
-            {"utilisateur": ChefProjetEnrichiSerializer(chef).data, "zone": None}
-            for chef in chefs_chantier(obj)
-        ]
+        resultats = []
+        for aff in chefs_chantier_affectations(obj):
+            u_data = ChefProjetEnrichiSerializer(aff.utilisateur, context=self.context).data
+            u_data["affectation_id"] = str(aff.id)
+            resultats.append(
+                {
+                    "utilisateur": u_data,
+                    "zone": aff.zone or None,
+                    "affectation_id": str(aff.id),
+                }
+            )
+        return resultats
+
+    @extend_schema_field(AutreMembreProjetSerializer(many=True))
+    def get_autres_membres(self, obj) -> list:
+        resultats = []
+        for aff in autres_membres_affectations(obj):
+            u_data = ChefProjetEnrichiSerializer(aff.utilisateur, context=self.context).data
+            u_data["affectation_id"] = str(aff.id)
+            resultats.append(
+                {
+                    **u_data,
+                    "fonction": aff.fonction_membre or "AUTRE",
+                    "affectation_id": str(aff.id),
+                    "utilisateur": u_data,
+                }
+            )
+        return resultats
 
     statistiques = serializers.SerializerMethodField(
         help_text="Compteurs et avancement des lots et activités actifs du projet."

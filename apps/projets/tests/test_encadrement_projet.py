@@ -34,6 +34,7 @@ CHAMPS_INTERVENANT = {
     "telephone",
     "statut",
     "lien_whatsapp",
+    "affectation_id",
 }
 
 

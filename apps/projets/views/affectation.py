@@ -4,16 +4,19 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import Utilisateur
-from apps.core.enums import StatutUtilisateur
+from apps.audit.services import journaliser
+from apps.core.enums import ActionAudit, StatutUtilisateur
+from apps.core.exceptions import RequeteRefusee
 from apps.core.permissions import GardePermissionProjet, obtenir_portee_role
 from apps.projets.models import AffectationProjet, Projet
+from apps.projets.permissions import PeutRetirerDuProjet
 from apps.projets.serializers.affectation import (
     AffectationProjetCreateSerializer,
     AffectationProjetResponseSerializer,
@@ -51,7 +54,9 @@ class ProjetAffectationListCreateView(APIView):
 
     @extend_schema(
         summary="Lister les membres de l'équipe du chantier",
-        description="Renvoie tous les collaborateurs affectés au projet avec leurs rôles et statuts.",
+        description=(
+            "Renvoie tous les collaborateurs affectés au projet avec leurs rôles et statuts."
+        ),
         responses={200: AffectationProjetResponseSerializer(many=True)},
     )
     def get(self, request, projet_id):
@@ -59,12 +64,17 @@ class ProjetAffectationListCreateView(APIView):
         self.check_object_permissions(request, projet)
         actifs_seulement = request.query_params.get("actifs_seulement", "false").lower() == "true"
         qs = lister_affectations_projet(projet, actifs_seulement=actifs_seulement)
-        serializer = AffectationProjetResponseSerializer(qs, many=True, context={"request": request})
+        serializer = AffectationProjetResponseSerializer(
+            qs, many=True, context={"request": request}
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Affecter un collaborateur au chantier",
-        description="Associe un collaborateur à ce projet avec un rôle spécifique (CT, CC, Consultant lecture, MOE, MOA, etc.).",
+        description=(
+            "Associe un collaborateur à ce projet avec un rôle spécifique "
+            "(CT, CC, Consultant lecture, MOE, MOA, etc.)."
+        ),
         request=AffectationProjetCreateSerializer,
         responses={201: AffectationProjetResponseSerializer},
     )
@@ -75,7 +85,9 @@ class ProjetAffectationListCreateView(APIView):
 
         verifier_statut_projet_pour_ecriture(projet)
 
-        serializer = AffectationProjetCreateSerializer(data=request.data, context={"request": request})
+        serializer = AffectationProjetCreateSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
 
         try:
@@ -85,11 +97,13 @@ class ProjetAffectationListCreateView(APIView):
                 role_projet=serializer.validated_data["role_projet"],
                 date_debut=serializer.validated_data.get("date_debut"),
                 date_fin=serializer.validated_data.get("date_fin"),
+                zone=serializer.validated_data.get("zone", ""),
+                fonction_membre=serializer.validated_data.get("fonction_membre", ""),
                 modifie_par=request.user,
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         return Response(
             AffectationProjetResponseSerializer(affectation, context={"request": request}).data,
@@ -98,15 +112,29 @@ class ProjetAffectationListCreateView(APIView):
 
 
 class ProjetAffectationDetailView(APIView):
-    """`GET`, `PATCH` et `DELETE /api/v1/projets/{projet_id}/affectations/{pk}/`."""
+    """`GET`, `PATCH` et `DELETE /api/v1/projets/{projet_id}/affectations/{pk}/`.
+
+    Effacement physique par défaut sur DELETE (décision du 15/10/2026, B4) :
+    Contrairement à la règle générale de suppression logique du Socle Commun,
+    le retrait d'un collaborateur d'un projet supprime physiquement la ligne
+    d'affectation par défaut (?hard=true implicite). Ce choix libère la
+    contrainte d'unicité `uq_affectation_utilisateur_projet` et permet de
+    réaffecter ultérieurement la même personne au projet. Passer ?hard=false
+    conserve l'ancien comportement de désactivation / révocation logique.
+    """
 
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        if self.request.method in ("PATCH", "PUT", "DELETE"):
+        if self.request.method in ("PATCH", "PUT"):
             return [
                 IsAuthenticated(),
                 GardePermissionProjet.pour("projets.affecter_membres")(),
+            ]
+        if self.request.method == "DELETE":
+            return [
+                IsAuthenticated(),
+                PeutRetirerDuProjet(),
             ]
         return [
             IsAuthenticated(),
@@ -150,7 +178,9 @@ class ProjetAffectationDetailView(APIView):
             supprime_le__isnull=True,
         )
 
-        serializer = AffectationProjetUpdateSerializer(data=request.data, partial=True)
+        serializer = AffectationProjetUpdateSerializer(
+            instance=affectation, data=request.data, partial=True
+        )
         serializer.is_valid(raise_exception=True)
 
         try:
@@ -161,7 +191,7 @@ class ProjetAffectationDetailView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         return Response(
             AffectationProjetResponseSerializer(affectation, context={"request": request}).data,
@@ -180,13 +210,44 @@ class ProjetAffectationDetailView(APIView):
         verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
-            AffectationProjet,
+            AffectationProjet.objects.select_related("utilisateur"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
         )
 
-        suppression_physique = request.query_params.get("hard", "false").lower() == "true"
+        if affectation.utilisateur_id == request.user.id:
+            raise PermissionDenied("Vous ne pouvez pas vous retirer vous-même d'un projet.")
+
+        hard_param = request.query_params.get("hard", "true").lower()
+        suppression_physique = hard_param != "false"
+
+        journaliser(
+            action=ActionAudit.SUPPRESSION,
+            type_entite="affectation_projet",
+            entite_id=affectation.pk,
+            utilisateur_id=request.user.pk,
+            valeur_avant={
+                "projet_id": str(projet.pk),
+                "projet_reference": projet.reference,
+                "utilisateur_id": str(affectation.utilisateur_id),
+                "utilisateur_email": getattr(affectation.utilisateur, "email", ""),
+                "role_projet": affectation.role_projet,
+                "zone": affectation.zone,
+                "fonction_membre": affectation.fonction_membre,
+            },
+            valeur_apres={"physique": suppression_physique},
+            adresse_ip=(
+                getattr(request, "META", {}).get("REMOTE_ADDR")
+                if getattr(request, "META", None)
+                else None
+            ),
+            appareil=(
+                getattr(request, "META", {}).get("HTTP_USER_AGENT", "")[:255]
+                if getattr(request, "META", None)
+                else ""
+            ),
+        )
 
         try:
             revoquer_affectation_projet(
@@ -196,7 +257,7 @@ class ProjetAffectationDetailView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -213,8 +274,8 @@ class CollaborateursAffectablesView(APIView):
         summary="Liste réduite des collaborateurs affectables au chantier",
         description=(
             "Retourne la liste des collaborateurs actifs dont le rôle est à portée PROJET. "
-            "Champs limités à id, nom, role. Exclut toute information personnelle (email, téléphone) "
-            "et les rôles de portée ENTREPRISE (DG, AD, DO)."
+            "Champs limités à id, nom, role. Exclut toute information personnelle "
+            "(email, téléphone) et les rôles de portée ENTREPRISE (DG, AD, DO)."
         ),
         responses={200: serializers.ListSerializer(child=serializers.DictField())},
     )

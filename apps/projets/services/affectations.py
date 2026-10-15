@@ -114,6 +114,8 @@ def affecter_collaborateur_projet(
     role_projet: str,
     date_debut=None,
     date_fin=None,
+    zone: str = "",
+    fonction_membre: str = "",
     modifie_par: Utilisateur | None = None,
     **kwargs,
 ) -> AffectationProjet:
@@ -138,6 +140,8 @@ def affecter_collaborateur_projet(
             affectation.role_projet = role_projet
             affectation.date_debut = date_debut_effective
             affectation.date_fin = date_fin
+            affectation.zone = zone
+            affectation.fonction_membre = fonction_membre
             affectation.est_actif = True
             affectation.supprime_le = None
             affectation.supprime_par = None
@@ -146,6 +150,8 @@ def affecter_collaborateur_projet(
                     "role_projet",
                     "date_debut",
                     "date_fin",
+                    "zone",
+                    "fonction_membre",
                     "est_actif",
                     "supprime_le",
                     "supprime_par",
@@ -159,6 +165,8 @@ def affecter_collaborateur_projet(
                 role_projet=role_projet,
                 date_debut=date_debut_effective,
                 date_fin=date_fin,
+                zone=zone,
+                fonction_membre=fonction_membre,
                 est_actif=True,
                 cree_par=modifie_par,
             )
@@ -228,7 +236,7 @@ def modifier_affectation_projet(
         affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
 
     champs = ["modifie_le"]
-    for c in ["role_projet", "date_debut", "date_fin", "est_actif"]:
+    for c in ["role_projet", "date_debut", "date_fin", "est_actif", "zone", "fonction_membre"]:
         if c in donnees:
             setattr(affectation, c, donnees[c])
             champs.append(c)

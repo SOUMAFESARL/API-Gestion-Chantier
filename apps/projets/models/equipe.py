@@ -13,6 +13,7 @@ class EquipeChantier(ModeleBase):
         max_length=20,
         choices=[
             ("INTERNE", "Interne"),
+            ("SOUS_TRAITANT", "Sous-traitant"),
             ("SOUS_TRAITANTE", "Sous-traitante"),
         ],
     )
@@ -32,6 +33,15 @@ class EquipeChantier(ModeleBase):
 
 
 class MembreEquipeChantier(ModeleBase):
+    FONCTION_CHOICES = [
+        ("CHEF_EQUIPE", "Chef d'équipe"),
+        ("OUVRIER_QUALIFIE", "Ouvrier qualifié"),
+        ("OUVRIER", "Ouvrier"),
+        ("MANOEUVRE", "Manœuvre"),
+        ("CONDUCTEUR_ENGIN", "Conducteur d'engin"),
+        ("APPRENTI", "Apprenti"),
+    ]
+
     equipe = models.ForeignKey(EquipeChantier, on_delete=models.RESTRICT, related_name="membres")
     utilisateur = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -40,8 +50,18 @@ class MembreEquipeChantier(ModeleBase):
         on_delete=models.RESTRICT,
         related_name="participations_equipes",
     )
+    prenom = models.CharField(max_length=100, blank=True, default="")
     nom = models.CharField(max_length=200, blank=True, default="")
-    fonction = models.CharField(max_length=50, default="OUVRIER")
+    fonction = models.CharField(max_length=50, choices=FONCTION_CHOICES, default="OUVRIER")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["equipe"],
+                condition=models.Q(fonction="CHEF_EQUIPE", supprime_le__isnull=True),
+                name="uq_membre_equipe_chef",
+            )
+        ]
 
 
 class AffectationEquipeActivite(ModeleBase):

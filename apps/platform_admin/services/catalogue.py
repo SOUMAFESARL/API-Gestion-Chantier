@@ -164,11 +164,6 @@ def propager_creation_module(
                         Permission.objects.filter(code__in=codes_perms, supprime_le__isnull=True)
                     )
                     mod.permissions.set(perms_tenant)
-                    perms_direction = perms_tenant
-                else:
-                    perms_direction = list(
-                        Permission.objects.filter(est_actif=True, supprime_le__isnull=True)
-                    )
 
                 roles = Role.objects.filter(supprime_le__isnull=True)
                 for role in roles:
@@ -179,14 +174,12 @@ def propager_creation_module(
                     )
                     rmp.module_catalogue = cat_mod
                     if role.code in ("DG", "DIRECTEUR_GENERAL"):
-                        rmp.permissions.set(perms_direction)
                         if codes_perms:
                             rmp.permissions_catalogue.set(cat_perms)
                         else:
                             rmp.permissions_catalogue.set(list(CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)))
                         rmp.niveau = NiveauAcces.VALIDATION
                     else:
-                        rmp.permissions.clear()
                         rmp.permissions_catalogue.clear()
                         rmp.niveau = NiveauAcces.AUCUN
                     rmp.save()
@@ -288,9 +281,11 @@ def propager_modification_module(
 
                         # 1. Révocation des permissions retirées du module sur tous les rôles
                         if codes_retires:
-                            perms_retires = list(Permission.objects.filter(code__in=codes_retires))
+                            perms_retires = list(
+                                CataloguePermission.objects.filter(code__in=codes_retires)
+                            )
                             for rmp in RoleModulePermission.objects.filter(module=mod, supprime_le__isnull=True):
-                                rmp.permissions.remove(*perms_retires)
+                                rmp.permissions_catalogue.remove(*perms_retires)
 
                         # 2. Règle A-05 : aucune attribution automatique aux rôles stockés
                         pass
@@ -528,8 +523,11 @@ def propager_affectation_modules_permission(
                             module__code__in=codes_retires,
                             supprime_le__isnull=True,
                         )
+                        perms_retires = list(
+                            CataloguePermission.objects.filter(code=perm_tenant.code)
+                        )
                         for rmp in rmp_retires:
-                            rmp.permissions.remove(perm_tenant)
+                            rmp.permissions_catalogue.remove(*perms_retires)
 
                     # 2. Règle A-05 : aucune attribution automatique aux rôles stockés
                     pass

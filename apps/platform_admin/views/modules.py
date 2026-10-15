@@ -199,6 +199,14 @@ class AdminModuleAffecterPermissionsView(APIView):
             retour = AdminModuleDetailSerializer(mod_complet)
             return Response(retour.data, status=status.HTTP_200_OK)
 
+    def patch(self, request, pk):
+        """Alias de `PUT` : le client HTTP du back-office n'a pas de PUT."""
+        return self.put(request, pk)
+
+    def post(self, request, pk):
+        """Alias de `PUT`, pour les clients qui n'envoient que du POST."""
+        return self.put(request, pk)
+
 
 class AdminModuleDesactiverView(APIView):
     """`POST /api/v1/admins/modules/{id}/desactiver/` — Désactive un module pour la plateforme."""

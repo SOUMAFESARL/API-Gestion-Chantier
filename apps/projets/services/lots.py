@@ -28,6 +28,9 @@ COLONNES = (
 
 def creer_lots(projet, donnees, utilisateur):
     """L'appelant possède transaction.atomic et le verrou select_for_update du projet."""
+    from apps.projets.services.budgets import verifier_budgets_lots_a_creer
+
+    verifier_budgets_lots_a_creer(projet, [d.get("budget_initial_montant") for d in donnees])
     existants = list(projet.lots.all())
     codes = {lot.code.upper() for lot in existants}
     ordre = max((lot.ordre for lot in existants), default=0)

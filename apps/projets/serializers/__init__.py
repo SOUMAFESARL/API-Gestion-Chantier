@@ -218,6 +218,9 @@ class LotCreationProjetSerializer(serializers.Serializer):
     )
     date_debut_prevue = serializers.DateField(required=False, allow_null=True, default=None)
     date_fin_prevue = serializers.DateField(required=False, allow_null=True, default=None)
+    budget_initial_montant = serializers.IntegerField(
+        min_value=0, required=False, allow_null=True, default=None
+    )
 
     def validate(self, attrs):
         debut = attrs.get("date_debut_prevue")
@@ -325,12 +328,44 @@ class ProjetCreationSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"lots_supprimer_ids": _("Disponible uniquement en modification.")}
             )
+        if self.instance is None:
+            budget_projet = attrs.get("budget_initial_montant")
+            lots = attrs.get("lots", [])
+            if budget_projet is not None and lots:
+                somme_lots = sum(
+                    lot.get("budget_initial_montant")
+                    for lot in lots
+                    if lot.get("budget_initial_montant") is not None
+                )
+                if somme_lots > budget_projet:
+                    from apps.core.fields import formater_fcfa
+
+                    disponible = max(0, budget_projet)
+                    raise serializers.ValidationError(
+                        {
+                            "budget_initial_montant": (
+                                f"Le budget des lots dépasserait celui du projet : "
+                                f"il reste {formater_fcfa(disponible)} sur un budget projet de "
+                                f"{formater_fcfa(budget_projet)}."
+                            )
+                        }
+                    )
         if self.instance is not None and "lots" in attrs:
             # Le PATCH du parent ne rend pas facultatifs les champs des nouveaux lots.
             nouveaux = LotCreationProjetSerializer(data=self.initial_data["lots"], many=True)
             nouveaux.is_valid(raise_exception=True)
             attrs["lots"] = nouveaux.validated_data
+            from apps.projets.services.budgets import verifier_budgets_lots_a_creer
+
+            verifier_budgets_lots_a_creer(
+                self.instance,
+                [lot.get("budget_initial_montant") for lot in attrs["lots"]],
+            )
         if self.instance is not None:
+            if "budget_initial_montant" in attrs:
+                from apps.projets.services.budgets import verifier_budget_projet
+
+                verifier_budget_projet(self.instance, attrs.get("budget_initial_montant"))
             if "date_debut_baseline" in self.initial_data or "date_fin_baseline" in self.initial_data:
                 raise serializers.ValidationError(
                     {"date_debut_baseline": _("La Baseline v0 est immuable et ne peut être modifiée.")}
@@ -719,6 +754,7 @@ class ProjetCreationSerializer(serializers.Serializer):
                     type_bordereau=ldata.get("type_bordereau", TypeBordereau.FORFAIT),
                     date_debut_prevue=ldata.get("date_debut_prevue"),
                     date_fin_prevue=ldata.get("date_fin_prevue"),
+                    budget_initial_montant=ldata.get("budget_initial_montant"),
                     ordre=idx,
                 )
 
@@ -793,7 +829,27 @@ class ProjetCreationSerializer(serializers.Serializer):
                     role_projet=role,
                     modifie_par=user,
                 )
+        ancien_budget = instance.budget_initial_montant
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
         instance.save()
+        if (
+            "budget_initial_montant" in validated_data
+            and ancien_budget != instance.budget_initial_montant
+        ):
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            request = self.context.get("request") if getattr(self, "context", None) else None
+            user = getattr(request, "user", None) if request else None
+            journaliser(
+                action=ActionAudit.MODIFICATION,
+                type_entite="projet",
+                entite_id=instance.pk,
+                utilisateur_id=user.pk if user and user.is_authenticated else None,
+                valeur_avant={"budget_initial_montant": ancien_budget},
+                valeur_apres={"budget_initial_montant": instance.budget_initial_montant},
+                adresse_ip=getattr(request, "META", {}).get("REMOTE_ADDR") if request else None,
+                appareil=getattr(request, "META", {}).get("HTTP_USER_AGENT", "") if request else "",
+            )
         return instance

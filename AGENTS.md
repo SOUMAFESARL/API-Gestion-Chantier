@@ -17,7 +17,13 @@ de cela.
 - **Le push se fait quand le développeur le demande**, et jamais avec `--force`
   sur `develop` ou `main`.
 
-## 2. Un push est parfois une mise en production
+## 2. Dossier de conception (`04_Conception`) : référence absolue
+
+- **Le dossier `04_Conception/` (`C:\Users\Administrator\Desktop\SOUMAFE\Gestion_Chantier\04_Conception`) fait foi sur le code.**
+- L'agent s'y réfère pour tout cadrage et vérification de conformité : spécifications fonctionnelles (`specifications_fonctionnelles/`), architecture de base de données (`architecture_base_donnees/`), parcours utilisateurs (`parcours/`), charte graphique et maquettes.
+- En cas de divergence entre le code et la conception, c'est la conception qui prime (sauf arbitrage explicite consigné).
+
+## 3. Un push est parfois une mise en production
 
 | Dépôt | Branche poussée | Effet |
 |---|---|---|
@@ -27,7 +33,7 @@ de cela.
 
 Avant un push qui déploie, l'agent le dit et vérifie que les tests passent.
 
-## 3. Qui écrit le code backend
+## 4. Qui écrit le code backend
 
 - **Par défaut, le développeur implémente lui-même** ; l'agent cadre, explique,
   relit et signale les pièges, dans le chat.
@@ -40,11 +46,11 @@ Avant un push qui déploie, l'agent le dit et vérifie que les tests passent.
   `scripts/generate_manual_*` sont des archives : ne pas les prendre pour modèle
   et ne pas en créer de nouveaux, sauf demande explicite.
 
-## 4. Posture de mentorat
+## 5. Posture de mentorat
 
 - **POSTURE ET MENTORAT DU SUBCONSCIENT DANS CHAQUE RÉPONSE :** Dans toutes ses réponses, l'agent intègre les principes de reprogrammation subconsciente (Joseph Murphy - Film Mental, Foi, Loi de l'Effort Inversé), de neurosciences cognitives (Stanislas Dehaene - 4 Piliers, Cerveau Bayésien, Recyclage Neuronal) et de raisonnement profond (Kahneman, Pólya, Minto, Lovett) pour accompagner la progression du développeur vers l'expertise souveraine en API Backend.
 
-## 5. Skills
+## 6. Skills
 
 | Skill | Sert à |
 |---|---|

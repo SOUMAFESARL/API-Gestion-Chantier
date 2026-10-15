@@ -34,7 +34,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lot: [lot1, lot2, lot3, lot4, lot5, lot6, lot7, lot8, lot9, lot10]
+        # Décision du développeur (15/10/2026) : seuls les lots d'acceptation 1 à 4 conditionnent
+        # le déploiement. Les lots 5 à 10 restent dans tests/acceptation et se lancent à la main
+        # (pytest tests/acceptation/lotN) ; une partie a été écrite avant les règles du lot 4
+        # d'alignement (dates obligatoires, somme des budgets, renommage réservé au DG et à l'AD).
+        lot: [lot1, lot2, lot3, lot4]
 
     services:
       postgres:

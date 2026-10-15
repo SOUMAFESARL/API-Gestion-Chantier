@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -27,7 +27,12 @@ from apps.accounts.services.roles import (
     supprimer_role,
 )
 from apps.core.enums import RoleGlobal
-from apps.core.exceptions import ActionReserveeDg, RoleSubstitutionObligatoire
+from apps.core.exceptions import (
+    ActionReserveeDg,
+    ErreurConflit,
+    RequeteRefusee,
+    RoleSubstitutionObligatoire,
+)
 
 __all__ = [
     "ParametresRoleDetailUpdateView",
@@ -128,7 +133,7 @@ class RoleListCreateView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         retour = RoleDetailSerializer(role)
         return Response(retour.data, status=status.HTTP_201_CREATED)
@@ -191,14 +196,12 @@ class RoleDetailUpdateView(APIView):
         nouvelle_portee = serializer.validated_data.get("portee")
         if nouvelle_portee is not None:
             if not est_dg(request.user):
-                return Response(
-                    {"detail": _("Seul le Directeur Général peut modifier la portée d'un rôle.")},
-                    status=status.HTTP_403_FORBIDDEN,
+                raise PermissionDenied(
+                    _("Seul le Directeur Général peut modifier la portée d'un rôle.")
                 )
             if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
-                return Response(
-                    {"detail": _("La portée du rôle Directeur Général ne peut pas être modifiée.")},
-                    status=status.HTTP_403_FORBIDDEN,
+                raise PermissionDenied(
+                    _("La portée du rôle Directeur Général ne peut pas être modifiée.")
                 )
             if nouvelle_portee != role.portee:
                 confirmer = serializer.validated_data.get("confirmer", False)
@@ -241,7 +244,7 @@ class RoleDetailUpdateView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         retour = RoleDetailSerializer(role_modifie)
         return Response(retour.data, status=status.HTTP_200_OK)
@@ -314,7 +317,7 @@ class RoleSupprimerReassignerView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         return Response(
             {
@@ -371,7 +374,7 @@ class ParametresRoleListCreateView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         retour = RoleDetailSerializer(role)
         return Response(retour.data, status=status.HTTP_201_CREATED)
@@ -434,14 +437,12 @@ class ParametresRoleDetailUpdateView(APIView):
         nouvelle_portee = serializer.validated_data.get("portee")
         if nouvelle_portee is not None:
             if not est_dg(request.user):
-                return Response(
-                    {"detail": _("Seul le Directeur Général peut modifier la portée d'un rôle.")},
-                    status=status.HTTP_403_FORBIDDEN,
+                raise PermissionDenied(
+                    _("Seul le Directeur Général peut modifier la portée d'un rôle.")
                 )
             if role.code in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
-                return Response(
-                    {"detail": _("La portée du rôle Directeur Général ne peut pas être modifiée.")},
-                    status=status.HTTP_403_FORBIDDEN,
+                raise PermissionDenied(
+                    _("La portée du rôle Directeur Général ne peut pas être modifiée.")
                 )
             if nouvelle_portee != role.portee:
                 confirmer = serializer.validated_data.get("confirmer", False)
@@ -484,7 +485,7 @@ class ParametresRoleDetailUpdateView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         retour = RoleDetailSerializer(role_modifie)
         return Response(retour.data, status=status.HTTP_200_OK)
@@ -557,7 +558,7 @@ class ParametresRoleSupprimerReassignerView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         return Response(
             {

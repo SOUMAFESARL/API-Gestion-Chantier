@@ -88,6 +88,18 @@ class ErreurConflit(ErreurMetier):
     code_metier = "conflit"
 
 
+class RequeteRefusee(ErreurMetier):
+    """Une règle refuse la requête, et le code HTTP historique de la route est 400.
+
+    Existe pour ne pas changer les statuts des routes déjà consommées : une règle métier
+    répond d'ordinaire 422 (`ErreurMetier`), mais ces routes répondaient 400, et le
+    frontend comme les tests d'acceptation s'y fient.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    code_metier = "requete_refusee"
+
+
 class RapportDejaExistant(ErreurConflit):
     code_metier = "rapport_deja_existant"
     default_detail = "Un rapport existe déjà pour ce lot à cette date."

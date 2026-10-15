@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -26,9 +26,16 @@ from apps.accounts.services import (
     desactiver_collaborateur_plateforme,
     rattacher_collaborateur_a_role,
 )
+from apps.audit.services import journaliser
 from apps.billing.services.quota import verifier_quota_avant_invitation
-from apps.core.enums import RoleGlobal, RoleProjet, StatutUtilisateur
-from apps.core.exceptions import ActionInterditeDelegue, ActionReserveeDg
+from apps.core.enums import ActionAudit, RoleGlobal, RoleProjet, StatutUtilisateur
+from apps.core.exceptions import (
+    ActionInterditeDelegue,
+    ActionReserveeDg,
+    ErreurConflit,
+    RequeteRefusee,
+)
+from apps.core.ip_restriction import extraire_ip_client
 from apps.projets.models import AffectationProjet, Projet
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -277,9 +284,8 @@ class ParametresCollaborateurListCreateView(APIView):
             perms_ad = permissions_effectives(request.user, request=request)
             perms_role = permissions_du_role(role_cible)
             if not perms_role.issubset(perms_ad):
-                return Response(
-                    {"detail": _("Vous ne pouvez attribuer qu'un rôle dont vous possédez toutes les permissions (B-09).")},
-                    status=status.HTTP_403_FORBIDDEN,
+                raise PermissionDenied(
+                    _("Vous ne pouvez attribuer qu'un rôle dont vous possédez toutes les permissions (B-09).")
                 )
 
 
@@ -511,17 +517,15 @@ class ParametresCollaborateurDetailView(APIView):
             or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
         )
         if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
-            return Response(
-                {"detail": _("Seul le Directeur Général a autorité pour gérer les administrateurs.")},
-                status=status.HTTP_403_FORBIDDEN,
+            raise PermissionDenied(
+                _("Seul le Directeur Général a autorité pour gérer les administrateurs.")
             )
 
         # Règle B-09 : L'AD ne peut pas attribuer DG ou AD
         role_demande = request.data.get("role_global")
         if not est_dg(request.user) and role_demande in (RoleGlobal.DIRECTEUR_GENERAL, "DG", RoleGlobal.ADMIN, "AD"):
-            return Response(
-                {"detail": _("Seul le Directeur Général peut attribuer ces rôles.")},
-                status=status.HTTP_403_FORBIDDEN,
+            raise PermissionDenied(
+                _("Seul le Directeur Général peut attribuer ces rôles.")
             )
 
         serializer = CollaborateurRattacherRoleSerializer(data=request.data)
@@ -562,9 +566,8 @@ class ParametresCollaborateurDetailView(APIView):
             perms_ad = permissions_effectives(request.user, request=request)
             perms_role = permissions_du_role(role_cible)
             if not perms_role.issubset(perms_ad):
-                return Response(
-                    {"detail": _("Vous ne pouvez attribuer qu'un rôle dont vous possédez toutes les permissions (B-09).")},
-                    status=status.HTTP_403_FORBIDDEN,
+                raise PermissionDenied(
+                    _("Vous ne pouvez attribuer qu'un rôle dont vous possédez toutes les permissions (B-09).")
                 )
 
 
@@ -577,7 +580,7 @@ class ParametresCollaborateurDetailView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
 
         # Recharger les données complètes pour la réponse
         rp_data = None
@@ -670,6 +673,8 @@ class ParametresCollaborateurDetailView(APIView):
             )
 
 
+        ancien_statut = collaborateur.statut
+        email_avant = collaborateur.email
         try:
             resultat = desactiver_collaborateur_plateforme(
                 collaborateur=collaborateur,
@@ -677,7 +682,18 @@ class ParametresCollaborateurDetailView(APIView):
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
-            raise ValidationError({"detail": msg}) from exc
+            raise RequeteRefusee(msg) from exc
+
+        journaliser(
+            action=ActionAudit.SUPPRESSION,
+            type_entite="utilisateur",
+            entite_id=collaborateur.pk,
+            utilisateur_id=request.user.pk,
+            valeur_avant={"email": email_avant, "statut": ancien_statut},
+            valeur_apres={"geste": "RETRAIT"},
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
 
         return Response(resultat, status=status.HTTP_200_OK)
 
@@ -705,9 +721,8 @@ class ParametresCollaborateurSuspendreView(APIView):
 
         from apps.core.droits import est_dg
         if est_dg(collaborateur):
-            return Response(
-                {"detail": _("Le compte du Directeur Général / Propriétaire ne peut pas être suspendu.")},
-                status=status.HTTP_403_FORBIDDEN,
+            raise PermissionDenied(
+                _("Le compte du Directeur Général / Propriétaire ne peut pas être suspendu.")
             )
 
         # Règle B-06 : Un AD ne peut ni suspendre un autre AD ni son propre compte (403)
@@ -716,27 +731,35 @@ class ParametresCollaborateurSuspendreView(APIView):
             or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
         )
         if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
-            return Response(
-                {"detail": _("Seul le Directeur Général a autorité pour suspendre un administrateur ou son propre compte.")},
-                status=status.HTTP_403_FORBIDDEN,
+            raise PermissionDenied(
+                _("Seul le Directeur Général a autorité pour suspendre un administrateur ou son propre compte.")
             )
 
         if collaborateur.pk == request.user.pk:
-            return Response(
-                {"detail": _("Vous ne pouvez pas suspendre votre propre compte.")},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise RequeteRefusee(
+                _("Vous ne pouvez pas suspendre votre propre compte.")
             )
-
 
         if collaborateur.statut == StatutUtilisateur.DESACTIVE:
-            return Response(
-                {"detail": _("Ce collaborateur est déjà suspendu / désactivé.")},
-                status=status.HTTP_409_CONFLICT,
+            raise ErreurConflit(
+                _("Ce collaborateur est déjà suspendu / désactivé.")
             )
 
+        ancien_statut = collaborateur.statut
         collaborateur.statut = StatutUtilisateur.DESACTIVE
         collaborateur.is_active = False
         collaborateur.save(update_fields=["statut", "is_active"])
+
+        journaliser(
+            action=ActionAudit.MODIFICATION,
+            type_entite="utilisateur",
+            entite_id=collaborateur.pk,
+            utilisateur_id=request.user.pk,
+            valeur_avant={"statut": ancien_statut},
+            valeur_apres={"statut": StatutUtilisateur.DESACTIVE, "geste": "SUSPENSION"},
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
 
         avatar_url = None
         if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):
@@ -802,21 +825,30 @@ class ParametresCollaborateurReactiverView(APIView):
             or (collaborateur.role and collaborateur.role.code in (RoleGlobal.ADMIN, "AD"))
         )
         if not est_dg(request.user) and (is_cible_ad or collaborateur.pk == request.user.pk):
-            return Response(
-                {"detail": _("Seul le Directeur Général a autorité pour réactiver un administrateur.")},
-                status=status.HTTP_403_FORBIDDEN,
+            raise PermissionDenied(
+                _("Seul le Directeur Général a autorité pour réactiver un administrateur.")
             )
 
         if collaborateur.statut == StatutUtilisateur.ACTIF:
-
-            return Response(
-                {"detail": _("Ce collaborateur est déjà actif.")},
-                status=status.HTTP_409_CONFLICT,
+            raise ErreurConflit(
+                _("Ce collaborateur est déjà actif.")
             )
 
+        ancien_statut = collaborateur.statut
         collaborateur.statut = StatutUtilisateur.ACTIF
         collaborateur.is_active = True
         collaborateur.save(update_fields=["statut", "is_active"])
+
+        journaliser(
+            action=ActionAudit.MODIFICATION,
+            type_entite="utilisateur",
+            entite_id=collaborateur.pk,
+            utilisateur_id=request.user.pk,
+            valeur_avant={"statut": ancien_statut},
+            valeur_apres={"statut": StatutUtilisateur.ACTIF, "geste": "REACTIVATION"},
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
 
         avatar_url = None
         if collaborateur.avatar and hasattr(collaborateur.avatar, "url"):

@@ -578,7 +578,8 @@ def provisionner(identifiant) -> None:
             )
 
         from django.db import connection
-        connection.commit()
+        if not connection.in_atomic_block:
+            connection.commit()
 
         # Branche 6 du §2.4 — l'espace est prêt, et il faut le dire.
         #

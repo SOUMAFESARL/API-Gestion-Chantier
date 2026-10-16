@@ -80,8 +80,10 @@ class AdminPermissionListCreateView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        retour = AdminPermissionSerializer(perm)
-        return Response(retour.data, status=status.HTTP_201_CREATED)
+        with schema_context("public"):
+            perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
+            retour = AdminPermissionSerializer(perm_complet)
+            return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
 class AdminPermissionDetailUpdateDeleteView(APIView):
@@ -126,8 +128,10 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        retour = AdminPermissionSerializer(perm_maj)
-        return Response(retour.data, status=status.HTTP_200_OK)
+        with schema_context("public"):
+            perm_complet = Permission.objects.prefetch_related("modules").get(id=perm_maj.id)
+            retour = AdminPermissionSerializer(perm_complet)
+            return Response(retour.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Supprimer logiquement une permission (Super Admin)",
@@ -180,5 +184,7 @@ class AdminPermissionAffecterModulesView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        retour = AdminPermissionSerializer(perm)
-        return Response(retour.data, status=status.HTTP_200_OK)
+        with schema_context("public"):
+            perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
+            retour = AdminPermissionSerializer(perm_complet)
+            return Response(retour.data, status=status.HTTP_200_OK)

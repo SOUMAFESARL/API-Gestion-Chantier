@@ -5,7 +5,7 @@ from django_tenants.utils import get_public_schema_name, schema_context
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Module, Utilisateur
+from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 HOTE_PLATEFORME = "localhost"
@@ -58,16 +58,17 @@ class TestAlignementFrontendModules:
             "description": "Suivi des engins de levage",
             "acces_par_defaut": ["lecture", "saisie"],
         }
-        rep = client_admin.post("/api/v1/admins/modules/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+        rep = client_admin.post(
+            "/api/v1/admins/modules/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep.status_code == status.HTTP_201_CREATED
         data = rep.json()
         assert data["code"] == "parc_materiel_grues"
         assert data["libelle"] == "Parc Matériel & Grues"
         assert data["statut"] == "ACTIF"
-        assert "lecture" in data["acces_par_defaut"]
-        assert "saisie" in data["acces_par_defaut"]
-        assert "LECTURE" in data["permissions_codes"]
-        assert "ECRITURE" in data["permissions_codes"]
+        # Garde bf3ae8d : acces_par_defaut est accepté sans effet (n'injecte plus les codes LECTURE/ECRITURE)
+        assert data["acces_par_defaut"] == []
+        assert data["permissions_codes"] == []
 
     def test_desactiver_et_reactiver_module(self, client_admin):
         """Vérifie POST /admins/modules/{id}/desactiver/ et /reactiver/ avec gestion du 409 Conflit."""
@@ -75,24 +76,32 @@ class TestAlignementFrontendModules:
         mod_id = rep.json()[0]["id"]
 
         # 1. Désactiver
-        rep_desact = client_admin.post(f"/api/v1/admins/modules/{mod_id}/desactiver/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_desact = client_admin.post(
+            f"/api/v1/admins/modules/{mod_id}/desactiver/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_desact.status_code == status.HTTP_200_OK
         assert rep_desact.json()["statut"] == "INACTIF"
         assert rep_desact.json()["est_actif"] is False
 
         # 2. Conflit si déjà désactivé (409)
-        rep_conflit1 = client_admin.post(f"/api/v1/admins/modules/{mod_id}/desactiver/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_conflit1 = client_admin.post(
+            f"/api/v1/admins/modules/{mod_id}/desactiver/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_conflit1.status_code == status.HTTP_409_CONFLICT
         assert rep_conflit1.json()["erreur"]["code"] == "conflit"
 
         # 3. Réactiver
-        rep_react = client_admin.post(f"/api/v1/admins/modules/{mod_id}/reactiver/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_react = client_admin.post(
+            f"/api/v1/admins/modules/{mod_id}/reactiver/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_react.status_code == status.HTTP_200_OK
         assert rep_react.json()["statut"] == "ACTIF"
         assert rep_react.json()["est_actif"] is True
 
         # 4. Conflit si déjà actif (409)
-        rep_conflit2 = client_admin.post(f"/api/v1/admins/modules/{mod_id}/reactiver/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_conflit2 = client_admin.post(
+            f"/api/v1/admins/modules/{mod_id}/reactiver/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_conflit2.status_code == status.HTTP_409_CONFLICT
         assert rep_conflit2.json()["erreur"]["code"] == "conflit"
 
@@ -120,7 +129,9 @@ class TestAlignementFrontendComptesEtProfil:
             "email": "agent.support@ccd-digital.ci",
             "role": "SUPPORT",
         }
-        rep_creer = client_admin.post("/api/v1/admins/comptes/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+        rep_creer = client_admin.post(
+            "/api/v1/admins/comptes/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_creer.status_code == status.HTTP_201_CREATED
         agent = rep_creer.json()
         assert agent["email"] == "agent.support@ccd-digital.ci"
@@ -129,16 +140,22 @@ class TestAlignementFrontendComptesEtProfil:
         agent_id = agent["id"]
 
         # 3. Suspendre son propre compte -> Refusé 400
-        rep_auto = client_admin.post(f"/api/v1/admins/comptes/{superuser_admin.id}/suspendre/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_auto = client_admin.post(
+            f"/api/v1/admins/comptes/{superuser_admin.id}/suspendre/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_auto.status_code == status.HTTP_400_BAD_REQUEST
 
         # 4. Suspendre l'agent -> 200 OK
-        rep_susp = client_admin.post(f"/api/v1/admins/comptes/{agent_id}/suspendre/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_susp = client_admin.post(
+            f"/api/v1/admins/comptes/{agent_id}/suspendre/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_susp.status_code == status.HTTP_200_OK
         assert rep_susp.json()["statut"] == "SUSPENDU"
 
         # 5. Réactiver l'agent -> 200 OK
-        rep_react = client_admin.post(f"/api/v1/admins/comptes/{agent_id}/reactiver/", HTTP_HOST=HOTE_PLATEFORME)
+        rep_react = client_admin.post(
+            f"/api/v1/admins/comptes/{agent_id}/reactiver/", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_react.status_code == status.HTTP_200_OK
         assert rep_react.json()["statut"] == "ACTIF"
 
@@ -155,7 +172,9 @@ class TestAlignementFrontendComptesEtProfil:
 
         # 2. Modifier coordonnées
         payload = {"telephone": "+2250700000000", "prenom": "SuperHero"}
-        rep_patch = client_admin.patch("/api/v1/admins/moi/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+        rep_patch = client_admin.patch(
+            "/api/v1/admins/moi/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME
+        )
         assert rep_patch.status_code == status.HTTP_200_OK
         assert rep_patch.json()["telephone"] == "+2250700000000"
         assert rep_patch.json()["prenom"] == "SuperHero"
@@ -172,7 +191,10 @@ class TestAlignementFrontendComptesEtProfil:
         # 4. Changer mot de passe - Succès -> 200
         rep_ok = client_admin.post(
             "/api/v1/admins/moi/mot-de-passe/",
-            {"ancien_mot_de_passe": "SuperPassword123!", "nouveau_mot_de_passe": "NouveauSuper2026!"},
+            {
+                "ancien_mot_de_passe": "SuperPassword123!",
+                "nouveau_mot_de_passe": "NouveauSuper2026!",
+            },
             format="json",
             HTTP_HOST=HOTE_PLATEFORME,
         )

@@ -96,7 +96,10 @@ class ParametresCollaborateurListCreateView(APIView):
 
         # 2. Indexation en mémoire des projets associés pour éviter tout N+1
         projets_par_utilisateur = defaultdict(dict)
-        labels_role_projet = dict(RoleProjet.choices)
+        labels_role_projet = {
+            **dict(RoleProjet.choices),
+            **dict(Role.objects.values_list("code", "libelle")),
+        }
 
         # Projets où l'utilisateur est chef de projet direct
         projets_cps = Projet.objects.filter(supprime_le__isnull=True).values(
@@ -400,7 +403,10 @@ class ParametresCollaborateurListCreateView(APIView):
 def _obtenir_projets_collaborateur(collaborateur):
     """Charge les chantiers associés à un collaborateur (CP ou affectation active)."""
     projets_dict = {}
-    labels_role_projet = dict(RoleProjet.choices)
+    labels_role_projet = {
+        **dict(RoleProjet.choices),
+        **dict(Role.objects.values_list("code", "libelle")),
+    }
 
     for p in Projet.objects.filter(chef_projet=collaborateur, supprime_le__isnull=True):
         projets_dict[str(p.id)] = {

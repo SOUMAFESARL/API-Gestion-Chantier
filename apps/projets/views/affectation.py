@@ -305,6 +305,9 @@ class CollaborateursAffectablesView(APIView):
                     "id": u.id,
                     "nom": nom_complet,
                     "role": role_libelle,
+                    # Le code (CP, CT, CC…) : le formulaire ne propose pour une place que
+                    # les personnes qui ont ce rôle sur la plateforme.
+                    "role_code": ((u.role.code if u.role else u.role_global) or "").upper(),
                 }
             )
 

@@ -145,6 +145,7 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
             {
                 "libelle": t.libelle,
                 "libelle_affiche": t.get_libelle_display(),
+                "nom": t.nom,
                 "numero": t.numero,
                 "principal": t.est_principal,
             }

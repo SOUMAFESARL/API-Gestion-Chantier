@@ -5,7 +5,7 @@ from django.urls import reverse
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
-from apps.core.enums import StatutProjet, TypeProjet
+from apps.core.enums import StatutProjet
 from apps.projets.models import Projet, ProjetContrat
 from apps.projets.selectors.encadrement import (
     autres_membres_affectations,
@@ -88,7 +88,7 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         ),
     )
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
-    type_projet = serializers.ChoiceField(choices=TypeProjet.choices)
+    type_projet = serializers.CharField(max_length=60)
     maitre_ouvrage = serializers.CharField(max_length=200)
     contrat = serializers.ListField(
         child=FichierContratField(validators=[valider_fichier_contrat]),
@@ -271,6 +271,9 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
                 {
                     **u_data,
                     "fonction": aff.fonction_membre or "AUTRE",
+                    # Le rôle tenu sur le projet : VI ou tout rôle de portée Projet.
+                    "role_code": aff.role_projet,
+                    "role_libelle": aff.get_role_projet_display(),
                     "affectation_id": str(aff.id),
                     "utilisateur": u_data,
                 }

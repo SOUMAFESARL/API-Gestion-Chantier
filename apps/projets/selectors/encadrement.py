@@ -132,11 +132,16 @@ def chefs_chantier_affectations(projet) -> list[AffectationProjet]:
 
 
 def autres_membres_affectations(projet) -> list[AffectationProjet]:
-    """Les affectations actives des autres membres (consultants/invités VI) en cours aujourd'hui."""
+    """Les affectations actives hors CP, CT et CC — VI ou tout autre rôle de portée Projet."""
+    encadrement = {
+        RoleProjet.CHEF_PROJET,
+        RoleProjet.CONDUCTEUR_TRAVAUX,
+        RoleProjet.CHEF_CHANTIER,
+    }
     membres, vus = [], set()
     for affectation in affectations_en_cours(projet):
         role = affectation.role_projet
-        if role == RoleProjet.VISITEUR and affectation.utilisateur_id not in vus:
+        if role not in encadrement and affectation.utilisateur_id not in vus:
             membres.append(affectation)
             vus.add(affectation.utilisateur_id)
     return membres

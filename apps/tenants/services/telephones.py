@@ -89,7 +89,12 @@ def remplacer_telephones(
             # modifiés en place plus bas, et un « avant » relu après coup égalerait l'« après »
             # — une modification de libellé ou de numéro ne serait alors jamais journalisée.
             valeur_avant = [
-                {"libelle": item.libelle, "numero": item.numero, "principal": item.est_principal}
+                {
+                    "libelle": item.libelle,
+                    "nom": item.nom,
+                    "numero": item.numero,
+                    "principal": item.est_principal,
+                }
                 for item in sorted(
                     existants,
                     key=lambda x: (-int(x.est_principal), x.ordre, x.cree_le),
@@ -120,6 +125,7 @@ def remplacer_telephones(
                 tid = t.get("id")
                 numero = normaliser_telephone(t["numero"])
                 libelle = t["libelle"]
+                nom = (t.get("nom") or "").strip()
                 est_principal = bool(t.get("principal") or t.get("est_principal"))
 
                 matched = None
@@ -133,12 +139,14 @@ def remplacer_telephones(
 
                 if matched:
                     matched.libelle = libelle
+                    matched.nom = nom
                     matched.numero = numero
                     matched.est_principal = est_principal
                     matched.ordre = index
                     matched.save(
                         update_fields=[
                             "libelle",
+                            "nom",
                             "numero",
                             "est_principal",
                             "ordre",
@@ -165,6 +173,7 @@ def remplacer_telephones(
                 tel_obj = TelephoneEntreprise.objects.create(
                     entreprise=entreprise,
                     libelle=libelle,
+                    nom=(t.get("nom") or "").strip(),
                     numero=numero,
                     est_principal=est_principal,
                     ordre=index,
@@ -189,6 +198,7 @@ def remplacer_telephones(
         valeur_apres = [
             {
                 "libelle": item.libelle,
+                "nom": item.nom,
                 "numero": item.numero,
                 "principal": item.est_principal,
             }
@@ -251,6 +261,7 @@ def definir_telephone_principal(
                         {
                             "id": t.id,
                             "libelle": t.libelle,
+                            "nom": t.nom,
                             "numero": numero_norm,
                             "principal": True,
                         }
@@ -260,6 +271,7 @@ def definir_telephone_principal(
                         {
                             "id": t.id,
                             "libelle": t.libelle,
+                            "nom": t.nom,
                             "numero": t.numero,
                             "principal": False,
                         }
@@ -278,6 +290,7 @@ def definir_telephone_principal(
                     {
                         "id": t.id,
                         "libelle": t.libelle,
+                        "nom": t.nom,
                         "numero": t.numero,
                         "principal": False,
                     }

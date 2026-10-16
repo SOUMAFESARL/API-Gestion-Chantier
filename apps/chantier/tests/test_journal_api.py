@@ -6,6 +6,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+from django.utils import timezone
 from django_tenants.utils import schema_context
 from PIL import Image
 from rest_framework.test import APIClient
@@ -43,6 +44,10 @@ def terrain(db, schema_demo):
         date_debut_prevue=aujourdhui() - timedelta(days=10),
         date_fin_prevue=aujourdhui() + timedelta(days=30),
     )
+    # Enregistré sur la plateforme avant le début du chantier : les jours J-2 et J-1 attendent
+    # un rapport (aucun rapport n'est attendu avant l'enregistrement — 16/10/2026).
+    Projet.objects.filter(pk=projet.pk).update(cree_le=timezone.now() - timedelta(days=30))
+    projet.refresh_from_db()
     for code, utilisateur in personnes.items():
         AffectationProjet.objects.create(projet=projet, utilisateur=utilisateur, role_projet=code)
     lot = Lot.objects.create(

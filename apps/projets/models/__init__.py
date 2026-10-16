@@ -16,6 +16,7 @@ from .historique_date import HistoriqueDate, TypeObjetHistorique
 from .lot import Lot
 from .motif_report import MotifReport
 from .projet import AffectationProjet, Projet
+from .referentiel import ReferentielEntreprise
 from .sante_snapshot import SanteProjetSnapshot
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "MotifReport",
     "Projet",
     "ProjetContrat",
+    "ReferentielEntreprise",
     "SanteProjetSnapshot",
     "TypeObjetHistorique",
 ]

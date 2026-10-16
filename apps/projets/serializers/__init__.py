@@ -267,8 +267,9 @@ class ProjetCreationSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
     reference = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     nom = serializers.CharField(max_length=200)
-    type_projet = serializers.ChoiceField(
-        choices=TypeProjet.choices, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
+    # Un code des référentiels (plateforme + entreprise) — voir `validate_type_projet`.
+    type_projet = serializers.CharField(
+        max_length=60, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
     )
     statut = serializers.ChoiceField(
         choices=StatutProjet.choices, required=False, default=StatutProjet.EN_ATTENTE
@@ -317,6 +318,35 @@ class ProjetCreationSerializer(serializers.Serializer):
         from apps.core.purger_montants import valider_ecriture_montant
 
         return valider_ecriture_montant(value, request=request, champ="budget_initial_montant")
+
+    def _responsable_coherent(self, value, role_projet):
+        """Règle du 16/10/2026 : le CP (ou CT) désigné a ce rôle sur la plateforme."""
+        if value:
+            from apps.projets.serializers.affectation import verifier_role_coherent
+
+            user = Utilisateur.objects.filter(pk=value).select_related("role").first()
+            # Le DG garde son refus dédié (422, DgNonAssignableCommeCp), posé plus loin.
+            if user is not None and not (user.is_dg or user.is_owner):
+                try:
+                    verifier_role_coherent(user, role_projet)
+                except serializers.ValidationError as exc:
+                    raise serializers.ValidationError(exc.detail["role_projet"]) from exc
+        return value
+
+    def validate_chef_projet_id(self, value):
+        return self._responsable_coherent(value, RoleProjet.CHEF_PROJET)
+
+    def validate_conducteur_travaux_id(self, value):
+        return self._responsable_coherent(value, RoleProjet.CONDUCTEUR_TRAVAUX)
+
+    def validate_type_projet(self, value: str) -> str:
+        from apps.projets.services.referentiels import code_type_projet_valide
+
+        if not code_type_projet_valide(value):
+            raise serializers.ValidationError(
+                _("Choisissez un type de projet dans la liste, ou ajoutez-le.")
+            )
+        return value
 
     def validate(self, attrs):
         request = self.context.get("request") if getattr(self, "context", None) else None

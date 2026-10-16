@@ -134,11 +134,14 @@ def test_lister_affectations_projet(admin_user, projet_db):
 
 @pytest.mark.django_db
 def test_affecter_conducteur_travaux_et_chef_chantier(admin_user, projet_db, collaborateur_user):
-    """Vérifie l'affectation d'un Conducteur de Travaux et d'un Chef de Chantier."""
+    """Un chef de chantier s'affecte comme CC ; le passer CT sur le projet est refusé.
+
+    Règle du 16/10/2026 : sur un projet, on tient le rôle qu'on a sur la plateforme.
+    """
     client = _auth(APIClient(), admin_user)
     url = f"/api/v1/projets/{projet_db.id}/affectations/"
 
-    # 1. Affectation CT
+    # 1. Affectation CT d'un chef de chantier : refusée
     payload_ct = {
         "utilisateur_id": str(collaborateur_user.id),
         "role_projet": RoleProjet.CONDUCTEUR_TRAVAUX,
@@ -146,28 +149,26 @@ def test_affecter_conducteur_travaux_et_chef_chantier(admin_user, projet_db, col
         "date_fin": str(date.today() + timedelta(days=30)),
     }
     rep_ct = client.post(url, payload_ct, format="json", HTTP_HOST=HOTE)
-    assert rep_ct.status_code == status.HTTP_201_CREATED
-    data_ct = rep_ct.json()
-    assert data_ct["role_projet"] == RoleProjet.CONDUCTEUR_TRAVAUX
-    assert data_ct["role_projet_libelle"] == "Conducteur de Travaux"
-    assert data_ct["est_actif"] is True
+    assert rep_ct.status_code == status.HTTP_400_BAD_REQUEST
 
-    # Vérification synchronisation sur le modèle Projet
-    with schema_context(SCHEMA):
-        projet_db.refresh_from_db()
-        assert projet_db.conducteur_travaux_id == collaborateur_user.id
+    # 2. Affectation CC : acceptée
+    rep_cc = client.post(
+        url, {**payload_ct, "role_projet": RoleProjet.CHEF_CHANTIER}, format="json", HTTP_HOST=HOTE
+    )
+    assert rep_cc.status_code == status.HTTP_201_CREATED
+    data_cc = rep_cc.json()
+    assert data_cc["role_projet"] == RoleProjet.CHEF_CHANTIER
+    assert data_cc["role_projet_libelle"] == "Chef de Chantier"
+    assert data_cc["est_actif"] is True
 
-    # 2. Modification de l'affectation vers Chef de Chantier
-    aff_id = data_ct["id"]
+    # 3. Le passer CT par modification : refusé aussi
     rep_patch = client.patch(
-        f"{url}{aff_id}/",
-        {"role_projet": RoleProjet.CHEF_CHANTIER},
+        f"{url}{data_cc['id']}/",
+        {"role_projet": RoleProjet.CONDUCTEUR_TRAVAUX},
         format="json",
         HTTP_HOST=HOTE,
     )
-    assert rep_patch.status_code == status.HTTP_200_OK
-    assert rep_patch.json()["role_projet"] == RoleProjet.CHEF_CHANTIER
-    assert rep_patch.json()["role_projet_libelle"] == "Chef de Chantier"
+    assert rep_patch.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db
@@ -184,9 +185,11 @@ def test_affecter_consultant_lecture_et_maitres(admin_user, projet_db, visiteur_
     rep_cl = client.post(url, payload_cl, format="json", HTTP_HOST=HOTE)
     assert rep_cl.status_code == status.HTTP_201_CREATED
     assert rep_cl.json()["role_projet"] == RoleProjet.VISITEUR
-    assert rep_cl.json()["role_projet_libelle"] == "Consultant lecture"
+    # Le libellé vient désormais de la table `role` (rôles dynamiques, 16/10/2026).
+    assert rep_cl.json()["role_projet_libelle"] == "Visiteur / Auditeur"
 
-    # Mise à jour vers Maître d'Œuvre (MOE)
+    # Passer un visiteur en maître d'œuvre sur le projet : refusé, ce n'est pas son rôle
+    # sur la plateforme (règle du 16/10/2026).
     aff_id = rep_cl.json()["id"]
     rep_moe = client.patch(
         f"{url}{aff_id}/",
@@ -194,9 +197,7 @@ def test_affecter_consultant_lecture_et_maitres(admin_user, projet_db, visiteur_
         format="json",
         HTTP_HOST=HOTE,
     )
-    assert rep_moe.status_code == status.HTTP_200_OK
-    assert rep_moe.json()["role_projet"] == RoleProjet.MAITRE_OEUVRE
-    assert rep_moe.json()["role_projet_libelle"] == "Maître d'Œuvre"
+    assert rep_moe.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db
@@ -238,17 +239,17 @@ def test_reactivation_collaborateur_inactif(admin_user, projet_db, collaborateur
     client = _auth(APIClient(), admin_user)
     url = f"/api/v1/projets/{projet_db.id}/affectations/"
 
-    # Nouvelle affectation du même utilisateur en Conducteur de Travaux
+    # Nouvelle affectation du même utilisateur, avec son rôle de plateforme
     payload = {
         "utilisateur_id": str(collaborateur_user.id),
-        "role_projet": RoleProjet.CONDUCTEUR_TRAVAUX,
+        "role_projet": RoleProjet.CHEF_CHANTIER,
     }
     rep = client.post(url, payload, format="json", HTTP_HOST=HOTE)
     assert rep.status_code == status.HTTP_201_CREATED
     data = rep.json()
     assert data["id"] == str(aff.id)
     assert data["est_actif"] is True
-    assert data["role_projet"] == RoleProjet.CONDUCTEUR_TRAVAUX
+    assert data["role_projet"] == RoleProjet.CHEF_CHANTIER
 
 
 @pytest.mark.django_db

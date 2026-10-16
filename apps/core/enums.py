@@ -207,6 +207,7 @@ class TypeTiers(models.TextChoices):
 
 class RoleTiersChoix(models.TextChoices):
     CLIENT_MOA = "CLIENT_MOA", "Client / Maître d'ouvrage"
+    MAITRE_OEUVRE = "MAITRE_OEUVRE", "Maître d'œuvre"
     FOURNISSEUR = "FOURNISSEUR", "Fournisseur"
     SOUS_TRAITANT = "SOUS_TRAITANT", "Sous-traitant"
     TACHERON = "TACHERON", "Tâcheron"

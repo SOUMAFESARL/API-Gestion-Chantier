@@ -28,6 +28,16 @@ def aujourdhui():
     return timezone.localdate(timezone=ZoneInfo("Africa/Abidjan"))
 
 
+def premier_jour_rapport(projet):
+    """Le premier jour qui attend un rapport : début du chantier, mais **jamais avant son
+    enregistrement sur la plateforme** (décision du 16/10/2026). Un chantier saisi avec une
+    date de début passée n'a pas de rapports à rattraper sur ce passé.
+    """
+    debut = projet.date_debut_reelle or projet.date_debut_prevue
+    enregistre = timezone.localdate(projet.cree_le, timezone=ZoneInfo("Africa/Abidjan"))
+    return max(debut, enregistre) if debut else enregistre
+
+
 def verifier_jour(jour):
     if not aujourdhui() - timedelta(days=2) <= jour <= aujourdhui():
         raise ErreurMetier(
@@ -483,6 +493,11 @@ def valider_soumission(saisie, projet):
 def creer_journal(*, projet, utilisateur, jour, data):
     verifier_jour(jour)
     projet = get_object_or_404(Projet.objects.select_for_update(), pk=projet.pk)
+    if jour < premier_jour_rapport(projet):
+        raise ErreurMetier(
+            "Aucun rapport n'est attendu avant l'enregistrement du chantier sur la plateforme.",
+            details={"date": "avant_enregistrement_projet"},
+        )
     verifier_statut_projet_pour_ecriture(projet, action="NOUVEAU_RAPPORT")
     saisie = normaliser_saisie(data, projet=projet, jour=jour, utilisateur=utilisateur)
     if RapportJournalier.objects.filter(

@@ -34,6 +34,12 @@ class AbonnementView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Le droit se lit dans le schéma de l'entreprise : sous `schema_context(public)`, le rôle
+        # de l'utilisateur y était cherché en vain et la vue répondait 500 à tout le monde.
+        from apps.core.droits import a_permission
+
+        voit_abonnement = a_permission(request.user, "administration.abonnement_voir", request=request)
+
         with schema_context(get_public_schema_name()):
             abonnement = Abonnement.objects.filter(entreprise=tenant).select_related("plan").first()
 
@@ -66,8 +72,7 @@ class AbonnementView(APIView):
             serializer = AbonnementSerializer(abonnement)
             data = serializer.data
 
-            from apps.core.droits import a_permission
-            if not a_permission(request.user, "administration.abonnement_voir", request=request):
+            if not voit_abonnement:
                 return Response(
                     {
                         "jours_essai_restants": data.get("jours_essai_restants"),

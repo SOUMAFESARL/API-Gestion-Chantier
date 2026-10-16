@@ -796,7 +796,8 @@ def propager_modification_permission(
         email_admin = getattr(modifie_par, "email", "") or "admin@plateforme.local"
         corps = (
             f"Bonjour,\n\n"
-            f"La permission '{cat_perm.code}' ({cat_perm.libelle}) a été désactivée par l'administration de la plateforme.\n"
+            f"La permission '{cat_perm.code}' ({cat_perm.libelle}) a été désactivée "
+            f"par l'administration de la plateforme.\n"
             f"Super admin acteur : {email_admin}\n"
         )
         for ea in entreprises:

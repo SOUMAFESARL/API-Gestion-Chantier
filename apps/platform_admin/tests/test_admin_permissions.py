@@ -5,8 +5,10 @@ from django_tenants.utils import get_public_schema_name, schema_context
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Permission, Role, RoleModulePermission, Utilisateur
+from apps.accounts.models import Role, RoleModulePermission, Utilisateur
 from apps.accounts.services.roles import initialiser_roles_par_defaut
+from apps.catalogue.models import CataloguePermission
+from apps.core.droits import permissions_effectives
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 SCHEMA_CLIENT = "demo"
@@ -59,7 +61,7 @@ def test_lister_permissions_super_admin(client_admin, user_non_admin):
     data = rep.json()
     assert isinstance(data, list)
     codes = [p["code"] for p in data]
-    for c in ["LECTURE", "ECRITURE", "VALIDATION", "SUPPRESSION"]:
+    for c in ["projets.lire", "projets.creer", "chantier.lire", "chantier.valider"]:
         assert c in codes
 
     # Non super admin -> 403
@@ -71,69 +73,82 @@ def test_lister_permissions_super_admin(client_admin, user_non_admin):
 
 @pytest.mark.django_db
 def test_creer_permission_et_propagation_ciblee_dg_admin(client_admin):
-    """Création d'une permission avec modules cibles et auto-attribution sélective aux rôles de direction."""
+    """Création/rétablissement d'une permission et respect de A-05 (aucun rôle stocké injecté)."""
     with schema_context(SCHEMA_CLIENT):
         initialiser_roles_par_defaut()
 
+    with schema_context(get_public_schema_name()):
+        perm = CataloguePermission.objects.get(code="chantier.valider")
+        perm_id = perm.id
+
+    # On supprime logiquement via l'API pour nettoyer les liaisons
+    client_admin.delete(f"/api/v1/admin/permissions/{perm_id}/", HTTP_HOST=HOTE_PLATEFORME)
+
     payload = {
-        "code": "AUDIT",
-        "libelle": "Audit et Inspection",
-        "description": "Capacité d'audit et d'inspection contradictoire",
+        "code": "chantier.valider",
+        "libelle": "Validation des rapports",
+        "description": "Validation contradictoire des rapports",
         "ordre": 5,
         "est_actif": True,
-        "modules": ["chantier", "ged"],
+        "modules": ["chantier"],
     }
-    rep = client_admin.post("/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+    rep = client_admin.post(
+        "/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME
+    )
     assert rep.status_code == status.HTTP_201_CREATED
     data = rep.json()
-    assert data["code"] == "AUDIT"
+    assert data["code"] == "chantier.valider"
     assert "modules_codes" in data
-    assert sorted(data["modules_codes"]) == ["chantier", "ged"]
-    perm_id = data["id"]
+    assert sorted(data["modules_codes"]) == ["chantier"]
+    assert str(data["id"]) == str(perm_id)
 
     # 1. Vérification dans public
     with schema_context(get_public_schema_name()):
-        p_pub = Permission.objects.get(id=perm_id, supprime_le__isnull=True)
-        assert p_pub.code == "AUDIT"
-        assert set(p_pub.modules.values_list("code", flat=True)) == {"chantier", "ged"}
+        p_pub = CataloguePermission.objects.get(id=perm_id, supprime_le__isnull=True)
+        assert p_pub.code == "chantier.valider"
+        assert set(p_pub.modules.values_list("code", flat=True)) == {"chantier"}
 
-    # 2. Vérification dans le tenant demo : auto-attribuée à DG UNIQUEMENT sur 'chantier' et 'ged'
+    # 2. Vérification tenant demo : respect de A-05, et DG a les droits via permissions_effectives
     with schema_context(SCHEMA_CLIENT):
-        p_tenant = Permission.objects.get(code="AUDIT", supprime_le__isnull=True)
-        assert set(p_tenant.modules.values_list("code", flat=True)) == {"chantier", "ged"}
-
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
         for rmp in RoleModulePermission.objects.filter(role=role_dg):
-            assert not rmp.permissions.filter(code="AUDIT").exists()
+            assert not rmp.permissions_catalogue.filter(code="chantier.valider").exists()
 
-        from apps.accounts.models import Utilisateur
-        from apps.core.droits import permissions_effectives
         u_dg = Utilisateur.objects.filter(role=role_dg, supprime_le__isnull=True).first()
         if u_dg:
             perms_dg = permissions_effectives(u_dg)
-            assert "audit" in [p.lower() for p in perms_dg]
+            assert "chantier.valider" in [p.lower() for p in perms_dg]
 
 
 @pytest.mark.django_db
 def test_creer_permission_sans_modules_zero_propagation(client_admin):
-    """Création d'une permission sans module : elle n'est injectée dans aucun RoleModulePermission."""
+    """Création d'une permission sans module : rattachée à son module sans injection dans rôles."""
     with schema_context(SCHEMA_CLIENT):
         initialiser_roles_par_defaut()
 
+    with schema_context(get_public_schema_name()):
+        perm = CataloguePermission.objects.get(code="projets.affecter_membres")
+        perm_id = perm.id
+
+    client_admin.delete(f"/api/v1/admin/permissions/{perm_id}/", HTTP_HOST=HOTE_PLATEFORME)
+
     payload = {
-        "code": "SIGNER_CONTRAT",
-        "libelle": "Signature de Contrat",
-        "description": "Droit de signature juridique",
+        "code": "projets.affecter_membres",
+        "libelle": "Affecter des membres",
+        "description": "Affectation des équipes",
         "modules": [],
     }
-    rep = client_admin.post("/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
+    rep = client_admin.post(
+        "/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME
+    )
     assert rep.status_code == status.HTTP_201_CREATED
-    perm_id = rep.json()["id"]
+    data = rep.json()
+    assert str(data["id"]) == str(perm_id)
 
     with schema_context(SCHEMA_CLIENT):
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
         for rmp in RoleModulePermission.objects.filter(role=role_dg):
-            assert not rmp.permissions.filter(code="SIGNER_CONTRAT").exists()
+            assert not rmp.permissions_catalogue.filter(code="projets.affecter_membres").exists()
 
 
 @pytest.mark.django_db
@@ -142,90 +157,100 @@ def test_affecter_modules_a_posteriori_et_revocation(client_admin):
     with schema_context(SCHEMA_CLIENT):
         initialiser_roles_par_defaut()
 
-    # 1. Création sans module
-    rep_create = client_admin.post(
-        "/api/v1/admin/permissions/",
-        {"code": "METTRE_EN_LIGNE", "libelle": "Mettre en ligne"},
+    with schema_context(get_public_schema_name()):
+        perm = CataloguePermission.objects.get(
+            code="projets.gerer_equipes", supprime_le__isnull=True
+        )
+        perm_id = perm.id
+
+    # 1. Retrait du module projets : la permission n'est plus attachée à aucun module
+    rep_detacher = client_admin.post(
+        f"/api/v1/admin/permissions/{perm_id}/modules/",
+        {"modules": []},
         format="json",
         HTTP_HOST=HOTE_PLATEFORME,
     )
-    perm_id = rep_create.json()["id"]
+    assert rep_detacher.status_code == status.HTTP_200_OK
+    assert rep_detacher.json()["modules_codes"] == []
 
-    # 2. Affectation a posteriori : [chantier, ged]
+    # 2. Affectation a posteriori : [projets]
     rep_affect = client_admin.post(
         f"/api/v1/admin/permissions/{perm_id}/modules/",
-        {"modules": ["chantier", "ged"]},
+        {"modules": ["projets"]},
         format="json",
         HTTP_HOST=HOTE_PLATEFORME,
     )
     assert rep_affect.status_code == status.HTTP_200_OK
-    assert sorted(rep_affect.json()["modules_codes"]) == ["chantier", "ged"]
+    assert sorted(rep_affect.json()["modules_codes"]) == ["projets"]
 
-    with schema_context(SCHEMA_CLIENT):
-        role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
-        for rmp in RoleModulePermission.objects.filter(role=role_dg):
-            assert not rmp.permissions.filter(code="METTRE_EN_LIGNE").exists()
-
-    # 3. Retrait du module 'ged' : seul 'chantier' est conservé
-    rep_retrait = client_admin.post(
+    # Tentative de rattachement à un mauvais module -> 400 (D2)
+    rep_bad = client_admin.post(
         f"/api/v1/admin/permissions/{perm_id}/modules/",
         {"modules": ["chantier"]},
         format="json",
         HTTP_HOST=HOTE_PLATEFORME,
     )
+    assert rep_bad.status_code == status.HTTP_400_BAD_REQUEST
+
+    # On attribue manuellement la permission au CP dans le tenant demo
+    with schema_context(SCHEMA_CLIENT):
+        role_cp = Role.objects.get(code=RoleGlobal.CONDUCTEUR_TRAVAUX)
+        rmp_projets = RoleModulePermission.objects.get(role=role_cp, module__code="projets")
+        perm_cat = CataloguePermission.objects.get(id=perm_id)
+        rmp_projets.permissions_catalogue.add(perm_cat)
+        assert rmp_projets.permissions_catalogue.filter(id=perm_id).exists()
+
+    # 3. Retrait du module : révocation de tous les rôles sur ce module
+    rep_retrait = client_admin.post(
+        f"/api/v1/admin/permissions/{perm_id}/modules/",
+        {"modules": []},
+        format="json",
+        HTTP_HOST=HOTE_PLATEFORME,
+    )
     assert rep_retrait.status_code == status.HTTP_200_OK
-    assert rep_retrait.json()["modules_codes"] == ["chantier"]
+    assert rep_retrait.json()["modules_codes"] == []
 
     with schema_context(SCHEMA_CLIENT):
-        rmp_chantier = RoleModulePermission.objects.get(role=role_dg, module__code="chantier")
-        rmp_ged = RoleModulePermission.objects.get(role=role_dg, module__code="ged")
-
-        # 'chantier' conserve la permission
-        assert rmp_chantier.permissions.filter(code="METTRE_EN_LIGNE").exists()
-        # 'ged' a été révoqué !
-        assert not rmp_ged.permissions.filter(code="METTRE_EN_LIGNE").exists()
+        rmp_projets.refresh_from_db()
+        assert not rmp_projets.permissions_catalogue.filter(id=perm_id).exists()
 
 
 @pytest.mark.django_db
 def test_modifier_permission(client_admin):
     """Modification des métadonnées d'une permission."""
-    payload = {
-        "code": "EXPORT_EXCEL",
-        "libelle": "Export Excel",
-        "description": "Export brut des données",
-        "ordre": 6,
-    }
-    rep_create = client_admin.post("/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
-    perm_id = rep_create.json()["id"]
+    with schema_context(get_public_schema_name()):
+        perm = CataloguePermission.objects.get(
+            code="projets.resilier_archiver", supprime_le__isnull=True
+        )
+        perm_id = perm.id
 
     rep_patch = client_admin.patch(
         f"/api/v1/admin/permissions/{perm_id}/",
-        {"libelle": "Exportation Tableurs (Excel / CSV)"},
+        {"libelle": "Résilier / archiver définitivement"},
         format="json",
         HTTP_HOST=HOTE_PLATEFORME,
     )
     assert rep_patch.status_code == status.HTTP_200_OK
-    assert rep_patch.json()["libelle"] == "Exportation Tableurs (Excel / CSV)"
+    assert rep_patch.json()["libelle"] == "Résilier / archiver définitivement"
 
-    with schema_context(SCHEMA_CLIENT):
-        p_tenant = Permission.objects.get(code="EXPORT_EXCEL", supprime_le__isnull=True)
-        assert p_tenant.libelle == "Exportation Tableurs (Excel / CSV)"
+    with schema_context(get_public_schema_name()):
+        p_pub = CataloguePermission.objects.get(id=perm_id, supprime_le__isnull=True)
+        assert p_pub.libelle == "Résilier / archiver définitivement"
 
 
 @pytest.mark.django_db
 def test_supprimer_permission_soft_delete(client_admin):
     """Suppression logique (soft delete) d'une permission."""
-    payload = {
-        "code": "PERM_TEMP",
-        "libelle": "Permission Éphémère",
-    }
-    rep_create = client_admin.post("/api/v1/admin/permissions/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME)
-    perm_id = rep_create.json()["id"]
+    with schema_context(get_public_schema_name()):
+        perm = CataloguePermission.objects.filter(code="pilotage.voir_montants").first()
+        perm_id = perm.id
 
-    rep_del = client_admin.delete(f"/api/v1/admin/permissions/{perm_id}/", HTTP_HOST=HOTE_PLATEFORME)
+    rep_del = client_admin.delete(
+        f"/api/v1/admin/permissions/{perm_id}/", HTTP_HOST=HOTE_PLATEFORME
+    )
     assert rep_del.status_code == status.HTTP_200_OK
 
     with schema_context(get_public_schema_name()):
-        p_pub = Permission.tous_objets.get(id=perm_id)
+        p_pub = CataloguePermission.tous_objets.get(id=perm_id)
         assert p_pub.est_actif is False
         assert p_pub.supprime_le is not None

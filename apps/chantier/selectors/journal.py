@@ -10,6 +10,7 @@ from apps.chantier.services.journal import (
     affectations_actives,
     aujourdhui,
     lots_disponibles,
+    premier_jour_rapport,
     statut_journal,
 )
 from apps.core.enums import ModeExecution
@@ -552,12 +553,7 @@ def journal_periode(request, debut, fin, *, projet_id=None, brouillons_visibles=
     charges = []
     for projet in projets:
         contexte = contexte_projet(projet, fin)
-        premier = max(
-            debut,
-            projet.date_debut_reelle
-            or projet.date_debut_prevue
-            or aujourdhui() - timedelta(days=2),
-        )
+        premier = max(debut, premier_jour_rapport(projet))
         dernier = min(fin, aujourdhui(), projet.date_fin_reelle or fin)
         for offset in range(max(0, (dernier - premier).days + 1)):
             jour = premier + timedelta(days=offset)

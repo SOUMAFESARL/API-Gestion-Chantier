@@ -22,7 +22,12 @@ from django.db import transaction
 
 from apps.audit.services import journaliser
 from apps.chantier.models import JournalChantier, RelanceJournal
-from apps.chantier.services.journal import affectations_actives, aujourdhui, statut_journal
+from apps.chantier.services.journal import (
+    affectations_actives,
+    aujourdhui,
+    premier_jour_rapport,
+    statut_journal,
+)
 from apps.core.emails import adresse_frontend, envoyer
 from apps.core.enums import ActionAudit
 from apps.core.exceptions import ErreurMetier
@@ -199,6 +204,8 @@ def relancer_rapports_manquants(jour: date | None = None) -> dict:
     if jour.weekday() >= 5:
         return bilan
     for projet in Projet.objects.filter(statut__in=STATUTS_SUIVIS).select_related("chef_projet"):
+        if jour < premier_jour_rapport(projet):
+            continue  # rien à rattraper avant l'enregistrement du chantier
         journal = journal_de_la_ligne(projet, jour)
         if journal and journal.rapport.statut != "BROUILLON":
             continue

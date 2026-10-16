@@ -7,7 +7,7 @@ Entités : Role, RoleModulePermission.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import ModuleChoix, NiveauAcces
+from apps.core.enums import ModuleChoix
 from apps.core.models import ModeleBase
 
 __all__ = ["Role", "RoleModulePermission"]
@@ -87,12 +87,11 @@ class RoleModulePermissionQuerySet(models.QuerySet):
 
 
 class RoleModulePermission(ModeleBase):
-    """Niveau d'accès d'un rôle sur l'un des modules applicatifs dynamiques BTP.
+    """Permissions accordées à un rôle sur l'un des modules applicatifs dynamiques BTP.
 
     Matrice par défaut au niveau de l'entreprise (tenant).
-    Niveaux : AUCUN (0), LECTURE (1), ECRITURE (2), VALIDATION (3).
     Intégrité référentielle stricte : la suppression d'un module supprime
-    automatiquement en cascade ses habilitations associées.
+    automatiquement en cascade ses permissions associées.
     """
 
     objects = RoleModulePermissionQuerySet.as_manager()
@@ -126,13 +125,6 @@ class RoleModulePermission(ModeleBase):
         db_table="role_module_permission_permissions_catalogue",
         verbose_name=_("permissions catalogue accordées"),
     )
-    niveau = models.PositiveSmallIntegerField(
-        _("niveau d'accès"),
-        choices=NiveauAcces.choices,
-        default=NiveauAcces.AUCUN,
-        null=True,
-        blank=True,
-    )
 
     class Meta:
         db_table = "role_module_permission"
@@ -153,7 +145,7 @@ class RoleModulePermission(ModeleBase):
 
     def __str__(self) -> str:
         mod_libelle = self.module.libelle if self.module_id else "?"
-        return f"{self.role.libelle} — {mod_libelle}: {self.get_niveau_display()}"
+        return f"{self.role.libelle} — {mod_libelle}"
 
     @property
     def module_code(self) -> str:

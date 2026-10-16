@@ -45,7 +45,7 @@ def test_b05_cocher_permission_ordinaire_accepte(client_dg):
         "libelle": "Personnalisé Métier Valide",
         "description": "Test d'acceptation règle B-05",
         "permissions_modules": {
-            "chantier": 2,
+            "chantier": ["chantier.lire", "chantier.rediger"],
         },
     }
     rep = client_dg.post("/api/v1/roles/", payload, format="json")

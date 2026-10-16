@@ -36,12 +36,11 @@ class RoleModuleItemSerializer(serializers.Serializer):
 class RoleModulePermissionSerializer(serializers.ModelSerializer):
     module_code = serializers.CharField(source="module.code", read_only=True)
     module_libelle = serializers.CharField(source="module.libelle", read_only=True)
-    niveau_libelle = serializers.CharField(source="get_niveau_display", read_only=True)
     permissions = PermissionItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = RoleModulePermission
-        fields = ["module", "module_code", "module_libelle", "niveau", "niveau_libelle", "permissions"]
+        fields = ["module", "module_code", "module_libelle", "permissions"]
 
 
 def _construire_tableau_dynamique_modules(role: Role):
@@ -86,7 +85,6 @@ def _construire_tableau_dynamique_modules(role: Role):
                 "module_description": rmp.module.description,
                 "module_icone": rmp.module.icone,
                 "module_ordre": rmp.module.ordre,
-                "niveau": rmp.niveau,
                 "permissions": perms_list,
             }
         )
@@ -102,13 +100,87 @@ def _construire_tableau_dynamique_modules(role: Role):
                     "module_description": m.description,
                     "module_icone": m.icone,
                     "module_ordre": m.ordre,
-                    "niveau": 0,
                     "permissions": [],
                 }
             )
 
     resultats.sort(key=lambda x: (x["module_ordre"], x["module_code"]))
     return resultats
+
+
+def _valider_code_permission(perm, perms_cat_valides: set[str]):
+    from apps.core.registre_permissions import REGISTRE
+
+    if isinstance(perm, (int, bool)):
+        raise serializers.ValidationError(f"Permission inconnue : « {perm} ».")
+    p_raw = perm.get("code") if isinstance(perm, dict) else perm
+    p_str = str(p_raw or "").strip().lower()
+    if not p_str:
+        raise serializers.ValidationError(f"Permission inconnue : « {perm} ».")
+    if p_str.startswith("administration."):
+        raise serializers.ValidationError(
+            "Les permissions d'administration ne peuvent pas être cochées sur un rôle (B-05)."
+        )
+    def_p = REGISTRE.get(p_str)
+    if def_p and getattr(def_p, "reservee_administration", False):
+        raise serializers.ValidationError(
+            "Les permissions réservées à l'administration ne peuvent pas être cochées sur un rôle (B-05)."
+        )
+    if p_str not in REGISTRE and p_str not in perms_cat_valides:
+        raise serializers.ValidationError(
+            f"Permission inconnue : « {p_raw} »."
+        )
+
+
+def _valider_permissions_modules_structure(value):
+    if value is None:
+        return value
+    from apps.catalogue.models import CataloguePermission
+
+    modules_valides = {
+        m.lower()
+        for m in Module.objects.filter(est_actif=True, supprime_le__isnull=True).values_list(
+            "code", flat=True
+        )
+    }
+    perms_cat_valides = {
+        c.lower()
+        for c in CataloguePermission.objects.filter(
+            est_actif=True, supprime_le__isnull=True
+        ).values_list("code", flat=True)
+    }
+
+    if isinstance(value, dict):
+        for module, codes in value.items():
+            m_str = str(module).lower()
+            if m_str == "administration":
+                raise serializers.ValidationError(
+                    "Les permissions d'administration ne peuvent pas être configurées sur un rôle (B-05)."
+                )
+            if m_str not in modules_valides:
+                raise serializers.ValidationError(f"Module inconnu : '{module}'.")
+            if not isinstance(codes, (list, tuple, set)):
+                raise serializers.ValidationError(f"Permission inconnue : « {codes} ».")
+            for c in codes:
+                _valider_code_permission(c, perms_cat_valides)
+    elif isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                m = item.get("module") or item.get("module_code")
+                if m and str(m).lower() == "administration":
+                    raise serializers.ValidationError(
+                        "Les permissions d'administration ne peuvent pas être configurées sur un rôle (B-05)."
+                    )
+                if m and str(m).lower() not in modules_valides:
+                    raise serializers.ValidationError(f"Module inconnu : '{m}'.")
+                p_items = item.get("permissions") or []
+                if not isinstance(p_items, (list, tuple, set)):
+                    raise serializers.ValidationError(f"Permission inconnue : « {p_items} ».")
+                for c in p_items:
+                    _valider_code_permission(c, perms_cat_valides)
+            else:
+                _valider_code_permission(item, perms_cat_valides)
+    return value
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -157,13 +229,7 @@ class RoleSerializer(serializers.ModelSerializer):
         return _construire_tableau_dynamique_modules(obj)
 
     def get_permissions_modules(self, obj: Role) -> dict[str, list[str]]:
-        """Dictionnaire dynamique associant chaque module actif à la liste ordonnée de ses codes de permissions.
-
-        Zéro hardcodage : interroge directement les relations M2M en base de données.
-        Garantit que tous les modules actifs du catalogue apparaissent (liste vide [] si aucune permission).
-        Fournit à la fois les codes majuscules (ex: 'LECTURE') et les minuscules normalisées Next.js
-        ('lecture', 'saisie', 'validation') pour garantir la compatibilité totale frontend & backend.
-        """
+        """Dictionnaire dynamique associant chaque module actif à la liste ordonnée de ses codes de permissions."""
         modules_actifs = list(
             Module.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
         )
@@ -182,43 +248,11 @@ class RoleSerializer(serializers.ModelSerializer):
         for mod in modules_actifs:
             rmp = rpm_par_module_id.get(mod.id)
             if rmp:
-                raw_perms = list(
+                resultat[mod.code] = list(
                     rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True)
                     .order_by("ordre", "code")
                     .values_list("code", flat=True)
                 )
-                perms = []
-                for p in raw_perms:
-                    if p not in perms:
-                        perms.append(p)
-                    p_up = p.upper()
-                    if p_up == "LECTURE" or p.endswith(".lire"):
-                        for alias in ("lecture", "LECTURE"):
-                            if alias not in perms:
-                                perms.append(alias)
-                    elif p_up == "ECRITURE" or p.endswith(".ecrire") or p.endswith(".rediger"):
-                        for alias in ("saisie", "ECRITURE"):
-                            if alias not in perms:
-                                perms.append(alias)
-                    elif p_up == "VALIDATION" or p.endswith(".valider") or p == "projets.changer_statut":
-                        for alias in ("validation", "VALIDATION"):
-                            if alias not in perms:
-                                perms.append(alias)
-                # Repli de compatibilité scalaire (ex: modules sans codes granulaires catalogue comme GED)
-                if getattr(rmp, "niveau", None):
-                    if rmp.niveau >= 1:
-                        for alias in ("lecture", "LECTURE"):
-                            if alias not in perms:
-                                perms.append(alias)
-                    if rmp.niveau >= 2:
-                        for alias in ("saisie", "ECRITURE"):
-                            if alias not in perms:
-                                perms.append(alias)
-                    if rmp.niveau >= 3:
-                        for alias in ("validation", "VALIDATION"):
-                            if alias not in perms:
-                                perms.append(alias)
-                resultat[mod.code] = perms
             else:
                 resultat[mod.code] = []
         return resultat
@@ -259,7 +293,6 @@ class RoleCreationSerializer(serializers.Serializer):
     def validate_permissions(self, value):
         if not value:
             return value
-        from apps.core.registre_permissions import REGISTRE
         from apps.catalogue.models import CataloguePermission
 
         perms_cat_valides = {
@@ -268,50 +301,12 @@ class RoleCreationSerializer(serializers.Serializer):
                 est_actif=True, supprime_le__isnull=True
             ).values_list("code", flat=True)
         }
-
         for perm in value:
-            p_str = str(perm).strip().lower()
-            if p_str.startswith("administration."):
-                raise serializers.ValidationError(
-                    "Les permissions d'administration ne peuvent pas être cochées sur un rôle (B-05)."
-                )
-            def_p = REGISTRE.get(p_str)
-            if def_p and getattr(def_p, "reservee_administration", False):
-                raise serializers.ValidationError(
-                    "Les permissions réservées à l'administration ne peuvent pas être cochées sur un rôle (B-05)."
-                )
-            if p_str not in REGISTRE and p_str not in perms_cat_valides:
-                raise serializers.ValidationError(
-                    f"La permission '{perm}' n'appartient pas au REGISTRE officiel ni au catalogue actif (A-01, A-05)."
-                )
+            _valider_code_permission(perm, perms_cat_valides)
         return value
 
     def validate_permissions_modules(self, value):
-        modules_valides = set(
-            Module.objects.filter(est_actif=True, supprime_le__isnull=True).values_list(
-                "code", flat=True
-            )
-        )
-        if isinstance(value, dict):
-            for module in value:
-                m_str = str(module).lower()
-                if m_str == "administration":
-                    raise serializers.ValidationError(
-                        "Les permissions d'administration ne peuvent pas être configurées sur un rôle (B-05)."
-                    )
-                if m_str not in modules_valides:
-                    raise serializers.ValidationError(f"Module inconnu : '{module}'.")
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    m = item.get("module") or item.get("module_code")
-                    if m and str(m).lower() == "administration":
-                        raise serializers.ValidationError(
-                            "Les permissions d'administration ne peuvent pas être configurées sur un rôle (B-05)."
-                        )
-                    if m and str(m).lower() not in modules_valides:
-                        raise serializers.ValidationError(f"Module inconnu : '{m}'.")
-        return value
+        return _valider_permissions_modules_structure(value)
 
 
 class RoleModificationSerializer(serializers.Serializer):
@@ -330,7 +325,6 @@ class RoleModificationSerializer(serializers.Serializer):
     def validate_permissions(self, value):
         if not value:
             return value
-        from apps.core.registre_permissions import REGISTRE
         from apps.catalogue.models import CataloguePermission
 
         perms_cat_valides = {
@@ -339,52 +333,12 @@ class RoleModificationSerializer(serializers.Serializer):
                 est_actif=True, supprime_le__isnull=True
             ).values_list("code", flat=True)
         }
-
         for perm in value:
-            p_str = str(perm).strip().lower()
-            if p_str.startswith("administration."):
-                raise serializers.ValidationError(
-                    "Les permissions d'administration ne peuvent pas être cochées sur un rôle (B-05)."
-                )
-            def_p = REGISTRE.get(p_str)
-            if def_p and getattr(def_p, "reservee_administration", False):
-                raise serializers.ValidationError(
-                    "Les permissions réservées à l'administration ne peuvent pas être cochées sur un rôle (B-05)."
-                )
-            if p_str not in REGISTRE and p_str not in perms_cat_valides:
-                raise serializers.ValidationError(
-                    f"La permission '{perm}' n'appartient pas au REGISTRE officiel ni au catalogue actif (A-01, A-05)."
-                )
+            _valider_code_permission(perm, perms_cat_valides)
         return value
 
     def validate_permissions_modules(self, value):
-        if value is None:
-            return value
-        modules_valides = set(
-            Module.objects.filter(est_actif=True, supprime_le__isnull=True).values_list(
-                "code", flat=True
-            )
-        )
-        if isinstance(value, dict):
-            for module in value:
-                m_str = str(module).lower()
-                if m_str == "administration":
-                    raise serializers.ValidationError(
-                        "Les permissions d'administration ne peuvent pas être configurées sur un rôle (B-05)."
-                    )
-                if m_str not in modules_valides:
-                    raise serializers.ValidationError(f"Module inconnu : '{module}'.")
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    m = item.get("module") or item.get("module_code")
-                    if m and str(m).lower() == "administration":
-                        raise serializers.ValidationError(
-                            "Les permissions d'administration ne peuvent pas être configurées sur un rôle (B-05)."
-                        )
-                    if m and str(m).lower() not in modules_valides:
-                        raise serializers.ValidationError(f"Module inconnu : '{m}'.")
-        return value
+        return _valider_permissions_modules_structure(value)
 
 
 class RoleSuppressionSerializer(serializers.Serializer):

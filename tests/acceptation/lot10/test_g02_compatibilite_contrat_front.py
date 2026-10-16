@@ -5,7 +5,7 @@ Tests de caractérisation (lot 9 clos) : le contrat figé au lot 2 ne doit pas a
 import pytest
 
 URL_PROFIL = "/api/v1/auth/profil/"
-CHAMPS = {"role_global", "role_libelle", "role_personnalise", "habilitations", "permissions"}
+CHAMPS = {"role_global", "role_libelle", "role_personnalise", "permissions"}
 PERMISSIONS_ADMINISTRATION = (
     "administration.roles_gerer",
     "administration.collaborateurs_gerer",
@@ -30,24 +30,13 @@ def _profil(fabriques, entreprise, profil):
 
 @pytest.mark.parametrize("profil", PROFILS)
 def test_g02_champs_et_types_du_contrat(profil, fabriques, entreprise):
-    """[G-02] Les cinq champs du contrat sont présents avec les bons types."""
+    """[G-02] Les champs du contrat sont présents avec les bons types."""
     corps = _profil(fabriques, entreprise, profil)
     assert CHAMPS <= set(corps), f"Champs manquants : {CHAMPS - set(corps)}"
     assert isinstance(corps["role_global"], str) and corps["role_global"]
     assert isinstance(corps["role_libelle"], str) and corps["role_libelle"]
     assert corps["role_personnalise"] is None or isinstance(corps["role_personnalise"], dict)
-    assert isinstance(corps["habilitations"], dict)
     assert isinstance(corps["permissions"], list)
-
-
-@pytest.mark.parametrize("profil", PROFILS)
-def test_g02_habilitations_entre_0_et_3(profil, fabriques, entreprise):
-    """[G-02] Chaque habilitation est un entier de 0 à 3 (jamais un booléen)."""
-    habilitations = _profil(fabriques, entreprise, profil)["habilitations"]
-    for module, info in habilitations.items():
-        niveau = info.get("niveau") if isinstance(info, dict) else info
-        assert isinstance(niveau, int) and not isinstance(niveau, bool), (module, niveau)
-        assert 0 <= niveau <= 3, (module, niveau)
 
 
 @pytest.mark.parametrize("profil", PROFILS)

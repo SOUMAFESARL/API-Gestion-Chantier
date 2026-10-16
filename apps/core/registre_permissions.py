@@ -2,14 +2,14 @@
 
 from dataclasses import dataclass
 
-__all__ = ["DefPermission", "REGISTRE", "permissions_du_module"]
+__all__ = ["DefPermission", "REGISTRE"]
 
 
 @dataclass(frozen=True)
 class DefPermission:
     code: str
     module: str  # code du CatalogueModule
-    rang: int  # 1 lecture, 2 écriture, 3 validation (sert à traduire le niveau 0-3 du front)
+    rang: int  # ordre d'affichage au sein du module
     libelle: str
     reservee_administration: bool = False
 
@@ -90,8 +90,3 @@ REGISTRE: dict[str, DefPermission] = {
         ),
     ]
 }
-
-
-def permissions_du_module(module: str, niveau: int) -> set[str]:
-    """Traduit le niveau 0-3 envoyé par le front en codes : rang <= niveau."""
-    return {c for c, p in REGISTRE.items() if p.module == module and p.rang <= niveau}

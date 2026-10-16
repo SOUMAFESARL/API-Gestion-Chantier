@@ -64,10 +64,7 @@ def client_dg(roles):
 def _droits_en_base(role_id):
     with schema_context(SCHEMA):
         return {
-            rmp.module.code: (
-                rmp.niveau,
-                sorted(rmp.permissions_catalogue.values_list("code", flat=True)),
-            )
+            rmp.module.code: sorted(rmp.permissions_catalogue.values_list("code", flat=True))
             for rmp in RoleModulePermission.objects.filter(role_id=role_id).select_related("module")
         }
 
@@ -78,15 +75,44 @@ def test_creation_avec_matrice_garde_ses_droits(client_dg):
         {
             "code": "B1_MATRICE",
             "libelle": "Matrice B1",
-            "permissions_modules": {"projets": ["lecture", "saisie"], "chantier": ["lecture"]},
+            "permissions_modules": {
+                "projets": ["projets.lire", "projets.ecrire"],
+                "chantier": ["chantier.lire"],
+            },
         },
         format="json",
     )
     assert reponse.status_code == 201, reponse.content
     droits = _droits_en_base(reponse.json()["id"])
-    assert droits["projets"][0] == 2
-    assert "projets.ecrire" in droits["projets"][1]
-    assert droits["chantier"][0] == 1
+    assert "projets.ecrire" in droits["projets"]
+    assert droits["chantier"] == ["chantier.lire"]
+
+
+def test_alias_rejete_en_400_et_codes_reels_acceptes_en_201(client_dg):
+    alias_obsolete = "lec" + "ture"
+    rep_ko = client_dg.post(
+        "/api/v1/parametres/roles/",
+        {
+            "code": "B1_ALIAS_KO",
+            "libelle": "Alias B1 KO",
+            "permissions_modules": {"projets": [alias_obsolete]},
+        },
+        format="json",
+    )
+    assert rep_ko.status_code == 400, rep_ko.content
+    assert "Permission inconnue" in str(rep_ko.json())
+
+    rep_ok = client_dg.post(
+        "/api/v1/parametres/roles/",
+        {
+            "code": "B1_CODES_OK",
+            "libelle": "Codes B1 OK",
+            "permissions": ["projets.lire", "projets.creer"],
+        },
+        format="json",
+    )
+    assert rep_ok.status_code == 201, rep_ok.content
+    assert _droits_en_base(rep_ok.json()["id"])["projets"] == ["projets.creer", "projets.lire"]
 
 
 def test_creation_avec_liste_explicite_de_codes(client_dg):
@@ -100,7 +126,7 @@ def test_creation_avec_liste_explicite_de_codes(client_dg):
         format="json",
     )
     assert reponse.status_code == 201, reponse.content
-    codes = _droits_en_base(reponse.json()["id"])["projets"][1]
+    codes = _droits_en_base(reponse.json()["id"])["projets"]
     assert codes == ["projets.lire", "projets.voir_montants"]
 
 
@@ -111,12 +137,12 @@ def test_liste_vide_explicite_ne_donne_rien(client_dg):
             "code": "B1_VIDE",
             "libelle": "Vide B1",
             "permissions": [],
-            "permissions_modules": {"projets": ["lecture"]},
+            "permissions_modules": {"projets": ["projets.lire"]},
         },
         format="json",
     )
     assert reponse.status_code == 201, reponse.content
-    assert all(niveau == 0 for niveau, _ in _droits_en_base(reponse.json()["id"]).values())
+    assert all(codes == [] for codes in _droits_en_base(reponse.json()["id"]).values())
 
 
 def test_modification_par_liste_complete_remplace_la_matrice(client_dg):
@@ -135,8 +161,8 @@ def test_modification_par_liste_complete_remplace_la_matrice(client_dg):
     )
     assert reponse.status_code == 200, reponse.content
     droits = _droits_en_base(role_id)
-    assert droits["projets"] == (0, [])
-    assert droits["chantier"][1] == ["chantier.lire", "chantier.rediger"]
+    assert droits["projets"] == []
+    assert droits["chantier"] == ["chantier.lire", "chantier.rediger"]
 
 
 def test_description_enregistree(client_dg):
@@ -187,7 +213,6 @@ def test_profil_dit_la_portee(roles, code_role, attendue):
 def test_rattachement_des_permissions_d_un_module_en_patch(settings):
     settings.SUPER_ADMIN_IPS = ["127.0.0.1"]
     with schema_context(get_public_schema_name()):
-        # Codes propres au test : LECTURE et ECRITURE sont supprimés logiquement du catalogue.
         for code in ("B1_LIRE", "B1_ECRIRE"):
             CataloguePermission.objects.get_or_create(code=code, defaults={"libelle": code})
         Utilisateur.tous_objets.filter(email="superviseur.b1@ccd-digital.ci").delete()
@@ -226,11 +251,9 @@ def test_rattachement_des_permissions_d_un_module_en_patch(settings):
     assert retrait.status_code == 200, retrait.content
     assert retrait.json()["permissions_codes"] == ["B1_LIRE"]
 
-    # `acces_par_defaut`, que l'écran du back-office envoie à chaque modification, ne remplace
-    # plus les permissions du module.
     modification = client.patch(
         f"/api/v1/admins/modules/{creation.json()['id']}/",
-        {"description": "Nouvelle description", "acces_par_defaut": ["lecture", "saisie"]},
+        {"description": "Nouvelle description"},
         format="json",
     )
     assert modification.status_code == 200, modification.content

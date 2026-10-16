@@ -118,56 +118,14 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
                 "logo_url": logo_url,
             }
 
-    # 3. Permissions effectives et habilitations dérivées (G-02)
-    from apps.core.droits import _obtenir_modules_actifs, est_dg, permissions_effectives
-    from apps.core.registre_permissions import REGISTRE
+    # 3. Permissions effectives
+    from apps.core.droits import permissions_effectives
 
-    modules_actifs = _obtenir_modules_actifs(tenant)
     perms_effectives = sorted(
         permissions_effectives(utilisateur, request=request, tenant=tenant)
     )
 
-    is_dg_ou_super = est_dg(utilisateur) or bool(getattr(utilisateur, "is_superuser", False))
-    habilitations = {}
-
-    for mod_code, _mod_label in ModuleChoix.choices:
-        m_upper = mod_code.upper()
-        m_lower = mod_code.lower()
-        est_souscrit = m_lower in modules_actifs or m_lower == "administration"
-
-        if not est_souscrit:
-            habilitations[m_upper] = {"libelle": "Non souscrit", "niveau": 0}
-        elif is_dg_ou_super:
-            habilitations[m_upper] = {"libelle": "Validation", "niveau": 3}
-        else:
-            perms_du_module = [p for p in perms_effectives if p.startswith(f"{m_lower}.")]
-            if not perms_du_module:
-                habilitations[m_upper] = {"libelle": "Aucun", "niveau": 0}
-            else:
-                max_rang = 0
-                for p_code in perms_du_module:
-                    def_p = REGISTRE.get(p_code)
-                    if def_p:
-                        max_rang = max(max_rang, def_p.rang)
-                    elif p_code.endswith(".valider"):
-                        max_rang = max(max_rang, 3)
-                    elif p_code.endswith(".ecrire") or p_code.endswith(".rediger"):
-                        max_rang = max(max_rang, 2)
-                    elif p_code.endswith(".lire"):
-                        max_rang = max(max_rang, 1)
-
-                libelles_rang = {
-                    0: "Aucun",
-                    1: "Lecture",
-                    2: "Écriture",
-                    3: "Validation",
-                }
-                habilitations[m_upper] = {
-                    "libelle": libelles_rang.get(max_rang, "Personnalisé"),
-                    "niveau": max_rang,
-                }
-
-    # 4. Rôle unique & compatibilité frontend (G-02, B-02 : la base est la seule source de vérité)
+    # 4. Rôle unique & compatibilité frontend (B-02 : la base est la seule source de vérité)
     if getattr(utilisateur, "pk", None):
         user_frais = Utilisateur.objects.filter(pk=utilisateur.pk).select_related("role").first()
         if user_frais:
@@ -215,7 +173,6 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "langue": utilisateur.langue,
         "schema": schema_name,
         "entreprise": entreprise_info,
-        "habilitations": habilitations,
         "permissions": perms_effectives,
         # ENTREPRISE : tous les chantiers ; PROJET : ceux où la personne est affectée.
         "portee": obtenir_portee_role(utilisateur),

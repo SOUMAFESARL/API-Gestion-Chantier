@@ -27,7 +27,6 @@ def test_a04_liste_cochee_exacte(client_tenant):
         rmp, _ = RoleModulePermission.objects.get_or_create(
             role=role_test,
             module_catalogue=mod_projets,
-            defaults={"niveau": 2},
         )
         p_lire = CataloguePermission.objects.filter(code="projets.lire").first()
         p_ecrire = CataloguePermission.objects.filter(code="projets.ecrire").first()
@@ -68,7 +67,6 @@ def test_a04_valider_seul(client_tenant):
         rmp, _ = RoleModulePermission.objects.get_or_create(
             role=role_test,
             module_catalogue=mod_chantier,
-            defaults={"niveau": 3},
         )
         p_valider = CataloguePermission.objects.filter(code="chantier.valider").first()
         if p_valider:

@@ -14,7 +14,7 @@ class ModuleAdmin(admin.ModelAdmin):
 class RoleModulePermissionInline(admin.TabularInline):
     model = RoleModulePermission
     extra = 0
-    fields = ["module", "niveau"]
+    fields = ["module"]
 
 
 @admin.register(Role)
@@ -27,6 +27,6 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(RoleModulePermission)
 class RoleModulePermissionAdmin(admin.ModelAdmin):
-    list_display = ["role", "module", "niveau", "cree_le"]
-    list_filter = ["module", "niveau"]
+    list_display = ["role", "module", "cree_le"]
+    list_filter = ["module"]
     search_fields = ["role__libelle", "role__code", "module__libelle", "module__code"]

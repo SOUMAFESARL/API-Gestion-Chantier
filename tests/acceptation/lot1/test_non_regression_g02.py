@@ -12,8 +12,8 @@ SCHEMA_TEST = "demo"
 pytestmark = pytest.mark.django_db
 
 
-def test_g02_profil_conserve_role_global_habilitations_permissions(client_tenant):
-    """[G-02] GET /api/v1/auth/profil/ continue d'exposer role_global, habilitations et permissions."""
+def test_g02_profil_conserve_role_global_et_permissions(client_tenant):
+    """[G-02] GET /api/v1/auth/profil/ expose role_global et permissions."""
     with schema_context(SCHEMA_TEST):
         user, _ = Utilisateur.tous_objets.get_or_create(
             email="user.g02.test@demo.ci",
@@ -31,7 +31,5 @@ def test_g02_profil_conserve_role_global_habilitations_permissions(client_tenant
 
     data = rep.data
     assert "role_global" in data, "La clé 'role_global' doit être conservée pour compatibilité"
-    assert "habilitations" in data, "La clé 'habilitations' doit être conservée pour le frontend"
     assert "permissions" in data, "La clé 'permissions' doit être présente"
-    assert isinstance(data["habilitations"], dict)
     assert isinstance(data["permissions"], list)

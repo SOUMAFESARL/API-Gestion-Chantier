@@ -69,7 +69,7 @@ def test_permissions_effectives_dg_tous_modules(mock_dg):
         assert "pilotage.lire" not in perms
 
 
-def test_permissions_effectives_collaborateur_niveaux(mock_collaborateur):
+def test_permissions_effectives_collaborateur_codes(mock_collaborateur):
     role_mock = MagicMock()
     role_mock.code = "CT"
     role_mock.est_actif = True
@@ -79,62 +79,40 @@ def test_permissions_effectives_collaborateur_niveaux(mock_collaborateur):
     rmp_projets.module_catalogue_id = None
     rmp_projets.module_id = "uuid1"
     rmp_projets.module.code = "projets"
-    rmp_projets.niveau = 2  # rang <= 2
+    rmp_projets.permissions_catalogue.filter.return_value.values_list.return_value = [
+        "projets.lire",
+        "projets.ecrire",
+    ]
 
     rmp_chantier = MagicMock()
     rmp_chantier.module_catalogue_id = None
     rmp_chantier.module_id = "uuid2"
     rmp_chantier.module.code = "chantier"
-    rmp_chantier.niveau = 3  # rang <= 3
+    rmp_chantier.permissions_catalogue.filter.return_value.values_list.return_value = [
+        "chantier.lire",
+        "chantier.rediger",
+        "chantier.valider",
+    ]
 
     qs_mock = MagicMock()
-    qs_mock.select_related.return_value = [rmp_projets, rmp_chantier]
+    qs_mock.select_related.return_value = qs_mock
+    qs_mock.exists.return_value = True
     qs_mock.__iter__.return_value = iter([rmp_projets, rmp_chantier])
 
     with (
         patch("apps.core.droits._obtenir_modules_actifs", return_value={"projets", "chantier", "administration"}),
         patch("apps.accounts.models.RoleModulePermission.objects.filter", return_value=qs_mock),
-        patch("apps.core.droits._obtenir_plafonds_modele", return_value={}),
     ):
         perms = permissions_effectives(mock_collaborateur)
-        # Projets niveau 2
         assert "projets.lire" in perms
         assert "projets.ecrire" in perms
         assert "projets.creer" not in perms
         assert "projets.changer_statut" not in perms
         assert "projets.voir_tous" not in perms
-        # Chantier niveau 3
         assert "chantier.lire" in perms
         assert "chantier.rediger" in perms
         assert "chantier.valider" in perms
-        # Administration (pas configuré)
         assert "administration.roles_gerer" not in perms
-
-
-def test_permissions_effectives_plafond_modele(mock_collaborateur):
-    role_mock = MagicMock(code="CT", est_actif=True)
-    mock_collaborateur.role_personnalise = role_mock
-
-    rmp_projets = MagicMock()
-    rmp_projets.module_catalogue_id = None
-    rmp_projets.module_id = "uuid1"
-    rmp_projets.module.code = "projets"
-    rmp_projets.niveau = 3  # Accordé 3 en base
-
-    qs_mock = MagicMock()
-    qs_mock.select_related.return_value = [rmp_projets]
-    qs_mock.__iter__.return_value = iter([rmp_projets])
-
-    with (
-        patch("apps.core.droits._obtenir_modules_actifs", return_value={"projets"}),
-        patch("apps.accounts.models.RoleModulePermission.objects.filter", return_value=qs_mock),
-        # Mais le plafond du modèle est 2 !
-        patch("apps.core.droits._obtenir_plafonds_modele", return_value={"projets": 2}),
-    ):
-        perms = permissions_effectives(mock_collaborateur)
-        # Plafonné à 2 : pas de rang 3
-        assert "projets.ecrire" in perms
-        assert "projets.changer_statut" not in perms
 
 
 def test_a_permission_permission_class(mock_dg, mock_collaborateur):

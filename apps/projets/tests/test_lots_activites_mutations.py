@@ -7,7 +7,8 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Module, Role, RoleModulePermission, Utilisateur
-from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal, RoleProjet
+from apps.catalogue.models import CataloguePermission
+from apps.core.enums import ModuleChoix, RoleGlobal, RoleProjet
 from apps.projets.models import Activite, AffectationProjet, Lot, Projet
 
 pytestmark = pytest.mark.django_db
@@ -255,7 +256,10 @@ def test_writer_needs_project_membership(contexte, ressource):
     module, _ = Module.objects.get_or_create(
         code=ModuleChoix.PROJETS, defaults={"libelle": "Projets"}
     )
-    RoleModulePermission.objects.create(role=role, module=module, niveau=NiveauAcces.ECRITURE)
+    rmp = RoleModulePermission.objects.create(role=role, module=module)
+    perm_ecrire = CataloguePermission.objects.filter(code="projets.ecrire").first()
+    if perm_ecrire:
+        rmp.permissions_catalogue.add(perm_ecrire)
     user = Utilisateur.objects.create_user(
         email="mutations.writer@demo.ci",
         password="Test12345!",

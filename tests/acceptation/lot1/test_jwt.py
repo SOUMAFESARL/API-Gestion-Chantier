@@ -43,7 +43,6 @@ def test_b11_jwt_sans_permission(client_tenant):
     payload = jwt.decode(token_str, options={"verify_signature": False})
 
     assert "permissions" not in payload, "Le JWT ne doit pas contenir la clé 'permissions'"
-    assert "habilitations" not in payload, "Le JWT ne doit pas contenir la clé 'habilitations'"
 
 
 def test_b11_claim_role_global_ignore_pour_acces(client_tenant):

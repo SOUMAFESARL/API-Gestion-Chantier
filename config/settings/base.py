@@ -457,7 +457,7 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=_liste)
 
 for _origine in [
     FRONTEND_URL.rstrip("/"),
-    "https://app-chantier.soumafe.com",
+    "https://gchantier.soumafe.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]:

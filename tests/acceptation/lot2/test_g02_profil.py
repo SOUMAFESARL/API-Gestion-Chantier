@@ -11,7 +11,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_g02_profil_dg_ad_cp_personnalise_forme(fab):
-    """[G-02] Pour DG, AD, CP et personnalisé, /profil/ contient role_global, habilitations et permissions."""
+    """[G-02] Pour DG, AD, CP et personnalisé, /profil/ contient role_global et permissions."""
     perso = fab.creer_role_personnalise("ROLE_FORME", "Rôle Forme")
     roles_a_tester = ["DG", "AD", "CP", "ROLE_FORME"]
 
@@ -24,9 +24,6 @@ def test_g02_profil_dg_ad_cp_personnalise_forme(fab):
         data = rep.data
         assert "role_global" in data
         assert isinstance(data["role_global"], str)
-
-        assert "habilitations" in data
-        assert isinstance(data["habilitations"], dict)
 
         assert "permissions" in data
         assert isinstance(data["permissions"], list)
@@ -52,8 +49,8 @@ def test_g02_role_global_role_personnalise(fab):
     assert rep.data.get("role_global") == "MACON_CHEF"
 
 
-def test_g02_habilitations_derivees_des_permissions(fab):
-    """[G-02] Les habilitations sont dérivées des permissions effectives (niveau 1 pour chantier.lire)."""
+def test_g02_permissions_exactes_exposees(fab):
+    """[G-02] Les permissions exposées dans /profil/ correspondent aux permissions effectives du rôle."""
     role = fab.creer_role_personnalise("ROLE_HAB_LIRE", "Hab Lire")
     with schema_context("demo"):
         p_lire = CataloguePermission.objects.filter(code="chantier.lire", est_actif=True).first()
@@ -67,15 +64,13 @@ def test_g02_habilitations_derivees_des_permissions(fab):
     client = fab.client_pour(user)
     rep = client.get("/api/v1/auth/profil/")
     assert rep.status_code == status.HTTP_200_OK
-    hab = rep.data.get("habilitations", {})
-    # CHANTIER doit être à niveau 1
-    info_chantier = hab.get("CHANTIER", {})
-    niveau = info_chantier.get("niveau") if isinstance(info_chantier, dict) else info_chantier
-    assert niveau == 1
+    perms = rep.data.get("permissions", [])
+    assert "chantier.lire" in perms
+    assert "chantier.rediger" not in perms
 
 
 def test_g02_limite_connue_valider_seul(fab):
-    """[G-02] Limite connue : un rôle n'ayant que valider a niveau 3 mais n'a ni lire ni rediger dans permissions."""
+    """[G-02] Un rôle n'ayant que chantier.valider n'a ni chantier.lire ni chantier.rediger dans permissions."""
     role = fab.creer_role_personnalise("ROLE_HAB_VAL", "Hab Valider")
     with schema_context("demo"):
         p_val = CataloguePermission.objects.filter(code="chantier.valider", est_actif=True).first()
@@ -96,7 +91,7 @@ def test_g02_limite_connue_valider_seul(fab):
 
 
 def test_g02_aucune_permission_pour_module_inactif(fab):
-    """[G-02] Un module inactif pour l'entreprise a niveau 0 dans habilitations et zéro permissions."""
+    """[G-02] Un module inactif pour l'entreprise n'expose aucune permission dans /profil/."""
     with schema_context("demo"):
         from apps.accounts.models import Module
         mod_ged = Module.objects.filter(code="ged").first()
@@ -110,9 +105,6 @@ def test_g02_aucune_permission_pour_module_inactif(fab):
     assert rep.status_code == status.HTTP_200_OK
     perms = rep.data.get("permissions", [])
     assert not any(p.startswith("ged.") for p in perms)
-    hab_ged = rep.data.get("habilitations", {}).get("GED", {})
-    niveau_ged = hab_ged.get("niveau") if isinstance(hab_ged, dict) else hab_ged
-    assert niveau_ged == 0
 
 
 def test_g02_role_global_non_ecrivable_via_profil(fab):

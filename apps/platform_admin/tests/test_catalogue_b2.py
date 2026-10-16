@@ -275,26 +275,3 @@ def test_retablir_une_permission_du_registre(superviseur_client):
     assert data["code"] == "projets.voir_montants"
     assert str(data["id"]) == str(perm_id)
     assert "projets" in data["modules_codes"]
-
-
-def test_acces_par_defaut_sans_effet(superviseur_client):
-    """PATCH /admins/modules/{projets}/ {"acces_par_defaut": ...} -> inchangé (garde bf3ae8d)."""
-    with schema_context(get_public_schema_name()):
-        mod_projets = CatalogueModule.objects.get(code="projets", supprime_le__isnull=True)
-        codes_avant = set(
-            mod_projets.permissions.filter(supprime_le__isnull=True).values_list("code", flat=True)
-        )
-
-    rep = superviseur_client.patch(
-        f"/api/v1/admins/modules/{mod_projets.id}/",
-        {"acces_par_defaut": ["lecture"]},
-        format="json",
-    )
-    assert rep.status_code == status.HTTP_200_OK, rep.content
-
-    with schema_context(get_public_schema_name()):
-        mod_projets.refresh_from_db()
-        codes_apres = set(
-            mod_projets.permissions.filter(supprime_le__isnull=True).values_list("code", flat=True)
-        )
-        assert codes_apres == codes_avant

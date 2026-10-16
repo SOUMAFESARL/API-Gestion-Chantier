@@ -100,7 +100,6 @@ def definir_permissions(role, codes):
                 role=role,
                 module=mod_local,
                 module_catalogue=cat_mod,
-                niveau=1,
             )
             perms = list(CataloguePermission.objects.filter(code__in=m_codes, supprime_le__isnull=True))
             rmp.permissions_catalogue.set(perms)

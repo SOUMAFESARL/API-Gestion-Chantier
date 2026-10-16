@@ -1,10 +1,9 @@
 """Modèle Permission — catalogue dynamique des autorisations granulaires.
 
 Socle IAM / RBAC :
-Ce modèle remplace le champ scalaire statique NiveauAcces.
 Il permet l'ajout, la modification et la suppression dynamique de permissions
-(ex: 'LECTURE', 'ECRITURE', 'VALIDATION', 'SUPPRESSION', etc.) par le Super Admin,
-sans hiérarchie imposée (le niveau supérieur n'implique plus les niveaux inférieurs).
+(ex: 'projets.lire', 'projets.creer', 'chantier.valider', etc.) par le Super Admin,
+sans hiérarchie imposée.
 """
 
 from django.db import models
@@ -18,15 +17,15 @@ __all__ = ["Permission"]
 class Permission(ModeleBase):
     """Autorisation granulaire dynamique de la plateforme.
 
-    Chaque enregistrement représente une capacité ou un droit d'action (ex: 'LECTURE', 'ECRITURE').
-    Les permissions sont transversales et applicables aux différents modules métier.
+    Chaque enregistrement représente une capacité ou un droit d'action (ex: 'projets.lire', 'projets.ecrire').
+    Les permissions sont rattachées aux différents modules métier.
     """
 
     code = models.CharField(
         _("code"),
         max_length=50,
         db_index=True,
-        help_text=_("Code technique unique de l'autorisation (ex: 'LECTURE', 'ECRITURE', 'VALIDATION')."),
+        help_text=_("Code technique unique de l'autorisation (ex: 'projets.lire', 'chantier.valider')."),
     )
     libelle = models.CharField(
         _("libellé"),

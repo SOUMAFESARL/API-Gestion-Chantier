@@ -259,7 +259,11 @@ def accepter_invitation(
     role_active = invitation.role_propose
 
     if utilisateur is not None:
-        utilisateur.nom = nom_final
+        # `invitation.nom` porte le nom **complet** (« Awa Traoré ») : il ne doit pas écraser
+        # le `nom` déjà saisi à l'ajout du collaborateur, sinon l'affichage prénom + nom
+        # devient « Awa Awa Traoré ».
+        if nom.strip() or not utilisateur.nom:
+            utilisateur.nom = nom_final
         if prenom_final:
             utilisateur.prenom = prenom_final
         utilisateur.statut = StatutUtilisateur.ACTIF

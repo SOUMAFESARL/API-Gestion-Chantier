@@ -181,10 +181,12 @@ class AffectationProjet(ModeleBase):
         on_delete=models.CASCADE,
         related_name="affectations",
     )
+    # Le code d'un rôle de portée Projet (table `role`) : CP, CT, CC, VI, ou tout rôle
+    # créé depuis — plus de liste figée (décision du 16/10/2026). C'est toujours le rôle
+    # du collaborateur sur la plateforme.
     role_projet = models.CharField(
         _("rôle sur le projet"),
-        max_length=5,
-        choices=RoleProjet.choices,
+        max_length=50,
         default=RoleProjet.CHEF_PROJET,
         blank=True,
     )
@@ -220,6 +222,15 @@ class AffectationProjet(ModeleBase):
                 name="uq_affectation_utilisateur_projet",
             )
         ]
+
+    def get_role_projet_display(self) -> str:
+        """Le libellé du rôle, lu dans la table `role` ; à défaut celui de l'énumération."""
+        from apps.accounts.models import Role
+
+        role = Role.objects.filter(code__iexact=self.role_projet).only("libelle").first()
+        if role:
+            return role.libelle
+        return dict(RoleProjet.choices).get(self.role_projet, self.role_projet)
 
     def __str__(self) -> str:
         return f"{self.utilisateur} sur {self.projet.nom} ({self.get_role_projet_display()})"

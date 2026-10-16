@@ -271,6 +271,9 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
                 {
                     **u_data,
                     "fonction": aff.fonction_membre or "AUTRE",
+                    # Le rôle tenu sur le projet : VI ou tout rôle de portée Projet.
+                    "role_code": aff.role_projet,
+                    "role_libelle": aff.get_role_projet_display(),
                     "affectation_id": str(aff.id),
                     "utilisateur": u_data,
                 }

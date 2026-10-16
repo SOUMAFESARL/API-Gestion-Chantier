@@ -121,7 +121,10 @@ def affecter_collaborateur_projet(
 ) -> AffectationProjet:
     """Affecte ou réactive un collaborateur sur un chantier avec un rôle spécifique."""
     verifier_affectable(utilisateur)
-    if role_projet not in RoleProjet.values:
+    # Tout rôle de la table `role` (CP, CT, CC, VI, ou créé depuis) — plus de liste figée.
+    if role_projet not in RoleProjet.values and not Role.objects.filter(
+        code__iexact=role_projet, est_actif=True
+    ).exists():
         raise ValidationError(_("Le rôle de projet spécifié n'est pas valide."))
 
     if date_debut and date_fin and date_fin < date_debut:

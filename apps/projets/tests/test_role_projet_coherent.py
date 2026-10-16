@@ -49,3 +49,21 @@ def test_un_ct_ne_s_affecte_que_comme_ct():
         assert not _valide(ct, RoleProjet.CHEF_PROJET)
         assert not _valide(ct, RoleProjet.CHEF_CHANTIER)
         assert not _valide(ct, RoleProjet.VISITEUR)
+
+
+def test_regle_valable_pour_un_role_cree_plus_tard():
+    """Aucun cas particulier : un rôle de portée Projet créé après coup suit la même règle."""
+    from apps.accounts.models import Role
+
+    with schema_context(SCHEMA):
+        role_qse, _ = Role.objects.get_or_create(
+            code="QSE_TEST",
+            defaults={"libelle": "Responsable QSE", "portee": "PROJET", "est_actif": True},
+        )
+        user = _utilisateur("qse.coherent@demo.ci", "QSE_TEST")
+        user.role = role_qse
+        user.save(update_fields=["role"])
+
+        assert _valide(user, "QSE_TEST")
+        assert not _valide(user, RoleProjet.VISITEUR)
+        assert not _valide(user, RoleProjet.CONDUCTEUR_TRAVAUX)

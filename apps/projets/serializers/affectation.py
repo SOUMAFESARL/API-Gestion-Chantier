@@ -6,22 +6,19 @@ from apps.core.enums import RoleProjet, StatutUtilisateur
 from apps.core.permissions import obtenir_portee_role
 from apps.projets.models import AffectationProjet
 
-# Les places de l'encadrement qui sont aussi des rôles de la plateforme.
-ROLES_ENCADREMENT = {
-    RoleProjet.CHEF_PROJET,
-    RoleProjet.CONDUCTEUR_TRAVAUX,
-    RoleProjet.CHEF_CHANTIER,
-}
+
+def code_role_plateforme(user) -> str:
+    """Le code du rôle du collaborateur sur la plateforme (CP, CT, QSE…)."""
+    return ((user.role.code if getattr(user, "role", None) else user.role_global) or "").upper()
 
 
 def verifier_role_coherent(user, role_projet) -> None:
     """Règle du 16/10/2026 : on tient sur un projet le rôle qu'on a sur la plateforme.
 
-    Un CT n'est affecté que comme CT ; un CP, CT ou CC ne devient pas « autre membre ».
+    Valable pour **tout** rôle de portée Projet, présent ou à venir : un CT n'est affecté
+    que comme CT, un « Responsable QSE » que comme Responsable QSE.
     """
-    code = (user.role.code if getattr(user, "role", None) else user.role_global) or ""
-    code = code.upper()
-    if role_projet in ROLES_ENCADREMENT and code != role_projet:
+    if (role_projet or "").upper() != code_role_plateforme(user):
         raise serializers.ValidationError(
             {
                 "role_projet": (
@@ -29,11 +26,6 @@ def verifier_role_coherent(user, role_projet) -> None:
                     "tenir sur un projet."
                 )
             },
-            code="role_incoherent",
-        )
-    if role_projet == RoleProjet.VISITEUR and code in ROLES_ENCADREMENT:
-        raise serializers.ValidationError(
-            {"role_projet": "Ce collaborateur s'affecte avec son propre rôle, pas comme membre."},
             code="role_incoherent",
         )
 
@@ -113,7 +105,7 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
     """Données pour affecter un nouveau collaborateur au projet (E-05 / B4)."""
 
     utilisateur_id = serializers.UUIDField(required=True)
-    role_projet = serializers.ChoiceField(choices=RoleProjet.choices, required=True)
+    role_projet = serializers.CharField(max_length=50, required=True)
     date_debut = serializers.DateField(required=False, allow_null=True)
     date_fin = serializers.DateField(required=False, allow_null=True)
     zone = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
@@ -153,7 +145,6 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
         attrs["utilisateur_instance"] = user
 
         role_projet = attrs.get("role_projet")
-        verifier_role_coherent(user, role_projet)
         zone = attrs.get("zone", "")
         fonction_membre = attrs.get("fonction_membre", "")
 
@@ -173,6 +164,9 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
         if role_projet == RoleProjet.VISITEUR and not fonction_membre:
             attrs["fonction_membre"] = "AUTRE"
 
+        # Après les contrôles de forme (zone, fonction) : leur message reste le plus précis.
+        verifier_role_coherent(user, role_projet)
+
         date_debut = attrs.get("date_debut")
         date_fin = attrs.get("date_fin")
         if date_debut and date_fin and date_fin < date_debut:
@@ -186,7 +180,7 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
 class AffectationProjetUpdateSerializer(serializers.Serializer):
     """Données pour modifier rôle, dates, zone, fonction ou statut d'une affectation."""
 
-    role_projet = serializers.ChoiceField(choices=RoleProjet.choices, required=False)
+    role_projet = serializers.CharField(max_length=50, required=False)
     date_debut = serializers.DateField(required=False, allow_null=True)
     date_fin = serializers.DateField(required=False, allow_null=True)
     est_actif = serializers.BooleanField(required=False)

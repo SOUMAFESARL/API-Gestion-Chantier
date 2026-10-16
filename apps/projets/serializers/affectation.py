@@ -6,6 +6,37 @@ from apps.core.enums import RoleProjet, StatutUtilisateur
 from apps.core.permissions import obtenir_portee_role
 from apps.projets.models import AffectationProjet
 
+# Les places de l'encadrement qui sont aussi des rôles de la plateforme.
+ROLES_ENCADREMENT = {
+    RoleProjet.CHEF_PROJET,
+    RoleProjet.CONDUCTEUR_TRAVAUX,
+    RoleProjet.CHEF_CHANTIER,
+}
+
+
+def verifier_role_coherent(user, role_projet) -> None:
+    """Règle du 16/10/2026 : on tient sur un projet le rôle qu'on a sur la plateforme.
+
+    Un CT n'est affecté que comme CT ; un CP, CT ou CC ne devient pas « autre membre ».
+    """
+    code = (user.role.code if getattr(user, "role", None) else user.role_global) or ""
+    code = code.upper()
+    if role_projet in ROLES_ENCADREMENT and code != role_projet:
+        raise serializers.ValidationError(
+            {
+                "role_projet": (
+                    "Ce collaborateur n'a pas ce rôle sur la plateforme : il ne peut pas le "
+                    "tenir sur un projet."
+                )
+            },
+            code="role_incoherent",
+        )
+    if role_projet == RoleProjet.VISITEUR and code in ROLES_ENCADREMENT:
+        raise serializers.ValidationError(
+            {"role_projet": "Ce collaborateur s'affecte avec son propre rôle, pas comme membre."},
+            code="role_incoherent",
+        )
+
 
 class IntervenantAffectationSerializer(serializers.Serializer):
     """Représentation de l'utilisateur affecté."""
@@ -122,6 +153,7 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
         attrs["utilisateur_instance"] = user
 
         role_projet = attrs.get("role_projet")
+        verifier_role_coherent(user, role_projet)
         zone = attrs.get("zone", "")
         fonction_membre = attrs.get("fonction_membre", "")
 
@@ -164,6 +196,8 @@ class AffectationProjetUpdateSerializer(serializers.Serializer):
     def validate(self, attrs):
         instance = getattr(self, "instance", None)
         nouveau_role = attrs.get("role_projet", getattr(instance, "role_projet", None))
+        if "role_projet" in attrs and instance is not None:
+            verifier_role_coherent(instance.utilisateur, attrs["role_projet"])
 
         if "zone" in attrs and attrs["zone"] and nouveau_role != RoleProjet.CHEF_CHANTIER:
             raise serializers.ValidationError(

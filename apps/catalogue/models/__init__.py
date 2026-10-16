@@ -4,6 +4,7 @@ from .entreprise_module import EntrepriseModule
 from .modele_role import ModeleRole, ModeleRoleModule
 from .module import CatalogueModule
 from .permission import CataloguePermission
+from .referentiel import CategorieReferentiel, ReferentielPlateforme
 
 # Alias pour compatibilité sémantique
 Module = CatalogueModule
@@ -17,4 +18,6 @@ __all__ = [
     "ModeleRoleModule",
     "Module",
     "Permission",
+    "CategorieReferentiel",
+    "ReferentielPlateforme",
 ]

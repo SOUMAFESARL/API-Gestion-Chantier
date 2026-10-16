@@ -267,8 +267,9 @@ class ProjetCreationSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
     reference = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     nom = serializers.CharField(max_length=200)
-    type_projet = serializers.ChoiceField(
-        choices=TypeProjet.choices, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
+    # Un code des référentiels (plateforme + entreprise) — voir `validate_type_projet`.
+    type_projet = serializers.CharField(
+        max_length=60, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
     )
     statut = serializers.ChoiceField(
         choices=StatutProjet.choices, required=False, default=StatutProjet.EN_ATTENTE
@@ -317,6 +318,15 @@ class ProjetCreationSerializer(serializers.Serializer):
         from apps.core.purger_montants import valider_ecriture_montant
 
         return valider_ecriture_montant(value, request=request, champ="budget_initial_montant")
+
+    def validate_type_projet(self, value: str) -> str:
+        from apps.projets.services.referentiels import code_type_projet_valide
+
+        if not code_type_projet_valide(value):
+            raise serializers.ValidationError(
+                _("Choisissez un type de projet dans la liste, ou ajoutez-le.")
+            )
+        return value
 
     def validate(self, attrs):
         request = self.context.get("request") if getattr(self, "context", None) else None

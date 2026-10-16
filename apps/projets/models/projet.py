@@ -18,10 +18,10 @@ class Projet(ModeleBase):
 
     reference = models.CharField(_("référence"), max_length=30)
     nom = models.CharField(_("nom"), max_length=200)
+    # Code d'une entrée des référentiels (plateforme ou entreprise) — plus de liste figée.
     type_projet = models.CharField(
         _("type de projet"),
-        max_length=40,
-        choices=TypeProjet.choices,
+        max_length=60,
         default=TypeProjet.BATIMENT_RESIDENTIEL,
     )
     description = models.TextField(_("description"), blank=True)

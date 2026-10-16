@@ -1,6 +1,6 @@
 """Routes pour l'application projets."""
 
-from django.urls import path
+from django.urls import path, re_path
 
 from apps.projets.views import (
     ArretChantierDetailView,
@@ -40,6 +40,7 @@ from apps.projets.views.lot import (
     ProjetLotListCreateView,
     ProjetLotModeleView,
 )
+from apps.projets.views.referentiels import ReferentielEntreeView, ReferentielListeView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
@@ -66,6 +67,17 @@ urlpatterns = [
         "projets/motifs-report/",
         MotifReportListCreateView.as_view(),
         name="projets-motifs-report-alias",
+    ),
+    # Référentiels dynamiques : types de projet et noms de lot (plateforme + entreprise)
+    re_path(
+        r"^referentiels/(?P<categorie>types-projet|lots)/$",
+        ReferentielListeView.as_view(),
+        name="referentiel-liste",
+    ),
+    re_path(
+        r"^referentiels/(?P<categorie>types-projet|lots)/(?P<code>[A-Za-z0-9_]+)/$",
+        ReferentielEntreeView.as_view(),
+        name="referentiel-entree",
     ),
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),

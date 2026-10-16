@@ -204,6 +204,7 @@ class TelephoneEntrepriseEcritureSerializer(serializers.Serializer):
         choices=TelephoneEntreprise.Libelle.choices,
         error_messages={"invalid_choice": _("Choisissez à quoi sert ce numéro.")},
     )
+    nom = serializers.CharField(max_length=60, required=False, allow_blank=True, default="")
     numero = serializers.CharField(max_length=30)
     principal = serializers.BooleanField()
 
@@ -253,6 +254,7 @@ class ChampListeTelephones(serializers.Field):
                     if hasattr(t, "get_libelle_display")
                     else t.get("libelle_affiche", t.get("libelle"))
                 ),
+                "nom": t.nom if hasattr(t, "nom") else t.get("nom", ""),
                 "numero": t.numero if hasattr(t, "numero") else t.get("numero"),
                 "principal": (
                     t.est_principal

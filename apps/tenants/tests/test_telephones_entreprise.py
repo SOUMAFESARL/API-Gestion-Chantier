@@ -143,6 +143,53 @@ def test_enregistrer_trois_numeros(client, utilisateur_dg):
 
 
 @pytest.mark.django_db
+def test_nom_libre_enregistre_modifie_et_journalise(client, utilisateur_dg):
+    """MLD v1.8 : le nom est facultatif, nettoyé, relu, et sa modification journalisée."""
+    client.force_authenticate(user=utilisateur_dg)
+    payload = {
+        "telephones": [
+            {
+                "libelle": "WHATSAPP",
+                "nom": "  Service achats ",
+                "numero": "+2250700000000",
+                "principal": True,
+            },
+            {"libelle": "FIXE", "numero": "+2252700000000", "principal": False},
+        ]
+    }
+    reponse = client.patch("/api/v1/parametres/configuration/", payload, format="json")
+    assert reponse.status_code == status.HTTP_200_OK
+    assert reponse.data["telephones"][0]["nom"] == "Service achats"
+    assert reponse.data["telephones"][1]["nom"] == ""
+
+    payload["telephones"][0]["id"] = reponse.data["telephones"][0]["id"]
+    payload["telephones"][0]["nom"] = "Direction"
+    with schema_context(SCHEMA):
+        avant = JournalAudit.objects.filter(type_entite="telephone_entreprise").count()
+    reponse = client.patch("/api/v1/parametres/configuration/", payload, format="json")
+    assert reponse.status_code == status.HTTP_200_OK
+    assert client.get("/api/v1/parametres/configuration/").data["telephones"][0]["nom"] == (
+        "Direction"
+    )
+    with schema_context(SCHEMA):
+        assert JournalAudit.objects.filter(type_entite="telephone_entreprise").count() == (
+            avant + 1
+        )
+
+
+@pytest.mark.django_db
+def test_nom_trop_long_refuse(client, utilisateur_dg):
+    client.force_authenticate(user=utilisateur_dg)
+    payload = {
+        "telephones": [
+            {"libelle": "MOBILE", "nom": "x" * 61, "numero": "+2250700000000", "principal": True}
+        ]
+    }
+    reponse = client.patch("/api/v1/parametres/configuration/", payload, format="json")
+    assert reponse.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
 def test_multipart_avec_logo_et_numeros(client, utilisateur_dg, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     client.force_authenticate(user=utilisateur_dg)

@@ -332,6 +332,8 @@ class TelephoneEntreprise(ModeleBase):
         verbose_name=_("entreprise"),
     )
     libelle = models.CharField(_("libellé"), max_length=20, choices=Libelle.choices)
+    # Le libellé dit le canal, le nom dit à qui il mène (« Service achats ») — MLD v1.8.
+    nom = models.CharField(_("nom"), max_length=60, blank=True, default="")
     numero = models.CharField(_("numéro"), max_length=16)
     est_principal = models.BooleanField(_("principal"), default=False)
     ordre = models.PositiveSmallIntegerField(_("ordre"), default=0)

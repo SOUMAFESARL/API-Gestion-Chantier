@@ -135,11 +135,11 @@ def test_prevol_options_autorise_meme_hors_liste_blanche():
     with override_settings(SUPER_ADMIN_IPS=["10.0.0.1"], DEBUG=False):
         reponse = client.options(
             TOKEN,
-            HTTP_ORIGIN="https://app-chantier.soumafe.com",
+            HTTP_ORIGIN="https://gchantier.soumafe.com",
             HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
             HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type",
         )
 
     assert reponse.status_code == 200
-    assert reponse.headers.get("Access-Control-Allow-Origin") == "https://app-chantier.soumafe.com"
+    assert reponse.headers.get("Access-Control-Allow-Origin") == "https://gchantier.soumafe.com"
 

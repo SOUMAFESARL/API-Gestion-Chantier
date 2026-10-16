@@ -5,11 +5,10 @@ from django_tenants.utils import schema_context
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Role, RoleModulePermission, Utilisateur
+from apps.accounts.models import Role, Utilisateur
 from apps.accounts.services.roles import initialiser_roles_par_defaut
 from apps.core.enums import (
     ModuleChoix,
-    NiveauAcces,
     RoleGlobal,
     StatutUtilisateur,
 )
@@ -121,9 +120,9 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
         "libelle": "Chef d'Équipe Maçonnerie",
         "description": "Responsable de l'équipe gros œuvre sur chantier",
         "permissions_modules": {
-            ModuleChoix.CHANTIER: NiveauAcces.ECRITURE,
-            ModuleChoix.GED: NiveauAcces.LECTURE,
-            ModuleChoix.TIERS: NiveauAcces.AUCUN,
+            ModuleChoix.CHANTIER: ["chantier.lire", "chantier.rediger"],
+            ModuleChoix.GED: ["ged.lire"],
+            ModuleChoix.TIERS: [],
         },
     }
     rep = client.post("/api/v1/parametres/roles/", payload, format="json")
@@ -131,9 +130,8 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
     data = rep.json()
     assert data["code"] == "CHEF_EQUIPE"
     assert data["libelle"] == "Chef d'Équipe Maçonnerie"
-    assert "ECRITURE" in data["permissions_modules"][ModuleChoix.CHANTIER]
-    assert "LECTURE" in data["permissions_modules"][ModuleChoix.GED]
-    assert "lecture" in data["permissions_modules"][ModuleChoix.GED]
+    assert "chantier.rediger" in data["permissions_modules"][ModuleChoix.CHANTIER]
+    assert "ged.lire" in data["permissions_modules"][ModuleChoix.GED]
     assert data["permissions_modules"][ModuleChoix.TIERS] == []
 
 
@@ -149,8 +147,8 @@ def test_post_parametres_roles_creer_par_dg(client_tenant, dg_user):
         "libelle": "Auditeur Externe",
         "description": "Audit des comptes et chantiers",
         "permissions_modules": {
-            ModuleChoix.PROJETS: NiveauAcces.LECTURE,
-            ModuleChoix.PILOTAGE: NiveauAcces.LECTURE,
+            ModuleChoix.PROJETS: ["projets.lire"],
+            ModuleChoix.PILOTAGE: ["pilotage.lire"],
         },
     }
     rep = client.post("/api/v1/parametres/roles/", payload, format="json")
@@ -184,27 +182,26 @@ def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user):
         f"/api/v1/parametres/roles/{role_cc.id}/",
         {
             "permissions_modules": {
-                ModuleChoix.GED: NiveauAcces.LECTURE,
+                ModuleChoix.GED: ["ged.lire"],
             }
         },
         format="json",
     )
     assert rep_patch.status_code == status.HTTP_200_OK
-    assert "LECTURE" in rep_patch.json()["permissions_modules"][ModuleChoix.GED]
-    assert "lecture" in rep_patch.json()["permissions_modules"][ModuleChoix.GED]
+    assert "ged.lire" in rep_patch.json()["permissions_modules"][ModuleChoix.GED]
 
     # 2. Modification via POST (supporté pour flexibilité frontend)
     rep_post = client.post(
         f"/api/v1/parametres/roles/{role_cc.id}/",
         {
             "permissions_modules": {
-                ModuleChoix.GED: NiveauAcces.ECRITURE,
+                ModuleChoix.GED: ["ged.lire", "ged.televerser"],
             }
         },
         format="json",
     )
     assert rep_post.status_code == status.HTTP_200_OK
-    assert "ECRITURE" in rep_post.json()["permissions_modules"][ModuleChoix.GED]
+    assert "ged.televerser" in rep_post.json()["permissions_modules"][ModuleChoix.GED]
 
 
 @pytest.mark.django_db

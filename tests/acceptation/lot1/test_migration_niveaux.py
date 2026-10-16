@@ -1,4 +1,4 @@
-"""Tests d'acceptation de la migration des niveaux vers les codes (Règle E-02)."""
+"""Tests d'acceptation de la migration vers les codes de permissions (Règle E-02)."""
 
 import json
 from pathlib import Path
@@ -6,27 +6,11 @@ import pytest
 from django_tenants.utils import schema_context
 
 from apps.accounts.models import Role, RoleModulePermission
-from apps.core.registre_permissions import REGISTRE, permissions_du_module
+from apps.core.registre_permissions import REGISTRE
 
 SCHEMA_TEST = "demo"
 
 pytestmark = pytest.mark.django_db
-
-
-def test_e02_table_niveaux_vers_codes():
-    """[E-02] Chaque niveau (1, 2, 3) se traduit rigoureusement en codes de rang inférieur ou égal."""
-    # Test pour chantier : rang 1 = lire, rang 2 = rediger, rang 3 = valider
-    assert permissions_du_module("chantier", 1) == {"chantier.lire"}
-    assert permissions_du_module("chantier", 2) == {"chantier.lire", "chantier.rediger"}
-    assert permissions_du_module("chantier", 3) == {"chantier.lire", "chantier.rediger", "chantier.valider"}
-
-    # Test pour tiers : rang 1 = lire, rang 2 = ecrire
-    assert permissions_du_module("tiers", 1) == {"tiers.lire"}
-    assert permissions_du_module("tiers", 2) == {"tiers.lire", "tiers.ecrire"}
-
-    # Test pour pilotage : rang 1 = lire, rang 3 = voir_montants
-    assert permissions_du_module("pilotage", 1) == {"pilotage.lire"}
-    assert "pilotage.lire" in permissions_du_module("pilotage", 3)
 
 
 def test_e02_aucun_code_perdu_apres_migration():
@@ -45,9 +29,13 @@ def test_e02_aucun_code_perdu_apres_migration():
                 continue
 
             for mod_code, info_mod in donnees_role.get("modules", {}).items():
-                niveau_avant = info_mod.get("niveau", 0)
-                if mod_code in ("chantier", "tiers", "pilotage") and niveau_avant > 0:
-                    codes_attendus = permissions_du_module(mod_code, niveau_avant)
+                rang_avant = info_mod.get("niveau", 0)
+                if mod_code in ("chantier", "tiers", "pilotage") and rang_avant > 0:
+                    codes_attendus = {
+                        code
+                        for code, def_p in REGISTRE.items()
+                        if def_p.module == mod_code and def_p.rang <= rang_avant
+                    }
                     rmp = RoleModulePermission.objects.filter(
                         role=role_actuel,
                         supprime_le__isnull=True,
@@ -61,7 +49,6 @@ def test_e02_aucun_code_perdu_apres_migration():
 
                     if rmp and rmp.permissions_catalogue.exists():
                         codes_obtenus = set(rmp.permissions_catalogue.values_list("code", flat=True))
-                        # Vérifier que les codes dérivés du niveau sont bien présents
                         assert codes_attendus.issubset(codes_obtenus), (
                             f"Rôle {code_role}, module {mod_code} : codes perdus {codes_attendus - codes_obtenus}"
                         )

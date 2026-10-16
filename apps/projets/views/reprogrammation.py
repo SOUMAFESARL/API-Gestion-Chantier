@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal
+from apps.core.enums import ModuleChoix, RoleGlobal
 from apps.core.droits import APermission
 from apps.core.pagination import PaginationStandard
 from apps.core.permissions import GardePermissionProjet

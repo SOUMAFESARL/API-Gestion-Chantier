@@ -17,7 +17,7 @@ def migrer_niveaux_vers_permissions(apps, schema_editor):
     CatalogueModule = apps.get_model("catalogue", "CatalogueModule")
     CataloguePermission = apps.get_model("catalogue", "CataloguePermission")
 
-    from apps.core.registre_permissions import REGISTRE, permissions_du_module
+    from apps.core.registre_permissions import REGISTRE
 
     # Matrice de l'Annexe 1 pour les 6 codes projets nouveaux
     ANNEXE1_CODES_PAR_ROLE = {
@@ -64,7 +64,9 @@ def migrer_niveaux_vers_permissions(apps, schema_editor):
 
             # E-02 : codes de rang <= niveau
             if niveau > 0:
-                codes_niveau = permissions_du_module(mod_key, niveau)
+                codes_niveau = {
+                    code for code, p in REGISTRE.items() if p.module == mod_key and p.rang <= niveau
+                }
                 for c in codes_niveau:
                     if c in cat_perms_by_code:
                         perms_a_ajouter.add(cat_perms_by_code[c])

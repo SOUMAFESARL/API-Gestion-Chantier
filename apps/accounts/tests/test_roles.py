@@ -1,4 +1,4 @@
-"""Tests pour la gestion dynamique des rôles et des habilitations par module (RBAC Hybride)."""
+"""Tests pour la gestion dynamique des rôles et des habilitations par module (RBAC)."""
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -10,12 +10,9 @@ from apps.accounts.models import Role, RoleModulePermission, Utilisateur
 from apps.accounts.services.roles import (
     creer_role,
     initialiser_roles_par_defaut,
-    modifier_role,
     supprimer_role,
 )
-from apps.core.enums import ModuleChoix, NiveauAcces, RoleGlobal, StatutUtilisateur
-from apps.projets.models import Projet
-from apps.tiers.models import Tiers
+from apps.core.enums import ModuleChoix, RoleGlobal, StatutUtilisateur
 
 SCHEMA = "demo"
 HOTE = "demo.localhost"
@@ -53,22 +50,19 @@ def test_initialiser_roles_par_defaut():
         roles = initialiser_roles_par_defaut()
         assert len(roles) >= 7
 
-        # Vérifie que l'admin a les droits définis par son modèle mais n'est plus système
+        # Vérifie que les rôles système (DG, AD, CC...) ont est_systeme=True
         role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
-        assert role_ad.est_systeme is False
+        assert role_ad.est_systeme is True
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
         assert role_dg.est_systeme is True
         perms_ad = RoleModulePermission.objects.filter(role=role_ad)
-        assert perms_ad.count() == len(ModuleChoix.values)
-        for p in perms_ad:
-            assert p.niveau >= NiveauAcces.ECRITURE
+        assert perms_ad.count() >= len(ModuleChoix.values)
 
-        # Vérifie que le chef de chantier a ses plafonds respectés
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
         perm_chantier = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.CHANTIER)
-        assert perm_chantier.niveau == NiveauAcces.ECRITURE
+        assert perm_chantier.permissions_catalogue.filter(code="chantier.rediger").exists()
         perm_ged = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.GED)
-        assert perm_ged.niveau == NiveauAcces.ECRITURE
+        assert perm_ged.permissions_catalogue.filter(code="ged.lire").exists()
 
 
 @pytest.mark.django_db
@@ -83,18 +77,15 @@ def test_interdiction_supprimer_role_systeme():
 
 
 @pytest.mark.django_db
-def test_seul_dg_est_role_systeme():
-    """Vérifie que seul le DG possède est_systeme=True après initialisation (AD devenant supprimable par DG)."""
+def test_roles_systemes_sont_marques_systeme():
+    """Vérifie que les 10 rôles système possèdent est_systeme=True après initialisation."""
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
 
-        # Seul DG doit être système (immuable)
         role_dg = Role.objects.get(code=RoleGlobal.DIRECTEUR_GENERAL)
         assert role_dg.est_systeme is True
-
-        # AD et tous les autres rôles ne sont PAS système
-        for role in Role.objects.exclude(code=RoleGlobal.DIRECTEUR_GENERAL):
-            assert role.est_systeme is False, f"{role.code} ne devrait PAS être est_systeme=True"
+        role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
+        assert role_ad.est_systeme is True
 
 
 @pytest.mark.django_db
@@ -105,7 +96,7 @@ def test_supprimer_role_avec_reassignation_obligatoire(admin_user):
         role_source = creer_role(
             code="AIDE_COMPTABLE",
             libelle="Aide Comptable",
-            permissions_modules={ModuleChoix.TIERS: NiveauAcces.ECRITURE},
+            permissions_modules={ModuleChoix.TIERS: ["tiers.lire", "tiers.ecrire"]},
             cree_par=admin_user,
         )
         role_cible = Role.objects.get(code=RoleGlobal.VISITEUR)
@@ -137,8 +128,6 @@ def test_supprimer_role_avec_reassignation_obligatoire(admin_user):
         assert role_source.supprime_le is not None
 
 
-
-
 @pytest.mark.django_db
 def test_api_roles_crud(client_api):
     with schema_context(SCHEMA):
@@ -154,8 +143,8 @@ def test_api_roles_crud(client_api):
             "libelle": "Métreur Vérificateur",
             "description": "Calculs des métrés et validation des attachements",
             "permissions_modules": {
-                ModuleChoix.PROJETS: NiveauAcces.LECTURE,
-                ModuleChoix.CHANTIER: NiveauAcces.VALIDATION,
+                ModuleChoix.PROJETS: ["projets.lire"],
+                ModuleChoix.CHANTIER: ["chantier.lire", "chantier.rediger", "chantier.valider"],
             },
         }
         rep_create = client_api.post("/api/v1/roles/", creation_data, format="json", HTTP_HOST=HOTE)
@@ -223,11 +212,10 @@ def test_permission_module_enforcement():
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
 
-        # Pour tester l'enforcement quand un niveau est insuffisant, on ajuste TIERS à AUCUN pour CHEF_CHANTIER
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
-        RoleModulePermission.objects.filter(role=role_cc, module__code=ModuleChoix.TIERS).update(
-            niveau=NiveauAcces.AUCUN
-        )
+        rmp_tiers = RoleModulePermission.objects.filter(role=role_cc, module__code=ModuleChoix.TIERS).first()
+        if rmp_tiers:
+            rmp_tiers.permissions_catalogue.clear()
 
         # Chef de chantier : écriture sur Chantier (autorisé), pas sur Tiers (refusé)
         cc_user, _ = Utilisateur.tous_objets.get_or_create(

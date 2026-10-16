@@ -50,7 +50,6 @@ class ProfilDetailResponseSerializer(serializers.Serializer):
     langue = serializers.CharField(read_only=True)
     schema = serializers.CharField(read_only=True)
     entreprise = ProfilEntrepriseSerializer(read_only=True, allow_null=True)
-    habilitations = serializers.DictField(read_only=True)
     permissions = serializers.ListField(
         child=serializers.CharField(), read_only=True,
         help_text="Codes des permissions effectives (ex. projets.voir_montants).",

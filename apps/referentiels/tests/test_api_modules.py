@@ -9,7 +9,6 @@ from apps.accounts.models import Utilisateur
 from apps.core.enums import (
     MODULES_DETAILS,
     ModuleChoix,
-    NiveauAcces,
     RoleGlobal,
     StatutUtilisateur,
 )
@@ -78,17 +77,25 @@ class TestApiCatalogueModules:
         response = client_tenant.get("/api/v1/modules/")
         assert response.status_code == status.HTTP_200_OK
 
-    def test_get_modules_structure_exacte(self, client_tenant, collaborateur_user):
-        """Vérifie que la liste contient exactement les 5 modules ordonnés avec toutes leurs métadonnées."""
-        client_tenant.force_authenticate(user=collaborateur_user)
+    def test_get_modules_structure_exacte(self, client_tenant, dg_user):
+        """Vérifie que la liste contient les modules actifs dotés de permissions avec toutes leurs métadonnées."""
+        from apps.accounts.services.roles import initialiser_modules_par_defaut
+        from apps.catalogue.models import EntrepriseModule
+
+        with schema_context("public"):
+            EntrepriseModule.objects.filter(entreprise__schema_name=SCHEMA).delete()
+        with schema_context(SCHEMA):
+            initialiser_modules_par_defaut()
+
+        client_tenant.force_authenticate(user=dg_user)
         response = client_tenant.get("/api/v1/modules/")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
-        assert len(data) == 5
+        assert len(data) == 4
 
-        # Ordre strict attendu
-        codes_attendus = ["projets", "chantier", "ged", "pilotage", "tiers"]
+        # Ordre strict attendu (les 4 modules dotés de permissions actives dans le REGISTRE)
+        codes_attendus = ["projets", "chantier", "pilotage", "tiers"]
         codes_reçus = [m["code"] for m in data]
         assert codes_reçus == codes_attendus
 
@@ -101,29 +108,9 @@ class TestApiCatalogueModules:
             assert "icone" in item
             assert "permissions" in item
             assert "permissions_codes" in item
-            assert "niveaux_supportes" in item
             assert item["code"] in ModuleChoix.values
             assert item["description"] == MODULES_DETAILS[item["code"]]["description"]
             assert item["icone"] == MODULES_DETAILS[item["code"]]["icone"]
-
-    def test_get_modules_niveaux_supportes(self, client_tenant, collaborateur_user):
-        """Vérifie que chaque module inclut les 4 niveaux d'accès RBAC (0 à 3)."""
-        client_tenant.force_authenticate(user=collaborateur_user)
-        response = client_tenant.get("/api/v1/modules/")
-        assert response.status_code == status.HTTP_200_OK
-
-        data = response.json()
-        for item in data:
-            niveaux = item["niveaux_supportes"]
-            assert len(niveaux) == 4
-            valeurs_niveaux = [n["niveau"] for n in niveaux]
-            assert valeurs_niveaux == [0, 1, 2, 3]
-
-            codes_niveaux = [n["code"] for n in niveaux]
-            assert codes_niveaux == ["AUCUN", "LECTURE", "ECRITURE", "VALIDATION"]
-
-            for n in niveaux:
-                assert n["libelle"] != ""
 
     def test_get_modules_permissions_dynamiques(self, client_tenant, collaborateur_user):
         """Vérifie que chaque module inclut la liste dynamique de ses autorisations granulaires."""
@@ -211,3 +198,6 @@ class TestRegleUniqueDesModulesActifs:
         assert fiche[retire] is False
         assert codes == (droits & catalogue) - MODULES_SYSTEME
         assert all(fiche[c] == (c in droits) for c in catalogue - MODULES_SYSTEME)
+
+        with schema_context("public"):
+            EntrepriseModule.objects.filter(entreprise=entreprise).delete()

@@ -267,15 +267,6 @@ class CodeEtape(models.TextChoices):
     EQUIPE = "EQUIPE", "Votre équipe"
 
 
-class NiveauAcces(models.IntegerChoices):
-    """Niveaux d'accès aux modules pour le RBAC (Socle IAM / Projets)."""
-
-    AUCUN = 0, "Aucun"
-    LECTURE = 1, "Lecture"
-    ECRITURE = 2, "Écriture / Saisie"
-    VALIDATION = 3, "Validation / Approbation"
-
-
 class ModuleChoix(models.TextChoices):
     """Les 5 modules applicatifs souverains de CCD Digital."""
 

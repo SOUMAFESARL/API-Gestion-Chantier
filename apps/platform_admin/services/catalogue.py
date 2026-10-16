@@ -24,7 +24,6 @@ from django_tenants.utils import schema_context
 
 from apps.accounts.models import Module, Permission, Role, RoleModulePermission
 from apps.catalogue.models import CatalogueModule, CataloguePermission, EntrepriseModule
-from apps.core.enums import NiveauAcces
 from apps.tenants.models import Entreprise
 
 __all__ = [
@@ -227,12 +226,8 @@ def propager_creation_module(
                 rmp.module_catalogue = cat_mod
                 if role.code in ("DG", "DIRECTEUR_GENERAL"):
                     rmp.permissions_catalogue.set(perms_catalogue)
-                    rmp.niveau = (
-                        NiveauAcces.VALIDATION if perms_catalogue else NiveauAcces.AUCUN
-                    )
                 else:
                     rmp.permissions_catalogue.clear()
-                    rmp.niveau = NiveauAcces.AUCUN
                 rmp.save()
 
     return cat_mod
@@ -1080,7 +1075,6 @@ def propager_roles_systeme(acteur=None) -> dict:
                             role=nouveau_role,
                             module=local_mod,
                             module_catalogue=cat_mod,
-                            niveau=NiveauAcces.AUCUN,
                         )
 
                         if cat_mod:

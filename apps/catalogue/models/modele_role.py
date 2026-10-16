@@ -3,7 +3,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import NiveauAcces
 from apps.core.models import ModeleBase
 
 __all__ = ["ModeleRole", "ModeleRoleModule"]
@@ -13,7 +12,7 @@ class ModeleRole(ModeleBase):
     """Gabarit type de rôle métier BTP souverain.
 
     Défini au niveau plateforme (schéma public). Sert de matrice de référence
-    et de plafond d'habilitation pour les rôles créés ou instanciés dans les tenants.
+    pour les rôles créés ou instanciés dans les tenants.
     """
 
     code = models.CharField(
@@ -64,10 +63,7 @@ class ModeleRole(ModeleBase):
 
 
 class ModeleRoleModule(ModeleBase):
-    """Plafond d'habilitation d'un modèle de rôle sur un module applicatif.
-
-    Niveau maximum : AUCUN (0), LECTURE (1), ECRITURE (2), VALIDATION (3).
-    """
+    """Association d'un modèle de rôle à un module applicatif."""
 
     modele_role = models.ForeignKey(
         ModeleRole,

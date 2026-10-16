@@ -14,12 +14,6 @@ __all__ = [
 ]
 
 
-MAPPING_PERM_VERS_ACCES = {
-    "LECTURE": "lecture",
-    "ECRITURE": "saisie",
-    "VALIDATION": "validation",
-}
-
 class AdminPermissionSimpleSerializer(serializers.ModelSerializer):
     """Représentation allégée d'une permission liée à un module."""
 
@@ -34,7 +28,6 @@ class AdminModuleListSerializer(serializers.ModelSerializer):
     permissions = AdminPermissionSimpleSerializer(many=True, read_only=True)
     permissions_codes = serializers.SerializerMethodField()
     statut = serializers.SerializerMethodField()
-    acces_par_defaut = serializers.SerializerMethodField()
 
     class Meta:
         model = Module
@@ -47,7 +40,6 @@ class AdminModuleListSerializer(serializers.ModelSerializer):
             "icone",
             "est_actif",
             "statut",
-            "acces_par_defaut",
             "permissions",
             "permissions_codes",
             "cree_le",
@@ -63,15 +55,6 @@ class AdminModuleListSerializer(serializers.ModelSerializer):
 
     def get_statut(self, obj: Module) -> str:
         return "ACTIF" if obj.est_actif else "INACTIF"
-
-    def get_acces_par_defaut(self, obj: Module) -> list[str]:
-        codes = self.get_permissions_codes(obj)
-        acces = []
-        for c in codes:
-            acc = MAPPING_PERM_VERS_ACCES.get(c.upper(), c.lower())
-            if acc not in acces:
-                acces.append(acc)
-        return acces
 
 
 class AdminModuleDetailSerializer(AdminModuleListSerializer):
@@ -96,12 +79,6 @@ class AdminModuleCreateSerializer(serializers.Serializer):
         required=False,
         default=list,
         help_text="Liste facultative des codes ou IDs de permissions autorisées pour ce module.",
-    )
-    acces_par_defaut = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        default=list,
-        help_text="Liste des accès par défaut envoyée par le frontend (ex: ['lecture', 'saisie', 'validation']).",
     )
 
     def validate_libelle(self, value: str) -> str:
@@ -132,9 +109,6 @@ class AdminModuleCreateSerializer(serializers.Serializer):
         if statut:
             attrs["est_actif"] = (statut.upper() == "ACTIF")
 
-        # 3. `acces_par_defaut` est accepté sans effet (voir `AdminModuleUpdateSerializer`).
-        attrs.pop("acces_par_defaut", None)
-
         return attrs
 
 
@@ -152,21 +126,12 @@ class AdminModuleUpdateSerializer(serializers.Serializer):
         required=False,
         help_text="Liste mise à jour des codes ou IDs de permissions autorisées pour ce module.",
     )
-    acces_par_defaut = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        help_text="Liste des accès mise à jour depuis le frontend.",
-    )
 
     def validate(self, attrs):
         statut = attrs.get("statut")
         if statut:
             attrs["est_actif"] = (statut.upper() == "ACTIF")
 
-        # `acces_par_defaut` ne touche plus aux permissions : traduit en LECTURE / ECRITURE /
-        # VALIDATION, il remplaçait les permissions fines du module (`projets.lire`…) à chaque
-        # modification faite depuis le back-office. Le champ reste accepté, sans effet.
-        attrs.pop("acces_par_defaut", None)
         return attrs
 
 

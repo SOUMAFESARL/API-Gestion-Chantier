@@ -42,14 +42,12 @@ class EnumerationsResponseSerializer(serializers.Serializer):
 
 from apps.referentiels.serializers.module import (
     ModuleItemSerializer,
-    NiveauAccesDetailSerializer,
 )
 
 __all__ = [
     "EnumerationsResponseSerializer",
     "ItemEnumerationSerializer",
     "ModuleItemSerializer",
-    "NiveauAccesDetailSerializer",
     "RegleMotDePasseItemSerializer",
     "ReglesMotDePasseResponseSerializer",
 ]

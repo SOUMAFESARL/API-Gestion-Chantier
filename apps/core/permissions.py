@@ -354,88 +354,35 @@ class PermissionModule(permissions.BasePermission):
     """Contrôle d'accès dynamique granulaire avec mémoïsation O(1) par requête HTTP."""
 
     module: str = ""
-    permission_requise: str = "LECTURE"
-    niveau_requis: int = 1
+    permission_requise: str = ""
     message = "Vos habilitations ne permettent pas d'effectuer cette action sur ce module."
 
     @classmethod
-    def pour(cls, module: str, permission_ou_niveau=1):
-        if isinstance(permission_ou_niveau, int):
-            mapping = {1: "LECTURE", 2: "ECRITURE", 3: "VALIDATION"}
-            perm_code = mapping.get(permission_ou_niveau, "LECTURE")
-            return type(
-                "PermissionModuleSpecifique",
-                (cls,),
-                {
-                    "module": str(module).lower(),
-                    "permission_requise": perm_code,
-                    "niveau_requis": int(permission_ou_niveau),
-                },
-            )
-        else:
-            return type(
-                "PermissionModuleSpecifique",
-                (cls,),
-                {
-                    "module": str(module).lower(),
-                    "permission_requise": str(permission_ou_niveau).upper(),
-                    "niveau_requis": 1,
-                },
-            )
+    def pour(cls, module: str, permission: str = ""):
+        return type(
+            "PermissionModuleSpecifique",
+            (cls,),
+            {
+                "module": str(module).lower(),
+                "permission_requise": str(permission).strip().lower(),
+            },
+        )
 
     def has_permission(self, request, view) -> bool:
         utilisateur = request.user
         if not utilisateur or not utilisateur.is_authenticated:
             return False
 
-        if (
-            utilisateur.is_superuser
-            or getattr(utilisateur, "is_owner", False)
-            or getattr(utilisateur, "is_dg", False)
-            or getattr(utilisateur, "role_global", None) in (RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL)
-        ):
+        from apps.core.droits import est_dg, permissions_effectives
+
+        if utilisateur.is_superuser or est_dg(utilisateur):
             return True
 
-        from django.apps import apps as registre
-
-        try:
-            Role = registre.get_model("accounts", "Role")
-            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
-        except LookupError:
-            Role = None
-            RoleModulePermission = None
-
-        if Role and RoleModulePermission:
-            role = utilisateur.role_personnalise or Role.objects.filter(
-                code=utilisateur.role_global, supprime_le__isnull=True
-            ).first()
-            if role:
-                from django.db import models as dj_models
-
-                rmp = RoleModulePermission.objects.filter(
-                    dj_models.Q(module_catalogue__code=self.module) | dj_models.Q(module__code=self.module),
-                    role=role,
-                    supprime_le__isnull=True,
-                ).first()
-                if rmp:
-                    if rmp.niveau == 0 and not rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True).exists():
-                        return False
-                    if rmp.permissions_catalogue.filter(
-                        code__iexact=self.permission_requise, est_actif=True, supprime_le__isnull=True
-                    ).exists():
-                        return True
-                    if self.permission_requise in ("LECTURE", "ECRITURE", "VALIDATION"):
-                        if rmp.niveau is not None and rmp.niveau >= self.niveau_requis:
-                            return True
-
-        from apps.core.droits import permissions_effectives
-        from apps.core.registre_permissions import REGISTRE
-
         perms = permissions_effectives(utilisateur, request=request)
-        for def_p in REGISTRE.values():
-            if def_p.module == self.module and def_p.rang >= self.niveau_requis and def_p.code in perms:
-                return True
-        return False
+        if self.permission_requise:
+            return self.permission_requise.lower() in perms
+
+        return any(code.startswith(f"{self.module}.") for code in perms)
 
     def has_object_permission(self, request, view, obj) -> bool:
         utilisateur = request.user
@@ -462,8 +409,6 @@ class PermissionModule(permissions.BasePermission):
 
         try:
             AffectationProjet = registre.get_model("projets", "AffectationProjet")
-            Role = registre.get_model("accounts", "Role")
-            RoleModulePermission = registre.get_model("accounts", "RoleModulePermission")
         except LookupError:
             return True
 
@@ -478,39 +423,7 @@ class PermissionModule(permissions.BasePermission):
             request._rbac_object_permissions_cache[cle_cache] = False
             return False
 
-        role = (
-            getattr(utilisateur, "role", None)
-            or getattr(utilisateur, "role_personnalise", None)
-            or Role.objects.filter(
-                code=utilisateur.role_global, supprime_le__isnull=True
-            ).first()
-        )
-
-        if not role:
-            request._rbac_object_permissions_cache[cle_cache] = False
-            return False
-
-        perm = RoleModulePermission.objects.filter(
-            models.Q(module_catalogue__code=self.module) | models.Q(module__code=self.module),
-            role=role,
-            supprime_le__isnull=True,
-        ).first()
-        if not perm or perm.niveau == 0:
-            request._rbac_object_permissions_cache[cle_cache] = False
-            return False
-
-        has_perm = perm.permissions_catalogue.filter(
-            code=self.permission_requise, est_actif=True, supprime_le__isnull=True
-        ).exists()
-        has_perm_m2m = perm.permissions_catalogue.exists()
-        if not has_perm and not has_perm_m2m and perm.niveau is not None and perm.niveau > 0:
-            if self.permission_requise == "LECTURE" and perm.niveau >= 1:
-                has_perm = True
-            elif self.permission_requise == "ECRITURE" and perm.niveau >= 2:
-                has_perm = True
-            elif self.permission_requise == "VALIDATION" and perm.niveau >= 3:
-                has_perm = True
-
+        has_perm = self.has_permission(request, view)
         request._rbac_object_permissions_cache[cle_cache] = has_perm
         return has_perm
 

@@ -38,7 +38,7 @@ class TestAlignementFrontendModules:
     """Valide les contrats de données attendus par `features/administration/adaptateur.ts`."""
 
     def test_modules_champs_frontend(self, client_admin):
-        """Vérifie la présence de statut ('ACTIF'/'INACTIF') et acces_par_defaut."""
+        """Vérifie la présence de statut ('ACTIF'/'INACTIF') et permissions_codes."""
         rep = client_admin.get("/api/v1/admins/modules/", HTTP_HOST=HOTE_PLATEFORME)
         assert rep.status_code == status.HTTP_200_OK
         data = rep.json()
@@ -46,17 +46,14 @@ class TestAlignementFrontendModules:
         for item in data:
             assert "statut" in item
             assert item["statut"] in ["ACTIF", "INACTIF"]
-            assert "acces_par_defaut" in item
-            assert isinstance(item["acces_par_defaut"], list)
             assert "est_actif" in item
             assert "permissions_codes" in item
 
-    def test_creer_module_sans_code_avec_acces_par_defaut(self, client_admin):
-        """Le frontend crée un module avec libelle, description et acces_par_defaut sans spécifier de code."""
+    def test_creer_module_sans_code(self, client_admin):
+        """Le frontend crée un module avec libelle et description sans spécifier de code."""
         payload = {
             "libelle": "Parc Matériel & Grues",
             "description": "Suivi des engins de levage",
-            "acces_par_defaut": ["lecture", "saisie"],
         }
         rep = client_admin.post(
             "/api/v1/admins/modules/", payload, format="json", HTTP_HOST=HOTE_PLATEFORME
@@ -66,8 +63,6 @@ class TestAlignementFrontendModules:
         assert data["code"] == "parc_materiel_grues"
         assert data["libelle"] == "Parc Matériel & Grues"
         assert data["statut"] == "ACTIF"
-        # Garde bf3ae8d : acces_par_defaut est accepté sans effet (n'injecte plus les codes LECTURE/ECRITURE)
-        assert data["acces_par_defaut"] == []
         assert data["permissions_codes"] == []
 
     def test_desactiver_et_reactiver_module(self, client_admin):

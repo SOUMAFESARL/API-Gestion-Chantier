@@ -11,7 +11,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalogue.models import CatalogueModule, EntrepriseModule
-from apps.core.enums import NiveauAcces
 from apps.core.exceptions import ErreurConflit
 from apps.core.ip_restriction import extraire_ip_client
 from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
@@ -522,7 +521,6 @@ class ActiverModuleClientPlateformeView(APIView):
                             role=r,
                             module=mod_local,
                             module_catalogue=module,
-                            niveau=NiveauAcces.AUCUN,
                         )
                         # Rôle système : reçoit les défauts du modèle
                         if r.est_systeme:

@@ -1,11 +1,10 @@
 """Tests d'intégration validant l'alignement strict entre l'API Entreprise Backend et le Frontend.
 
 Vérifie les contrats d'interface suivants :
-1. Rôles et Permissions : acceptation et renvoi des accès normalisés ("lecture", "saisie", "validation").
+1. Rôles et Permissions : acceptation et renvoi des codes de permissions ("projets.lire", "projets.ecrire", "projets.changer_statut").
 2. Collaborateurs : présence de avatar_url et derniere_connexion sur GET /parametres/collaborateurs/.
 3. Cycle de vie Collaborateur : POST /parametres/collaborateurs/{id}/suspendre/ et reactiver/ avec sécurité (400 auto-suspension, 403 DG/Owner, 409 conflits).
-4. Modules : présence des champs 'id', 'statut' (ACTIF) et 'acces_par_defaut' sur GET /modules/.
-5. Matrice Permissions Projets : acceptation et renvoi de la liste 'acces' sur GET et PUT /projets/{id}/permissions-roles/.
+4. Modules : présence des champs 'id', 'statut' (ACTIF) et 'permissions_codes' sur GET /modules/.
 """
 
 import pytest
@@ -14,10 +13,8 @@ from django_tenants.utils import schema_context
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Module, Permission, Role, Utilisateur
-from apps.core.enums import RoleGlobal, StatutProjet, StatutUtilisateur, TypeTiers
-from apps.projets.models import Projet
-from apps.tiers.models import Tiers
+from apps.accounts.models import Utilisateur
+from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 SCHEMA = "demo"
 HOTE = "demo.localhost"
@@ -105,16 +102,16 @@ def _auth(client, user):
 
 @pytest.mark.django_db
 def test_roles_endpoints_frontend_format(client_tenant, dg_user):
-    """POST, GET et PATCH /parametres/roles/ supportent le format attendu par le frontend (lecture, saisie, validation)."""
+    """POST, GET et PATCH /parametres/roles/ supportent les codes de permissions par module."""
     _auth(client_tenant, dg_user)
 
-    # 1. Création avec les codes frontend minuscules
+    # 1. Création avec les codes de permissions réels
     payload_creation = {
         "code": "CHEF_EQUIPE_ALIGN",
         "libelle": "Chef d'équipe Alignement",
         "description": "Rôle créé pour valider l'alignement frontend",
         "permissions_modules": {
-            "projets": ["lecture", "saisie"]
+            "projets": ["projets.lire", "projets.ecrire"]
         },
     }
     rep_create = client_tenant.post(
@@ -125,8 +122,8 @@ def test_roles_endpoints_frontend_format(client_tenant, dg_user):
     )
     assert rep_create.status_code == status.HTTP_201_CREATED
     data_create = rep_create.json()
-    assert "lecture" in data_create["permissions_modules"]["projets"]
-    assert "saisie" in data_create["permissions_modules"]["projets"]
+    assert "projets.lire" in data_create["permissions_modules"]["projets"]
+    assert "projets.ecrire" in data_create["permissions_modules"]["projets"]
     role_id = data_create["id"]
 
     # 2. GET liste paramètres rôles
@@ -135,19 +132,19 @@ def test_roles_endpoints_frontend_format(client_tenant, dg_user):
     data_list = rep_list.json()
     created_role_item = next((r for r in data_list if str(r["id"]) == str(role_id)), None)
     assert created_role_item is not None
-    assert "lecture" in created_role_item["permissions_modules"]["projets"]
-    assert "saisie" in created_role_item["permissions_modules"]["projets"]
+    assert "projets.lire" in created_role_item["permissions_modules"]["projets"]
+    assert "projets.ecrire" in created_role_item["permissions_modules"]["projets"]
 
     # 3. PATCH modification des permissions
     rep_patch = client_tenant.patch(
         f"/api/v1/parametres/roles/{role_id}/",
-        {"permissions_modules": {"projets": ["lecture", "saisie", "validation"]}},
+        {"permissions_modules": {"projets": ["projets.lire", "projets.ecrire", "projets.changer_statut"]}},
         format="json",
         HTTP_HOST=HOTE,
     )
     assert rep_patch.status_code == status.HTTP_200_OK
     data_patch = rep_patch.json()
-    assert "validation" in data_patch["permissions_modules"]["projets"]
+    assert "projets.changer_statut" in data_patch["permissions_modules"]["projets"]
 
 
 @pytest.mark.django_db
@@ -227,7 +224,7 @@ def test_collaborateurs_suspendre_regles_securite(client_tenant, dg_user, admin_
 
 @pytest.mark.django_db
 def test_modules_endpoints_frontend_format(client_tenant, dg_user):
-    """GET /api/v1/modules/ renvoie id, statut='ACTIF' et acces_par_defaut requis par le frontend."""
+    """GET /api/v1/modules/ renvoie id, statut='ACTIF' et permissions_codes requis par le frontend."""
     _auth(client_tenant, dg_user)
 
     rep = client_tenant.get("/api/v1/modules/", HTTP_HOST=HOTE)
@@ -240,7 +237,6 @@ def test_modules_endpoints_frontend_format(client_tenant, dg_user):
         assert "id" in mod
         assert "statut" in mod
         assert mod["statut"] == "ACTIF"
-        assert "acces_par_defaut" in mod
-        assert isinstance(mod["acces_par_defaut"], list)
-        assert "lecture" in mod["acces_par_defaut"]
+        assert "permissions_codes" in mod
+        assert isinstance(mod["permissions_codes"], list)
 

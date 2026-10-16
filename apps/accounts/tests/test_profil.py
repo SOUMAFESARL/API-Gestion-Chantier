@@ -78,7 +78,7 @@ def test_profil_consultation_authentifie(client, utilisateur):
     assert data["is_dg"] is False
     assert data["is_owner"] is False
     assert data["doit_changer_mot_de_passe"] is True
-    assert "habilitations" in data
+    assert "permissions" in data
     assert "schema" in data
 
 
@@ -279,16 +279,13 @@ def test_profil_super_admin_dans_schema_public(settings):
     assert response.data["is_staff"] is True
     assert response.data["is_dg"] is False
     assert response.data["is_owner"] is False
-    # Toutes les habilitations sont au niveau 3 (Validation plein droit)
-    for _mod, hab in response.data["habilitations"].items():
-        assert hab["niveau"] == 3
     assert "permissions" in response.data
     assert isinstance(response.data["permissions"], list)
 
 
 @pytest.mark.django_db
 def test_profil_expose_permissions_effectives_et_modules_non_souscrits(client, utilisateur):
-    """Vérifie que /api/v1/auth/profil/ retourne les permissions effectives et masque les modules non souscrits."""
+    """Vérifie que /api/v1/auth/profil/ retourne les permissions effectives."""
     client.force_authenticate(user=utilisateur)
     response = client.get("/api/v1/auth/profil/")
 
@@ -298,13 +295,4 @@ def test_profil_expose_permissions_effectives_et_modules_non_souscrits(client, u
     # L'utilisateur a le rôle CT (Conducteur de travaux)
     # Vérifier que les permissions contiennent au moins des permissions projets
     assert any("projets." in p for p in response.data["permissions"])
-
-    # Vérifier les habilitations : si un module n'est pas souscrit, niveau 0 et libellé "Non souscrit"
-    hab = response.data["habilitations"]
-    assert isinstance(hab, dict)
-    for mod_code, info in hab.items():
-        assert "niveau" in info
-        assert "libelle" in info
-        if info["libelle"] == "Non souscrit":
-            assert info["niveau"] == 0
 

@@ -48,6 +48,7 @@ from apps.platform_admin.views.inscriptions import (
     RefuserInscriptionView,
 )
 from apps.platform_admin.views.messagerie import AdminMessagerieTestView, AdminMessagerieView
+from apps.platform_admin.views.roles_systeme import RoleSystemeDetailView, RolesSystemeListeView
 from apps.platform_admin.views.suppression import (
     ApercuSuppressionClientView,
     SupprimerClientDefinitivementView,
@@ -218,6 +219,9 @@ urlpatterns = [
     path("admins/permissions/", AdminPermissionListCreateView.as_view(), name="admins-permissions-liste-creer"),
     path("admins/permissions/<uuid:pk>/", AdminPermissionDetailUpdateDeleteView.as_view(), name="admins-permissions-detail-modifier-supprimer"),
     path("admins/permissions/<uuid:pk>/modules/", AdminPermissionAffecterModulesView.as_view(), name="admins-permissions-affecter-modules"),
+    # Rôles système (gabarits propagés à toutes les entreprises)
+    path("admins/roles-systeme/", RolesSystemeListeView.as_view(), name="admins-roles-systeme"),
+    path("admins/roles-systeme/<uuid:pk>/", RoleSystemeDetailView.as_view(), name="admins-roles-systeme-detail"),
     # Gestion des Comptes Administrateurs (Super Admin)
     path("admins/comptes/", ComptesAdministrateursListCreateView.as_view(), name="admins-comptes-liste-creer"),
     path("admins/comptes/<uuid:pk>/suspendre/", SuspendreCompteAdministrateurView.as_view(), name="admins-comptes-suspendre"),

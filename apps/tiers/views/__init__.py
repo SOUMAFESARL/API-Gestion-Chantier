@@ -35,6 +35,10 @@ class TiersListCreateView(APIView):
     )
     def get(self, request):
         qs = Tiers.objects.filter(est_actif=True).prefetch_related("roles")
+        # `?role=CLIENT_MOA` : les listes du formulaire de projet (maître d'ouvrage, d'œuvre).
+        role = request.query_params.get("role")
+        if role:
+            qs = qs.filter(roles__role=role).distinct()
         serializer = TiersSerializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

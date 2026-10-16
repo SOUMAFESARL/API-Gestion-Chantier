@@ -236,3 +236,15 @@ def test_rattachement_des_permissions_d_un_module_en_patch(settings):
     assert modification.status_code == 200, modification.content
     assert modification.json()["permissions_codes"] == ["B1_LIRE"]
     assert modification.json()["description"] == "Nouvelle description"
+
+
+@pytest.mark.parametrize(("code_role", "complet"), [("AD", True), ("CP", False)])
+def test_abonnement_lu_selon_le_droit_sans_erreur(roles, code_role, complet):
+    """`a_permission` était appelé sous `schema_context(public)` : 500 pour tout le monde."""
+    client = APIClient(HTTP_HOST=HOTE)
+    client.force_authenticate(_utilisateur(f"abo.{code_role.lower()}@demo.ci", code_role))
+    reponse = client.get("/api/v1/abonnement/")
+    assert reponse.status_code == 200, reponse.content
+    corps = reponse.json()
+    assert "jours_essai_restants" in corps
+    assert (len(corps) > 2) is complet

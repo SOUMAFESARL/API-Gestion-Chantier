@@ -38,7 +38,9 @@ class AbonnementView(APIView):
         # de l'utilisateur y était cherché en vain et la vue répondait 500 à tout le monde.
         from apps.core.droits import a_permission
 
-        voit_abonnement = a_permission(request.user, "administration.abonnement_voir", request=request)
+        voit_abonnement = a_permission(
+            request.user, "administration.abonnement_voir", request=request
+        )
 
         with schema_context(get_public_schema_name()):
             abonnement = Abonnement.objects.filter(entreprise=tenant).select_related("plan").first()

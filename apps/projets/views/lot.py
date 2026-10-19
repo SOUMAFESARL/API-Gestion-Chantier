@@ -25,6 +25,7 @@ from apps.projets.serializers.lot import (
     LotModificationSerializer,
     LotResponseSerializer,
 )
+from apps.projets.services.indicateurs_temporels import calendrier_pour_lots
 from apps.projets.services.lots import creer_lots, lire_excel, modele_excel
 
 ERREURS_LOTS = {
@@ -56,9 +57,14 @@ class ProjetLotListCreateView(APIView):
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
+        lots = list(projet.lots.prefetch_related("activites"))
+        context = {
+            "request": request,
+            "calendrier_temporel": calendrier_pour_lots(lots),
+        }
         return Response(
             LotResponseSerializer(
-                projet.lots.prefetch_related("activites"), many=True, context={"request": request}
+                lots, many=True, context=context
             ).data
         )
 

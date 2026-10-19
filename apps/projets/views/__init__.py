@@ -29,9 +29,14 @@ from apps.projets.serializers.swagger import (
     ProjetPatchSerializer,
     ProjetPostSerializer,
 )
+from apps.projets.services.indicateurs_temporels import calendrier_pour_projets
 from apps.projets.views.activite import (
     ActiviteDetailView,
     LotActiviteListCreateView,
+)
+from apps.projets.views.arret_chantier import (
+    ArretChantierDetailView,
+    ProjetArretChantierListCreateView,
 )
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
 from apps.projets.views.reprogrammation import (
@@ -44,10 +49,6 @@ from apps.projets.views.reprogrammation import (
     ProjetHistoriqueDatesView,
     ProjetJournalReportsConsolideView,
     ProjetReprogrammerView,
-)
-from apps.projets.views.arret_chantier import (
-    ArretChantierDetailView,
-    ProjetArretChantierListCreateView,
 )
 from apps.projets.views.sante import (
     ProjetSanteApercuView,
@@ -95,7 +96,6 @@ class ProjetListCreateView(APIView):
     parser_classes = [JSONParser, MultiPartParser]
 
     def get_permissions(self):
-        from apps.core.droits import APermission
 
         if self.request.method == "POST":
             return [
@@ -138,7 +138,12 @@ class ProjetListCreateView(APIView):
             .prefetch_related("contrats", "lots__activites", prefetch_encadrement())
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
-        serializer = ProjetCreationResponseSerializer(qs, many=True, context={"request": request})
+        projets = list(qs)
+        context = {
+            "request": request,
+            "calendrier_temporel": calendrier_pour_projets(projets),
+        }
+        serializer = ProjetCreationResponseSerializer(projets, many=True, context=context)
         return Response(ResultList(serializer.data), status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -291,6 +296,7 @@ class ProjetDetailView(APIView):
         self.check_object_permissions(request, projet)
 
         from rest_framework.exceptions import PermissionDenied
+
         from apps.core.droits import a_permission, est_dg
         from apps.projets.services.machine_etats import (
             STATUTS_FIN_DE_VIE,

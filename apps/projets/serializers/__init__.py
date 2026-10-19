@@ -20,13 +20,6 @@ from apps.core.enums import (
     TypeProjet,
 )
 from apps.projets.models import AffectationProjet, Lot, Projet
-from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
-from apps.projets.serializers.meteo import (
-    MeteoResponseSerializer,
-    ReferentielVillesResponseSerializer,
-)
-from apps.projets.services.affectations import affecter_collaborateur_projet, verifier_affectable
-from apps.projets.services.references import generer_reference_projet
 from apps.projets.serializers.activite import (
     ActiviteCreationSerializer,
     ActiviteModificationSerializer,
@@ -36,6 +29,11 @@ from apps.projets.serializers.arret_chantier import (
     ArretChantierCreateSerializer,
     ArretChantierSerializer,
     ArretChantierUpdateSerializer,
+)
+from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
+from apps.projets.serializers.meteo import (
+    MeteoResponseSerializer,
+    ReferentielVillesResponseSerializer,
 )
 from apps.projets.serializers.reprogrammation import (
     HistoriqueDateSerializer,
@@ -49,6 +47,8 @@ from apps.projets.serializers.sante import (
     SanteDetailResponseSerializer,
     SanteHistoriqueItemSerializer,
 )
+from apps.projets.services.affectations import affecter_collaborateur_projet, verifier_affectable
+from apps.projets.services.references import generer_reference_projet
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
 
@@ -155,6 +155,8 @@ class ProjetSerializer(serializers.ModelSerializer):
     duree_jours_ouvres = serializers.IntegerField(read_only=True)
     duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
     peut_renommer = serializers.SerializerMethodField()
+    avancement_theorique = serializers.SerializerMethodField()
+    delta_retard = serializers.SerializerMethodField()
 
     class Meta:
         model = Projet
@@ -187,6 +189,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             "statut",
             "avancement_reel",
             "avancement_theorique",
+            "delta_retard",
             "indice_sante",
             "lots",
         ]
@@ -217,6 +220,24 @@ class ProjetSerializer(serializers.ModelSerializer):
             "schema_name": tenant.schema_name,
             "logo_url": logo_url,
         }
+
+    def _get_indicateurs(self, obj) -> dict:
+        cache_attr = "_indicateurs_temporels_cache"
+        if not hasattr(obj, cache_attr):
+            from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
+
+            ctx = getattr(self, "context", None)
+            cal = ctx.get("calendrier_temporel") if ctx else None
+            setattr(obj, cache_attr, indicateurs_temporels_projet(obj, calendrier=cal))
+        return getattr(obj, cache_attr)
+
+    @extend_schema_field(serializers.FloatField())
+    def get_avancement_theorique(self, obj) -> float:
+        return self._get_indicateurs(obj)["avancement_temporel"]
+
+    @extend_schema_field(serializers.FloatField())
+    def get_delta_retard(self, obj) -> float:
+        return self._get_indicateurs(obj)["delta_retard"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

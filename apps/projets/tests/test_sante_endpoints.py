@@ -230,8 +230,9 @@ class TestSanteConsultationEndpoints:
         assert data["indice_sante"] == 85
         assert data["badge_sante"] == "VERT"
         assert data["avancement_reel"] == 45.0
-        assert data["avancement_theorique"] == 50.0
-        assert data["ecart"] == -5.0
+        # Avancement temporel calculé à l'appel (0.0 sans lots datés et budgétés, RG-F3-04)
+        assert data["avancement_theorique"] == 0.0
+        assert data["ecart"] == 45.0
 
     def test_projet_sante_apercu_projet_en_attente(self, client_tenant, setup_sante_data):
         client_tenant.force_authenticate(user=setup_sante_data["dg"])

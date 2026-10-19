@@ -108,6 +108,10 @@ class Projet(ModeleBase):
         max_digits=5,
         decimal_places=2,
         default=0,
+        help_text=_(
+            "Déprécié : valeur de l'ancien moteur, plus lue ; "
+            "l'avancement temporel se calcule à chaque appel (SFD F3 RG-F3-04)."
+        ),
     )
 
     indice_sante = models.PositiveSmallIntegerField(

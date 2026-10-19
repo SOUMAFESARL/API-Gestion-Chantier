@@ -8,10 +8,8 @@ description: >-
 
 # Cycle de vie d'une tâche de sprint
 
-Cinq étapes, dans l'ordre. Les deux premières ne modifient aucun fichier.
-
-Qui écrit le code est fixé par `AGENTS.md` §3 : le développeur par défaut, l'agent sur demande
-expresse. Dans le doute, poser la question à la fin de l'étape 2, pas avant.
+Cinq étapes, dans l'ordre. Les deux premières ne modifient aucun fichier. L'agent implémente
+(`AGENTS.md` §4).
 
 ## Étape 1 — Cadrage (lecture seule)
 
@@ -40,9 +38,6 @@ Le plan tient en un message :
 - **les pièges de cette tâche précise** (deux ou trois, pas une liste générique), chacun avec le
   test qui le révèle ;
 - les tests à écrire.
-
-Quand le développeur implémente lui-même, expliquer le *pourquoi* de chaque choix : c'est ce qu'il
-réutilisera sur la tâche suivante.
 
 ## Étape 3 — Branche feature
 

@@ -33,14 +33,10 @@ de cela.
 
 Avant un push qui déploie, l'agent le dit et vérifie que les tests passent.
 
-## 4. Qui écrit le code backend
+## 4. Code backend
 
-- **Par défaut, le développeur implémente lui-même** ; l'agent cadre, explique,
-  relit et signale les pièges, dans le chat.
-- **Sur demande expresse** (contrainte de temps, fin de journée, refactoring
-  d'envergure), l'agent implémente directement le code métier backend, écrit et
-  exécute les tests, et fait les commits et opérations Git nécessaires sur la
-  branche de feature.
+- **L'agent implémente le code métier backend**, écrit et exécute les tests, et
+  fait les commits et opérations Git nécessaires sur la branche de feature.
 - **Aucun manuel PDF n'est généré par tâche.** L'accompagnement se fait dans le
   chat. Le dossier `Manuels_Apprentissage/` et les scripts
   `scripts/generate_manual_*` sont des archives : ne pas les prendre pour modèle

@@ -1077,7 +1077,7 @@ def propager_roles_systeme(acteur=None) -> dict:
                             module_catalogue=cat_mod,
                         )
 
-                        if cat_mod:
+                        if cat_mod and modules_modele_map:
                             perms_actives = list(
                                 CataloguePermission.objects.filter(
                                     modules=cat_mod, est_actif=True, supprime_le__isnull=True

@@ -1,15 +1,18 @@
 """Tâches Celery pour l'application projets."""
 
 import logging
+
 from celery import shared_task
 from django_tenants.utils import schema_context
 
 from apps.core.emails import envoyer
-from apps.core.enums import RoleGlobal
+from apps.core.enums import RoleGlobal, StatutProjet
+from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "STATUTS_SANTE_FIGES",
     "evaluer_sante_projets_quotidien_tous_tenants",
     "evaluer_statuts_quotidiens_tous_tenants",
     "notifier_dg_derive_delai",
@@ -160,11 +163,15 @@ def recalculer_sante_projet_task(
     6. En cas de transition vers le ROUGE (ancien != ROUGE et nouveau == ROUGE), alerte par email post-commit.
     """
     from decimal import Decimal
+
     from django.core.cache import cache
     from django.db import transaction
+    from django.utils import timezone
+
     from apps.core.enums import BadgeSante
     from apps.projets.models import Projet, SanteProjetSnapshot
-    from apps.projets.services.sante_calculs import calculer_indice_sante_projet
+    from apps.projets.services.indice_sante import evaluer_indice_sante
+    from apps.projets.services.sante_calculs import calculer_avancement_physique_projet
     from apps.projets.services.sante_declencheur import obtenir_cle_recalcul_en_attente
 
     # 1. Effacement immédiat de la clé Redis en début d'exécution (C8)
@@ -186,18 +193,26 @@ def recalculer_sante_projet_task(
                 )
                 return None
 
-            ancien_badge = projet.badge_sante
-
-            res = calculer_indice_sante_projet(projet)
-
-            if res.etat == "NON_DEMARRE":
-                projet.avancement_reel = Decimal("0.0")
+            if projet.statut == StatutProjet.EN_ATTENTE:
+                projet.avancement_reel = Decimal("0")
                 projet.indice_sante = None
                 projet.badge_sante = None
-                projet.save(update_fields=["avancement_reel", "indice_sante", "badge_sante", "modifie_le"])
-                return {"projet_id": projet_id, "etat": "NON_DEMARRE", "score": None, "badge": None}
+                projet.save(
+                    update_fields=[
+                        "avancement_reel",
+                        "indice_sante",
+                        "badge_sante",
+                        "modifie_le",
+                    ]
+                )
+                return {
+                    "projet_id": projet_id,
+                    "etat": "NON_DEMARRE",
+                    "score": None,
+                    "badge": None,
+                }
 
-            if res.etat == "FIGE":
+            if projet.statut in STATUTS_SANTE_FIGES:
                 return {
                     "projet_id": projet_id,
                     "etat": "FIGE",
@@ -205,49 +220,68 @@ def recalculer_sante_projet_task(
                     "badge": projet.badge_sante,
                 }
 
-            # État ACTIF : mise à jour du projet
-            projet.avancement_reel = Decimal(str(res.avancement_physique))
-            projet.avancement_theorique = Decimal(str(res.avancement_temporel))
-            projet.indice_sante = res.score
-            projet.badge_sante = res.badge_final
+            ancien_badge = projet.badge_sante
+
+            res = evaluer_indice_sante(projet)
+
+            # Calcul des avancements pour persistance et snapshot
+            av_physique, mode_pond = calculer_avancement_physique_projet(projet)
+            av_temporel = float(round(av_physique + res.delta, 2))
+            maintenant = timezone.now()
+
+            # Mise à jour du projet (indice de la SFD, badge et horodatage de calcul)
+            projet.avancement_reel = Decimal(str(av_physique))
+            projet.avancement_theorique = Decimal(str(av_temporel))
+            projet.indice_sante = res.indice
+            projet.badge_sante = res.badge
+            projet.indice_sante_calcule_le = maintenant
             projet.save(
                 update_fields=[
                     "avancement_reel",
                     "avancement_theorique",
                     "indice_sante",
                     "badge_sante",
+                    "indice_sante_calcule_le",
                     "modifie_le",
                 ]
             )
 
-            # Création du snapshot immuable
+            # Création du snapshot immuable d'historique avec scores SFD
+            scores_snapshot = {
+                "delais": res.scores.get("delais", 0),
+                "rapports": res.scores.get("rapports", 0),
+                "blocages": res.scores.get("blocages", 0),
+                "incidents": res.scores.get("incidents", 0),
+                "taux_rapports": res.taux_rapports,
+            }
             snapshot = SanteProjetSnapshot.objects.create(
                 projet=projet,
-                score=res.score or 0,
-                badge_brut=res.badge_brut or "",
-                badge_final=res.badge_final or "",
-                plancher_applique=res.plancher_applique,
-                p_delais=Decimal(str(res.p_delais)),
-                p_retard=Decimal(str(res.p_retard)),
-                p_malus=Decimal(str(res.p_malus)),
-                p_blocages=Decimal(str(res.p_blocages)),
-                p_reporting=Decimal(str(res.p_reporting)),
-                avancement_physique=Decimal(str(res.avancement_physique)),
-                avancement_temporel=Decimal(str(res.avancement_temporel)),
-                delta=Decimal(str(res.retard_pts)),
-                mode_ponderation=res.mode_ponderation,
-                nb_reports=res.nb_reports,
-                blocages_ouverts_par_severite=res.blocages_ouverts_par_severite,
-                taux_reporting=Decimal(str(res.taux_reporting)),
-                jours_attendus=res.jours_attendus,
-                jours_couverts=res.jours_couverts,
+                score=res.indice,
+                badge_brut=res.badge,
+                badge_final=res.badge,
+                plancher_applique=False,
+                scores=scores_snapshot,
+                p_delais=Decimal("0.0"),
+                p_retard=Decimal("0.0"),
+                p_malus=Decimal("0.0"),
+                p_blocages=Decimal("0.0"),
+                p_reporting=Decimal("0.0"),
+                avancement_physique=Decimal(str(av_physique)),
+                avancement_temporel=Decimal(str(av_temporel)),
+                delta=Decimal(str(res.delta)),
+                mode_ponderation=mode_pond,
+                nb_reports=0,
+                blocages_ouverts_par_severite={},
+                taux_reporting=Decimal(str(round(res.taux_rapports / 100, 4))),
+                jours_attendus=0,
+                jours_couverts=0,
                 declencheur_type=declencheur_type or "",
                 declencheur_id=str(declencheur_id) if declencheur_id else "",
             )
 
             # Détection de transition vers le ROUGE (C8, C9)
             alerte_rouge = False
-            if ancien_badge != BadgeSante.ROUGE and res.badge_final == BadgeSante.ROUGE:
+            if ancien_badge != BadgeSante.ROUGE and res.badge == BadgeSante.ROUGE:
                 from apps.projets.services.sante_email import envoyer_alerte_sante_rouge
 
                 alerte_rouge = True
@@ -258,8 +292,8 @@ def recalculer_sante_projet_task(
             return {
                 "projet_id": projet_id,
                 "etat": "ACTIF",
-                "score": res.score,
-                "badge": res.badge_final,
+                "score": res.indice,
+                "badge": res.badge,
                 "alerte_rouge": alerte_rouge,
                 "snapshot_id": str(snapshot.id),
             }
@@ -273,7 +307,7 @@ def recalculer_sante_projet_task(
 @shared_task
 def evaluer_sante_projets_quotidien_tous_tenants() -> dict:
     """Tâche Celery Beat quotidienne (00h15) : évalue et actualise l'indice de santé sur tous les tenants actifs."""
-    from apps.core.enums import StatutEntreprise, StatutProjet
+    from apps.core.enums import StatutEntreprise
     from apps.projets.models import Projet
     from apps.tenants.models import Entreprise
 

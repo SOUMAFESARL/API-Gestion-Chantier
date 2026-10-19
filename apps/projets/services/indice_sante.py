@@ -60,11 +60,26 @@ from django.db.models import prefetch_related_objects
 from django.utils import timezone
 
 from apps.chantier.services.journal import premier_jour_rapport
-from apps.core.enums import BadgeSante, StatutBlocage, StatutRapport
+from apps.core.enums import StatutBlocage, StatutProjet, StatutRapport
 from apps.projets.services.calendrier_ouvre import calendrier_entreprise
-from apps.projets.services.sante_calculs import calculer_delta_projet
+from apps.projets.services.sante_calculs import (
+    calculer_delta_projet,
+    determiner_badge,
+)
+
+STATUTS_SANTE_FIGES = frozenset(
+    {
+        StatutProjet.SUSPENDU,
+        StatutProjet.RECEPTIONNE,
+        StatutProjet.TERMINE,
+        StatutProjet.DESACTIVE,
+        StatutProjet.RESILIE,
+        StatutProjet.ARCHIVE,
+    }
+)
 
 __all__ = [
+    "STATUTS_SANTE_FIGES",
     "IndiceSante",
     "determiner_badge",
     "evaluer_indice_sante",
@@ -178,24 +193,6 @@ def indice_sante(
 
     score_entier = int(somme.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     return max(0, min(100, score_entier))
-
-
-def determiner_badge(score: int) -> str:
-    """Détermine le badge de santé (VERT, ORANGE, ROUGE) selon les seuils existants.
-
-    Seuils configurés :
-    - score >= settings.SANTE_SEUIL_VERT (80)   -> VERT
-    - score >= settings.SANTE_SEUIL_ORANGE (50) -> ORANGE
-    - score < settings.SANTE_SEUIL_ORANGE (50)  -> ROUGE
-    """
-    seuil_vert = getattr(settings, "SANTE_SEUIL_VERT", 80)
-    seuil_orange = getattr(settings, "SANTE_SEUIL_ORANGE", 50)
-
-    if score >= seuil_vert:
-        return str(BadgeSante.VERT)
-    if score >= seuil_orange:
-        return str(BadgeSante.ORANGE)
-    return str(BadgeSante.ROUGE)
 
 
 # ==============================================================================

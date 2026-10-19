@@ -8,27 +8,37 @@ Vérifie :
 5. Destinataires : Chef de Projet et Direction Générale (ADMIN/DG).
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 import pytest
 from django.core import mail
 from django.core.cache import cache
 from django.utils import timezone
-from django_tenants.utils import schema_context
 
 from apps.accounts.models import Utilisateur
-from apps.chantier.models import Blocage, RapportJournalier
-from apps.chantier.services.blocage import creer_blocage, resoudre_blocage
+from apps.chantier.models import Blocage
 from apps.chantier.services.rapport_journalier import creer_rapport_journalier
-from apps.core.enums import BadgeSante, RoleGlobal, RoleProjet, SeveriteBlocage, StatutBlocage, StatutProjet, StatutRapport
-from apps.projets.models import AffectationProjet, ArretChantier, Lot, Projet, SanteProjetSnapshot
-from apps.projets.services.arret_chantier import declarer_arret_chantier
-from apps.projets.services.sante_declencheur import declencher_recalcul_sante, obtenir_cle_recalcul_en_attente
+from apps.core.enums import (
+    BadgeSante,
+    RoleGlobal,
+    RoleProjet,
+    SeveriteBlocage,
+    StatutBlocage,
+    StatutProjet,
+    StatutRapport,
+)
+from apps.projets.models import AffectationProjet, Lot, Projet, SanteProjetSnapshot
+from apps.projets.services.sante_declencheur import (
+    declencher_recalcul_sante,
+    obtenir_cle_recalcul_en_attente,
+)
 from apps.projets.services.sante_email import obtenir_destinataires_alerte_rouge
-from apps.projets.tasks import evaluer_sante_projets_quotidien_tous_tenants, recalculer_sante_projet_task
+from apps.projets.tasks import (
+    evaluer_sante_projets_quotidien_tous_tenants,
+    recalculer_sante_projet_task,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -209,6 +219,14 @@ def test_transition_vers_le_rouge_un_seul_email(environnement_sante, django_capt
     assert SanteProjetSnapshot.objects.filter(projet=projet).count() == 1
     snap = SanteProjetSnapshot.objects.filter(projet=projet).first()
     assert snap.badge_final == BadgeSante.ROUGE
+    assert snap.score == 24
+    assert snap.scores["delais"] == 10
+    assert snap.scores["blocages"] == 10
+    assert snap.scores["rapports"] == 10
+    assert snap.scores["incidents"] == 100
+    assert snap.scores["taux_rapports"] == 0.0
+    assert snap.mode_ponderation == "BUDGET"
+    assert snap.taux_reporting == Decimal("0.00")
 
     # Deuxième recalcul alors que le projet est DÉJÀ ROUGE :
     # Aucun second email ne doit être envoyé !
@@ -243,10 +261,9 @@ def test_transaction_annulee_ne_bloque_pas_recalcul(environnement_sante, django_
     try:
         from django.db import transaction
 
-        with django_capture_on_commit_callbacks(execute=True):
-            with transaction.atomic():
-                declencher_recalcul_sante(projet.id, "TRANSACTION_ROLLBACK")
-                raise RuntimeError("Erreur forçant le rollback")
+        with django_capture_on_commit_callbacks(execute=True), transaction.atomic():
+            declencher_recalcul_sante(projet.id, "TRANSACTION_ROLLBACK")
+            raise RuntimeError("Erreur forçant le rollback")
     except RuntimeError:
         pass
 
@@ -257,9 +274,8 @@ def test_transaction_annulee_ne_bloque_pas_recalcul(environnement_sante, django_
     from django.db import transaction
 
     with patch("apps.projets.tasks.recalculer_sante_projet_task.apply_async") as mock_apply:
-        with django_capture_on_commit_callbacks(execute=True):
-            with transaction.atomic():
-                declencher_recalcul_sante(projet.id, "TRANSACTION_REUSSIE")
+        with django_capture_on_commit_callbacks(execute=True), transaction.atomic():
+            declencher_recalcul_sante(projet.id, "TRANSACTION_REUSSIE")
         assert cache.get(cle) == 1
         mock_apply.assert_called_once()
     cache.delete(cle)
@@ -275,7 +291,6 @@ def test_declencheur_rapport_soumission_et_creation_directe(environnement_sante,
     cache.delete(cle)
 
     from apps.chantier.services.rapport_journalier import (
-        creer_rapport_journalier,
         soumettre_rapport_journalier,
     )
 
@@ -325,7 +340,6 @@ def test_declencheur_rapport_rejet(environnement_sante, django_capture_on_commit
     cache.delete(cle)
 
     from apps.chantier.services.rapport_journalier import (
-        creer_rapport_journalier,
         rejeter_rapport_journalier,
     )
 
@@ -429,5 +443,76 @@ def test_suspension_reprise_ouverture_fermeture_arret_automatique(environnement_
         assert cache.get(cle) == 1
         mock_apply.assert_called_once()
     cache.delete(cle)
+
+
+def test_recalculer_sante_projet_en_attente_non_demarre(environnement_sante):
+    """Un projet EN_ATTENTE rend NON_DEMARRE, indice et badge à None, sans snapshot."""
+    schema = environnement_sante["schema"]
+    projet = environnement_sante["projet"]
+    projet.statut = StatutProjet.EN_ATTENTE
+    projet.indice_sante = None
+    projet.badge_sante = None
+    projet.save(update_fields=["statut", "indice_sante", "badge_sante", "modifie_le"])
+
+    SanteProjetSnapshot.objects.filter(projet=projet).delete()
+
+    res = recalculer_sante_projet_task(schema, str(projet.id), "TEST_EN_ATTENTE")
+
+    assert res == {
+        "projet_id": str(projet.id),
+        "etat": "NON_DEMARRE",
+        "score": None,
+        "badge": None,
+    }
+    projet.refresh_from_db()
+    assert projet.indice_sante is None
+    assert projet.badge_sante is None
+    assert projet.avancement_reel == Decimal("0")
+    assert SanteProjetSnapshot.objects.filter(projet=projet).count() == 0
+
+
+def test_recalculer_sante_projet_termine_fige(
+    environnement_sante, django_capture_on_commit_callbacks
+):
+    """Un projet TERMINE (indice 78, badge ORANGE) rend FIGE et 78, sans snapshot ni email."""
+    schema = environnement_sante["schema"]
+    projet = environnement_sante["projet"]
+    lot = environnement_sante["lot"]
+    chef = environnement_sante["chef_projet"]
+
+    projet.statut = StatutProjet.TERMINE
+    projet.indice_sante = 78
+    projet.badge_sante = BadgeSante.ORANGE
+    projet.save(update_fields=["statut", "indice_sante", "badge_sante", "modifie_le"])
+
+    # Ajout d'un blocage critique qui ferait basculer au ROUGE si le calcul n'était pas figé
+    Blocage.objects.create(
+        projet=projet,
+        lot=lot,
+        titre="Blocage sur projet terminé",
+        severite=SeveriteBlocage.CRITIQUE,
+        statut=StatutBlocage.OUVERT,
+        ouvert_par=chef,
+        cree_par=chef,
+    )
+
+    SanteProjetSnapshot.objects.filter(projet=projet).delete()
+    mail.outbox.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        res = recalculer_sante_projet_task(schema, str(projet.id), "TEST_FIGE")
+
+    assert res == {
+        "projet_id": str(projet.id),
+        "etat": "FIGE",
+        "score": 78,
+        "badge": BadgeSante.ORANGE,
+    }
+    projet.refresh_from_db()
+    assert projet.indice_sante == 78
+    assert projet.badge_sante == BadgeSante.ORANGE
+    assert SanteProjetSnapshot.objects.filter(projet=projet).count() == 0
+    assert len(mail.outbox) == 0
+
 
 

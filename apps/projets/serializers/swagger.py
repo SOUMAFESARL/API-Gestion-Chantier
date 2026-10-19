@@ -25,7 +25,6 @@ from apps.projets.services.contrats import (
     nettoyer_contrats,
     valider_fichier_contrat,
 )
-from apps.projets.services.indicateurs import calculer_sante
 from apps.projets.services.statistiques import statistiques_lots
 
 CHAMPS_FORMULAIRE = (
@@ -304,7 +303,10 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
         )
     )
     indice_sante = serializers.SerializerMethodField(
-        help_text="Note sur 100 comparant réalisation et budget consommé ; null si non calculable."
+        help_text=(
+            "Indice de santé synthétique (0-100) calculé selon la SFD F3 ; "
+            "null si non calculé."
+        )
     )
     maitre_ouvrage = serializers.SerializerMethodField()
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
@@ -342,9 +344,9 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     def get_delta_retard(self, obj) -> float:
         return self._indicateurs_temporels(obj)["delta_retard"]
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_indice_sante(self, obj) -> int | None:
-        # Aucun registre de dépenses réelles n'est encore relié aux projets.
-        return calculer_sante(100 - self.get_avancement_reel(obj), obj.budget_initial_montant, None)
+        return obj.indice_sante
 
     def get_maitre_ouvrage(self, obj) -> str:
         return obj.maitre_ouvrage or (obj.client.raison_sociale if obj.client_id else "")

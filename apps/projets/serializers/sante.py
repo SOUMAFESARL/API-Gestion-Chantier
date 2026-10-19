@@ -61,6 +61,11 @@ class SanteDetailResponseSerializer(serializers.Serializer):
     badge_brut = serializers.CharField(
         allow_null=True, help_text="Badge brut avant application du plancher."
     )
+    scores = serializers.DictField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Scores des dimensions SFD (delais, rapports, blocages, incidents).",
+    )
 
     # Indicateurs d'avancement
     avancement_physique = serializers.FloatField(help_text="Avancement physique pondéré (%).")

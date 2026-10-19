@@ -10,9 +10,6 @@ __all__ = [
     "RoleSystemeSerializer",
 ]
 
-PORTEES = [("ENTREPRISE", "Entreprise"), ("PROJET", "Projet")]
-
-
 class RoleSystemeSerializer(serializers.ModelSerializer):
     modules = serializers.SerializerMethodField()
 
@@ -35,14 +32,8 @@ class RoleSystemeCreationSerializer(serializers.Serializer):
     )
     libelle = serializers.CharField(max_length=100)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    portee = serializers.ChoiceField(choices=PORTEES, default="PROJET")
-    modules = serializers.ListField(child=serializers.CharField(max_length=50), allow_empty=True)
 
 
 class RoleSystemeModificationSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=100, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
-    portee = serializers.ChoiceField(choices=PORTEES, required=False)
-    modules = serializers.ListField(
-        child=serializers.CharField(max_length=50), allow_empty=True, required=False
-    )

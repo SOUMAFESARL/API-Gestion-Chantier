@@ -9,6 +9,7 @@ Entités MCD  : Projet, Lot, Activite, AffectationProjet, BordereauPrix, LigneBo
 """
 
 from .activite import Activite
+from .alerte_retard import AlerteRetard, NiveauAlerteRetard, StatutAlerteRetard
 from .arret_chantier import ArretChantier
 from .calendrier import ExceptionCalendrier, SemaineType
 from .contrat import ProjetContrat
@@ -24,6 +25,7 @@ __all__ = [
     "Activite",
     "AffectationEquipeActivite",
     "AffectationProjet",
+    "AlerteRetard",
     "ArretChantier",
     "EquipeChantier",
     "ExceptionCalendrier",
@@ -31,11 +33,12 @@ __all__ = [
     "Lot",
     "MembreEquipeChantier",
     "MotifReport",
+    "NiveauAlerteRetard",
     "Projet",
     "ProjetContrat",
     "ReferentielEntreprise",
     "SanteProjetSnapshot",
     "SemaineType",
+    "StatutAlerteRetard",
     "TypeObjetHistorique",
 ]
-

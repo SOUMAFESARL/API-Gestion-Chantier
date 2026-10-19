@@ -7,7 +7,7 @@ from django.utils import timezone
 from apps.core.enums import StatutActivite
 from apps.projets.services.sante_calculs import (
     calculer_avancement_physique_activite,
-    calculer_avancement_physique_lot,
+    ponderer_lots_par_budget,
 )
 
 
@@ -19,9 +19,10 @@ def pourcentage_realise(activite):
 def statistiques_lots(lots):
     """Calcule les statistiques consolidées d'une collection de lots actifs.
 
-    Unifié avec le moteur d'indice de santé (C3) :
-    - Pour 1 lot : délégation directe à calculer_avancement_physique_lot(lot).
-    - Pour plusieurs lots : moyenne pondérée par budget initial des lots (repli uniforme si incomplet).
+    Unifié avec le moteur d'indice de santé et la SFD F3 (§4.3, RG-F3-05) :
+    - Moyenne pondérée par budget initial des lots via ponderer_lots_par_budget.
+    - Les lots sans budget sont exclus du calcul.
+    - Pondération toujours 'BUDGET'.
     """
     lots_actifs = [
         lot for lot in lots
@@ -32,43 +33,8 @@ def statistiques_lots(lots):
         if getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None
     ]
 
-    # Seuls les lots ayant une consistance (budget propre ou au moins une activité active) participent au calcul d'avancement
-    lots_pertinents = [
-        lot for lot in lots_actifs
-        if (getattr(lot, "budget_initial_montant", None) is not None and lot.budget_initial_montant > 0)
-        or any(getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None for a in lot.activites.all())
-    ]
-
-    if not lots_pertinents:
-        avancement = 0.0
-        ponderation = "UNIFORME"
-    elif len(lots_pertinents) == 1:
-        lot_unique = lots_pertinents[0]
-        avancement = calculer_avancement_physique_lot(lot_unique)
-        activites_lot = [
-            a for a in lot_unique.activites.all()
-            if getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None
-        ]
-        budget_complet = bool(activites_lot) and all(
-            a.budget_initial_montant is not None and a.budget_initial_montant > 0
-            for a in activites_lot
-        )
-        ponderation = "BUDGET" if budget_complet else "UNIFORME"
-    else:
-        # Multiples lots (consolidation niveau projet)
-        from apps.projets.services.sante_calculs import obtenir_budget_effectif_lot
-
-        budgets_lots = [obtenir_budget_effectif_lot(lot) for lot in lots_pertinents]
-        budget_complet_lots = all(b is not None and b > 0 for b in budgets_lots)
-        poids = [b if budget_complet_lots else 1.0 for b in budgets_lots]
-        total_poids = sum(poids)
-        if total_poids <= 0:
-            avancement = 0.0
-        else:
-            avancements_lots = [calculer_avancement_physique_lot(l) for l in lots_pertinents]
-            somme = sum(av * p for av, p in zip(avancements_lots, poids, strict=True))
-            avancement = float(round(somme / total_poids, 2))
-        ponderation = "BUDGET" if budget_complet_lots else "UNIFORME"
+    avancement = ponderer_lots_par_budget(lots_actifs)
+    ponderation = "BUDGET"
 
     aujourd_hui = timezone.localdate()
     return {

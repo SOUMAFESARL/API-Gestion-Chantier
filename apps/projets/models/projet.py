@@ -131,18 +131,18 @@ class Projet(ModeleBase):
 
     @property
     def duree_jours_ouvres(self) -> int | None:
-        """Calcule la durée estimée en jours ouvrés (lundi au vendredi)."""
+        """Calcule la durée estimée en jours ouvrés selon le calendrier de l'entreprise."""
         if not self.date_debut_prevue or not self.date_fin_prevue:
             return None
         if self.date_fin_prevue < self.date_debut_prevue:
             return 0
-        from datetime import timedelta
+        from apps.projets.services.calendrier_ouvre import calendrier_entreprise
+        from apps.projets.services.sante_calculs import compter_jours_ouvres
 
-        total_jours = (self.date_fin_prevue - self.date_debut_prevue).days + 1
-        return sum(
-            1
-            for i in range(total_jours)
-            if (self.date_debut_prevue + timedelta(days=i)).weekday() < 5
+        return compter_jours_ouvres(
+            self.date_debut_prevue,
+            self.date_fin_prevue,
+            calendrier_entreprise(self.date_debut_prevue, self.date_fin_prevue),
         )
 
     @property

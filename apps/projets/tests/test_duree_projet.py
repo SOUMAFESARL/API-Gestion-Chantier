@@ -51,8 +51,11 @@ def test_duree_calendaire_date_manquante_ou_fin_anterieure():
     assert duree_calendaire(date(2026, 1, 2), date(2026, 1, 1)) is None
 
 
-def test_projet_propriete_duree_calendaire():
-    """Projet.duree_calendaire expose les quatre clés, jours_ouvres égal à duree_jours_ouvres."""
+def test_projet_propriete_duree_calendaire(db, schema_demo):
+    """Projet.duree_calendaire expose les quatre clés, jours_ouvres égal à duree_jours_ouvres.
+
+    En base : les jours ouvrés se lisent dans le calendrier de l'entreprise (erratum SFD F3 E-4).
+    """
     projet = Projet(
         date_debut_prevue=date(2026, 1, 1),
         date_fin_prevue=date(2026, 12, 31),

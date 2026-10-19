@@ -17,6 +17,7 @@ from apps.chantier.services.journal import (
 from apps.core.enums import ModeExecution
 from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.projets.models import Activite, Projet
+from apps.projets.services.calendrier_ouvre import calendrier_entreprise
 
 SECTIONS = {
     ModeExecution.REGIE: ["AVANCEMENT", "EFFECTIFS", "MATERIAUX", "LIVRAISONS", "EQUIPEMENTS"],
@@ -559,13 +560,14 @@ def journal_periode(request, debut, fin, *, projet_id=None, brouillons_visibles=
         {p.id for p in projets} | {j.rapport.projet_id for j in rapports}, debut, fin
     )
     charges = []
+    cal = calendrier_entreprise(debut, fin)
     for projet in projets:
         contexte = contexte_projet(projet, fin)
         premier = max(debut, premier_jour_rapport(projet))
         dernier = min(fin, aujourdhui(), projet.date_fin_reelle or fin)
         for offset in range(max(0, (dernier - premier).days + 1)):
             jour = premier + timedelta(days=offset)
-            if jour.weekday() >= 5 and (projet.id, jour) not in par_jour:
+            if not cal.est_ouvre(jour) and (projet.id, jour) not in par_jour:
                 continue
             j = par_jour.pop((projet.id, jour), None)
             if j and (j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == lecteur):

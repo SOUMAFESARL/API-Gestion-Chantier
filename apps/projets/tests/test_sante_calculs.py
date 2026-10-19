@@ -10,9 +10,9 @@ Couvre :
 - La détection d'années manquantes pour les jours fériés (avertissement JOURS_FERIES_INCOMPLETS).
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -24,25 +24,21 @@ from apps.core.enums import (
     StatutActivite,
     StatutBlocage,
     StatutProjet,
-    StatutRapport,
 )
+from apps.projets.services.calendrier_ouvre import CALENDRIER_PAR_DEFAUT_SEMAINE, Calendrier
 from apps.projets.services.sante_calculs import (
-    ResultatCalculSante,
     calculer_avancement_physique_activite,
     calculer_avancement_physique_lot,
     calculer_avancement_physique_projet,
     calculer_avancement_temporel_lot,
-    calculer_avancement_temporel_projet,
     calculer_indice_sante_projet,
     calculer_penalite_blocages,
     calculer_penalite_delais,
     calculer_penalite_reporting,
     compter_jours_ouvres,
     couverture_budget_projet,
-    est_jour_ouvre,
-    multiplicateur_anciennete_blocage,
+    obtenir_jours_feries_ci,
 )
-
 
 # ==============================================================================
 # 1. TESTS DES 4 CAS CHIFFRÉS DE LA SPÉCIFICATION BTP
@@ -468,8 +464,14 @@ def test_avancement_temporel_bornes_0_et_100():
 
 
 def test_avancement_temporel_lot_sans_baseline():
-    """Un lot sans dates de baseline retourne None et remonte un avertissement."""
-    lot = MagicMock(date_debut_baseline=None, date_fin_baseline=None, code="LOT-01")
+    """Un lot sans dates (ni baseline ni prévues) retourne None."""
+    lot = MagicMock(
+        date_debut_baseline=None,
+        date_fin_baseline=None,
+        date_debut_prevue=None,
+        date_fin_prevue=None,
+        code="LOT-01",
+    )
     assert calculer_avancement_temporel_lot(lot, date(2026, 10, 5), set()) is None
 
 
@@ -597,10 +599,10 @@ def test_calculer_indice_sante_projet_plancher_actif():
     )
     projet.blocages.filter.return_value = [b_crit]
 
-    from unittest.mock import patch
+    cal_vide = Calendrier(CALENDRIER_PAR_DEFAUT_SEMAINE, frozenset(), {})
     with patch(
-        "apps.projets.services.sante_calculs.obtenir_jours_feries_ci",
-        return_value=(set(), False),
+        "apps.projets.services.sante_calculs.calendrier_entreprise",
+        return_value=cal_vide,
     ):
         res = calculer_indice_sante_projet(projet, date_reference=date(2026, 10, 15))
 
@@ -628,8 +630,7 @@ def test_retrogradation_plancher_vert_vers_orange():
 
 @pytest.mark.django_db
 def test_obtenir_jours_feries_ci_incomplet():
-    """Vérifie que si une année est absente de la table, est_incomplet=True et avertissement présent."""
-    from apps.projets.services.sante_calculs import obtenir_jours_feries_ci
+    """Vérifie que si une année est absente de la table, est_incomplet=True et avertissement."""
     # Années 2030 à 2031 (qui ne sont pas en base)
     feries, est_incomplet = obtenir_jours_feries_ci(2030, 2031)
     assert est_incomplet is True

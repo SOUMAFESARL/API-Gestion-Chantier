@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.enums import StatutProjet
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Projet, SanteProjetSnapshot
 from apps.projets.serializers.sante import (

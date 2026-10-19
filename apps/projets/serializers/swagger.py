@@ -13,7 +13,11 @@ from apps.projets.selectors.encadrement import (
     chefs_chantier_affectations,
     conducteurs_travaux_avec_affectations,
 )
-from apps.projets.serializers import ChefProjetEnrichiSerializer, ProjetCreationSerializer
+from apps.projets.serializers import (
+    ChefProjetEnrichiSerializer,
+    DureeProjetSerializer,
+    ProjetCreationSerializer,
+)
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.contrats import (
     MAX_LOT,
@@ -37,6 +41,7 @@ CHAMPS_FORMULAIRE = (
     "date_debut_reelle",
     "date_fin_reelle",
     "duree_jours_ouvres",
+    "duree",
     "budget_initial_montant",
     "description",
     "contrat",
@@ -88,6 +93,7 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         ),
     )
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
+    duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
     type_projet = serializers.CharField(max_length=60)
     maitre_ouvrage = serializers.CharField(max_length=200)
     contrat = serializers.ListField(
@@ -299,6 +305,7 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     )
     maitre_ouvrage = serializers.SerializerMethodField()
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
+    duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
     contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
 
     def get_avancement_reel(self, obj) -> float:

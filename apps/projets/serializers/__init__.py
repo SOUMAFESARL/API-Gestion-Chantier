@@ -61,6 +61,7 @@ __all__ = [
     "ArretChantierUpdateSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
+    "DureeProjetSerializer",
     "EquipeCreationSerializer",
     "HistoriqueDateSerializer",
     "LotCreationProjetSerializer",
@@ -114,6 +115,15 @@ class ChefProjetInviteSerializer(serializers.Serializer):
     telephone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
 
 
+class DureeProjetSerializer(serializers.Serializer):
+    """Durée calendaire et ouvrée d'un projet."""
+
+    annees = serializers.IntegerField(read_only=True)
+    mois = serializers.IntegerField(read_only=True)
+    jours = serializers.IntegerField(read_only=True)
+    jours_ouvres = serializers.IntegerField(read_only=True)
+
+
 @extend_schema_serializer(component_name="LotProjet")
 class LotSimpleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -143,6 +153,7 @@ class ProjetSerializer(serializers.ModelSerializer):
     conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
     lots = LotSimpleSerializer(many=True, read_only=True)
     duree_jours_ouvres = serializers.IntegerField(read_only=True)
+    duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
     peut_renommer = serializers.SerializerMethodField()
 
     class Meta:
@@ -167,6 +178,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             "date_debut_baseline",
             "date_fin_baseline",
             "duree_jours_ouvres",
+            "duree",
             "date_debut_reelle",
             "date_fin_reelle",
             "chef_projet",

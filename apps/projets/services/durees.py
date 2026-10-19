@@ -1,32 +1,13 @@
 """Calculs des durées calendaires et ouvrées des projets."""
 
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 __all__ = ["decaler_mois", "duree_calendaire"]
 
 
-def _normaliser_date(valeur: date | str | None) -> date | None:
-    """Convertit une valeur date ou chaîne ISO en objet date, ou None."""
-    if valeur is None:
-        return None
-    if isinstance(valeur, datetime):
-        return valeur.date()
-    if isinstance(valeur, date):
-        return valeur
-    if isinstance(valeur, str):
-        valeur_str = valeur.strip()
-        if not valeur_str:
-            return None
-        try:
-            return date.fromisoformat(valeur_str)
-        except (ValueError, TypeError):
-            return None
-    return None
-
-
 def decaler_mois(d: date, n: int) -> date:
-    """Décale une date de `n` mois en UTC/calendaire.
+    """Décale une date de `n` mois.
 
     Le quantième est ramené au dernier jour du mois cible si nécessaire
     (par ex. 31 janvier + 1 mois -> 28 ou 29 février).
@@ -40,10 +21,12 @@ def decaler_mois(d: date, n: int) -> date:
 
 
 def duree_calendaire(
-    debut: date | str | None,
-    fin: date | str | None,
+    debut: date | None,
+    fin: date | None,
 ) -> dict[str, int] | None:
     """Calcule la durée calendaire entre deux dates, bornes comprises.
+
+    Accepte des objets datetime.date ou None.
 
     Règle (identique à `dureeProjet` côté frontend) :
     - Bornes comprises (du 1er janvier au 31 décembre = 1 an).
@@ -54,17 +37,14 @@ def duree_calendaire(
     - Puis compte les jours restants.
     - Le résultat est None si une des deux dates manque ou si la fin précède le début.
     """
-    d_debut = _normaliser_date(debut)
-    d_fin = _normaliser_date(fin)
-
-    if d_debut is None or d_fin is None:
+    if debut is None or fin is None:
         return None
 
-    if d_fin < d_debut:
+    if fin < debut:
         return None
 
-    arrivee = d_fin + timedelta(days=1)
-    depart = d_debut
+    arrivee = fin + timedelta(days=1)
+    depart = debut
 
     mois_pleins = (arrivee.year - depart.year) * 12 + (arrivee.month - depart.month)
     if decaler_mois(depart, mois_pleins) > arrivee:

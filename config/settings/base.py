@@ -605,3 +605,19 @@ CINETPAY_CHECKOUT_URL = config(
 CINETPAY_CHECK_URL = config(
     "CINETPAY_CHECK_URL", default="https://api-checkout.cinetpay.com/v2/payment/check"
 )
+
+# --------------------------------------------------------------------------
+# F3 — suivi d'avancement (SFD F3 §4.6, §5.4)
+# --------------------------------------------------------------------------
+F3_PONDERATIONS_INDICE_SANTE = {
+    "delais": 40,
+    "rapports": 25,
+    "blocages": 20,
+    "incidents": 15,
+}
+F3_SEUILS_RETARD_PTS = {
+    "MODERE": 5,
+    "ELEVE": 15,
+    "CRITIQUE": 25,
+}
+F3_SEUIL_INDICE_SANTE_CRITIQUE = 40

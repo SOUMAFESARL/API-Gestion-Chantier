@@ -18,8 +18,9 @@ class ProjetStatistiquesView(APIView):
         summary="Statistiques des lots et activités du projet",
         description=(
             "Statistiques calculées à chaque lecture. Lots et activités actifs non supprimés. "
-            "Pondération par budget si toutes les activités ont un budget positif, "
-            "sinon moyenne uniforme. Retard : fin passée et réalisation inférieure à 100 %."
+            "Lots pondérés par leur budget, lots sans budget exclus (RG-F3-05) ; "
+            "activités pondérées par leur quantité prévue. "
+            "Retard : fin passée et réalisation inférieure à 100 %."
         ),
         responses={
             200: StatistiquesProjetSerializer,
@@ -29,7 +30,7 @@ class ProjetStatistiquesView(APIView):
         },
         examples=[
             OpenApiExample(
-                "Deux activités pondérées par budget",
+                "Lots pondérés par budget, activités pondérées par quantité prévue",
                 response_only=True,
                 value={
                     "lots_count": 2,

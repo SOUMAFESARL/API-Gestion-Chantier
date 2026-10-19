@@ -1,7 +1,8 @@
 """Moteur de calcul pur pour l'Indice de Santé de Projet et ses pénalités.
 
 Fonctions pures, déterministes et testables unitairement :
-- Avancement physique (activité -> lot -> projet, pondération budgétaire avec repli uniforme).
+- Avancement physique (activité -> lot pondéré par quantités prévues -> projet
+  pondéré par budget lot, exclusion des lots sans budget).
 - Avancement temporel (jours ouvrés écoulés vs baseline contractuelle v0).
 - Delta de retard en points (retard_pts = temporel - physique).
 - Pénalité Délais (retard clampé à 25 pts + malus des reports accordés du projet).
@@ -21,7 +22,14 @@ from django.conf import settings
 from django.utils import timezone
 from django_tenants.utils import get_public_schema_name, schema_context
 
-from apps.core.enums import BadgeSante, SeveriteBlocage, StatutActivite, StatutBlocage, StatutProjet, StatutRapport
+from apps.core.enums import (
+    BadgeSante,
+    SeveriteBlocage,
+    StatutActivite,
+    StatutBlocage,
+    StatutProjet,
+    StatutRapport,
+)
 from apps.projets.models.historique_date import TypeObjetHistorique
 from apps.referentiels.models import JourFerie
 
@@ -39,8 +47,10 @@ __all__ = [
     "calculer_penalite_delais",
     "calculer_penalite_reporting",
     "compter_jours_ouvres",
+    "couverture_budget_projet",
     "est_jour_ouvre",
     "obtenir_jours_feries_ci",
+    "ponderer_lots_par_budget",
 ]
 
 
@@ -128,10 +138,11 @@ def compter_jours_ouvres(debut: date, fin: date, jours_feries: set[date]) -> int
 def calculer_avancement_physique_activite(activite) -> float:
     """Calcule l'avancement physique d'une activité (0 à 100 %).
 
-    Règle CDC : Activite.quantite_realisee / Activite.quantite_prevue * 100.
-    100 % si clôturée.
-    Note contractuelle : La source est Activite.quantite_realisee directement,
-    sans condition d'approbation préalable d'un rapport F2 (spécification V1).
+    Règle CDC / SFD F3 §4.1 : Activite.quantite_realisee / Activite.quantite_prevue * 100.
+    100 % si clôturée. Plafonné à 100 %, plancher à 0 %.
+    0.0 si quantite_prevue <= 0.
+    Note : quantite_realisee est désormais alimentée par les rapports approuvés
+    (tâche P3) et par les mises à jour manuelles.
     """
     if getattr(activite, "statut", None) == StatutActivite.CLOTURE:
         return 100.0
@@ -144,36 +155,40 @@ def calculer_avancement_physique_activite(activite) -> float:
 
 
 def calculer_avancement_physique_lot(lot) -> float:
-    """Calcule l'avancement physique d'un lot : moyenne des activités actives pondérées par budget.
+    """Calcule l'avancement physique d'un lot (SFD F3 §4.2).
 
-    Si une activité active n'a pas de budget initial > 0, repli à pondération uniforme.
+    Moyenne des activités actives non supprimées, pondérée par leur quantite_prevue.
+    Les activités dont quantite_prevue <= 0 n'entrent pas dans le calcul.
+    Si le lot n'a aucune activité active, garde le comportement actuel
+    (rendre float(lot.avancement or 0)).
+    Si toutes ses activités ont une quantité prévue nulle, rend 0.0.
     """
     activites = [
         a for a in lot.activites.all()
         if getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None
     ]
     if not activites:
-        return float(lot.avancement or 0.0)
+        return float(getattr(lot, "avancement", None) or 0.0)
 
-    budget_complet = all(
-        a.budget_initial_montant is not None and a.budget_initial_montant > 0
-        for a in activites
-    )
-    poids = [
-        float(a.budget_initial_montant) if budget_complet else 1.0
-        for a in activites
+    activites_valides = [
+        a for a in activites
+        if (getattr(a, "quantite_prevue", None) or 0) > 0
     ]
+    if not activites_valides:
+        return 0.0
+
+    poids = [float(a.quantite_prevue) for a in activites_valides]
     total_poids = sum(poids)
     if total_poids <= 0:
         return 0.0
 
-    avancements = [calculer_avancement_physique_activite(a) for a in activites]
+    avancements = [calculer_avancement_physique_activite(a) for a in activites_valides]
     somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
     return float(round(somme / total_poids, 2))
 
 
 def obtenir_budget_effectif_lot(lot) -> float | None:
-    """Retourne le budget initial du lot, ou à défaut la somme des budgets de ses activités actives."""
+    """Retourne le budget initial du lot, ou la somme des budgets de ses activités actives."""
     b_lot = getattr(lot, "budget_initial_montant", None)
     if b_lot is not None and b_lot > 0:
         return float(b_lot)
@@ -187,36 +202,85 @@ def obtenir_budget_effectif_lot(lot) -> float | None:
     return None
 
 
-def calculer_avancement_physique_projet(projet) -> tuple[float, str]:
-    """Calcule l'avancement physique du projet : moyenne pondérée des lots actifs par leur budget effectif.
+def ponderer_lots_par_budget(lots) -> float:
+    """Calcule l'avancement physique de lots pondéré par budget (SFD F3 §4.3, RG-F3-05).
 
-    Retourne (avancement_physique, mode_ponderation).
-    Si un lot actif n'a pas de budget effectif > 0, repli à pondération uniforme.
+    Seuls les lots actifs, non supprimés, et disposant d'un budget initial > 0 sont inclus.
+    Retourne 0.0 si aucun lot n'a de budget.
     """
-    lots = [
+    lots_iterable = lots.all() if hasattr(lots, "all") else lots
+    lots_actifs = [
+        lot for lot in lots_iterable
+        if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
+    ]
+    lots_budgetes = [
+        lot for lot in lots_actifs
+        if getattr(lot, "budget_initial_montant", None) is not None
+        and lot.budget_initial_montant > 0
+    ]
+    if not lots_budgetes:
+        return 0.0
+
+    poids = [float(lot.budget_initial_montant) for lot in lots_budgetes]
+    total_poids = sum(poids)
+    if total_poids <= 0:
+        return 0.0
+
+    avancements = [calculer_avancement_physique_lot(lot) for lot in lots_budgetes]
+    somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
+    return float(round(somme / total_poids, 2))
+
+
+def calculer_avancement_physique_projet(projet) -> tuple[float, str]:
+    """Calcule l'avancement physique du projet (SFD F3 §4.3, RG-F3-05).
+
+    Moyenne des lots actifs non supprimés, pondérée par lot.budget_initial_montant.
+    Les lots sans budget (> 0) sont exclus du calcul.
+    Retourne toujours (avancement, "BUDGET").
+    Retourne (0.0, "BUDGET") si aucun lot n'a de budget.
+    """
+    avancement = ponderer_lots_par_budget(projet.lots.all())
+    return avancement, "BUDGET"
+
+
+def couverture_budget_projet(projet) -> dict[str, Any]:
+    """Calcule la couverture budgétaire des lots par rapport au budget du projet (RG-F3-05).
+
+    Retourne :
+    {
+        "lots_sans_budget": int,
+        "part_budget_couverte": float | None,
+    }
+    - lots_sans_budget : nombre de lots actifs non supprimés sans budget > 0.
+    - part_budget_couverte : part (en %, arrondie à 2 décimales) de
+      projet.budget_initial_montant couverte par la somme des budgets des lots inclus (> 0),
+      ou None si le projet n'a pas de budget > 0.
+    """
+    lots_actifs = [
         lot for lot in projet.lots.all()
         if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
     ]
-    # Seuls les lots ayant une consistance (budget propre ou au moins une activité active) participent au calcul
-    lots_pertinents = [
-        lot for lot in lots
-        if (getattr(lot, "budget_initial_montant", None) is not None and lot.budget_initial_montant > 0)
-        or any(getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None for a in lot.activites.all())
-    ]
-    if not lots_pertinents:
-        return 0.0, "UNIFORME"
 
-    budgets_lots = [obtenir_budget_effectif_lot(lot) for lot in lots_pertinents]
-    budget_complet = all(b is not None and b > 0 for b in budgets_lots)
-    poids = [b if budget_complet else 1.0 for b in budgets_lots]
-    total_poids = sum(poids)
-    if total_poids <= 0:
-        return 0.0, "UNIFORME"
+    lots_sans_budget = 0
+    somme_budgets_inclus = Decimal("0")
+    for lot in lots_actifs:
+        b = getattr(lot, "budget_initial_montant", None)
+        if b is not None and b > 0:
+            somme_budgets_inclus += Decimal(str(b))
+        else:
+            lots_sans_budget += 1
 
-    avancements = [calculer_avancement_physique_lot(lot) for lot in lots_pertinents]
-    somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
-    mode = "BUDGET" if budget_complet else "UNIFORME"
-    return float(round(somme / total_poids, 2)), mode
+    b_projet = getattr(projet, "budget_initial_montant", None)
+    if b_projet is not None and Decimal(str(b_projet)) > Decimal("0"):
+        ratio = (float(somme_budgets_inclus) / float(b_projet)) * 100.0
+        part_budget_couverte = float(round(ratio, 2))
+    else:
+        part_budget_couverte = None
+
+    return {
+        "lots_sans_budget": lots_sans_budget,
+        "part_budget_couverte": part_budget_couverte,
+    }
 
 
 def calculer_avancement_temporel_lot(
@@ -226,7 +290,8 @@ def calculer_avancement_temporel_lot(
 ) -> float | None:
     """Calcule l'avancement temporel d'un lot : jours ouvrés écoulés / jours ouvrés totaux.
 
-    Basé strictement sur la Baseline v0 contractuelle : lot.date_debut_baseline et lot.date_fin_baseline.
+    Basé strictement sur la Baseline v0 contractuelle :
+    lot.date_debut_baseline et lot.date_fin_baseline.
     Retourne None si les dates de baseline ne sont pas renseignées.
     """
     debut = getattr(lot, "date_debut_baseline", None)
@@ -560,7 +625,9 @@ def calculer_indice_sante_projet(
             p_reporting=0.0,
             avancement_physique=float(projet.avancement_reel or 0.0),
             avancement_temporel=float(projet.avancement_theorique or 0.0),
-            retard_pts=float((projet.avancement_theorique or 0.0) - (projet.avancement_reel or 0.0)),
+            retard_pts=float(
+                (projet.avancement_theorique or 0.0) - (projet.avancement_reel or 0.0)
+            ),
             mode_ponderation="FIGE",
             nb_reports=0,
             blocages_ouverts_par_severite={},

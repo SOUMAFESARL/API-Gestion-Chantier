@@ -100,6 +100,13 @@ class RapportJournalier(ModeleBase):
         max_length=10,
         default="WEB",
     )
+    f3_sync_done = models.BooleanField(
+        _("synchronisé avec F3"),
+        default=False,
+        help_text=_(
+            "Vrai une fois les quantités du rapport approuvé reportées sur les activités (F3)."
+        ),
+    )
 
     class Meta:
         db_table = "rapport_journalier"

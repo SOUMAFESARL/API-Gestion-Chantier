@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.core.enums import ModeExecution, TypeBordereau
 from apps.projets.models import Lot
+from apps.projets.services.sante_calculs import calculer_avancement_physique_lot
 from apps.projets.services.statistiques import statistiques_lots
 
 
@@ -152,7 +153,7 @@ class LotResponseSerializer(serializers.ModelSerializer):
     activites_count = serializers.SerializerMethodField()
 
     def get_avancement(self, obj) -> float:
-        return statistiques_lots([obj])["avancement_pondere"]
+        return calculer_avancement_physique_lot(obj)
 
     def get_activites_count(self, obj) -> int:
         return statistiques_lots([obj])["activites_count"]

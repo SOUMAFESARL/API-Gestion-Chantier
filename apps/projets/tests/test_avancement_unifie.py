@@ -118,12 +118,16 @@ def test_unification_avancement_physique_exemple_biais():
     av_serializer = serializer_projet.get_avancement_reel(projet)
     assert av_serializer == 19.0
 
+    lot_serializer = LotResponseSerializer()
+    assert lot_serializer.get_avancement(lot_a) == 10.0
+    assert lot_serializer.get_avancement(lot_b) == 100.0
+
     # Preuve formelle de stricte égalité entre toutes les sources
     assert av_projet_moteur == stats_projet["avancement_pondere"] == av_serializer == 19.0
 
 
-def test_unification_avec_repli_uniforme():
-    """Si un lot n'a pas de budget initial, repli uniforme au niveau lots (50% et 50%)."""
+def test_unification_aucun_lot_budgete():
+    """Si aucun lot n'a de budget, l'avancement vaut 0.0 et le mode reste 'BUDGET' (RG-F3-05)."""
     lot_a = MagicMock(
         est_actif=True,
         supprime_le=None,
@@ -163,14 +167,76 @@ def test_unification_avec_repli_uniforme():
     projet = MagicMock()
     projet.lots.all.return_value = [lot_a, lot_b]
 
-    # Lot A = 0%, Lot B = 100%
-    # Au niveau projet en repli uniforme sur les 2 lots : (0% + 100%) / 2 = 50.0%
-    # (Tandis que l'ancien calcul aplati donnait 5/6 = 83.33% !)
+    # Sans aucun budget : avancement projet = 0.0, mode = "BUDGET" (plus de repli uniforme)
     stats = statistiques_lots([lot_a, lot_b])
     av_moteur, mode = calculer_avancement_physique_projet(projet)
+    serializer_projet = ProjetCreationResponseSerializer()
+    av_serializer = serializer_projet.get_avancement_reel(projet)
 
-    assert stats["avancement_pondere"] == 50.0
-    assert stats["ponderation"] == "UNIFORME"
+    assert stats["avancement_pondere"] == 0.0
+    assert stats["ponderation"] == "BUDGET"
+    assert av_moteur == 0.0
+    assert mode == "BUDGET"
+    assert av_serializer == 0.0
+    assert stats["avancement_pondere"] == av_moteur == av_serializer == 0.0
+
+
+def test_unification_lot_sans_budget_exclu():
+    """Un lot sans budget est exclu du calcul de projet (RG-F3-05)."""
+    # Lot A avec budget 5 000 000 FCFA, avancement 50 %
+    lot_a = MagicMock(
+        est_actif=True,
+        supprime_le=None,
+        budget_initial_montant=Decimal("500000000"),
+    )
+    act_a = MagicMock(
+        est_actif=True,
+        supprime_le=None,
+        statut=StatutActivite.EN_COURS,
+        quantite_prevue=100,
+        quantite_realisee=50,
+        budget_initial_montant=Decimal("500000000"),
+        date_fin_prevue=None,
+    )
+    lot_a.activites.all.return_value = [act_a]
+
+    # Lot B sans budget, 5 activités à 100 % (avancement lot B = 100 %)
+    acts_b = [
+        MagicMock(
+            est_actif=True,
+            supprime_le=None,
+            statut=StatutActivite.EN_COURS,
+            quantite_prevue=100,
+            quantite_realisee=100,
+            budget_initial_montant=None,
+            date_fin_prevue=None,
+        )
+        for _ in range(5)
+    ]
+    lot_b = MagicMock(
+        est_actif=True,
+        supprime_le=None,
+        budget_initial_montant=None,  # Exclu du projet
+    )
+    lot_b.activites.all.return_value = acts_b
+
+    projet = MagicMock()
+    projet.lots.all.return_value = [lot_a, lot_b]
+
+    # Le lot B sans budget est exclu : l'avancement projet est celui du lot A (50.0 %)
+    stats = statistiques_lots([lot_a, lot_b])
+    av_moteur, mode = calculer_avancement_physique_projet(projet)
+    serializer_projet = ProjetCreationResponseSerializer()
+    av_serializer = serializer_projet.get_avancement_reel(projet)
+
     assert av_moteur == 50.0
-    assert mode == "UNIFORME"
-    assert stats["avancement_pondere"] == av_moteur
+    assert mode == "BUDGET"
+    assert stats["avancement_pondere"] == 50.0
+    assert stats["ponderation"] == "BUDGET"
+    assert av_serializer == 50.0
+    assert stats["avancement_pondere"] == av_moteur == av_serializer == 50.0
+
+    lot_serializer = LotResponseSerializer()
+    assert lot_serializer.get_avancement(lot_a) == 50.0
+    # Lot sans budget garde l'avancement de ses activités (formule 2, pas 0)
+    assert lot_serializer.get_avancement(lot_b) == 100.0

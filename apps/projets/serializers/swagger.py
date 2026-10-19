@@ -297,7 +297,8 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     avancement_reel = serializers.SerializerMethodField(
         help_text=(
             "Pourcentage réalisé automatique : 0 à la création, jusqu'à 100 selon les activités. "
-            "Pondéré par les budgets complets des activités, sinon moyenne simple."
+            "Lots pondérés par leur budget, lots sans budget exclus (RG-F3-05) ; "
+            "activités pondérées par leur quantité prévue."
         )
     )
     indice_sante = serializers.SerializerMethodField(

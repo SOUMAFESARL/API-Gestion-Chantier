@@ -28,7 +28,12 @@ def test_progress_from_activities(schema_demo):
     assert created.data["avancement_reel"] == 0
     assert created.data["indice_sante"] is None
     url = created["Location"]
-    lot = Lot.objects.create(projet_id=created.data["id"], code="L1", libelle="Lot")
+    lot = Lot.objects.create(
+        projet_id=created.data["id"],
+        code="L1",
+        libelle="Lot",
+        budget_initial_montant=1_000_000,
+    )
     assert client.get(url).data["avancement_reel"] == 0
     activity = Activite.objects.create(
         lot=lot, libelle="Travaux", quantite_prevue=100, quantite_realisee=25,

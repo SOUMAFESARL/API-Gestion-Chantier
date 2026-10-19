@@ -206,6 +206,7 @@ Exceptions au gel : C-04 (levée au lot 8) et H-01 (levée au lot 9).
 - CA : un VI reçoit 403, un CP obtient 200 pour SUSPENDU, un CP reçoit 403 pour RESILIE, un DO obtient 200 pour RESILIE.
 
 **E-09 [D] Statut CRITIQUE.** Statut manuel protégé. Il est ajouté à l'ensemble des statuts fixes que la tâche nocturne n'écrase jamais, et relève de `changer_statut`. À confirmer par le test de Gemini sur le comportement actuel.
+- Remplacée le 19/10/2026 par la SFD F3 §7 : CRITIQUE est un statut automatique.
 - CA : après `executer_evaluation_quotidienne_schema`, un projet CRITIQUE reste CRITIQUE.
 
 **E-10 [V] Effet des statuts sur les écritures.**

@@ -13,8 +13,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "STATUTS_SANTE_FIGES",
-    "evaluer_sante_projets_quotidien_tous_tenants",
-    "evaluer_statuts_quotidiens_tous_tenants",
+    "evaluer_f3_nuit_tous_tenants",
     "notifier_dg_derive_delai",
     "recalculer_sante_projet_task",
 ]
@@ -112,10 +111,25 @@ def notifier_dg_derive_delai(
 
 
 @shared_task
-def evaluer_statuts_quotidiens_tous_tenants() -> dict:
-    """Tâche nocturne Celery Beat : évalue les statuts calendaires sur chaque schéma tenant actif."""
-    from apps.core.enums import StatutEntreprise
-    from apps.projets.services.machine_etats import executer_evaluation_quotidienne_schema
+def evaluer_f3_nuit_tous_tenants() -> dict:
+    """Tâche Celery Beat quotidienne de nuit à 00h01 (SFD F3 §4.6, §7).
+
+    Pour chaque entreprise cliente sous son schema_context :
+    1. Synchronise d'abord les rapports APPROUVE dont f3_sync_done est faux
+       via synchroniser_rapport_approuve (rattrapage de coupure serveur).
+    2. Recalcule l'indice de chaque projet suivi (appel direct de recalculer_sante_projet_task).
+    3. Évalue ensuite le statut de chaque projet via evaluer_statut_projet.
+    """
+    from apps.chantier.models import RapportJournalier
+    from apps.core.enums import StatutActivite, StatutEntreprise, StatutLot, StatutRapport
+    from apps.projets.models import Activite, Lot, Projet
+    from apps.projets.services.avancement import synchroniser_rapport_approuve
+    from apps.projets.services.machine_etats import (
+        STATUTS_PROJET_MANUELS_FIXES,
+        evaluer_statut_activite,
+        evaluer_statut_lot,
+        evaluer_statut_projet,
+    )
     from apps.tenants.models import Entreprise
 
     entreprises = Entreprise.objects.exclude(schema_name="public").filter(
@@ -128,20 +142,126 @@ def evaluer_statuts_quotidiens_tous_tenants() -> dict:
             continue
         try:
             with schema_context(ent.schema_name):
-                rapport = executer_evaluation_quotidienne_schema()
-                rapport_global[ent.schema_name] = rapport
+                # 1. Rattrapage des rapports approuvés non synchronisés
+                rapports_a_rattraper = list(
+                    RapportJournalier.objects.filter(
+                        supprime_le__isnull=True,
+                        statut=StatutRapport.APPROUVE,
+                        f3_sync_done=False,
+                    ).values_list("id", flat=True)
+                )
+                nb_rattrapes = 0
+                for rap_id in rapports_a_rattraper:
+                    try:
+                        if synchroniser_rapport_approuve(rap_id):
+                            nb_rattrapes += 1
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors du rattrapage du rapport %s (tenant %s) : %s",
+                            rap_id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                # Évaluation préalable des activités et lots (mise à jour calendaire)
+                activites = Activite.objects.filter(supprime_le__isnull=True).exclude(
+                    statut__in=[StatutActivite.CLOTURE, StatutActivite.SUSPENDU]
+                )
+                for act in activites.iterator():
+                    try:
+                        evaluer_statut_activite(act)
+                    except Exception as err:
+                        logger.error(
+                            "Erreur d'évaluation du statut de l'activité %s (tenant %s) : %s",
+                            act.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                lots = Lot.objects.filter(supprime_le__isnull=True).exclude(
+                    statut__in=[StatutLot.CLOTURE, StatutLot.SUSPENDU]
+                )
+                for lot in lots.iterator():
+                    try:
+                        evaluer_statut_lot(lot)
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors de l'évaluation du statut du lot %s (tenant %s) : %s",
+                            lot.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                # 2. Recalcul de l'indice de chaque projet suivi (appel direct synchrone)
+                projets_suivis = list(
+                    Projet.objects.filter(
+                        supprime_le__isnull=True,
+                    ).exclude(
+                        statut__in=STATUTS_SANTE_FIGES,
+                    ).values_list("id", flat=True)
+                )
+                nb_indices = 0
+                for pid in projets_suivis:
+                    try:
+                        recalculer_sante_projet_task(
+                            schema_name=ent.schema_name,
+                            projet_id=str(pid),
+                            declencheur_type="JOB_NUIT_F3_00H01",
+                        )
+                        nb_indices += 1
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors du recalcul de santé du projet %s (tenant %s) : %s",
+                            pid,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                # 3. Évaluation du statut des projets
+                projets_a_evaluer = list(
+                    Projet.objects.filter(
+                        supprime_le__isnull=True,
+                    ).exclude(
+                        statut__in=STATUTS_PROJET_MANUELS_FIXES,
+                    )
+                )
+                nb_projets_modifies = 0
+                for proj in projets_a_evaluer:
+                    try:
+                        if evaluer_statut_projet(proj):
+                            nb_projets_modifies += 1
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors de l'évaluation du statut du projet %s (tenant %s) : %s",
+                            proj.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                rapport_global[ent.schema_name] = {
+                    "rapports_rattrapes": nb_rattrapes,
+                    "projets_indices_recalcules": nb_indices,
+                    "projets_modifies": nb_projets_modifies,
+                }
                 logger.info(
-                    "Évaluation quotidienne réussie pour tenant '%s' : %s",
+                    "Évaluation F3 nuit réussie pour tenant '%s' : %s",
                     ent.schema_name,
-                    rapport,
+                    rapport_global[ent.schema_name],
                 )
         except Exception as e:
             logger.error(
-                "Erreur lors de l'évaluation quotidienne pour tenant '%s' : %s",
+                "Erreur lors de l'évaluation F3 nuit pour tenant '%s' : %s",
                 ent.schema_name,
                 e,
                 exc_info=True,
             )
+            rapport_global[ent.schema_name] = {"erreur": str(e)}
+
     return rapport_global
 
 
@@ -304,60 +424,3 @@ def recalculer_sante_projet_task(
     return _executer()
 
 
-@shared_task
-def evaluer_sante_projets_quotidien_tous_tenants() -> dict:
-    """Tâche Celery Beat quotidienne (00h15) : évalue et actualise l'indice de santé sur tous les tenants actifs."""
-    from apps.core.enums import StatutEntreprise
-    from apps.projets.models import Projet
-    from apps.tenants.models import Entreprise
-
-    entreprises = Entreprise.objects.exclude(schema_name="public").filter(
-        statut__in=[StatutEntreprise.ACTIF, StatutEntreprise.ESSAI]
-    )
-    rapport_global = {}
-
-    statuts_actifs = {
-        StatutProjet.EN_COURS,
-        StatutProjet.EN_RETARD,
-        StatutProjet.CRITIQUE,
-        StatutProjet.BLOQUE,
-    }
-
-    for ent in entreprises:
-        if not ent.schema_name:
-            continue
-        try:
-            with schema_context(ent.schema_name):
-                projets_actifs = list(
-                    Projet.objects.filter(
-                        supprime_le__isnull=True,
-                        statut__in=statuts_actifs,
-                    ).values_list("id", flat=True)
-                )
-                recalcules = 0
-                for pid in projets_actifs:
-                    recalculer_sante_projet_task(
-                        schema_name=ent.schema_name,
-                        projet_id=str(pid),
-                        declencheur_type="JOB_QUOTIDIEN_00H15",
-                    )
-                    recalcules += 1
-
-                rapport_global[ent.schema_name] = {
-                    "projets_actifs_recalcules": recalcules,
-                }
-                logger.info(
-                    "Évaluation quotidienne santé réussie pour tenant '%s' : %d projets recalculés.",
-                    ent.schema_name,
-                    recalcules,
-                )
-        except Exception as e:
-            logger.error(
-                "Erreur lors de l'évaluation quotidienne santé pour tenant '%s' : %s",
-                ent.schema_name,
-                e,
-                exc_info=True,
-            )
-            rapport_global[ent.schema_name] = {"erreur": str(e)}
-
-    return rapport_global

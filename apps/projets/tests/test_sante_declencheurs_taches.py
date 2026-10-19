@@ -36,7 +36,7 @@ from apps.projets.services.sante_declencheur import (
 )
 from apps.projets.services.sante_email import obtenir_destinataires_alerte_rouge
 from apps.projets.tasks import (
-    evaluer_sante_projets_quotidien_tous_tenants,
+    evaluer_f3_nuit_tous_tenants,
     recalculer_sante_projet_task,
 )
 
@@ -241,14 +241,19 @@ def test_transition_vers_le_rouge_un_seul_email(environnement_sante, django_capt
 
 
 def test_evaluer_sante_projets_quotidien_tous_tenants(environnement_sante):
-    """Vérifie le parcours multi-tenant de la tâche Beat quotidienne à 00h15."""
+    """Vérifie le parcours multi-tenant de la tâche Beat quotidienne F3 à 00h01."""
     with patch("apps.projets.services.sante_calculs.obtenir_jours_feries_ci", return_value=(set(), False)):
-        rapport = evaluer_sante_projets_quotidien_tous_tenants()
+        rapport = evaluer_f3_nuit_tous_tenants()
 
     assert isinstance(rapport, dict)
     schema = environnement_sante["schema"]
     assert schema in rapport
-    assert rapport[schema]["projets_actifs_recalcules"] >= 1
+    assert rapport[schema]["projets_indices_recalcules"] >= 1
+    assert rapport["demo"]["projets_indices_recalcules"] >= 1
+
+    projet = environnement_sante["projet"]
+    projet.refresh_from_db()
+    assert projet.indice_sante is not None
 
 
 def test_transaction_annulee_ne_bloque_pas_recalcul(environnement_sante, django_capture_on_commit_callbacks):

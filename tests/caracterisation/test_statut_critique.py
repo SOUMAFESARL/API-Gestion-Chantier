@@ -1,10 +1,14 @@
-"""Test de caractérisation : comportement actuel d'un projet CRITIQUE face à l'évaluation quotidienne.
+"""Test de caractérisation : comportement d'un projet CRITIQUE.
 
-[E-09] Vérifie ce que fait aujourd'hui `executer_evaluation_quotidienne_schema` sur un projet au statut CRITIQUE.
-Constat : le statut CRITIQUE est ÉCRASÉ par l'évaluation calendaire (car absent de STATUTS_PROJET_MANUELS_FIXES).
+Conformité SFD F3 §7 face à l'évaluation quotidienne.
+[E-09 / SFD §7] Vérifie le comportement de `executer_evaluation_quotidienne_schema`
+sur un projet au statut CRITIQUE.
+Règle de retour SFD §7 : un projet CRITIQUE qui ne l'est plus repasse obligatoirement
+par EN_RETARD (jamais directement EN_COURS).
 """
 
 from datetime import timedelta
+
 import pytest
 from django.utils import timezone
 
@@ -17,7 +21,9 @@ from apps.tiers.models import Tiers
 
 @pytest.mark.django_db
 def test_evaluation_quotidienne_ecrase_statut_critique(schema_demo):
-    """Vérifie que executer_evaluation_quotidienne_schema écrase actuellement le statut CRITIQUE."""
+    """Vérifie que executer_evaluation_quotidienne_schema fait repasser un projet
+    CRITIQUE par EN_RETARD selon la SFD §7.
+    """
     admin = Utilisateur.objects.create_user(
         email="admin.critique@demo.ci",
         password="TestPassword123!",
@@ -47,6 +53,7 @@ def test_evaluation_quotidienne_ecrase_statut_critique(schema_demo):
     # Rechargement depuis la base
     projet.refresh_from_db()
 
-    # Constat : le statut CRITIQUE a été écrasé (il passe à EN_COURS selon les dates calendaires)
+    # Règle de retour SFD §7 : un projet CRITIQUE rétabli passe par EN_RETARD
+    # (jamais directement EN_COURS).
     assert projet.statut != StatutProjet.CRITIQUE
-    assert projet.statut == StatutProjet.EN_COURS
+    assert projet.statut == StatutProjet.EN_RETARD

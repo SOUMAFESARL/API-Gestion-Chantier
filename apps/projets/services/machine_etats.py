@@ -2,39 +2,52 @@
 
 Schéma : tenant.
 Module CDC : 1 (Gestion des Projets) & 2 (Suivi Technique des Travaux).
+Conformité : SFD F3 §7 (Statuts automatiques de projet).
 
 Invariants garantis :
-1. Déclenchement strictement calendaire :
-   - PLANIFIE (EN_ATTENTE) -> EN_COURS dès que date_du_jour >= date_debut_prevue.
-   - EN_COURS -> EN_RETARD dès que date_du_jour > date_fin_prevue (si non réceptionné ni clôturé).
+1. Transitions automatiques de projet (SFD F3 §7) :
+   - EN_ATTENTE -> EN_COURS dès que date_du_jour >= date_debut_prevue (ou réelle)
+     ET qu'au moins un rapport F2 a été soumis (SOUMIS ou APPROUVE).
+   - EN_COURS / EN_RETARD -> CRITIQUE dès qu'un lot actif présente un delta de retard
+     > F3_SEUILS_RETARD_PTS["CRITIQUE"] (25 pts)
+     OU que projet.indice_sante < F3_SEUIL_INDICE_SANTE_CRITIQUE (40).
+   - EN_COURS -> EN_RETARD dès qu'un lot actif présente un delta de retard
+     > F3_SEUILS_RETARD_PTS["MODERE"] (5 pts).
+   - Règle de retour SFD §7 : un projet CRITIQUE qui ne l'est plus repasse obligatoirement
+     par EN_RETARD (jamais directement EN_COURS). Il ne rejoindra EN_COURS qu'à une
+     évaluation ultérieure.
 2. Rétablissement instantané en temps réel :
    - EN_RETARD -> EN_COURS dès qu'un décalage justifié (reprogrammation de date)
      repousse la date de fin à une date >= date_du_jour.
 3. Verrou absolu de Réception :
    - Aucun projet ne peut passer à RECEPTIONNE (ou TERMINE) si 100 % de ses lots actifs
      ne sont pas au statut CLOTURE (ou avancement = 100 %).
-4. Préservation des états manuels (puits stables) :
+4. Préservation des états manuels et terminaux (puits stables) :
    - Les statuts SUSPENDU, BLOQUE, DESACTIVE, RESILIE, ARCHIVE, RECEPTIONNE et TERMINE
-     ne sont jamais écrasés automatiquement par la tâche calendaire nocturne.
+     (STATUTS_PROJET_MANUELS_FIXES) ne sont jamais écrasés automatiquement par la tâche nocturne.
+     Le statut CRITIQUE est quant à lui automatique (SFD F3 §7) et non protégé.
 """
 
-from datetime import date
 import logging
+from datetime import date
+
+from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
-from apps.core.enums import StatutActivite, StatutLot, StatutProjet
+from apps.core.enums import StatutActivite, StatutLot, StatutProjet, StatutRapport
 from apps.projets.models import Activite, Lot, Projet
+from apps.projets.services.calendrier_ouvre import calendrier_entreprise
+from apps.projets.services.sante_calculs import calculer_delta_lot
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "ProjetClosError",
     "STATUTS_ACHEVES",
     "STATUTS_FIN_DE_VIE",
     "STATUTS_PROJET_MANUELS_FIXES",
+    "ProjetClosError",
     "changer_statut_projet",
     "evaluer_statut_activite",
     "evaluer_statut_lot",
@@ -82,7 +95,6 @@ STATUTS_ACHEVES = frozenset(
 
 STATUTS_PROJET_MANUELS_FIXES = frozenset(
     {
-        StatutProjet.CRITIQUE,
         StatutProjet.SUSPENDU,
         StatutProjet.BLOQUE,
         StatutProjet.DESACTIVE,
@@ -115,7 +127,10 @@ def verifier_statut_projet_pour_ecriture(projet, action="ECRITURE"):
     # 2. Achèvement : interdiction des nouveaux rapports et des reprogrammations
     if statut in STATUTS_ACHEVES and action in ("NOUVEAU_RAPPORT", "REPROGRAMMATION"):
         raise ProjetClosError(
-            detail="Le projet est achevé (réceptionné ou terminé). Cette opération n'est plus autorisée.",
+            detail=(
+                "Le projet est achevé (réceptionné ou terminé). "
+                "Cette opération n'est plus autorisée."
+            ),
             code="projet_clos",
         )
 
@@ -227,28 +242,85 @@ def evaluer_statut_lot(lot: Lot, date_reference: date | None = None) -> bool:
 
 
 def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) -> bool:
-    """Évalue et met à jour le statut calendaire d'un projet.
+    """Évalue et met à jour le statut d'un projet selon la SFD F3 §7.
 
-    Règles :
-    - Préserve les statuts manuels / terminaux (SUSPENDU, BLOQUE, RECEPTIONNE, etc.).
-    - Strictement calendaire :
-      * date_ref < date_debut_prevue -> EN_ATTENTE
-      * date_ref > date_fin_prevue -> EN_RETARD
-      * date_debut_prevue <= date_ref <= date_fin_prevue -> EN_COURS
+    Règles de passage et transitions :
+    1. Préservation absolue des statuts manuels et terminaux (STATUTS_PROJET_MANUELS_FIXES).
+    2. EN_ATTENTE reste EN_ATTENTE tant que la date de début n'est pas atteinte OU
+       qu'aucun rapport F2 n'a été soumis (SOUMIS ou APPROUVE), puis passe EN_COURS.
+    3. Pour un projet démarré, calcule le delta de chaque lot (calculer_delta_lot,
+       calendrier de l'entreprise construit UNE fois) et l'indice (projet.indice_sante).
+       - CRITIQUE si un lot a un delta > F3_SEUILS_RETARD_PTS["CRITIQUE"] (25 pts)
+         OU si l'indice est < F3_SEUIL_INDICE_SANTE_CRITIQUE (40).
+       - EN_RETARD si un lot a un delta > F3_SEUILS_RETARD_PTS["MODERE"] (5 pts).
+       - EN_COURS sinon.
+    4. RÈGLE DE RETOUR : un projet CRITIQUE qui ne l'est plus repasse EN_RETARD,
+       jamais directement EN_COURS. Il ne rejoindra EN_COURS qu'à une évaluation suivante.
+    5. En cas de changement : journalisation et déclenchement du recalcul de santé réactif.
 
     Retourne True si le statut a été modifié et sauvegardé, False sinon.
     """
-    date_ref = date_reference or timezone.now().date()
+    date_ref = date_reference or timezone.localdate()
 
     if projet.statut in STATUTS_PROJET_MANUELS_FIXES:
         return False
 
-    if projet.date_debut_prevue and date_ref < projet.date_debut_prevue:
-        nouveau_statut = StatutProjet.EN_ATTENTE
-    elif projet.date_fin_prevue and date_ref > projet.date_fin_prevue:
-        nouveau_statut = StatutProjet.EN_RETARD
-    else:
+    if projet.statut == StatutProjet.EN_ATTENTE:
+        date_debut = projet.date_debut_prevue or getattr(projet, "date_debut_reelle", None)
+        debut_atteint = bool(date_debut and date_ref >= date_debut)
+        rapport_soumis = projet.rapports_journaliers.filter(
+            supprime_le__isnull=True,
+            statut__in=[StatutRapport.SOUMIS, StatutRapport.APPROUVE],
+        ).exists()
+        if not (debut_atteint and rapport_soumis):
+            return False
         nouveau_statut = StatutProjet.EN_COURS
+    else:
+        # Projet démarré : construction unique du calendrier de l'entreprise
+        dates_projet = [
+            d
+            for d in [
+                getattr(projet, "date_debut_prevue", None),
+                getattr(projet, "date_fin_prevue", None),
+                getattr(projet, "date_debut_reelle", None),
+                getattr(projet, "date_fin_reelle", None),
+                date_ref,
+            ]
+            if d is not None
+        ]
+        d_min = min(dates_projet) if dates_projet else date_ref
+        d_max = max(dates_projet) if dates_projet else date_ref
+        annee_min = min(d_min.year, date_ref.year - 1)
+        annee_max = max(d_max.year, date_ref.year + 1)
+        calendrier = calendrier_entreprise(date(annee_min, 1, 1), date(annee_max, 12, 31))
+
+        lots_actifs = projet.lots.filter(supprime_le__isnull=True)
+        deltas: list[float] = []
+        for lot in lots_actifs:
+            d = calculer_delta_lot(lot, date_ref, calendrier)
+            if d is not None:
+                deltas.append(d)
+
+        seuil_critique_pts = settings.F3_SEUILS_RETARD_PTS["CRITIQUE"]
+        seuil_modere_pts = settings.F3_SEUILS_RETARD_PTS["MODERE"]
+        seuil_critique_indice = settings.F3_SEUIL_INDICE_SANTE_CRITIQUE
+
+        lot_critique = any(d > seuil_critique_pts for d in deltas)
+        indice_critique = (
+            projet.indice_sante is not None
+            and projet.indice_sante < seuil_critique_indice
+        )
+        lot_en_retard = any(d > seuil_modere_pts for d in deltas)
+
+        if lot_critique or indice_critique:
+            nouveau_statut = StatutProjet.CRITIQUE
+        elif lot_en_retard:
+            nouveau_statut = StatutProjet.EN_RETARD
+        else:
+            if projet.statut == StatutProjet.CRITIQUE:
+                nouveau_statut = StatutProjet.EN_RETARD
+            else:
+                nouveau_statut = StatutProjet.EN_COURS
 
     if projet.statut != nouveau_statut:
         ancien = projet.statut

@@ -144,8 +144,6 @@ class Projet(ModeleBase):
     @property
     def duree_calendaire(self) -> dict[str, int] | None:
         """Calcule la durée du projet en années, mois, jours et jours ouvrés."""
-        if not self.date_debut_prevue or not self.date_fin_prevue:
-            return None
         from apps.projets.services.durees import duree_calendaire
 
         duree = duree_calendaire(self.date_debut_prevue, self.date_fin_prevue)

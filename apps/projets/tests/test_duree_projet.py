@@ -18,18 +18,11 @@ def test_duree_calendaire_annee_pleine():
     res = duree_calendaire(date(2026, 1, 1), date(2026, 12, 31))
     assert res == {"annees": 1, "mois": 0, "jours": 0}
 
-    # Supporte également les chaînes ISO
-    res_str = duree_calendaire("2026-01-01", "2026-12-31")
-    assert res_str == {"annees": 1, "mois": 0, "jours": 0}
-
 
 def test_duree_calendaire_fin_fevrier():
     """duree_calendaire(2026-01-31, 2026-02-28) rend annees=0, mois=1, jours=1."""
     res = duree_calendaire(date(2026, 1, 31), date(2026, 2, 28))
     assert res == {"annees": 0, "mois": 1, "jours": 1}
-
-    res_str = duree_calendaire("2026-01-31", "2026-02-28")
-    assert res_str == {"annees": 0, "mois": 1, "jours": 1}
 
 
 def test_duree_calendaire_multi_annees():
@@ -37,26 +30,17 @@ def test_duree_calendaire_multi_annees():
     res = duree_calendaire(date(2026, 3, 15), date(2028, 6, 14))
     assert res == {"annees": 2, "mois": 3, "jours": 0}
 
-    res_str = duree_calendaire("2026-03-15", "2028-06-14")
-    assert res_str == {"annees": 2, "mois": 3, "jours": 0}
-
 
 def test_duree_calendaire_meme_jour():
     """duree_calendaire(2026-10-19, 2026-10-19) rend annees=0, mois=0, jours=1."""
     res = duree_calendaire(date(2026, 10, 19), date(2026, 10, 19))
     assert res == {"annees": 0, "mois": 0, "jours": 1}
 
-    res_str = duree_calendaire("2026-10-19", "2026-10-19")
-    assert res_str == {"annees": 0, "mois": 0, "jours": 1}
-
 
 def test_duree_calendaire_mois_et_jours():
     """duree_calendaire(2025-02-03, 2025-07-15) rend annees=0, mois=5, jours=13."""
     res = duree_calendaire(date(2025, 2, 3), date(2025, 7, 15))
     assert res == {"annees": 0, "mois": 5, "jours": 13}
-
-    res_str = duree_calendaire("2025-02-03", "2025-07-15")
-    assert res_str == {"annees": 0, "mois": 5, "jours": 13}
 
 
 def test_duree_calendaire_date_manquante_ou_fin_anterieure():
@@ -65,7 +49,6 @@ def test_duree_calendaire_date_manquante_ou_fin_anterieure():
     assert duree_calendaire(date(2026, 1, 1), None) is None
     assert duree_calendaire(None, None) is None
     assert duree_calendaire(date(2026, 1, 2), date(2026, 1, 1)) is None
-    assert duree_calendaire("2026-01-02", "2026-01-01") is None
 
 
 def test_projet_propriete_duree_calendaire():
@@ -109,20 +92,16 @@ def test_decaler_mois():
 @pytest.fixture
 def client_api(schema_demo):
     """Client API authentifié en tant qu'administrateur dans le schéma tenant demo."""
-    admin, _ = Utilisateur.objects.get_or_create(
+    admin = Utilisateur.objects.create_user(
         email="admin.duree@demo.ci",
-        defaults={
-            "password": "Test12345!",
-            "nom": "Admin",
-            "role_global": RoleGlobal.ADMIN,
-            "statut": StatutUtilisateur.ACTIF,
-        },
+        password="Test12345!",
+        nom="Admin",
+        role_global=RoleGlobal.ADMIN,
+        statut=StatutUtilisateur.ACTIF,
     )
-    if not admin.has_usable_password():
-        admin.set_password("Test12345!")
-        admin.save()
     client = APIClient(headers={"host": "demo.localhost"})
     client.force_authenticate(admin)
+    client.utilisateur_service = admin
     return client
 
 

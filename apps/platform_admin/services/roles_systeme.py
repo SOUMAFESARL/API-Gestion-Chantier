@@ -1,6 +1,6 @@
 """Les rôles système, gérés par le super admin — gabarits `ModeleRole` du catalogue.
 
-Arbitrage du 16/10/2026 :
+Arbitrage du 16/10/2026 et du 19/10/2026 :
 - **création** : le gabarit est créé puis propagé à toutes les entreprises
   (`propager_roles_systeme`, qui gère les conflits avec les rôles personnalisés) ;
 - **modification** : libellé et description sont réécrits dans toutes les
@@ -9,9 +9,11 @@ Arbitrage du 16/10/2026 :
 - **suppression** : le gabarit disparaît et, dans chaque entreprise, le rôle
   devient personnalisé — personne ne perd ses droits, le DG le supprime ensuite.
 
-Les dix rôles du socle (`CODES_ROLES_SYSTEME`) portent la logique métier
-(affectations CP/CT/CC, propriété du DG) : ils se modifient, ils ne se
-suppriment pas.
+Tous les rôles système se modifient et se suppriment, y compris les rôles du
+socle, à l'exception unique du gabarit DG : sans gabarit DG, une entreprise créée
+ensuite n'aurait plus de rôle pour son administrateur (`appliquer_modeles_roles`
+ne crée que les gabarits actifs et `core/permissions.py` résout les droits par
+`Role.objects.filter(code=user.role_global)`).
 """
 
 from typing import Any
@@ -22,8 +24,8 @@ from django_tenants.utils import schema_context
 from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import Role
-from apps.accounts.services.roles import CODES_ROLES_SYSTEME
 from apps.catalogue.models import CatalogueModule, ModeleRole, ModeleRoleModule
+from apps.core.exceptions import ErreurMetier
 from apps.platform_admin.services.catalogue import propager_roles_systeme
 from apps.platform_admin.services.notifications import journaliser_plateforme, journaliser_tenant
 from apps.tenants.models import Entreprise
@@ -133,9 +135,10 @@ def modifier_role_systeme(
 
 
 def supprimer_role_systeme(modele: ModeleRole, *, acteur=None) -> dict:
-    if modele.code.upper() in CODES_ROLES_SYSTEME:
-        raise ValidationError(
-            {"detail": "Les rôles du socle se modifient mais ne se suppriment pas."}
+    if (modele.code or "").upper() == "DG":
+        raise ErreurMetier(
+            "Le rôle DG ne se supprime pas : chaque entreprise en a besoin "
+            "pour son administrateur."
         )
 
     with schema_context("public"):

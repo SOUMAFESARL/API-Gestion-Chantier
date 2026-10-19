@@ -8,7 +8,6 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal
 from apps.projets.models import Activite, Lot
-from apps.projets.services.indicateurs import calculer_sante
 
 pytestmark = pytest.mark.django_db
 
@@ -52,11 +51,3 @@ def test_progress_from_activities(schema_demo):
     response = client.patch(url, {"statut": "TERMINE"}, format="json")
     assert response.data["avancement_reel"] == 0
     assert client.patch(url, {"avancement_reel": 20}, format="json").status_code == 400
-
-
-@pytest.mark.parametrize("restant,budget,depenses,expected", [
-    (75, 1000, 250, 100), (75, 1000, 500, 75), (75, 1000, 1500, 0),
-    (100, None, 0, None), (100, 0, 0, None), (100, 1000, None, None),
-])
-def test_health_balance(restant, budget, depenses, expected):
-    assert calculer_sante(restant, budget, depenses) == expected

@@ -530,13 +530,9 @@ CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=Tr
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    "evaluation_quotidienne_statuts_chantiers": {
-        "task": "apps.projets.tasks.evaluer_statuts_quotidiens_tous_tenants",
-        "schedule": crontab(hour=0, minute=5),
-    },
-    "evaluation_quotidienne_sante_projets": {
-        "task": "apps.projets.tasks.evaluer_sante_projets_quotidien_tous_tenants",
-        "schedule": crontab(hour=0, minute=15),
+    "evaluation_f3_nuit_tous_tenants": {
+        "task": "apps.projets.tasks.evaluer_f3_nuit_tous_tenants",
+        "schedule": crontab(hour=0, minute=1),
     },
     # Le journal promet « relance automatique à 17 h 30 » : c'est elle. Heure
     # du chantier (CELERY_TIMEZONE). Sans Celery Beat — sur cPanel —, le cron

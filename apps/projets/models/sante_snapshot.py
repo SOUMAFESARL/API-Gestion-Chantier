@@ -62,6 +62,11 @@ class SanteProjetSnapshot(ModeleBase):
         _("plancher de gravité appliqué"),
         default=False,
     )
+    scores = models.JSONField(
+        _("scores"),
+        default=dict,
+        blank=True,
+    )
 
     # Décomposition des pénalités
     p_delais = models.DecimalField(

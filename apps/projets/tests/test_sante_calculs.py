@@ -1,237 +1,156 @@
-"""Tests unitaires des fonctions pures du moteur d'indice de santé (sante_calculs.py).
+"""Tests unitaires du moteur de calcul d'avancement et de l'indice SFD.
 
-Couvre :
-- Les 4 cas chiffrés de la spécification BTP (score, pénalités détaillées, badge brut et final).
-- Le plafonnement des 3 pénalités (délais 40, blocages 40, reporting 20).
-- Le plancher de gravité (retard > 25 pts ou blocage critique > 7 jours ouvrés -> au minimum ORANGE).
-- L'avancement physique (activité, lot avec pondération budget et repli uniforme, projet).
+Couvre sante_calculs.py et indice_sante.py :
+- Paliers fermes de pilotage pour les 4 dimensions SFD (délais, rapports, blocages, incidents).
+- La Formule 6 de synthèse avec pondérations dynamiques et arrondi ROUND_HALF_UP.
+- Les seuils d'attribution des badges opérationnels (VERT, ORANGE, ROUGE).
+- L'avancement physique (activité, lot pondéré par quantite_prevue, projet par budget lot).
 - L'avancement temporel (baseline v0, week-ends, jours fériés, bornes 0% et 100%).
-- Le taux de reporting (tolérance de 48 h, jours d'arrêt de chantier, projet démarré depuis moins de 14 jours).
 - La détection d'années manquantes pour les jours fériés (avertissement JOURS_FERIES_INCOMPLETS).
 """
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
-from zoneinfo import ZoneInfo
+from unittest.mock import MagicMock
 
 import pytest
-from django.utils import timezone
 
 from apps.core.enums import (
     BadgeSante,
-    SeveriteBlocage,
     StatutActivite,
-    StatutBlocage,
-    StatutProjet,
 )
-from apps.projets.services.calendrier_ouvre import CALENDRIER_PAR_DEFAUT_SEMAINE, Calendrier
+from apps.projets.services.indice_sante import (
+    indice_sante,
+    score_blocages,
+    score_delais,
+    score_incidents,
+    score_rapports,
+)
 from apps.projets.services.sante_calculs import (
     calculer_avancement_physique_activite,
     calculer_avancement_physique_lot,
     calculer_avancement_physique_projet,
     calculer_avancement_temporel_lot,
-    calculer_indice_sante_projet,
-    calculer_penalite_blocages,
-    calculer_penalite_delais,
-    calculer_penalite_reporting,
     compter_jours_ouvres,
     couverture_budget_projet,
+    determiner_badge_brut,
     obtenir_jours_feries_ci,
 )
 
 # ==============================================================================
-# 1. TESTS DES 4 CAS CHIFFRÉS DE LA SPÉCIFICATION BTP
+# 1. TESTS DES PALIERS FERMES DU PILOTAGE (SFD F3 §4.6)
 # ==============================================================================
 
-def test_cas_1_nominal_vert():
-    """Cas 1 : Projet nominal sans retard, sans report, sans blocage, 100% reporting -> Score 100, VERT."""
-    retard_pts = 0.0
-    nb_reports = 0
-    p_delais, p_retard, p_malus = calculer_penalite_delais(retard_pts, nb_reports)
-    assert p_delais == 0.0
-    assert p_retard == 0.0
-    assert p_malus == 0.0
+def test_paliers_score_delais():
+    """Vérifie les paliers Délais : d <= 5 -> 100 ; 5 < d <= 15 -> 40 ; d > 15 -> 10."""
+    # Retard nul ou inférieur/égal à 5 points
+    assert score_delais(-10.0) == 100
+    assert score_delais(0.0) == 100
+    assert score_delais(5.0) == 100
 
-    p_blocages, decompte, a_critique = calculer_penalite_blocages([], date(2026, 10, 5), set())
-    assert p_blocages == 0.0
-    assert not a_critique
+    # Retard modéré entre 5 et 15 points
+    assert score_delais(5.1) == 40
+    assert score_delais(10.0) == 40
+    assert score_delais(15.0) == 40
 
-    p_reporting = 0.0  # 100% de reporting
+    # Retard important supérieur à 15 points
+    assert score_delais(15.1) == 10
+    assert score_delais(25.0) == 10
+    assert score_delais(100.0) == 10
 
-    score_brut = 100.0 - (p_delais + p_blocages + p_reporting)
-    assert score_brut == 100.0
 
-
-def test_cas_2_retard_modere_orange():
-    """Cas 2 : Retard 15 pts, 1 report, 1 blocage mineur (<= 2j), 100% reporting.
-
-    P_retard = 40 * (15/25) = 24.0
-    P_malus = 1 * 2 = 2.0 -> P_delais = 26.0
-    P_blocages = 2 * 1.0 = 2.0
-    P_reporting = 0.0
-    Total pénalités = 28.0 -> Score = 72 -> Badge ORANGE.
+def test_paliers_score_rapports():
+    """Vérifie les paliers Rapports :
+    100% -> 100 ; 70% <= taux < 100% -> 40 ; taux < 70% -> 10.
     """
-    p_delais, p_retard, p_malus = calculer_penalite_delais(15.0, 1)
-    assert p_retard == 24.0
-    assert p_malus == 2.0
-    assert p_delais == 26.0
+    # Aucun jour attendu -> 100
+    assert score_rapports(0, 0) == 100
+    assert score_rapports(-1, 0) == 100
 
-    mock_blocage = MagicMock(
-        severite=SeveriteBlocage.MINEUR,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 5, 8, 0)),
-    )
-    # Même date -> 0 jour ouvré écoulé -> mult 1.0
-    p_blocages, decompte, a_critique = calculer_penalite_blocages(
-        [mock_blocage], date(2026, 10, 5), set()
-    )
-    assert p_blocages == 2.0
-    assert not a_critique
+    # Couverture totale (100 %)
+    assert score_rapports(5, 5) == 100
+    assert score_rapports(7, 7) == 100
 
-    score_brut = 100.0 - (p_delais + p_blocages + 0.0)
-    assert score_brut == 72.0
+    # Couverture partielle entre 70% et 100%
+    assert score_rapports(10, 7) == 40   # 70 %
+    assert score_rapports(10, 9) == 40   # 90 %
+    assert score_rapports(7, 5) == 40    # 71.43 %
+
+    # Couverture insuffisante (< 70 %)
+    assert score_rapports(10, 6) == 10   # 60 %
+    assert score_rapports(5, 0) == 10    # 0 %
+    assert score_rapports(7, 4) == 10    # 57.14 %
 
 
-def test_cas_3_problemes_multiples_orange():
-    """Cas 3 : Retard 10 pts (0 report), blocages (1 MAJEUR à 5j, 1 MINEUR à 1j), reporting 70%.
-
-    P_delais = 40 * (10/25) = 16.0
-    P_blocages = (5 * 1.5) + (2 * 1.0) = 7.5 + 2.0 = 9.5
-    P_reporting = 20 * (1 - 0.70) = 6.0
-    Total pénalités = 16.0 + 9.5 + 6.0 = 31.5
-    Score = 100 - 31.5 = 68.5 -> arrondi ROUND_HALF_UP = 69 -> Badge ORANGE.
+def test_paliers_score_blocages():
+    """Vérifie les paliers Blocages :
+    aucun -> 100 ; seulement MINEUR -> 40 ; au moins un MAJEUR/CRITIQUE -> 10.
     """
-    p_delais, p_retard, p_malus = calculer_penalite_delais(10.0, 0)
-    assert p_delais == 16.0
+    # Aucun blocage ouvert
+    assert score_blocages([]) == 100
 
-    # Lundi 28 septembre à lundi 5 octobre 2026 = 5 jours ouvrés écoulés (mar, mer, jeu, ven, lun)
-    # Lundi 5 octobre à mardi 6 octobre = 1 jour ouvré
-    ref_date = date(2026, 10, 5)
-    b_majeur = MagicMock(
-        severite=SeveriteBlocage.MAJEUR,
-        ouvert_le=timezone.make_aware(datetime(2026, 9, 28, 8, 0)),
-    )
-    b_mineur = MagicMock(
-        severite=SeveriteBlocage.MINEUR,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 2, 8, 0)),  # ven -> lun = 1j ouvré
-    )
-    p_blocages, decompte, a_critique = calculer_penalite_blocages(
-        [b_majeur, b_mineur], ref_date, set()
-    )
-    assert p_blocages == 9.5
-    assert not a_critique
+    # Uniquement des blocages MINEUR
+    assert score_blocages(["MINEUR"]) == 40
+    assert score_blocages(["MINEUR", "MINEUR", "MINEUR"]) == 40
 
-    p_reporting = round(20.0 * (1.0 - 0.70), 2)
-    assert p_reporting == 6.0
-
-    total = p_delais + p_blocages + p_reporting
-    score_brut = 100.0 - total
-    assert score_brut == 68.5
-    score_arrondi = int(Decimal(str(score_brut)).quantize(Decimal("1"), rounding="ROUND_HALF_UP"))
-    assert score_arrondi == 69
+    # Au moins un MAJEUR ou CRITIQUE
+    assert score_blocages(["MAJEUR"]) == 10
+    assert score_blocages(["CRITIQUE"]) == 10
+    assert score_blocages(["MINEUR", "MAJEUR"]) == 10
+    assert score_blocages(["MINEUR", "CRITIQUE"]) == 10
+    assert score_blocages(["MAJEUR", "CRITIQUE"]) == 10
 
 
-def test_cas_4_projet_critique_rouge():
-    """Cas 4 : Retard 30 pts (clampé à 25), 3 reports, blocages multiples, reporting 30%.
-
-    P_delais : P_retard = 40, P_malus = 6 -> plafonné à 40.0.
-    P_blocages : 1 CRITIQUE à 10j (15*2 = 30), 1 MAJEUR à 4j (5*1.5 = 7.5), 1 MINEUR à 3j (2*1.5 = 3) -> 40.5 clampé à 40.0.
-    P_reporting = 20 * (1 - 0.30) = 14.0.
-    Total pénalités = 40.0 + 40.0 + 14.0 = 94.0.
-    Score = 100 - 94 = 6 -> Badge ROUGE.
+def test_paliers_score_incidents():
+    """Vérifie les paliers Incidents :
+    aucun -> 100 ; aucun GRAVE -> 40 ; au moins un GRAVE -> 10.
     """
-    p_delais, p_retard, p_malus = calculer_penalite_delais(30.0, 3)
-    assert p_retard == 40.0
-    assert p_malus == 6.0
-    assert p_delais == 40.0
+    # Aucun incident ou que des gravités non retenues
+    assert score_incidents([]) == 100
+    assert score_incidents(["AUTRE_NON_RETENU"]) == 100
 
-    ref_date = date(2026, 10, 16)
-    # 10 jours ouvrés avant le 16 oct 2026 (ven) : vendredi 2 oct 2026
-    b_crit = MagicMock(
-        severite=SeveriteBlocage.CRITIQUE,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 2, 8, 0)),
-    )
-    # 4 jours ouvrés avant : lundi 12 oct 2026
-    b_maj = MagicMock(
-        severite=SeveriteBlocage.MAJEUR,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 12, 8, 0)),
-    )
-    # 3 jours ouvrés avant : mardi 13 oct 2026
-    b_min = MagicMock(
-        severite=SeveriteBlocage.MINEUR,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 13, 8, 0)),
-    )
+    # Uniquement MINEUR ou SIGNIFICATIF
+    assert score_incidents(["MINEUR"]) == 40
+    assert score_incidents(["SIGNIFICATIF"]) == 40
+    assert score_incidents(["MINEUR", "SIGNIFICATIF"]) == 40
 
-    p_blocages, decompte, a_critique = calculer_penalite_blocages(
-        [b_crit, b_maj, b_min], ref_date, set()
-    )
-    assert p_blocages == 40.0
-    assert a_critique is True
-
-    p_reporting = round(20.0 * (1.0 - 0.30), 2)
-    assert p_reporting == 14.0
-
-    total = p_delais + p_blocages + p_reporting
-    score = 100.0 - total
-    assert score == 6.0
+    # Au moins un GRAVE
+    assert score_incidents(["GRAVE"]) == 10
+    assert score_incidents(["MINEUR", "GRAVE"]) == 10
+    assert score_incidents(["SIGNIFICATIF", "GRAVE"]) == 10
 
 
-# ==============================================================================
-# 2. TESTS DE PLAFONNEMENT STRICT DES 3 PÉNALITÉS
-# ==============================================================================
+def test_indice_sante_synthese_formule_6():
+    """Vérifie la Formule 6 : somme(score * pondération / 100) avec pondérations 40/25/20/15."""
+    # 1. Nominal parfait : tous les scores à 100 -> Indice 100
+    assert indice_sante(100, 100, 100, 100) == 100
 
-def test_plafonnement_delais():
-    """P_delais ne dépasse jamais 40 même avec retard massif et reports excessifs."""
-    p_delais, p_retard, p_malus = calculer_penalite_delais(retard_pts=150.0, nb_reports=20)
-    assert p_delais == 40.0
-    assert p_retard == 40.0
-    assert p_malus == 40.0
+    # 2. Cas critique total : tous les scores à 10 -> Indice 10
+    assert indice_sante(10, 10, 10, 10) == 10
 
+    # 3. Cas dégradé intermédiaire : tous les scores à 40 -> Indice 40
+    assert indice_sante(40, 40, 40, 40) == 40
 
-def test_plafonnement_blocages():
-    """P_blocages ne dépasse jamais 40 même avec une accumulation de blocages critiques."""
-    ref_date = date(2026, 10, 16)
-    b1 = MagicMock(severite=SeveriteBlocage.CRITIQUE, ouvert_le=timezone.make_aware(datetime(2026, 10, 1, 8, 0)))
-    b2 = MagicMock(severite=SeveriteBlocage.CRITIQUE, ouvert_le=timezone.make_aware(datetime(2026, 10, 1, 8, 0)))
-    b3 = MagicMock(severite=SeveriteBlocage.CRITIQUE, ouvert_le=timezone.make_aware(datetime(2026, 10, 1, 8, 0)))
+    # 4. Délais 100 (40 pts), Rapports 40 (10), Blocages 40 (8), Incidents 100 (15) -> 73
+    assert indice_sante(100, 40, 40, 100) == 73
 
-    p_blocages, _, _ = calculer_penalite_blocages([b1, b2, b3], ref_date, set())
-    assert p_blocages == 40.0
+    # 5. Délais 40 (16 pts), Rapports 100 (25 pts), Blocages 40 (8 pts), Incidents 10 (1.5 pts)
+    # Somme = 50.5 -> arrondi arithmétique ROUND_HALF_UP -> 51
+    assert indice_sante(40, 100, 40, 10) == 51
 
-
-def test_plafonnement_reporting():
-    """P_reporting ne dépasse jamais 20 même à taux zéro."""
-    taux = 0.0
-    p_rep = round(20.0 * (1.0 - taux), 2)
-    assert p_rep == 20.0
+    # 6. Délais 10 (4 pts), Rapports 10 (2.5 pts), Blocages 10 (2 pts), Incidents 100 (15 pts)
+    # Somme = 23.5 -> arrondi ROUND_HALF_UP -> 24
+    assert indice_sante(10, 10, 10, 100) == 24
 
 
-# ==============================================================================
-# 3. TESTS DU PLANCHER DE GRAVITÉ
-# ==============================================================================
-
-def test_plancher_gravite_blocage_critique_ancien():
-    """Un projet avec score >= 80 mais un blocage critique > 7 jours ouvrés est rétrogradé en ORANGE."""
-    # Retard nul, 0 report -> P_delais = 0
-    # 1 seul blocage critique > 7 jours ouvrés -> poids 15 * 2.0 = 30 pts de pénalité
-    # Reporting 100% -> P_reporting = 0
-    # Score brut = 100 - 30 = 70 (déjà ORANGE).
-    # Mais supposons un blocage critique dont le poids serait bas ou un score brut >= 80 :
-    # Vérifions le drapeau plancher_requis
-    ref_date = date(2026, 10, 16)
-    b_crit = MagicMock(
-        severite=SeveriteBlocage.CRITIQUE,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 2, 8, 0)),  # 10 jours ouvrés
-    )
-    _, _, a_critique_ancien = calculer_penalite_blocages([b_crit], ref_date, set())
-    assert a_critique_ancien is True
-
-
-def test_plancher_gravite_retard_majeur_seul():
-    """Si retard_pts > 25, plancher s'applique même si le score était >= 80 (ex: bonus ou cas limite)."""
-    retard_pts = 26.0
-    plancher_requis = (retard_pts > 25.0)
-    assert plancher_requis is True
+def test_determiner_badge_brut_seuils():
+    """Vérifie l'attribution du badge selon SANTE_SEUIL_VERT (80) et SANTE_SEUIL_ORANGE (50)."""
+    assert determiner_badge_brut(100) == BadgeSante.VERT
+    assert determiner_badge_brut(80) == BadgeSante.VERT
+    assert determiner_badge_brut(79) == BadgeSante.ORANGE
+    assert determiner_badge_brut(50) == BadgeSante.ORANGE
+    assert determiner_badge_brut(49) == BadgeSante.ROUGE
+    assert determiner_badge_brut(10) == BadgeSante.ROUGE
 
 
 # ==============================================================================
@@ -473,159 +392,6 @@ def test_avancement_temporel_lot_sans_baseline():
         code="LOT-01",
     )
     assert calculer_avancement_temporel_lot(lot, date(2026, 10, 5), set()) is None
-
-
-# ==============================================================================
-# 6. TESTS DU REPORTING (TOLÉRANCE 48H, ARRÊTS DE CHANTIER, FENÊTRE RÉDUITE)
-# ==============================================================================
-
-def test_reporting_tolerance_48h_exclut_jours_recents():
-    """Les jours dont la tolérance de 48h n'est pas échue ne sont pas dans jours_attendus."""
-    ref_date = date(2026, 10, 12)  # Lundi
-    # Dimanche 11 oct fin 23h59 -> +48h = mardi 13 oct 23h59. Le lundi 12 oct n'a pas sa tolérance échue.
-    moment = timezone.make_aware(datetime(2026, 10, 12, 10, 0), timezone=ZoneInfo("Africa/Abidjan"))
-
-    projet = MagicMock()
-    projet.date_debut_reelle = date(2026, 9, 1)
-    projet.arrets_chantier.filter.return_value = []
-    projet.rapports_journaliers.filter.return_value = []
-
-    p_rep, taux, attendus, couverts = calculer_penalite_reporting(
-        projet, ref_date, set(), moment_actuel=moment
-    )
-    # Le vendredi 9 oct (fin ven 23h59 -> tolérance dim 23h59) est échu au lun 12 oct 10h.
-    # Les jours de week-end (10 et 11) ne sont pas ouvrés.
-    # Le lundi 12 oct a sa tolérance qui court jusqu'au mer 14 oct -> non échu !
-    # Donc attendus ne compte que les jours <= 9 oct.
-    assert attendus > 0
-
-
-def test_reporting_exclusion_jours_arret_chantier():
-    """Les jours inclus dans un arrêt de chantier ne sont pas exigibles."""
-    ref_date = date(2026, 10, 16)
-    moment = timezone.make_aware(datetime(2026, 10, 20, 10, 0), timezone=ZoneInfo("Africa/Abidjan"))
-
-    # Arrêt du lundi 5 au vendredi 9 octobre (toute la semaine)
-    arret = MagicMock(date_debut=date(2026, 10, 5), date_fin=date(2026, 10, 9))
-
-    projet = MagicMock()
-    projet.date_debut_reelle = date(2026, 10, 1)
-    projet.arrets_chantier.filter.return_value = [arret]
-    projet.rapports_journaliers.filter.return_value = []
-
-    p_rep, taux, attendus, couverts = calculer_penalite_reporting(
-        projet, ref_date, set(), moment_actuel=moment
-    )
-    # Fenêtre : [3 oct, 16 oct] (14 jours calendaires).
-    # Du 5 au 9 oct (5 j ouvrés) sont en arrêt de chantier.
-    # Du 12 au 16 oct (5 j ouvrés) sont actifs.
-    # Les week-ends (3-4 et 10-11) ne sont pas ouvrés.
-    # Total attendus = 5 jours (au lieu de 10 jours ouvrés sans arrêt).
-    assert attendus == 5
-
-
-def test_reporting_projet_demarre_moins_de_14_jours():
-    """Un projet démarré il y a 3 jours n'a pas une fenêtre de 14 jours mais de 3 jours."""
-    ref_date = date(2026, 10, 7)  # Mercredi
-    moment = timezone.make_aware(datetime(2026, 10, 15, 10, 0), timezone=ZoneInfo("Africa/Abidjan"))
-
-    projet = MagicMock()
-    projet.date_debut_reelle = date(2026, 10, 5)  # Démarré lundi 5 oct
-    projet.arrets_chantier.filter.return_value = []
-    projet.rapports_journaliers.filter.return_value = []
-
-    p_rep, taux, attendus, couverts = calculer_penalite_reporting(
-        projet, ref_date, set(), moment_actuel=moment
-    )
-    # Fenêtre : [5 oct, 7 oct] -> lun, mar, mer = 3 jours ouvrés
-    assert attendus == 3
-
-
-# ==============================================================================
-# 7. TESTS DE CALCULER_INDICE_SANTE_PROJET (ÉTATS, PLANCHER & AVERTISSEMENTS)
-# ==============================================================================
-
-def test_calculer_indice_sante_projet_non_demarre():
-    """Un projet en statut EN_ATTENTE est NON_DEMARRE avec score et badge None."""
-    projet = MagicMock(statut=StatutProjet.EN_ATTENTE, id="uuid-proj-1")
-    res = calculer_indice_sante_projet(projet)
-    assert res.etat == "NON_DEMARRE"
-    assert res.score is None
-    assert res.badge_final is None
-    assert "PROJET_NON_DEMARRE" in res.avertissements
-
-
-def test_calculer_indice_sante_projet_fige():
-    """Un projet en statut TERMINE ou SUSPENDU conserve son indice figé sans recalcul."""
-    projet = MagicMock(
-        statut=StatutProjet.TERMINE,
-        id="uuid-proj-2",
-        indice_sante=78,
-        badge_sante=BadgeSante.ORANGE,
-        avancement_reel=Decimal("95.0"),
-        avancement_theorique=Decimal("100.0"),
-    )
-    res = calculer_indice_sante_projet(projet)
-    assert res.etat == "FIGE"
-    assert res.score == 78
-    assert res.badge_final == BadgeSante.ORANGE
-    assert "PROJET_FIGE_STATUT_TERMINE" in res.avertissements
-
-
-def test_calculer_indice_sante_projet_plancher_actif():
-    """Vérifie le déclenchement du plancher de gravité (rétrogradation VERT -> ORANGE)."""
-    projet = MagicMock(statut=StatutProjet.EN_COURS, id="uuid-proj-3")
-    # Lot avec avance physique et temporelle synchronisées (0 retard)
-    lot = MagicMock(
-        est_actif=True, supprime_le=None, budget_initial_montant=Decimal("100000"),
-        date_debut_baseline=date(2026, 10, 1), date_fin_baseline=date(2026, 10, 31),
-    )
-    act = MagicMock(
-        est_actif=True, supprime_le=None, statut=StatutActivite.EN_COURS,
-        quantite_prevue=100, quantite_realisee=50, budget_initial_montant=Decimal("100000"),
-    )
-    lot.activites.all.return_value = [act]
-    projet.lots.all.return_value = [lot]
-    projet.historique_dates.filter.return_value.count.return_value = 0
-    projet.arrets_chantier.filter.return_value = []
-    projet.rapports_journaliers.filter.return_value = []
-    projet.date_debut_reelle = date(2026, 10, 1)
-
-    b_crit = MagicMock(
-        severite=SeveriteBlocage.CRITIQUE,
-        statut=StatutBlocage.OUVERT,
-        ouvert_le=timezone.make_aware(datetime(2026, 10, 1, 8, 0)),
-        supprime_le=None,
-    )
-    projet.blocages.filter.return_value = [b_crit]
-
-    cal_vide = Calendrier(CALENDRIER_PAR_DEFAUT_SEMAINE, frozenset(), {})
-    with patch(
-        "apps.projets.services.sante_calculs.calendrier_entreprise",
-        return_value=cal_vide,
-    ):
-        res = calculer_indice_sante_projet(projet, date_reference=date(2026, 10, 15))
-
-    assert res.score == 50  # 100 - 30 (blocage critique ancien) - 20 (zéro rapport)
-    assert res.badge_final == BadgeSante.ORANGE
-    assert res.etat == "ACTIF"
-
-
-def test_retrogradation_plancher_vert_vers_orange():
-    """Vérifie qu'un score >= 80 (VERT) est forcé en ORANGE avec plancher_applique=True."""
-    # Test unitaire de la logique du plancher
-    score_entier = 85
-    badge_brut = BadgeSante.VERT
-    plancher_requis = True
-    plancher_applique = False
-    badge_final = badge_brut
-
-    if plancher_requis and badge_brut == BadgeSante.VERT:
-        badge_final = BadgeSante.ORANGE
-        plancher_applique = True
-
-    assert badge_final == BadgeSante.ORANGE
-    assert plancher_applique is True
 
 
 @pytest.mark.django_db

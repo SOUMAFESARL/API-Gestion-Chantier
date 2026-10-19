@@ -7,8 +7,9 @@ Vérifie :
 4. Commande d'évaluation quotidienne multi-tenant et tâche Celery.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
+
 import pytest
 from django.core.management import call_command
 from django.utils import timezone
@@ -16,12 +17,14 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Utilisateur
+from apps.chantier.models import RapportJournalier
 from apps.core.enums import (
     RoleGlobal,
     RoleProjet,
     StatutActivite,
     StatutLot,
     StatutProjet,
+    StatutRapport,
     StatutUtilisateur,
 )
 from apps.projets.models import (
@@ -35,12 +38,10 @@ from apps.projets.services.machine_etats import (
     evaluer_statut_activite,
     evaluer_statut_lot,
     evaluer_statut_projet,
-    executer_evaluation_quotidienne_schema,
-    retablir_statut_apres_decalage_si_necessaire,
     valider_transition_reception,
 )
 from apps.projets.services.reprogrammation import reprogrammer_date_instance
-from apps.projets.tasks import evaluer_statuts_quotidiens_tous_tenants
+from apps.projets.tasks import evaluer_f3_nuit_tous_tenants
 from apps.tiers.models import Tiers
 
 pytestmark = pytest.mark.django_db
@@ -140,7 +141,7 @@ def environnement_machine_etats(schema_demo):
 
 
 def test_transition_calendaire_projet(environnement_machine_etats):
-    """Vérifie le cycle calendaire d'un projet : EN_ATTENTE -> EN_COURS -> EN_RETARD."""
+    """Vérifie le cycle d'un projet : EN_ATTENTE -> EN_COURS -> EN_RETARD selon SFD §7."""
     env = environnement_machine_etats
     projet = env["projet"]
     j = env["aujourdhui"]
@@ -150,18 +151,36 @@ def test_transition_calendaire_projet(environnement_machine_etats):
     assert not change
     assert projet.statut == StatutProjet.EN_ATTENTE
 
-    # 2. Au jour J de début : bascule strictement calendaire à EN_COURS
+    # 2. Au jour J de début sans rapport F2 : reste EN_ATTENTE
+    change = evaluer_statut_projet(projet, date_reference=projet.date_debut_prevue)
+    assert not change
+    assert projet.statut == StatutProjet.EN_ATTENTE
+
+    # 2bis. Au jour J de début AVEC rapport F2 soumis : bascule à EN_COURS
+    RapportJournalier.objects.create(
+        projet=projet,
+        date_rapport=projet.date_debut_prevue,
+        statut=StatutRapport.SOUMIS,
+        auteur=env["cp"],
+    )
     change = evaluer_statut_projet(projet, date_reference=projet.date_debut_prevue)
     assert change
     assert projet.statut == StatutProjet.EN_COURS
 
-    # 3. Après la date de fin : bascule automatique à EN_RETARD
+    # 3. Retard modéré (delta > 5 pts et <= 25 pts) : bascule à EN_RETARD
+    env["lot1"].avancement = Decimal("90.00")
+    env["lot1"].save(update_fields=["avancement"])
+    env["lot2"].avancement = Decimal("90.00")
+    env["lot2"].save(update_fields=["avancement"])
+    env["act1"].quantite_realisee = Decimal("90.000")
+    env["act1"].save(update_fields=["quantite_realisee"])
+
     apres_fin = projet.date_fin_prevue + timedelta(days=1)
     change = evaluer_statut_projet(projet, date_reference=apres_fin)
     assert change
     assert projet.statut == StatutProjet.EN_RETARD
 
-    # 4. Statut manuel SUSPENDU : préservé (non écrasé par la tâche calendaire)
+    # 4. Statut manuel SUSPENDU : préservé (non écrasé par la tâche)
     projet.statut = StatutProjet.SUSPENDU
     projet.save(update_fields=["statut"])
     change = evaluer_statut_projet(projet, date_reference=apres_fin)
@@ -273,7 +292,7 @@ def test_verrou_reception_autorise_si_tous_lots_clotures(environnement_machine_e
 
 
 def test_commande_management_et_tache_celery(environnement_machine_etats):
-    """Vérifie l'exécution de la commande d'évaluation quotidienne et de la tâche Celery."""
+    """Vérifie l'exécution de la commande d'évaluation quotidienne et de la tâche Celery F3."""
     env = environnement_machine_etats
     projet = env["projet"]
     j = env["aujourdhui"]
@@ -282,12 +301,20 @@ def test_commande_management_et_tache_celery(environnement_machine_etats):
     projet.date_debut_prevue = j
     projet.save(update_fields=["date_debut_prevue"])
 
+    # Rapport F2 nécessaire pour passer à EN_COURS selon SFD §7
+    RapportJournalier.objects.create(
+        projet=projet,
+        date_rapport=j,
+        statut=StatutRapport.SOUMIS,
+        auteur=env["cp"],
+    )
+
     # Exécution de la commande Django
     call_command("evaluer_statuts_quotidiens", schema="demo")
     projet.refresh_from_db()
     assert projet.statut == StatutProjet.EN_COURS
 
-    # Exécution de la tâche Celery
-    rapport = evaluer_statuts_quotidiens_tous_tenants()
+    # Exécution de la tâche Celery nocturne F3
+    rapport = evaluer_f3_nuit_tous_tenants()
     assert "demo" in rapport
     assert "projets_modifies" in rapport["demo"]

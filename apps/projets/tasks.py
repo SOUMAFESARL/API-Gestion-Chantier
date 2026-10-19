@@ -1,17 +1,19 @@
 """Tâches Celery pour l'application projets."""
 
 import logging
+
 from celery import shared_task
 from django_tenants.utils import schema_context
 
 from apps.core.emails import envoyer
-from apps.core.enums import RoleGlobal
+from apps.core.enums import RoleGlobal, StatutProjet
+from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "evaluer_sante_projets_quotidien_tous_tenants",
-    "evaluer_statuts_quotidiens_tous_tenants",
+    "STATUTS_SANTE_FIGES",
+    "evaluer_f3_nuit_tous_tenants",
     "notifier_dg_derive_delai",
     "recalculer_sante_projet_task",
 ]
@@ -109,10 +111,25 @@ def notifier_dg_derive_delai(
 
 
 @shared_task
-def evaluer_statuts_quotidiens_tous_tenants() -> dict:
-    """Tâche nocturne Celery Beat : évalue les statuts calendaires sur chaque schéma tenant actif."""
-    from apps.core.enums import StatutEntreprise
-    from apps.projets.services.machine_etats import executer_evaluation_quotidienne_schema
+def evaluer_f3_nuit_tous_tenants() -> dict:
+    """Tâche Celery Beat quotidienne de nuit à 00h01 (SFD F3 §4.6, §7).
+
+    Pour chaque entreprise cliente sous son schema_context :
+    1. Synchronise d'abord les rapports APPROUVE dont f3_sync_done est faux
+       via synchroniser_rapport_approuve (rattrapage de coupure serveur).
+    2. Recalcule l'indice de chaque projet suivi (appel direct de recalculer_sante_projet_task).
+    3. Évalue ensuite le statut de chaque projet via evaluer_statut_projet.
+    """
+    from apps.chantier.models import RapportJournalier
+    from apps.core.enums import StatutActivite, StatutEntreprise, StatutLot, StatutRapport
+    from apps.projets.models import Activite, Lot, Projet
+    from apps.projets.services.avancement import synchroniser_rapport_approuve
+    from apps.projets.services.machine_etats import (
+        STATUTS_PROJET_MANUELS_FIXES,
+        evaluer_statut_activite,
+        evaluer_statut_lot,
+        evaluer_statut_projet,
+    )
     from apps.tenants.models import Entreprise
 
     entreprises = Entreprise.objects.exclude(schema_name="public").filter(
@@ -125,20 +142,126 @@ def evaluer_statuts_quotidiens_tous_tenants() -> dict:
             continue
         try:
             with schema_context(ent.schema_name):
-                rapport = executer_evaluation_quotidienne_schema()
-                rapport_global[ent.schema_name] = rapport
+                # 1. Rattrapage des rapports approuvés non synchronisés
+                rapports_a_rattraper = list(
+                    RapportJournalier.objects.filter(
+                        supprime_le__isnull=True,
+                        statut=StatutRapport.APPROUVE,
+                        f3_sync_done=False,
+                    ).values_list("id", flat=True)
+                )
+                nb_rattrapes = 0
+                for rap_id in rapports_a_rattraper:
+                    try:
+                        if synchroniser_rapport_approuve(rap_id):
+                            nb_rattrapes += 1
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors du rattrapage du rapport %s (tenant %s) : %s",
+                            rap_id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                # Évaluation préalable des activités et lots (mise à jour calendaire)
+                activites = Activite.objects.filter(supprime_le__isnull=True).exclude(
+                    statut__in=[StatutActivite.CLOTURE, StatutActivite.SUSPENDU]
+                )
+                for act in activites.iterator():
+                    try:
+                        evaluer_statut_activite(act)
+                    except Exception as err:
+                        logger.error(
+                            "Erreur d'évaluation du statut de l'activité %s (tenant %s) : %s",
+                            act.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                lots = Lot.objects.filter(supprime_le__isnull=True).exclude(
+                    statut__in=[StatutLot.CLOTURE, StatutLot.SUSPENDU]
+                )
+                for lot in lots.iterator():
+                    try:
+                        evaluer_statut_lot(lot)
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors de l'évaluation du statut du lot %s (tenant %s) : %s",
+                            lot.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                # 2. Recalcul de l'indice de chaque projet suivi (appel direct synchrone)
+                projets_suivis = list(
+                    Projet.objects.filter(
+                        supprime_le__isnull=True,
+                    ).exclude(
+                        statut__in=STATUTS_SANTE_FIGES,
+                    ).values_list("id", flat=True)
+                )
+                nb_indices = 0
+                for pid in projets_suivis:
+                    try:
+                        recalculer_sante_projet_task(
+                            schema_name=ent.schema_name,
+                            projet_id=str(pid),
+                            declencheur_type="JOB_NUIT_F3_00H01",
+                        )
+                        nb_indices += 1
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors du recalcul de santé du projet %s (tenant %s) : %s",
+                            pid,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                # 3. Évaluation du statut des projets
+                projets_a_evaluer = list(
+                    Projet.objects.filter(
+                        supprime_le__isnull=True,
+                    ).exclude(
+                        statut__in=STATUTS_PROJET_MANUELS_FIXES,
+                    )
+                )
+                nb_projets_modifies = 0
+                for proj in projets_a_evaluer:
+                    try:
+                        if evaluer_statut_projet(proj):
+                            nb_projets_modifies += 1
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors de l'évaluation du statut du projet %s (tenant %s) : %s",
+                            proj.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                rapport_global[ent.schema_name] = {
+                    "rapports_rattrapes": nb_rattrapes,
+                    "projets_indices_recalcules": nb_indices,
+                    "projets_modifies": nb_projets_modifies,
+                }
                 logger.info(
-                    "Évaluation quotidienne réussie pour tenant '%s' : %s",
+                    "Évaluation F3 nuit réussie pour tenant '%s' : %s",
                     ent.schema_name,
-                    rapport,
+                    rapport_global[ent.schema_name],
                 )
         except Exception as e:
             logger.error(
-                "Erreur lors de l'évaluation quotidienne pour tenant '%s' : %s",
+                "Erreur lors de l'évaluation F3 nuit pour tenant '%s' : %s",
                 ent.schema_name,
                 e,
                 exc_info=True,
             )
+            rapport_global[ent.schema_name] = {"erreur": str(e)}
+
     return rapport_global
 
 
@@ -160,11 +283,15 @@ def recalculer_sante_projet_task(
     6. En cas de transition vers le ROUGE (ancien != ROUGE et nouveau == ROUGE), alerte par email post-commit.
     """
     from decimal import Decimal
+
     from django.core.cache import cache
     from django.db import transaction
+    from django.utils import timezone
+
     from apps.core.enums import BadgeSante
     from apps.projets.models import Projet, SanteProjetSnapshot
-    from apps.projets.services.sante_calculs import calculer_indice_sante_projet
+    from apps.projets.services.indice_sante import evaluer_indice_sante
+    from apps.projets.services.sante_calculs import calculer_avancement_physique_projet
     from apps.projets.services.sante_declencheur import obtenir_cle_recalcul_en_attente
 
     # 1. Effacement immédiat de la clé Redis en début d'exécution (C8)
@@ -186,18 +313,26 @@ def recalculer_sante_projet_task(
                 )
                 return None
 
-            ancien_badge = projet.badge_sante
-
-            res = calculer_indice_sante_projet(projet)
-
-            if res.etat == "NON_DEMARRE":
-                projet.avancement_reel = Decimal("0.0")
+            if projet.statut == StatutProjet.EN_ATTENTE:
+                projet.avancement_reel = Decimal("0")
                 projet.indice_sante = None
                 projet.badge_sante = None
-                projet.save(update_fields=["avancement_reel", "indice_sante", "badge_sante", "modifie_le"])
-                return {"projet_id": projet_id, "etat": "NON_DEMARRE", "score": None, "badge": None}
+                projet.save(
+                    update_fields=[
+                        "avancement_reel",
+                        "indice_sante",
+                        "badge_sante",
+                        "modifie_le",
+                    ]
+                )
+                return {
+                    "projet_id": projet_id,
+                    "etat": "NON_DEMARRE",
+                    "score": None,
+                    "badge": None,
+                }
 
-            if res.etat == "FIGE":
+            if projet.statut in STATUTS_SANTE_FIGES:
                 return {
                     "projet_id": projet_id,
                     "etat": "FIGE",
@@ -205,49 +340,68 @@ def recalculer_sante_projet_task(
                     "badge": projet.badge_sante,
                 }
 
-            # État ACTIF : mise à jour du projet
-            projet.avancement_reel = Decimal(str(res.avancement_physique))
-            projet.avancement_theorique = Decimal(str(res.avancement_temporel))
-            projet.indice_sante = res.score
-            projet.badge_sante = res.badge_final
+            ancien_badge = projet.badge_sante
+
+            res = evaluer_indice_sante(projet)
+
+            # Calcul des avancements pour persistance et snapshot
+            av_physique, mode_pond = calculer_avancement_physique_projet(projet)
+            av_temporel = float(round(av_physique + res.delta, 2))
+            maintenant = timezone.now()
+
+            # Mise à jour du projet (indice de la SFD, badge et horodatage de calcul)
+            projet.avancement_reel = Decimal(str(av_physique))
+            projet.avancement_theorique = Decimal(str(av_temporel))
+            projet.indice_sante = res.indice
+            projet.badge_sante = res.badge
+            projet.indice_sante_calcule_le = maintenant
             projet.save(
                 update_fields=[
                     "avancement_reel",
                     "avancement_theorique",
                     "indice_sante",
                     "badge_sante",
+                    "indice_sante_calcule_le",
                     "modifie_le",
                 ]
             )
 
-            # Création du snapshot immuable
+            # Création du snapshot immuable d'historique avec scores SFD
+            scores_snapshot = {
+                "delais": res.scores.get("delais", 0),
+                "rapports": res.scores.get("rapports", 0),
+                "blocages": res.scores.get("blocages", 0),
+                "incidents": res.scores.get("incidents", 0),
+                "taux_rapports": res.taux_rapports,
+            }
             snapshot = SanteProjetSnapshot.objects.create(
                 projet=projet,
-                score=res.score or 0,
-                badge_brut=res.badge_brut or "",
-                badge_final=res.badge_final or "",
-                plancher_applique=res.plancher_applique,
-                p_delais=Decimal(str(res.p_delais)),
-                p_retard=Decimal(str(res.p_retard)),
-                p_malus=Decimal(str(res.p_malus)),
-                p_blocages=Decimal(str(res.p_blocages)),
-                p_reporting=Decimal(str(res.p_reporting)),
-                avancement_physique=Decimal(str(res.avancement_physique)),
-                avancement_temporel=Decimal(str(res.avancement_temporel)),
-                delta=Decimal(str(res.retard_pts)),
-                mode_ponderation=res.mode_ponderation,
-                nb_reports=res.nb_reports,
-                blocages_ouverts_par_severite=res.blocages_ouverts_par_severite,
-                taux_reporting=Decimal(str(res.taux_reporting)),
-                jours_attendus=res.jours_attendus,
-                jours_couverts=res.jours_couverts,
+                score=res.indice,
+                badge_brut=res.badge,
+                badge_final=res.badge,
+                plancher_applique=False,
+                scores=scores_snapshot,
+                p_delais=Decimal("0.0"),
+                p_retard=Decimal("0.0"),
+                p_malus=Decimal("0.0"),
+                p_blocages=Decimal("0.0"),
+                p_reporting=Decimal("0.0"),
+                avancement_physique=Decimal(str(av_physique)),
+                avancement_temporel=Decimal(str(av_temporel)),
+                delta=Decimal(str(res.delta)),
+                mode_ponderation=mode_pond,
+                nb_reports=0,
+                blocages_ouverts_par_severite={},
+                taux_reporting=Decimal(str(round(res.taux_rapports / 100, 4))),
+                jours_attendus=0,
+                jours_couverts=0,
                 declencheur_type=declencheur_type or "",
                 declencheur_id=str(declencheur_id) if declencheur_id else "",
             )
 
             # Détection de transition vers le ROUGE (C8, C9)
             alerte_rouge = False
-            if ancien_badge != BadgeSante.ROUGE and res.badge_final == BadgeSante.ROUGE:
+            if ancien_badge != BadgeSante.ROUGE and res.badge == BadgeSante.ROUGE:
                 from apps.projets.services.sante_email import envoyer_alerte_sante_rouge
 
                 alerte_rouge = True
@@ -258,8 +412,8 @@ def recalculer_sante_projet_task(
             return {
                 "projet_id": projet_id,
                 "etat": "ACTIF",
-                "score": res.score,
-                "badge": res.badge_final,
+                "score": res.indice,
+                "badge": res.badge,
                 "alerte_rouge": alerte_rouge,
                 "snapshot_id": str(snapshot.id),
             }
@@ -270,60 +424,3 @@ def recalculer_sante_projet_task(
     return _executer()
 
 
-@shared_task
-def evaluer_sante_projets_quotidien_tous_tenants() -> dict:
-    """Tâche Celery Beat quotidienne (00h15) : évalue et actualise l'indice de santé sur tous les tenants actifs."""
-    from apps.core.enums import StatutEntreprise, StatutProjet
-    from apps.projets.models import Projet
-    from apps.tenants.models import Entreprise
-
-    entreprises = Entreprise.objects.exclude(schema_name="public").filter(
-        statut__in=[StatutEntreprise.ACTIF, StatutEntreprise.ESSAI]
-    )
-    rapport_global = {}
-
-    statuts_actifs = {
-        StatutProjet.EN_COURS,
-        StatutProjet.EN_RETARD,
-        StatutProjet.CRITIQUE,
-        StatutProjet.BLOQUE,
-    }
-
-    for ent in entreprises:
-        if not ent.schema_name:
-            continue
-        try:
-            with schema_context(ent.schema_name):
-                projets_actifs = list(
-                    Projet.objects.filter(
-                        supprime_le__isnull=True,
-                        statut__in=statuts_actifs,
-                    ).values_list("id", flat=True)
-                )
-                recalcules = 0
-                for pid in projets_actifs:
-                    recalculer_sante_projet_task(
-                        schema_name=ent.schema_name,
-                        projet_id=str(pid),
-                        declencheur_type="JOB_QUOTIDIEN_00H15",
-                    )
-                    recalcules += 1
-
-                rapport_global[ent.schema_name] = {
-                    "projets_actifs_recalcules": recalcules,
-                }
-                logger.info(
-                    "Évaluation quotidienne santé réussie pour tenant '%s' : %d projets recalculés.",
-                    ent.schema_name,
-                    recalcules,
-                )
-        except Exception as e:
-            logger.error(
-                "Erreur lors de l'évaluation quotidienne santé pour tenant '%s' : %s",
-                ent.schema_name,
-                e,
-                exc_info=True,
-            )
-            rapport_global[ent.schema_name] = {"erreur": str(e)}
-
-    return rapport_global

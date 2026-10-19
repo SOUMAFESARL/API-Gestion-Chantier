@@ -11,6 +11,7 @@ Vérifie :
 
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 from django.utils import timezone
@@ -179,7 +180,7 @@ def setup_sante_data(db):
             delta=5.0,
             avancement_physique=45.0,
             avancement_temporel=50.0,
-            taux_reporting=85.0,
+            taux_reporting=0.85,
             date_calcul=timezone.now() - timedelta(days=1),
         )
 
@@ -257,18 +258,107 @@ class TestSanteConsultationEndpoints:
         data = response.json()
         assert data["projet_id"] == str(p.id)
         assert data["etat_calcul"] == "ACTIF"
-        assert "score" in data
-        assert "badge" in data
-        assert "penalite_delais" in data
-        assert "penalite_blocages" in data
-        assert "penalite_reporting" in data
-        assert "retard_pts" in data
-        assert "avancement_physique" in data
-        assert "blocages_critiques" in data
-        assert "blocages_majeurs" in data
-        assert "blocages_moderes" in data
-        assert "taux_reporting" in data
-        assert "avertissements" in data
+        assert data["score"] == 78
+        assert data["badge"] == "ORANGE"
+        assert data["retard_pts"] == 0.0
+        assert data["avancement_physique"] == 0.0
+        assert data["avancement_temporel"] == 0.0
+        assert data["blocages_critiques"] == 0
+        assert data["blocages_majeurs"] == 0
+        assert data["blocages_moderes"] == 0
+        assert data["taux_reporting"] == 0.0
+        assert 0.0 <= data["taux_reporting"] <= 1.0
+        assert data["penalite_delais"] == 0.0
+        assert data["penalite_blocages"] == 0.0
+        assert data["penalite_reporting"] == 0.0
+        assert data["plancher_applique"] is False
+        assert "scores" in data
+        assert data["scores"]["delais"] == 100
+        assert data["scores"]["rapports"] == 10
+        assert data["scores"]["blocages"] == 100
+        assert data["scores"]["incidents"] == 100
+        assert isinstance(data["avertissements"], list)
+
+    def test_projet_sante_detail_projet_fige(self, client_tenant, setup_sante_data):
+        """Projet figé (ex. TERMINE) : /sante/detail/ rend les valeurs stockées du snapshot."""
+        client_tenant.force_authenticate(user=setup_sante_data["cp"])
+        p = setup_sante_data["projet_en_cours"]
+        cp = setup_sante_data["cp"]
+        lot = setup_sante_data["lot"]
+        with schema_context(SCHEMA):
+            p.statut = StatutProjet.TERMINE
+            p.indice_sante = 85
+            p.badge_sante = "VERT"
+            p.save(update_fields=["statut", "indice_sante", "badge_sante", "modifie_le"])
+
+            snap = SanteProjetSnapshot.objects.create(
+                projet=p,
+                score=85,
+                badge_brut="VERT",
+                badge_final="VERT",
+                scores={"delais": 100, "rapports": 100, "blocages": 40, "incidents": 100},
+                delta=Decimal("4.50"),
+                avancement_physique=Decimal("45.00"),
+                avancement_temporel=Decimal("49.50"),
+                taux_reporting=Decimal("1.00"),
+                date_calcul=timezone.now(),
+            )
+
+            # Ouvrir un blocage MAJEUR actif qui ferait chuter le score
+            # blocages à 10 si recalculé en direct
+            Blocage.objects.create(
+                projet=p,
+                lot=lot,
+                titre="Blocage majeur pendant gel",
+                severite="MAJEUR",
+                statut=StatutBlocage.OUVERT,
+                ouvert_par=cp,
+                cree_par=cp,
+            )
+
+        url = f"/api/v1/projets/{p.id}/sante/detail/"
+        response = client_tenant.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["projet_id"] == str(p.id)
+        assert data["statut"] == StatutProjet.TERMINE
+        assert data["etat_calcul"] == "FIGE"
+        assert data["score"] == 85
+        assert data["badge"] == "VERT"
+        assert data["scores"] == {
+            "delais": 100,
+            "rapports": 100,
+            "blocages": 40,
+            "incidents": 100,
+        }
+        assert data["retard_pts"] == float(snap.delta)
+        assert data["avancement_physique"] == float(snap.avancement_physique)
+        assert data["avancement_temporel"] == float(snap.avancement_temporel)
+        assert data["taux_reporting"] == float(snap.taux_reporting)
+
+    def test_projet_sante_detail_projet_non_demarre(self, client_tenant, setup_sante_data):
+        """Projet non démarré (EN_ATTENTE) : /sante/detail/ rend score None et scores {}."""
+        # Le CP de la fixture n'est affecté qu'au projet en cours : le DG voit tout.
+        client_tenant.force_authenticate(user=setup_sante_data["dg"])
+        p = setup_sante_data["projet_en_attente"]
+
+        url = f"/api/v1/projets/{p.id}/sante/detail/"
+        response = client_tenant.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["projet_id"] == str(p.id)
+        assert data["statut"] == StatutProjet.EN_ATTENTE
+        assert data["etat_calcul"] == "NON_DEMARRE"
+        assert data["score"] is None
+        assert data["badge"] is None
+        assert data["scores"] == {}
+        assert data["retard_pts"] == 0.0
+        assert data["avancement_physique"] == 0.0
+        assert data["avancement_temporel"] == 0.0
+        assert data["taux_reporting"] == 1.0
+        assert data["avertissements"] == []
 
     def test_projet_sante_historique_ok(self, client_tenant, setup_sante_data):
         client_tenant.force_authenticate(user=setup_sante_data["cp"])

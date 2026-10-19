@@ -114,6 +114,12 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
 
     if journal is None:
         RapportJournalier.objects.filter(pk=rapport.pk).update(f3_sync_done=True)
+        if rapport.projet_id:
+            projet = Projet.objects.filter(pk=rapport.projet_id).first()
+            if projet:
+                from apps.projets.services.machine_etats import evaluer_statut_projet
+
+                evaluer_statut_projet(projet)
         return True
 
     saisie = journal.saisie or {}
@@ -174,6 +180,10 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
     RapportJournalier.objects.filter(pk=rapport.pk).update(f3_sync_done=True)
 
     if rapport.projet_id:
+        from apps.projets.services.machine_etats import evaluer_statut_projet
+
+        evaluer_statut_projet(projet)
+
         declencher_recalcul_sante(
             projet_id=rapport.projet_id,
             declencheur_type="RAPPORT_APPROBATION",

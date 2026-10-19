@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.enums import StatutProjet
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Projet, SanteProjetSnapshot
 from apps.projets.serializers.sante import (
@@ -16,6 +17,7 @@ from apps.projets.serializers.sante import (
     SanteDetailResponseSerializer,
     SanteHistoriqueItemSerializer,
 )
+from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
 from apps.projets.services.sante_calculs import calculer_indice_sante_projet
 
 __all__ = [
@@ -45,8 +47,9 @@ class ProjetSanteApercuView(APIView):
         )
         self.check_object_permissions(request, projet)
 
+        indics = indicateurs_temporels_projet(projet)
+        theorique = indics["avancement_temporel"]
         reel = float(projet.avancement_reel or 0)
-        theorique = float(projet.avancement_theorique or 0)
         ecart = round(reel - theorique, 1)
 
         indice = projet.indice_sante

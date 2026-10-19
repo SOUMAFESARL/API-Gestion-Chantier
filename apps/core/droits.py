@@ -25,7 +25,7 @@ __all__ = [
     "DROITS_ADMIN_RESERVES_DG",
 ]
 
-# Les 6 droits d'administration fixes de l'AD (B-04)
+# Les 7 droits d'administration fixes de l'AD (B-04)
 DROITS_ADMIN_AD = frozenset({
     "administration.collaborateurs_voir",
     "administration.collaborateurs_gerer",
@@ -33,6 +33,7 @@ DROITS_ADMIN_AD = frozenset({
     "administration.abonnement_voir",
     "administration.factures_voir",
     "administration.onboarding_suivre",
+    "administration.calendrier_gerer",
 })
 
 # Droits d'administration strictement reserves au DG (B-04)
@@ -278,7 +279,7 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
             # Permissions actives cochées dans le catalogue (A-04, A-06)
             perms_accordees.update({c.lower() for c in codes_cochés})
 
-        # AD ou ADMIN : 6 droits d'administration fixes dans le code (Règle B-04)
+        # AD ou ADMIN : 7 droits d'administration fixes dans le code (Règle B-04)
         if code_role in (RoleGlobal.ADMIN, "AD") or getattr(role, "code", "") in (RoleGlobal.ADMIN, "AD"):
             perms_accordees.update(DROITS_ADMIN_AD)
             perms_accordees.difference_update(DROITS_ADMIN_RESERVES_DG)

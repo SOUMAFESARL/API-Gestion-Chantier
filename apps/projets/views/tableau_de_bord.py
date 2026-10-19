@@ -6,7 +6,7 @@ Alimentée à 100% par les modèles réels du schéma tenant :
 - Météo en direct & Alertes intempéries (Open-Meteo)
 """
 
-from django.db.models import Q, Sum
+from django.db.models import Sum
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -21,7 +21,10 @@ from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.core.purger_montants import purger_montants_recursif
 from apps.projets.models import Projet
 from apps.projets.serializers import TableauDeBordResponseSerializer
-from apps.projets.services.tableau_de_bord_bons import obtenir_bons_a_valider
+from apps.projets.services.indicateurs_temporels import (
+    calendrier_pour_projets,
+    indicateurs_temporels_projet,
+)
 from apps.projets.services.meteo import (
     PORTEE_CHANTIER,
     PORTEE_ENTREPRISE,
@@ -29,6 +32,7 @@ from apps.projets.services.meteo import (
     meteo_indisponible,
     obtenir_meteo,
 )
+from apps.projets.services.tableau_de_bord_bons import obtenir_bons_a_valider
 
 __all__ = ["TableauDeBordView"]
 
@@ -161,9 +165,14 @@ class TableauDeBordView(APIView):
             .values_list("projet_id", "total")
         )
 
-        for p in projets_qs:
+        projets_liste = list(projets_qs.prefetch_related("lots__activites"))
+        cal = calendrier_pour_projets(projets_liste)
+
+        for p in projets_liste:
+            indics = indicateurs_temporels_projet(p, calendrier=cal)
+            theorique = indics["avancement_temporel"]
+            delta_retard = indics["delta_retard"]
             reel = float(p.avancement_reel or 0)
-            theorique = float(p.avancement_theorique or 0)
             ecart = round(reel - theorique, 1)
 
             if ecart < -5:
@@ -224,16 +233,19 @@ class TableauDeBordView(APIView):
                 "statut": p.statut,
                 "avancement_reel": reel,
                 "avancement_theorique": theorique,
+                "delta_retard": delta_retard,
                 "ecart": ecart,
                 "budget_initial_montant": budget_initial,
                 "rapport_jour_statut": "SOUMIS" if rapport_soumis else "EN_ATTENTE",
                 "indice_sante": indice_projet,
                 "badge_sante": badge_projet,
                 "chef_projet_nom": (
-                    f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip() or p.chef_projet.email
+                    f"{p.chef_projet.prenom} {p.chef_projet.nom}".strip()
+                    or p.chef_projet.email
                 ) if p.chef_projet else None,
                 "conducteur_travaux_nom": (
-                    f"{p.conducteur_travaux.prenom} {p.conducteur_travaux.nom}".strip() or p.conducteur_travaux.email
+                    f"{p.conducteur_travaux.prenom} {p.conducteur_travaux.nom}".strip()
+                    or p.conducteur_travaux.email
                 ) if p.conducteur_travaux else None,
             }
             projets_data.append(p_dict)
@@ -255,7 +267,7 @@ class TableauDeBordView(APIView):
         }
         scores_sante_actifs = [
             p.indice_sante
-            for p in projets_qs
+            for p in projets_liste
             if p.statut in statuts_actifs and p.indice_sante is not None
         ]
         if scores_sante_actifs:
@@ -266,7 +278,7 @@ class TableauDeBordView(APIView):
         # Météo du premier chantier actif ou, à défaut, du siège. « Abidjan »
         # était écrit en dur ici comme dernier recours : faux pour huit clients
         # sur neuf, et invisible puisqu'une température s'affichait quand même.
-        premier_chantier = projets_qs.first()
+        premier_chantier = projets_liste[0] if projets_liste else None
         if premier_chantier is not None:
             ville_meteo, portee_meteo = premier_chantier.ville, PORTEE_CHANTIER
         else:

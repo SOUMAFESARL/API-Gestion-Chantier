@@ -31,6 +31,7 @@ from apps.chantier.services.journal import (
 from apps.core.emails import adresse_frontend, envoyer
 from apps.core.enums import ActionAudit
 from apps.core.exceptions import ErreurMetier
+from apps.projets.services.calendrier_ouvre import Calendrier, calendrier_entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -98,26 +99,42 @@ def relance_du_jour(projet, date_rapport: date) -> RelanceJournal | None:
     ).first()
 
 
-def verifier_ligne(projet, date_rapport: date, journal: JournalChantier | None) -> None:
+def verifier_ligne(
+    projet,
+    date_rapport: date,
+    journal: JournalChantier | None,
+    calendrier: Calendrier | None = None,
+) -> None:
     """Une ligne qui n'existe pas dans le journal ne se relance pas."""
     if date_rapport > aujourdhui():
         raise ErreurMetier("Un rapport futur ne se réclame pas.")
     if journal is None:
         if projet.statut not in STATUTS_SUIVIS:
             raise ErreurMetier("Ce chantier n'attend pas de rapport journalier.")
-        if date_rapport.weekday() >= 5:
-            raise ErreurMetier("Aucun rapport n'est attendu le week-end.")
+        cal = calendrier or calendrier_entreprise(date_rapport, date_rapport)
+        if not cal.est_ouvre(date_rapport):
+            raise ErreurMetier(
+                "Aucun rapport n'est attendu ce jour : "
+                "il n'est pas ouvré dans le calendrier de l'entreprise."
+            )
 
 
 @transaction.atomic
-def relancer(*, projet, date_rapport: date, utilisateur=None, automatique: bool = False):
+def relancer(
+    *,
+    projet,
+    date_rapport: date,
+    utilisateur=None,
+    automatique: bool = False,
+    calendrier: Calendrier | None = None,
+):
     """Relance la ligne ; rend la relance du jour, existante ou nouvelle."""
     existante = relance_du_jour(projet, date_rapport)
     if existante:
         return existante
 
     journal = journal_de_la_ligne(projet, date_rapport)
-    verifier_ligne(projet, date_rapport, journal)
+    verifier_ligne(projet, date_rapport, journal, calendrier=calendrier)
     etape, destinataires = cible(projet, journal)
     if not destinataires:
         raise RelanceSansDestinataire()
@@ -201,7 +218,8 @@ def relancer_rapports_manquants(jour: date | None = None) -> dict:
 
     jour = jour or aujourdhui()
     bilan = {"relances": 0, "deja_relances": 0, "sans_destinataire": 0, "echecs": 0}
-    if jour.weekday() >= 5:
+    cal = calendrier_entreprise(jour, jour)
+    if not cal.est_ouvre(jour):
         return bilan
     for projet in Projet.objects.filter(statut__in=STATUTS_SUIVIS).select_related("chef_projet"):
         if jour < premier_jour_rapport(projet):
@@ -213,7 +231,7 @@ def relancer_rapports_manquants(jour: date | None = None) -> dict:
             bilan["deja_relances"] += 1
             continue
         try:
-            relancer(projet=projet, date_rapport=jour, automatique=True)
+            relancer(projet=projet, date_rapport=jour, automatique=True, calendrier=cal)
             bilan["relances"] += 1
         except RelanceSansDestinataire:
             bilan["sans_destinataire"] += 1

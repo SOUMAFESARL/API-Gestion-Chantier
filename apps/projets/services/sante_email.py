@@ -8,16 +8,15 @@ Règles de gouvernance :
 """
 
 import logging
-from typing import Any
 from uuid import UUID
 
-from django.db.models import Q
 from django_tenants.utils import schema_context
 
 from apps.accounts.models import Utilisateur
 from apps.core.emails import envoyer
 from apps.core.enums import RoleGlobal
 from apps.projets.models import Projet, SanteProjetSnapshot
+from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
 
 logger = logging.getLogger(__name__)
 
@@ -74,13 +73,23 @@ def envoyer_alerte_sante_rouge(
             return 0
 
         score = snapshot.score if snapshot else projet.indice_sante
+        if snapshot:
+            av_temporel = snapshot.avancement_temporel
+            retard_pts = snapshot.delta
+        else:
+            indics = indicateurs_temporels_projet(projet)
+            av_temporel = indics["avancement_temporel"]
+            retard_pts = indics["delta_retard"]
+
         contexte = {
             "projet_nom": projet.nom,
             "projet_reference": projet.reference,
             "score": score,
-            "avancement_physique": snapshot.avancement_physique if snapshot else projet.avancement_reel,
-            "avancement_temporel": snapshot.avancement_temporel if snapshot else projet.avancement_theorique,
-            "retard_pts": snapshot.delta if snapshot else 0,
+            "avancement_physique": (
+                snapshot.avancement_physique if snapshot else projet.avancement_reel
+            ),
+            "avancement_temporel": av_temporel,
+            "retard_pts": retard_pts,
             "p_delais": snapshot.p_delais if snapshot else 0,
             "p_blocages": snapshot.p_blocages if snapshot else 0,
             "p_reporting": snapshot.p_reporting if snapshot else 0,

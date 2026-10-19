@@ -1,5 +1,6 @@
 """Création indépendante de lots pour un projet existant."""
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.enums import ModeExecution, TypeBordereau
@@ -151,12 +152,32 @@ class LotResponseSerializer(serializers.ModelSerializer):
     statut = serializers.CharField(read_only=True)
     avancement = serializers.SerializerMethodField()
     activites_count = serializers.SerializerMethodField()
+    avancement_temporel = serializers.SerializerMethodField()
+    delta_retard = serializers.SerializerMethodField()
+
+    def _get_indicateurs(self, obj) -> dict:
+        cache_attr = "_indicateurs_temporels_cache"
+        if not hasattr(obj, cache_attr):
+            from apps.projets.services.indicateurs_temporels import indicateurs_temporels_lot
+
+            ctx = getattr(self, "context", None)
+            cal = ctx.get("calendrier_temporel") if ctx else None
+            setattr(obj, cache_attr, indicateurs_temporels_lot(obj, calendrier=cal))
+        return getattr(obj, cache_attr)
 
     def get_avancement(self, obj) -> float:
         return calculer_avancement_physique_lot(obj)
 
     def get_activites_count(self, obj) -> int:
         return statistiques_lots([obj])["activites_count"]
+
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_avancement_temporel(self, obj) -> float | None:
+        return self._get_indicateurs(obj)["avancement_temporel"]
+
+    @extend_schema_field(serializers.FloatField(allow_null=True))
+    def get_delta_retard(self, obj) -> float | None:
+        return self._get_indicateurs(obj)["delta_retard"]
 
     class Meta:
         model = Lot
@@ -175,6 +196,8 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "date_debut_reelle",
             "date_fin_reelle",
             "avancement",
+            "avancement_temporel",
+            "delta_retard",
             "activites_count",
             "ordre",
             "est_actif",

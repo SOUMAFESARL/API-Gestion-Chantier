@@ -65,9 +65,12 @@ class ProjetDashboardItemSerializer(serializers.Serializer):
     ville = serializers.CharField()
     quartier = serializers.CharField(allow_blank=True)
     statut = serializers.CharField()
-    avancement_reel = serializers.IntegerField()
-    avancement_theorique = serializers.IntegerField()
-    ecart = serializers.IntegerField()
+    avancement_reel = serializers.FloatField()
+    avancement_theorique = serializers.FloatField()
+    delta_retard = serializers.FloatField(
+        help_text="Écart temporel - physique en points (positif = retard)."
+    )
+    ecart = serializers.FloatField()
     budget_initial_montant = serializers.IntegerField(allow_null=True)
     rapport_jour_statut = serializers.CharField(help_text="SOUMIS ou EN_ATTENTE")
     indice_sante = serializers.IntegerField(help_text="Note sur 100", allow_null=True)

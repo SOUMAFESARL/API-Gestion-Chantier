@@ -11,10 +11,10 @@ Fonctions pures, déterministes et testables unitairement :
 - Score synthétique (0-100), badges (VERT, ORANGE, ROUGE) et plancher de gravité.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal, ROUND_HALF_UP
-import logging
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -31,21 +31,31 @@ from apps.core.enums import (
     StatutRapport,
 )
 from apps.projets.models.historique_date import TypeObjetHistorique
+from apps.projets.services.calendrier_ouvre import (
+    CALENDRIER_PAR_DEFAUT_SEMAINE,
+    Calendrier,
+    calendrier_entreprise,
+)
 from apps.referentiels.models import JourFerie
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "CALENDRIER_PAR_DEFAUT_SEMAINE",
+    "Calendrier",
     "ResultatCalculSante",
     "calculer_avancement_physique_activite",
     "calculer_avancement_physique_lot",
     "calculer_avancement_physique_projet",
     "calculer_avancement_temporel_lot",
     "calculer_avancement_temporel_projet",
+    "calculer_delta_lot",
+    "calculer_delta_projet",
     "calculer_indice_sante_projet",
     "calculer_penalite_blocages",
     "calculer_penalite_delais",
     "calculer_penalite_reporting",
+    "calendrier_entreprise",
     "compter_jours_ouvres",
     "couverture_budget_projet",
     "est_jour_ouvre",
@@ -112,13 +122,27 @@ def obtenir_jours_feries_ci(annee_min: int, annee_max: int) -> tuple[set[date], 
     return feries, est_incomplet
 
 
-def est_jour_ouvre(d: date, jours_feries: set[date]) -> bool:
-    """Vérifie si un jour donné est ouvré (lundi à vendredi, hors férié)."""
+def est_jour_ouvre(d: date, jours_feries: Calendrier | set[date] | frozenset[date]) -> bool:
+    """Vérifie si un jour donné est ouvré.
+
+    Accepte soit une instance de Calendrier d'entreprise (règle des 3 couches :
+    exceptions, puis fériés nationaux, puis semaine type), soit un ensemble de dates
+    (comportement historique : lundi à vendredi hors dates de l'ensemble).
+    """
+    if isinstance(jours_feries, Calendrier):
+        return jours_feries.est_ouvre(d)
     return d.weekday() < 5 and d not in jours_feries
 
 
-def compter_jours_ouvres(debut: date, fin: date, jours_feries: set[date]) -> int:
-    """Compte le nombre de jours ouvrés inclus entre debut et fin (bornes incluses)."""
+def compter_jours_ouvres(
+    debut: date,
+    fin: date,
+    jours_feries: Calendrier | set[date] | frozenset[date],
+) -> int:
+    """Compte le nombre de jours ouvrés inclus entre debut et fin (bornes incluses).
+
+    Accepte soit un Calendrier d'entreprise, soit un ensemble de dates de jours fériés.
+    """
     if fin < debut:
         return 0
     total = 0
@@ -185,21 +209,6 @@ def calculer_avancement_physique_lot(lot) -> float:
     avancements = [calculer_avancement_physique_activite(a) for a in activites_valides]
     somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
     return float(round(somme / total_poids, 2))
-
-
-def obtenir_budget_effectif_lot(lot) -> float | None:
-    """Retourne le budget initial du lot, ou la somme des budgets de ses activités actives."""
-    b_lot = getattr(lot, "budget_initial_montant", None)
-    if b_lot is not None and b_lot > 0:
-        return float(b_lot)
-    activites = [
-        a for a in lot.activites.all()
-        if getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None
-    ]
-    somme_act = sum(float(getattr(a, "budget_initial_montant", None) or 0) for a in activites)
-    if somme_act > 0:
-        return somme_act
-    return None
 
 
 def ponderer_lots_par_budget(lots) -> float:
@@ -286,18 +295,28 @@ def couverture_budget_projet(projet) -> dict[str, Any]:
 def calculer_avancement_temporel_lot(
     lot,
     date_reference: date,
-    jours_feries: set[date],
+    jours_feries: Calendrier | set[date] | frozenset[date],
 ) -> float | None:
     """Calcule l'avancement temporel d'un lot : jours ouvrés écoulés / jours ouvrés totaux.
 
-    Basé strictement sur la Baseline v0 contractuelle :
-    lot.date_debut_baseline et lot.date_fin_baseline.
-    Retourne None si les dates de baseline ne sont pas renseignées.
+    Règle contractuelle (SFD F3 §4.4, Erratum E-1 & Décision 5) :
+    - Paire baseline complète (date_debut_baseline et date_fin_baseline).
+    - À défaut, paire prévisionnelle complète (date_debut_prevue et date_fin_prevue).
+    - Si aucune des deux paires n'est complète, retourne None.
+    - Bornes incluses au numérateur comme au dénominateur.
+    - 0.0 % si date_reference < debut, 100.0 % si date_reference >= fin.
     """
-    debut = getattr(lot, "date_debut_baseline", None)
-    fin = getattr(lot, "date_fin_baseline", None)
-    if not debut or not fin:
-        return None
+    debut_base = getattr(lot, "date_debut_baseline", None)
+    fin_base = getattr(lot, "date_fin_baseline", None)
+    if debut_base and fin_base:
+        debut, fin = debut_base, fin_base
+    else:
+        debut_prev = getattr(lot, "date_debut_prevue", None)
+        fin_prev = getattr(lot, "date_fin_prevue", None)
+        if debut_prev and fin_prev:
+            debut, fin = debut_prev, fin_prev
+        else:
+            return None
 
     if date_reference < debut:
         return 0.0
@@ -316,41 +335,80 @@ def calculer_avancement_temporel_lot(
 def calculer_avancement_temporel_projet(
     projet,
     date_reference: date,
-    jours_feries: set[date],
+    jours_feries: Calendrier | set[date] | frozenset[date],
 ) -> tuple[float, list[str]]:
-    """Calcule l'avancement temporel consolidé du projet (moyenne des lots pondérée par budget).
+    """Calcule l'avancement temporel consolidé du projet (SFD F3 §4.4, RG-F3-04).
 
-    Les lots sans baseline sont exclus du calcul temporel avec un avertissement.
+    Moyenne des lots actifs non supprimés, pondérée par lot.budget_initial_montant (> 0).
+    Seuls les lots disposant d'un budget > 0 et d'un avancement temporel non None sont retenus.
+    Pour chaque lot actif non supprimé dont l'avancement temporel est None, ajoute
+    l'avertissement LOT_SANS_DATES:<code>.
+    Retourne (avancement, avertissements). Retourne (0.0, avertissements) si aucun lot n'est retenu.
     """
-    avertissements = []
-    lots = [
-        lot for lot in projet.lots.all()
+    avertissements: list[str] = []
+    lots_iterable = projet.lots.all() if hasattr(projet.lots, "all") else projet.lots
+    lots_actifs = [
+        lot for lot in lots_iterable
         if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
     ]
-    if not lots:
+    if not lots_actifs:
         return 0.0, avertissements
 
-    lots_avec_temporel: list[tuple[Any, float]] = []
-    for lot in lots:
+    lots_retenus: list[tuple[Any, float]] = []
+    for lot in lots_actifs:
         temp = calculer_avancement_temporel_lot(lot, date_reference, jours_feries)
         if temp is None:
-            avertissements.append(f"LOT_SANS_BASELINE:{lot.code}")
-        else:
-            lots_avec_temporel.append((lot, temp))
+            code = getattr(lot, "code", "")
+            avertissements.append(f"LOT_SANS_DATES:{code}")
+            continue
 
-    if not lots_avec_temporel:
-        avertissements.append("AUCUN_LOT_AVEC_BASELINE")
+        budget = getattr(lot, "budget_initial_montant", None)
+        if budget is not None and budget > 0:
+            lots_retenus.append((lot, temp))
+
+    if not lots_retenus:
         return 0.0, avertissements
 
-    budgets_lots = [obtenir_budget_effectif_lot(lot) for lot, _ in lots_avec_temporel]
-    budget_complet = all(b is not None and b > 0 for b in budgets_lots)
-    poids = [b if budget_complet else 1.0 for b in budgets_lots]
+    poids = [float(lot.budget_initial_montant) for lot, _ in lots_retenus]
     total_poids = sum(poids)
     if total_poids <= 0:
         return 0.0, avertissements
 
-    somme = sum(temp * p for (_, temp), p in zip(lots_avec_temporel, poids, strict=True))
+    somme = sum(temp * p for (_, temp), p in zip(lots_retenus, poids, strict=True))
     return float(round(somme / total_poids, 2)), avertissements
+
+
+def calculer_delta_lot(
+    lot,
+    date_reference: date,
+    calendrier: Calendrier | set[date] | frozenset[date],
+) -> float | None:
+    """Calcule l'écart d'avancement d'un lot (Formule 5, SFD F3 §4.5).
+
+    Delta = avancement temporel (Formule 4) - avancement physique (Formule 2).
+    Arrondi à 2 décimales. Un résultat positif signifie un retard.
+    Retourne None si l'avancement temporel est None (absence de dates contractuelles).
+    """
+    temp = calculer_avancement_temporel_lot(lot, date_reference, calendrier)
+    if temp is None:
+        return None
+    phys = calculer_avancement_physique_lot(lot)
+    return float(round(temp - phys, 2))
+
+
+def calculer_delta_projet(
+    projet,
+    date_reference: date,
+    calendrier: Calendrier | set[date] | frozenset[date],
+) -> float:
+    """Calcule l'écart d'avancement consolidé d'un projet (Formule 5, SFD F3 §4.5).
+
+    Delta = avancement temporel (Formule 4) - avancement physique (Formule 3).
+    Arrondi à 2 décimales. Un résultat positif signifie un retard.
+    """
+    temp, _ = calculer_avancement_temporel_projet(projet, date_reference, calendrier)
+    phys, _ = calculer_avancement_physique_projet(projet)
+    return float(round(temp - phys, 2))
 
 
 # --------------------------------------------------------------------------
@@ -400,7 +458,7 @@ def multiplicateur_anciennete_blocage(jours_ouvres: int) -> float:
 def calculer_penalite_blocages(
     blocages_ouverts: list[Any],
     date_reference: date,
-    jours_feries: set[date],
+    jours_feries: Calendrier | set[date] | frozenset[date],
 ) -> tuple[float, dict[str, int], bool]:
     """Calcule la pénalité blocages sur les blocages ouverts et pris en charge.
 
@@ -464,7 +522,7 @@ def est_dans_periode_arret(d: date, arrets: list[Any]) -> bool:
 def calculer_penalite_reporting(
     projet,
     date_reference: date,
-    jours_feries: set[date],
+    jours_feries: Calendrier | set[date] | frozenset[date],
     moment_actuel: datetime | None = None,
 ) -> tuple[float, float, int, int]:
     """Calcule la pénalité reporting sur la fenêtre des 14 derniers jours calendaires.
@@ -637,16 +695,16 @@ def calculer_indice_sante_projet(
             avertissements=[f"PROJET_FIGE_STATUT_{statut}"],
         )
 
-    # 2. Récupération des jours fériés pour la fenêtre du projet
+    # 2. Récupération du calendrier d'entreprise pour la fenêtre du projet
     annee_min = date_ref.year - 1
     annee_max = date_ref.year + 1
-    jours_feries, est_incomplet = obtenir_jours_feries_ci(annee_min, annee_max)
-    if est_incomplet:
+    calendrier = calendrier_entreprise(date(annee_min, 1, 1), date(annee_max, 12, 31))
+    if getattr(calendrier, "est_incomplet", False):
         avertissements.append("JOURS_FERIES_INCOMPLETS")
 
     # 3. Avancements physique et temporel
     av_physique, mode_pond = calculer_avancement_physique_projet(projet)
-    av_temporel, avert_temp = calculer_avancement_temporel_projet(projet, date_ref, jours_feries)
+    av_temporel, avert_temp = calculer_avancement_temporel_projet(projet, date_ref, calendrier)
     avertissements.extend(avert_temp)
 
     # Retard en points (retard_pts = temporel - physique, positif = retard) (C4)
@@ -671,12 +729,12 @@ def calculer_indice_sante_projet(
         )
     )
     p_blocages, decompte_sev, a_critique_ancien = calculer_penalite_blocages(
-        blocages_actifs, date_ref, jours_feries
+        blocages_actifs, date_ref, calendrier
     )
 
     # 6. Pénalité Reporting (Section 6)
     p_reporting, taux_rep, attendus, couverts = calculer_penalite_reporting(
-        projet, date_ref, jours_feries, moment_actuel=maintenant
+        projet, date_ref, calendrier, moment_actuel=maintenant
     )
 
     # 7. Score synthétique brut et arrondi

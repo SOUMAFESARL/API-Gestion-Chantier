@@ -76,7 +76,9 @@ def test_consulter_tableau_de_bord(client_tenant, admin_user):
     p = data["projets"][0]
     assert p["nom"] == "Résidence Cocody"
     assert p["avancement_reel"] == 34.0
-    assert p["avancement_theorique"] == 32.0
+    # Avancement temporel calculé à l'appel (0.0 sans lots datés et budgétés, RG-F3-04)
+    assert p["avancement_theorique"] == 0.0
+    assert "delta_retard" in p
     assert "bons_paiement_a_valider" in data
     assert "meteo" in data
     assert data["aucun_chantier"] is False

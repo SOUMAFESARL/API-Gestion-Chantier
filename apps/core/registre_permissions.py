@@ -61,6 +61,13 @@ REGISTRE: dict[str, DefPermission] = {
             reservee_administration=True,
         ),
         DefPermission(
+            "administration.calendrier_gerer",
+            "administration",
+            2,
+            "Gérer le calendrier des jours ouvrés",
+            reservee_administration=True,
+        ),
+        DefPermission(
             "administration.abonnement_voir",
             "administration",
             1,

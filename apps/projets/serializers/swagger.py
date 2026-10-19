@@ -52,6 +52,8 @@ CHAMPS_REPONSE = (
     "id",
     *CHAMPS_FORMULAIRE,
     "avancement_reel",
+    "avancement_theorique",
+    "delta_retard",
     "indice_sante",
     "statistiques",
     "sans_chef_projet",
@@ -309,8 +311,36 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
     contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
 
+    avancement_theorique = serializers.SerializerMethodField(
+        help_text=(
+            "Avancement temporel (SFD F3 formule 4), calculé à chaque appel sur le calendrier "
+            "de l'entreprise. Le nom de champ est conservé pour les écrans existants."
+        )
+    )
+    delta_retard = serializers.SerializerMethodField(
+        help_text="Avancement temporel - avancement physique, en points (positif = retard)."
+    )
+
     def get_avancement_reel(self, obj) -> float:
         return statistiques_lots(obj.lots.all())["avancement_pondere"]
+
+    def _indicateurs_temporels(self, obj) -> dict:
+        # Un seul calcul par projet et par réponse : les deux champs le partagent.
+        if not hasattr(obj, "_indicateurs_temporels_cache"):
+            from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
+
+            ctx = getattr(self, "context", None)
+            cal = ctx.get("calendrier_temporel") if ctx else None
+            obj._indicateurs_temporels_cache = indicateurs_temporels_projet(obj, calendrier=cal)
+        return obj._indicateurs_temporels_cache
+
+    @extend_schema_field(serializers.FloatField())
+    def get_avancement_theorique(self, obj) -> float:
+        return self._indicateurs_temporels(obj)["avancement_temporel"]
+
+    @extend_schema_field(serializers.FloatField())
+    def get_delta_retard(self, obj) -> float:
+        return self._indicateurs_temporels(obj)["delta_retard"]
 
     def get_indice_sante(self, obj) -> int | None:
         # Aucun registre de dépenses réelles n'est encore relié aux projets.

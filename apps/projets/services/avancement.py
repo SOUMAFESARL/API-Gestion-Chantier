@@ -12,7 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 
-from apps.chantier.models.rapport_journalier import RapportJournalier
+from apps.chantier.models import JournalChantier, RapportJournalier
 from apps.core.enums import StatutRapport
 from apps.projets.models import Activite, Lot, Projet
 from apps.projets.services.sante_calculs import (
@@ -24,7 +24,68 @@ from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["synchroniser_rapport_approuve"]
+__all__ = [
+    "quantites_du_journal",
+    "quantites_synchronisees",
+    "synchroniser_rapport_approuve",
+]
+
+
+def quantites_du_journal(saisie: dict) -> dict[str, Decimal]:
+    """Extrait la somme des quantités du jour par activité d'un journal.
+
+    Parcourt les sections 'activites' et 'production'. Ne retient que les
+    lignes dont l'identifiant d'activité est renseigné et dont la quantite_jour
+    est non nulle, convertible en Decimal et strictement positive (> 0).
+    Retourne un dictionnaire {activite_id_str: somme_decimal}.
+    """
+    if not isinstance(saisie, dict):
+        return {}
+    cumuls: dict[str, Decimal] = {}
+    for section in ("activites", "production"):
+        lignes = saisie.get(section) or []
+        if not isinstance(lignes, list):
+            continue
+        for ligne in lignes:
+            if not isinstance(ligne, dict):
+                continue
+            q_brut = ligne.get("quantite_jour")
+            if q_brut is None:
+                continue
+            try:
+                q_dec = Decimal(str(q_brut))
+                if not q_dec.is_finite() or q_dec <= Decimal("0"):
+                    continue
+            except (ValueError, TypeError, InvalidOperation):
+                continue
+            act_id = ligne.get("activite_id")
+            if not act_id:
+                continue
+            cle = str(act_id)
+            cumuls[cle] = cumuls.get(cle, Decimal("0")) + q_dec
+    return cumuls
+
+
+def quantites_synchronisees(projet) -> dict[str, Decimal]:
+    """Calcule la somme des quantités synchronisées sur toutes les activités du projet.
+
+    Ne prend en compte que les JournalChantier du projet dont le rapport est
+    statut=APPROUVE, f3_sync_done=True et non supprimé (rapport__supprime_le__isnull=True).
+    Retourne un dictionnaire {activite_id_str: total_decimal}.
+    """
+    journaux = JournalChantier.objects.filter(
+        rapport__projet=projet,
+        rapport__statut=StatutRapport.APPROUVE,
+        rapport__f3_sync_done=True,
+        rapport__supprime_le__isnull=True,
+    ).only("saisie")
+
+    cumuls: dict[str, Decimal] = {}
+    for journal in journaux:
+        q_journal = quantites_du_journal(journal.saisie or {})
+        for act_id, q_dec in q_journal.items():
+            cumuls[act_id] = cumuls.get(act_id, Decimal("0")) + q_dec
+    return cumuls
 
 
 @transaction.atomic
@@ -56,30 +117,18 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
         return True
 
     saisie = journal.saisie or {}
+    quantites = quantites_du_journal(saisie)
     cumuls: dict[uuid.UUID, Decimal] = {}
-
-    for section in ("activites", "production"):
-        lignes = saisie.get(section) or []
-        for ligne in lignes:
-            if not isinstance(ligne, dict):
-                continue
-            q_brut = ligne.get("quantite_jour")
-            if q_brut is None:
-                continue
-            try:
-                q_dec = Decimal(str(q_brut))
-            except (ValueError, TypeError, InvalidOperation):
-                continue
-            if q_dec <= Decimal("0"):
-                continue
-            act_id = ligne.get("activite_id")
-            if not act_id:
-                continue
-            try:
-                act_uuid = uuid.UUID(str(act_id)) if not isinstance(act_id, uuid.UUID) else act_id
-            except (ValueError, TypeError, AttributeError):
-                continue
-            cumuls[act_uuid] = cumuls.get(act_uuid, Decimal("0")) + q_dec
+    for act_id_str, q_dec in quantites.items():
+        try:
+            act_uuid = (
+                uuid.UUID(str(act_id_str))
+                if not isinstance(act_id_str, uuid.UUID)
+                else act_id_str
+            )
+        except (ValueError, TypeError, AttributeError):
+            continue
+        cumuls[act_uuid] = q_dec
 
     activites_touchees = list(
         Activite.objects.filter(pk__in=cumuls.keys(), supprime_le__isnull=True)

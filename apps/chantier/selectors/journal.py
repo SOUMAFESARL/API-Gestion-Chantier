@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db.models import Prefetch, Q
 
@@ -91,6 +92,8 @@ def theorique(debut, fin, jour):
 
 
 def contexte_projet(projet, jour):
+    from apps.projets.services.avancement import quantites_synchronisees
+
     intervenants = dict.fromkeys(("CC", "CT", "CP"), "")
     for affectation in affectations_actives(projet.id).order_by("cree_le"):
         if affectation.role_projet in intervenants and not intervenants[affectation.role_projet]:
@@ -121,6 +124,7 @@ def contexte_projet(projet, jour):
             bases.setdefault(activite["activite_id"], activite["cumul_veille"])
         for ligne in saisie.get("activites", []) + saisie.get("production", []):
             cumuls[ligne["activite_id"]] += ligne["quantite_jour"] or 0
+    synchronisees = quantites_synchronisees(projet)
     charges_lots, charges_activites, sections = [], [], []
     for lot in lots:
         charges_lots.append(
@@ -142,6 +146,11 @@ def contexte_projet(projet, jour):
                 sections.append(section)
         for rang, activite in enumerate(lot.activites.all(), 1):
             identifiant = str(activite.id)
+            # La base de repli retire les quantités synchronisées pour ne pas imputer à la veille
+            # des quantités déjà reportées par des rapports approuvés postérieurs au jour visé.
+            base_repli = float(
+                activite.quantite_realisee - synchronisees.get(identifiant, Decimal("0"))
+            )
             charges_activites.append(
                 {
                     "activite_id": identifiant,
@@ -153,8 +162,7 @@ def contexte_projet(projet, jour):
                     "libelle": activite.libelle,
                     "unite": activite.unite,
                     "quantite_prevue": float(activite.quantite_prevue),
-                    "cumul_veille": bases.get(identifiant, float(activite.quantite_realisee))
-                    + cumuls[identifiant],
+                    "cumul_veille": bases.get(identifiant, base_repli) + cumuls[identifiant],
                     "avancement_theorique": theorique(
                         activite.date_debut_prevue, activite.date_fin_prevue, jour
                     ),

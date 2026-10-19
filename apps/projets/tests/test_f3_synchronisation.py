@@ -2,6 +2,7 @@
 
 # ruff: noqa: F811
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
@@ -10,6 +11,7 @@ import pytest
 from django.utils import timezone
 
 from apps.chantier.models import JournalChantier, RapportJournalier
+from apps.chantier.selectors.journal import contexte_projet
 from apps.chantier.services.journal import aujourdhui
 from apps.chantier.tests.test_journal_api import (
     API,
@@ -20,7 +22,11 @@ from apps.chantier.tests.test_journal_api import (
 )
 from apps.core.enums import StatutRapport
 from apps.projets.models import Activite
-from apps.projets.services.avancement import synchroniser_rapport_approuve
+from apps.projets.services.avancement import (
+    quantites_du_journal,
+    quantites_synchronisees,
+    synchroniser_rapport_approuve,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -351,4 +357,236 @@ def test_signal_post_save_sur_rapport_journalier(
     rapport.refresh_from_db()
     assert rapport.f3_sync_done is True
     assert activite.quantite_realisee == Decimal("7.000")
+
+
+def test_cumul_veille_retro_saisie_hier_et_contexte_demain(
+    terrain, django_capture_on_commit_callbacks
+):
+    """(a) et (b) Scénario de repli : retirer les quantités des rapports approuvés postérieurs.
+
+    (a) Le rapport du jour J est approuvé (quantite_jour=12.5).
+        La préparation pour HIER (J-1) affiche le cumul_veille initial (0.0).
+    (b) Pour DEMAIN (J+1), contexte_projet affiche initial + quantité de J (12.5),
+        compté une seule fois.
+    """
+    activite = terrain["activite"]
+    projet = terrain["projet"]
+    cc, ct, cp = (terrain["clients"][code] for code in ("CC", "CT", "CP"))
+
+    # Quantité réalisée initiale dans la fixture
+    q_init = activite.quantite_realisee
+
+    # Rapport du jour J avec quantite_jour = 12.5 (dans corps(terrain))
+    identifiant = creer(terrain, data=corps(terrain, date=aujourdhui().isoformat()))
+    soumettre(terrain, identifiant)
+
+    # Validation CT
+    rep_ct = ct.post(
+        f"{API}/rapports/{identifiant}/valider/", {"commentaire": "Validé par CT"}, format="json"
+    )
+    assert rep_ct.status_code == 200, rep_ct.data
+
+    # Approbation CP avec capture du callback post-commit F3
+    with django_capture_on_commit_callbacks(execute=True):
+        rep_cp = cp.post(f"{API}/rapports/{identifiant}/approuver/", {}, format="json")
+    assert rep_cp.status_code == 200, rep_cp.data
+
+    # Vérification que quantite_realisee a augmenté
+    activite.refresh_from_db()
+    assert activite.quantite_realisee == q_init + Decimal("12.500")
+
+    # (a) Appel API de préparation pour HIER (J-1)
+    hier = aujourdhui() - timedelta(days=1)
+    rep_hier = cc.get(
+        f"{API}/rapports/preparation/",
+        {"projet": str(projet.id), "date": hier.isoformat()},
+    )
+    assert rep_hier.status_code == 200, rep_hier.data
+    act_hier = next(
+        a for a in rep_hier.data["activites"] if a["activite_id"] == str(activite.id)
+    )
+    # Le cumul de la veille pour J-1 doit valoir la quantité initiale, pas initial + 12.5
+    assert act_hier["cumul_veille"] == float(q_init)
+
+    # (b) Pour DEMAIN (J+1), appel direct de contexte_projet(projet, demain)
+    demain = aujourdhui() + timedelta(days=1)
+    ctx_demain = contexte_projet(projet, demain)
+    act_demain = next(
+        a for a in ctx_demain["activites"] if a["activite_id"] == str(activite.id)
+    )
+    # Le cumul de la veille pour J+1 vaut initial + 12.5, compté une seule fois
+    assert act_demain["cumul_veille"] == float(q_init + Decimal("12.500"))
+
+
+def test_cumul_veille_retro_saisie_avec_quantite_initiale_non_nulle(
+    terrain, django_capture_on_commit_callbacks
+):
+    """Vérifie le repli lorsque l'activité possède déjà un avancement initial non nul."""
+    activite = terrain["activite"]
+    activite.quantite_realisee = Decimal("5.000")
+    activite.save(update_fields=["quantite_realisee"])
+    q_init = activite.quantite_realisee
+
+    projet = terrain["projet"]
+    cc, ct, cp = (terrain["clients"][code] for code in ("CC", "CT", "CP"))
+
+    identifiant = creer(terrain, data=corps(terrain, date=aujourdhui().isoformat()))
+    soumettre(terrain, identifiant)
+    ct.post(f"{API}/rapports/{identifiant}/valider/", {"commentaire": "OK"}, format="json")
+
+    with django_capture_on_commit_callbacks(execute=True):
+        cp.post(f"{API}/rapports/{identifiant}/approuver/", {}, format="json")
+
+    activite.refresh_from_db()
+    assert activite.quantite_realisee == Decimal("17.500")
+
+    # J-1 via préparation
+    hier = aujourdhui() - timedelta(days=1)
+    rep_hier = cc.get(
+        f"{API}/rapports/preparation/",
+        {"projet": str(projet.id), "date": hier.isoformat()},
+    )
+    assert rep_hier.status_code == 200, rep_hier.data
+    act_hier = next(
+        a for a in rep_hier.data["activites"] if a["activite_id"] == str(activite.id)
+    )
+    assert act_hier["cumul_veille"] == float(q_init)  # 5.0
+
+    # J+1 via contexte_projet
+    demain = aujourdhui() + timedelta(days=1)
+    ctx_demain = contexte_projet(projet, demain)
+    act_demain = next(
+        a for a in ctx_demain["activites"] if a["activite_id"] == str(activite.id)
+    )
+    assert act_demain["cumul_veille"] == float(Decimal("17.500"))
+
+
+def test_quantites_du_journal_regles_lecture_et_exclusions():
+    """(c) Tests unitaires de quantites_du_journal.
+
+    Vérifie :
+    - lignes null (quantite_jour None)
+    - lignes négatives ou nulles (quantite_jour <= 0)
+    - lignes non numériques
+    - cumul de deux lignes d'une même activité (activités et production)
+    - sections absentes ou saisie invalide
+    """
+    # Sections absentes, saisie vide ou types non-dict
+    assert quantites_du_journal({}) == {}
+    assert quantites_du_journal(None) == {}
+    assert quantites_du_journal([]) == {}
+    assert quantites_du_journal({"activites": None, "production": None}) == {}
+
+    act_id = str(uuid4())
+
+    # Lignes nulles, négatives, non numériques ou sans activite_id
+    saisie_invalide = {
+        "activites": [
+            {"activite_id": act_id, "quantite_jour": None},
+            {"activite_id": act_id, "quantite_jour": 0},
+            {"activite_id": act_id, "quantite_jour": "0"},
+            {"activite_id": act_id, "quantite_jour": -10},
+            {"activite_id": act_id, "quantite_jour": "-5.5"},
+            {"activite_id": act_id, "quantite_jour": "non_numerique"},
+            {"activite_id": act_id, "quantite_jour": ""},
+            {"activite_id": None, "quantite_jour": 12.0},
+            {"activite_id": "", "quantite_jour": 12.0},
+            None,
+            "chaine_au_lieu_de_dict",
+        ],
+        "production": [
+            {"activite_id": act_id, "quantite_jour": None},
+            {"activite_id": act_id, "quantite_jour": -1},
+            {"activite_id": act_id, "quantite_jour": "NaN"},
+            {},
+        ],
+    }
+    assert quantites_du_journal(saisie_invalide) == {}
+
+    # Cumul de deux lignes d'une même activité dans les deux sections
+    act_a = str(uuid4())
+    act_b = str(uuid4())
+    saisie_valide = {
+        "activites": [
+            {"activite_id": act_a, "quantite_jour": 10.5},
+            {"activite_id": act_a, "quantite_jour": "5.5"},
+            {"activite_id": act_b, "quantite_jour": 8.0},
+        ],
+        "production": [
+            {"activite_id": act_a, "quantite_jour": 4.0, "intervenant": "Tâcheron 1"},
+            {"activite_id": act_b, "quantite_jour": "2.0", "intervenant": "Tâcheron 2"},
+        ],
+    }
+    resultats = quantites_du_journal(saisie_valide)
+    # act_a : 10.5 + 5.5 + 4.0 = 20.0
+    assert resultats[act_a] == Decimal("20.0")
+    # act_b : 8.0 + 2.0 = 10.0
+    assert resultats[act_b] == Decimal("10.0")
+
+
+def test_quantites_synchronisees_filtres_et_suppression(terrain):
+    """Vérifie que quantites_synchronisees ne retient que APPROUVE, f3_sync_done=True
+    et non supprimé.
+    """
+    projet = terrain["projet"]
+    activite = terrain["activite"]
+    user = terrain["CC"]
+    act_id = str(activite.id)
+
+    # 1. Rapport APPROUVE et f3_sync_done=True -> Retenu
+    r1 = RapportJournalier.objects.create(
+        projet=projet,
+        date_rapport=aujourdhui(),
+        auteur=user,
+        statut=StatutRapport.APPROUVE,
+        f3_sync_done=True,
+    )
+    JournalChantier.objects.create(
+        rapport=r1,
+        saisie={"activites": [{"activite_id": act_id, "quantite_jour": 10.0}]},
+    )
+
+    # 2. Rapport APPROUVE mais f3_sync_done=False -> Exclu
+    r2 = RapportJournalier.objects.create(
+        projet=projet,
+        date_rapport=aujourdhui() - timedelta(days=1),
+        auteur=user,
+        statut=StatutRapport.APPROUVE,
+        f3_sync_done=False,
+    )
+    JournalChantier.objects.create(
+        rapport=r2,
+        saisie={"activites": [{"activite_id": act_id, "quantite_jour": 20.0}]},
+    )
+
+    # 3. Rapport SOUMIS (f3_sync_done=False) -> Exclu
+    r3 = RapportJournalier.objects.create(
+        projet=projet,
+        date_rapport=aujourdhui() - timedelta(days=2),
+        auteur=user,
+        statut=StatutRapport.SOUMIS,
+        f3_sync_done=False,
+    )
+    JournalChantier.objects.create(
+        rapport=r3,
+        saisie={"activites": [{"activite_id": act_id, "quantite_jour": 30.0}]},
+    )
+
+    # 4. Rapport APPROUVE et f3_sync_done=True mais supprimé logiquement -> Exclu
+    r4 = RapportJournalier.objects.create(
+        projet=projet,
+        date_rapport=aujourdhui() - timedelta(days=3),
+        auteur=user,
+        statut=StatutRapport.APPROUVE,
+        f3_sync_done=True,
+    )
+    JournalChantier.objects.create(
+        rapport=r4,
+        saisie={"activites": [{"activite_id": act_id, "quantite_jour": 40.0}]},
+    )
+    RapportJournalier.objects.filter(pk=r4.pk).update(supprime_le=timezone.now())
+
+    synced = quantites_synchronisees(projet)
+    assert synced == {act_id: Decimal("10.0")}
+
 

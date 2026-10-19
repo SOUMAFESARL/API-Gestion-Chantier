@@ -1,4 +1,4 @@
-"""Rôles système gérés par le super admin — `/api/v1/admins/roles-systeme/` (arbitrage du 16/10/2026)."""
+"""Rôles système gérés par le super admin — `/api/v1/admins/roles-systeme/`."""
 
 import pytest
 from django_tenants.utils import get_public_schema_name, schema_context
@@ -54,7 +54,7 @@ def test_cycle_creer_modifier_supprimer(superviseur_client):
     assert rep.status_code == status.HTTP_201_CREATED, rep.content
     pk = rep.json()["id"]
     assert rep.json()["modules"] == ["projets"]
-    assert rep.json()["protege"] is False
+    assert "protege" not in rep.json()
 
     role = _role_demo("QSE")
     assert role is not None and role.est_systeme
@@ -62,6 +62,8 @@ def test_cycle_creer_modifier_supprimer(superviseur_client):
 
     rep = superviseur_client.patch(f"{URL}{pk}/", {"libelle": "Responsable HSE"}, format="json")
     assert rep.status_code == status.HTTP_200_OK, rep.content
+    assert rep.json()["libelle"] == "Responsable HSE"
+    assert "protege" not in rep.json()
     assert _role_demo("QSE").libelle == "Responsable HSE"
 
     rep = superviseur_client.delete(f"{URL}{pk}/")
@@ -73,13 +75,30 @@ def test_cycle_creer_modifier_supprimer(superviseur_client):
         assert not ModeleRole.objects.filter(code="QSE").exists()
 
 
-def test_role_du_socle_non_supprimable(superviseur_client):
+def test_role_du_socle_supprimable(superviseur_client):
     with schema_context(get_public_schema_name()):
         modele = ModeleRole.objects.get(code="CT")
     rep = superviseur_client.delete(f"{URL}{modele.id}/")
-    assert rep.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep.status_code == status.HTTP_200_OK, rep.content
+    role = _role_demo("CT")
+    assert role is not None, "le rôle reste dans l'entreprise"
+    assert role.est_systeme is False, "il devient personnalisé"
+    with schema_context(get_public_schema_name()):
+        assert not ModeleRole.objects.filter(code="CT").exists()
     liste = superviseur_client.get(URL).json()
-    assert next(r for r in liste if r["code"] == "CT")["protege"] is True
+    assert not any(r["code"] == "CT" for r in liste)
+    assert all("protege" not in r for r in liste)
+
+
+def test_role_dg_non_supprimable(superviseur_client):
+    with schema_context(get_public_schema_name()):
+        modele = ModeleRole.objects.get(code="DG")
+    rep = superviseur_client.delete(f"{URL}{modele.id}/")
+    assert rep.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    message_attendu = (
+        "Le rôle DG ne se supprime pas : chaque entreprise en a besoin pour son administrateur."
+    )
+    assert rep.json()["erreur"]["message"] == message_attendu
 
 
 def test_code_en_double_refuse(superviseur_client):

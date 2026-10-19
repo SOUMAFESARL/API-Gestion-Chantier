@@ -2,7 +2,6 @@
 
 from rest_framework import serializers
 
-from apps.accounts.services.roles import CODES_ROLES_SYSTEME
 from apps.catalogue.models import ModeleRole
 
 __all__ = [
@@ -16,20 +15,15 @@ PORTEES = [("ENTREPRISE", "Entreprise"), ("PROJET", "Projet")]
 
 class RoleSystemeSerializer(serializers.ModelSerializer):
     modules = serializers.SerializerMethodField()
-    protege = serializers.SerializerMethodField()
 
     class Meta:
         model = ModeleRole
-        fields = ["id", "code", "libelle", "description", "portee", "modules", "protege"]
+        fields = ["id", "code", "libelle", "description", "portee", "modules"]
 
     def get_modules(self, obj: ModeleRole) -> list[str]:
         return sorted(
             m.module_code for m in obj.modules_plafonds.all() if m.supprime_le is None
         )
-
-    def get_protege(self, obj: ModeleRole) -> bool:
-        """Vrai pour les rôles du socle : modifiables, jamais supprimables."""
-        return obj.code.upper() in CODES_ROLES_SYSTEME
 
 
 class RoleSystemeCreationSerializer(serializers.Serializer):

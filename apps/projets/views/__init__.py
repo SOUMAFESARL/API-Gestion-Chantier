@@ -39,6 +39,12 @@ from apps.projets.views.arret_chantier import (
     ArretChantierDetailView,
     ProjetArretChantierListCreateView,
 )
+from apps.projets.views.calendrier import (
+    CalendrierEntrepriseView,
+    ExceptionCalendrierDetailView,
+    ExceptionCalendrierListCreateView,
+    SemaineTypeView,
+)
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
@@ -65,6 +71,9 @@ __all__ = [
     "AlerteRetardListView",
     "AlerteRetardResoudreView",
     "ArretChantierDetailView",
+    "CalendrierEntrepriseView",
+    "ExceptionCalendrierDetailView",
+    "ExceptionCalendrierListCreateView",
     "GlobalJournalReportsView",
     "LotActiviteListCreateView",
     "LotHistoriqueDatesView",
@@ -81,6 +90,7 @@ __all__ = [
     "ProjetSanteDetailView",
     "ProjetSanteHistoriqueView",
     "ReferentielVillesView",
+    "SemaineTypeView",
     "TableauDeBordView",
 ]
 

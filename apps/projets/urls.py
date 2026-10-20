@@ -26,6 +26,12 @@ from apps.projets.views.affectation import (
     ProjetAffectationDetailView,
     ProjetAffectationListCreateView,
 )
+from apps.projets.views.calendrier import (
+    CalendrierEntrepriseView,
+    ExceptionCalendrierDetailView,
+    ExceptionCalendrierListCreateView,
+    SemaineTypeView,
+)
 from apps.projets.views.equipe import (
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
@@ -242,5 +248,22 @@ urlpatterns = [
         "alertes-retard/<uuid:pk>/resoudre/",
         AlerteRetardResoudreView.as_view(),
         name="alerte-retard-resoudre",
+    ),
+    # Calendrier d'entreprise (SFD F3 §6 & Erratum E-4)
+    path("calendrier/", CalendrierEntrepriseView.as_view(), name="calendrier-entreprise"),
+    path(
+        "calendrier/semaine-type/",
+        SemaineTypeView.as_view(),
+        name="calendrier-semaine-type",
+    ),
+    path(
+        "calendrier/exceptions/",
+        ExceptionCalendrierListCreateView.as_view(),
+        name="calendrier-exceptions",
+    ),
+    path(
+        "calendrier/exceptions/<uuid:pk>/",
+        ExceptionCalendrierDetailView.as_view(),
+        name="calendrier-exception-detail",
     ),
 ]

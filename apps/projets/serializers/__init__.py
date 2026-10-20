@@ -30,6 +30,15 @@ from apps.projets.serializers.arret_chantier import (
     ArretChantierSerializer,
     ArretChantierUpdateSerializer,
 )
+from apps.projets.serializers.calendrier import (
+    CalendrierQuerySerializer,
+    CalendrierResponseSerializer,
+    ExceptionCalendrierCreateSerializer,
+    ExceptionCalendrierResponseSerializer,
+    JourFerieResponseSerializer,
+    SemaineTypeSerializer,
+    SemaineTypeUpdateSerializer,
+)
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
 from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
@@ -59,11 +68,16 @@ __all__ = [
     "ArretChantierCreateSerializer",
     "ArretChantierSerializer",
     "ArretChantierUpdateSerializer",
+    "CalendrierQuerySerializer",
+    "CalendrierResponseSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
     "DureeProjetSerializer",
     "EquipeCreationSerializer",
+    "ExceptionCalendrierCreateSerializer",
+    "ExceptionCalendrierResponseSerializer",
     "HistoriqueDateSerializer",
+    "JourFerieResponseSerializer",
     "LotCreationProjetSerializer",
     "LotSimpleSerializer",
     "MeteoResponseSerializer",
@@ -77,6 +91,8 @@ __all__ = [
     "SanteApercuSerializer",
     "SanteDetailResponseSerializer",
     "SanteHistoriqueItemSerializer",
+    "SemaineTypeSerializer",
+    "SemaineTypeUpdateSerializer",
     "TableauDeBordResponseSerializer",
 ]
 

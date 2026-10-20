@@ -87,6 +87,28 @@ def _verifier_ad_ne_donne_que_ce_qu_il_possede(user, data, request=None):
         )
 
 
+def _filtrer_roles_attribuables(user, roles, request=None):
+    """Ne garde que les rôles que `user` peut attribuer à un collaborateur.
+
+    Mêmes règles que l'ajout et la modification d'un collaborateur : le rôle DG
+    n'est jamais attribuable (B-09) ; hors DG, ni le rôle AD (R-DEMO-01) ni un
+    rôle dont l'utilisateur ne détient pas toutes les permissions (B-09).
+    """
+    from apps.core.droits import est_dg, permissions_du_role, permissions_effectives
+
+    codes_dg = (RoleGlobal.DIRECTEUR_GENERAL, "DG")
+    codes_admin = (RoleGlobal.ADMIN, "AD")
+    attribuables = [r for r in roles if r.est_actif and r.code not in codes_dg]
+    if est_dg(user):
+        return attribuables
+    perms_user = permissions_effectives(user, request=request)
+    return [
+        r
+        for r in attribuables
+        if r.code not in codes_admin and permissions_du_role(r).issubset(perms_user)
+    ]
+
+
 class RoleListCreateView(APIView):
     """`GET` et `POST /api/v1/roles/` — Consultation et création des rôles de l'entreprise."""
 
@@ -350,8 +372,15 @@ class ParametresRoleListCreateView(APIView):
         responses={200: RoleSerializer(many=True)},
     )
     def get(self, request):
-        _autoriser_parametres_roles(request.user, request=request)
+        # La liste alimente aussi la sélection du rôle à l'ajout d'un collaborateur :
+        # qui gère les collaborateurs doit pouvoir la lire sans gérer les rôles.
+        from apps.core.droits import a_permission
+
+        if not a_permission(request.user, "administration.collaborateurs_gerer", request=request):
+            _autoriser_parametres_roles(request.user, request=request)
         roles = Role.objects.filter(supprime_le__isnull=True).order_by("code")
+        if request.query_params.get("attribuables") in ("1", "true", "True"):
+            roles = _filtrer_roles_attribuables(request.user, roles, request=request)
         serializer = RoleSerializer(roles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

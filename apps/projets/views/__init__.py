@@ -34,6 +34,7 @@ from apps.projets.views.activite import (
     ActiviteDetailView,
     LotActiviteListCreateView,
 )
+from apps.projets.views.alertes_retard import AlerteRetardListView, AlerteRetardResoudreView
 from apps.projets.views.arret_chantier import (
     ArretChantierDetailView,
     ProjetArretChantierListCreateView,
@@ -61,6 +62,8 @@ __all__ = [
     "ActiviteDetailView",
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",
+    "AlerteRetardListView",
+    "AlerteRetardResoudreView",
     "ArretChantierDetailView",
     "GlobalJournalReportsView",
     "LotActiviteListCreateView",

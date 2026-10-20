@@ -15,6 +15,8 @@ from django.db import transaction
 from apps.chantier.models import JournalChantier, RapportJournalier
 from apps.core.enums import StatutRapport
 from apps.projets.models import Activite, Lot, Projet
+from apps.projets.services.alertes_retard import detecter_alertes_retard
+from apps.projets.services.machine_etats import evaluer_statut_projet
 from apps.projets.services.sante_calculs import (
     calculer_avancement_physique_activite,
     calculer_avancement_physique_lot,
@@ -100,6 +102,7 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
     5. Recalcule et stocke l'avancement (activités touchées -> leurs lots -> projet).
     6. Marque f3_sync_done=True sur le rapport par update de queryset (évite post_save).
     7. Déclenche le recalcul réactif de l'indice de santé (RAPPORT_APPROBATION).
+    8. Réévalue le statut du projet puis détecte les alertes de retard (F3).
 
     Retourne True si la synchronisation a été effectuée ou marquée, False sinon.
     """
@@ -117,9 +120,8 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
         if rapport.projet_id:
             projet = Projet.objects.filter(pk=rapport.projet_id).first()
             if projet:
-                from apps.projets.services.machine_etats import evaluer_statut_projet
-
                 evaluer_statut_projet(projet)
+                detecter_alertes_retard(projet)
         return True
 
     saisie = journal.saisie or {}
@@ -180,8 +182,6 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
     RapportJournalier.objects.filter(pk=rapport.pk).update(f3_sync_done=True)
 
     if rapport.projet_id:
-        from apps.projets.services.machine_etats import evaluer_statut_projet
-
         evaluer_statut_projet(projet)
 
         declencher_recalcul_sante(
@@ -189,5 +189,7 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
             declencheur_type="RAPPORT_APPROBATION",
             declencheur_id=rapport.pk,
         )
+
+        detecter_alertes_retard(projet)
 
     return True

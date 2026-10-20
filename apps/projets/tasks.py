@@ -7,6 +7,7 @@ from django_tenants.utils import schema_context
 
 from apps.core.emails import envoyer
 from apps.core.enums import RoleGlobal, StatutProjet
+from apps.projets.services.alertes_retard import detecter_alertes_retard
 from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
 
 logger = logging.getLogger(__name__)
@@ -234,9 +235,22 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                     try:
                         if evaluer_statut_projet(proj):
                             nb_projets_modifies += 1
+
                     except Exception as err:
                         logger.error(
                             "Erreur lors de l'évaluation du statut du projet %s (tenant %s) : %s",
+                            proj.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
+                    try:
+                        detecter_alertes_retard(proj)
+                    except Exception as err:
+                        logger.error(
+                            "Erreur lors de la détection des alertes de retard du "
+                            "projet %s (tenant %s) : %s",
                             proj.id,
                             ent.schema_name,
                             err,
@@ -280,7 +294,8 @@ def recalculer_sante_projet_task(
     3. Verrouille le projet via select_for_update() dans une transaction atomique.
     4. Persiste l'avancement physique, l'avancement théorique, le score et le badge final.
     5. Enregistre un SanteProjetSnapshot d'audit.
-    6. En cas de transition vers le ROUGE (ancien != ROUGE et nouveau == ROUGE), alerte par email post-commit.
+    6. En cas de transition vers le ROUGE (ancien != ROUGE et nouveau == ROUGE),
+       alerte par email post-commit.
     """
     from decimal import Decimal
 

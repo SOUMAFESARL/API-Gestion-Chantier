@@ -3,6 +3,8 @@
 from django.urls import path, re_path
 
 from apps.projets.views import (
+    AlerteRetardListView,
+    AlerteRetardResoudreView,
     ArretChantierDetailView,
     MeteoProjetView,
     ProjetArretChantierListCreateView,
@@ -230,4 +232,15 @@ urlpatterns = [
     ),
     # Tableau de bord
     path("tableau-de-bord/", TableauDeBordView.as_view(), name="tableau-de-bord"),
+    # Alertes de retard (SFD F3 §5.4 & Erratum E-3)
+    path(
+        "alertes-retard/",
+        AlerteRetardListView.as_view(),
+        name="alerte-retard-liste",
+    ),
+    path(
+        "alertes-retard/<uuid:pk>/resoudre/",
+        AlerteRetardResoudreView.as_view(),
+        name="alerte-retard-resoudre",
+    ),
 ]

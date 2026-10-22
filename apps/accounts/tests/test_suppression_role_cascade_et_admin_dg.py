@@ -1,7 +1,8 @@
 """Tests complets pour la gouvernance du rôle Administrateur et la suppression en cascade.
 
 Règles testées :
-1. Le rôle Administrateur (AD) n'est plus système et peut être supprimé UNIQUEMENT par le DG / Propriétaire.
+1. Le rôle Administrateur (AD) est un rôle système (lots 01/01b) : personne, DG compris,
+   ne peut le supprimer.
 2. Un Administrateur délégué ne peut JAMAIS supprimer le rôle Administrateur (403 ActionReserveeDg).
 3. Le rôle Directeur Général (DG) reste strictement système et immuable.
 4. Option A (Réassignation) : les collaborateurs et affectations sont réassignés vers le rôle cible.
@@ -17,14 +18,13 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Role, Utilisateur
-from apps.accounts.services.roles import initialiser_roles_par_defaut, supprimer_role
+from apps.accounts.services.roles import initialiser_roles_par_defaut
 from apps.core.enums import (
     RoleGlobal,
     RoleProjet,
     StatutUtilisateur,
     TypeTiers,
 )
-from apps.core.exceptions import ActionReserveeDg
 from apps.projets.models import AffectationProjet, Projet
 from apps.tiers.models import Tiers
 
@@ -51,15 +51,9 @@ def dg_user(db):
             statut=StatutUtilisateur.ACTIF,
             is_owner=True,
         )
+        # Pas de nettoyage après le yield : la transaction du test est annulée, et supprimer les
+        # rôles échoue dès qu'un utilisateur les référence (FK protégée `Utilisateur.role`).
         yield dg
-        Utilisateur.tous_objets.all().update(supprime_par=None, cree_par=None)
-        AffectationProjet.tous_objets.all().delete()
-        Projet.tous_objets.all().delete()
-        Tiers.tous_objets.all().delete()
-        Role.tous_objets.all().delete()
-        Utilisateur.tous_objets.filter(email__contains="cascade").delete()
-        Utilisateur.tous_objets.filter(email="simple.collab@demo.ci").delete()
-        Utilisateur.tous_objets.filter(pk=dg.pk).delete()
 
 
 @pytest.fixture
@@ -76,8 +70,6 @@ def admin_delegue(db):
             is_owner=False,
         )
         yield admin
-        Utilisateur.tous_objets.all().update(supprime_par=None, cree_par=None)
-        Utilisateur.tous_objets.filter(pk=admin.pk).delete()
 
 
 def auth_client(client, user):
@@ -92,12 +84,12 @@ def auth_client(client, user):
 
 
 @pytest.mark.django_db
-def test_admin_supprimable_par_le_dg(client_tenant, dg_user):
-    """Le DG peut supprimer le rôle Administrateur."""
+def test_admin_non_supprimable_meme_par_le_dg(client_tenant, dg_user):
+    """Le rôle Administrateur est un rôle système (lots 01/01b) : même le DG ne le supprime pas."""
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
         role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
-        assert role_ad.est_systeme is False
+        assert role_ad.est_systeme is True
 
         # Rôle de substitution pour l'option réassignation
         role_cp = Role.objects.get(code=RoleGlobal.CHEF_PROJET)
@@ -109,13 +101,13 @@ def test_admin_supprimable_par_le_dg(client_tenant, dg_user):
         {"role_substitution_id": str(role_cp.id)},
         format="json",
     )
-    assert rep.status_code == status.HTTP_200_OK
-    assert rep.json()["role_supprime"] == "AD"
+    assert rep.status_code == status.HTTP_400_BAD_REQUEST
+    assert "rôles système ne peuvent pas être supprimés" in rep.json()["erreur"]["message"]
 
     with schema_context(SCHEMA):
         role_ad.refresh_from_db()
-        assert role_ad.est_actif is False
-        assert role_ad.supprime_le is not None
+        assert role_ad.est_actif is True
+        assert role_ad.supprime_le is None
 
 
 @pytest.mark.django_db
@@ -209,7 +201,6 @@ def test_suppression_role_option_b_cascade_collaborateurs(client_tenant, dg_user
         affectation1 = AffectationProjet.objects.create(
             projet=projet,
             utilisateur=collab1,
-            role=role_equipe,
             role_projet=RoleProjet.VISITEUR,
             est_actif=True,
         )
@@ -297,7 +288,10 @@ def test_garde_fou_proprietaire_non_desactive_en_cascade(client_tenant, dg_user)
         assert dg_user.statut == StatutUtilisateur.ACTIF
         assert dg_user.is_active is True
         assert dg_user.supprime_le is None
-        assert dg_user.role_personnalise is None  # Rôle simplement détaché
+        # Le DG est calculé (`is_owner`) : la suppression du rôle ne change pas son statut de DG
+        from apps.core.droits import est_dg
+
+        assert est_dg(dg_user) is True
 
         # Le collaborateur standard a bien été désactivé
         collab.refresh_from_db()

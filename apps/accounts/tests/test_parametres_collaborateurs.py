@@ -1,6 +1,7 @@
 """Tests pour l'API des collaborateurs dans les paramètres (/api/v1/parametres/collaborateurs/)."""
 
 from datetime import timedelta
+
 import pytest
 from django.utils import timezone
 from django_tenants.utils import schema_context
@@ -24,6 +25,7 @@ MOT_DE_PASSE = "Pass12345!"
 
 
 from django.contrib.auth.hashers import make_password
+
 
 @pytest.fixture
 def client_tenant():
@@ -100,9 +102,12 @@ def _auth(client, user):
 
 @pytest.mark.django_db
 def test_get_parametres_collaborateurs_liste_avec_projets(
-    client_tenant, collaborateur_user, dg_user
+    client_tenant, collaborateur_user, dg_user, admin_user
 ):
-    """GET /api/v1/parametres/collaborateurs/ renvoie les collaborateurs et leurs projets associés."""
+    """GET /api/v1/parametres/collaborateurs/ renvoie les collaborateurs et leurs projets associés.
+
+    La liste exige `administration.collaborateurs_voir` (un AD l'a, un CT non).
+    """
     with schema_context(SCHEMA):
         client_tiers, _ = Tiers.objects.get_or_create(
             raison_sociale="Client Test",
@@ -158,7 +163,11 @@ def test_get_parametres_collaborateurs_liste_avec_projets(
             statut=Invitation.Statut.ENVOYEE,
         )
 
+    # Un collaborateur sans le droit de voir les collaborateurs est refusé
     client = _auth(client_tenant, collaborateur_user)
+    assert client.get("/api/v1/parametres/collaborateurs/").status_code == status.HTTP_403_FORBIDDEN
+
+    client = _auth(client_tenant, admin_user)
     rep = client.get("/api/v1/parametres/collaborateurs/")
     assert rep.status_code == status.HTTP_200_OK
 
@@ -253,7 +262,7 @@ def test_post_parametres_collaborateurs_interdit_role_dg(client_tenant, dg_user)
         "role_global": RoleGlobal.DIRECTEUR_GENERAL,
     }
     rep = client.post("/api/v1/parametres/collaborateurs/", payload, format="json")
-    assert rep.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep.status_code == status.HTTP_403_FORBIDDEN
     assert rep.json()["erreur"]["code"] == "role_dg_non_attribuable"
 
 
@@ -331,5 +340,16 @@ def test_interdiction_modifier_role_proprietaire(
         format="json",
     )
 
-    assert rep.status_code == status.HTTP_400_BAD_REQUEST
-    assert "immuable" in str(rep.json()).lower()
+    assert rep.status_code == status.HTTP_403_FORBIDDEN
+    assert rep.json()["erreur"]["code"] == "role_dg_immuable"
+    assert "immuable" in rep.json()["erreur"]["message"].lower()
+
+    # Le DG lui-même ne peut pas non plus changer son rôle
+    client = _auth(client_tenant, dg_user)
+    rep = client.patch(
+        f"/api/v1/parametres/collaborateurs/{dg_user.id}/",
+        payload,
+        format="json",
+    )
+    assert rep.status_code == status.HTTP_403_FORBIDDEN
+    assert rep.json()["erreur"]["code"] == "role_dg_immuable"

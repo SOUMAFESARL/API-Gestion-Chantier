@@ -128,13 +128,13 @@ def test_dg_owner_peut_inviter_admin_mais_pas_dg(dg_owner):
         {"email": "co.dg@demo.ci", "role_propose": "DG", "nom": "Touré"},
         format="json",
     )
-    assert rep_dg.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep_dg.status_code == status.HTTP_403_FORBIDDEN
     assert rep_dg.data["erreur"]["code"] == "role_dg_non_attribuable"
 
 
 @pytest.mark.django_db
 def test_admin_delegue_interdit_inviter_admin_ou_dg(admin_delegue):
-    """REC-S1-01-D : L'admin délégué ne peut ni inviter d'admin (403) ni de DG (400 rôle non attribuable)."""
+    """REC-S1-01-D : L'admin délégué ne peut ni inviter d'admin ni de DG (403 dans les deux cas)."""
     client = APIClient(headers={"host": HOTE})
     client.force_authenticate(user=admin_delegue)
 
@@ -151,19 +151,23 @@ def test_admin_delegue_interdit_inviter_admin_ou_dg(admin_delegue):
         == "Seul le Directeur Général peut inviter ou nommer un administrateur."
     )
 
-    # 2. Tentative d'invitation rôle DG -> 400 Rôle DG non attribuable / immuable
+    # 2. Tentative d'invitation rôle DG -> 403 Rôle DG non attribuable / immuable
     rep_dg = client.post(
         "/api/v1/invitations/",
         {"email": "tentative.dg@demo.ci", "role_propose": "DG", "nom": "Infiltré"},
         format="json",
     )
-    assert rep_dg.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep_dg.status_code == status.HTTP_403_FORBIDDEN
     assert rep_dg.data["erreur"]["code"] == "role_dg_non_attribuable"
 
 
 @pytest.mark.django_db
 def test_admin_delegue_peut_inviter_autres_roles(admin_delegue):
-    """REC-S1-01-E : L'admin délégué peut parfaitement inviter des rôles opérationnels (CT, CP)."""
+    """REC-S1-01-E : L'admin délégué invite les rôles dont il détient toutes les permissions.
+
+    Règle B-09 : le CT (aucun droit hors de ceux de l'AD) est invitable ; le CP porte
+    `projets.voir_montants`, que l'AD n'a pas — l'invitation est refusée (403).
+    """
     client = APIClient(headers={"host": HOTE})
     client.force_authenticate(user=admin_delegue)
 
@@ -180,8 +184,8 @@ def test_admin_delegue_peut_inviter_autres_roles(admin_delegue):
         {"email": "chef.projet@demo.ci", "role_propose": "CP", "nom": "Bakayoko"},
         format="json",
     )
-    assert rep_cp.status_code == status.HTTP_201_CREATED
-    assert rep_cp.data["role_propose"] == "CP"
+    assert rep_cp.status_code == status.HTTP_403_FORBIDDEN
+    assert "possédez toutes les permissions" in rep_cp.data["erreur"]["message"]
 
 
 @pytest.mark.django_db
@@ -197,8 +201,12 @@ def test_immuabilite_owner(dg_owner):
         with pytest.raises(ValidationError, match="ne peut pas être désactivé"):
             dg_owner.save()
 
-        # 3. Tentative de retrait du statut de propriétaire
+        # 3. Tentative de rétrogradation : le DG est calculé (lot 2), son rôle ne peut pas changer
         dg_owner.refresh_from_db()
         dg_owner.is_owner = False
-        with pytest.raises(ValidationError, match="statut de Propriétaire est immuable"):
+        dg_owner.role_global = RoleGlobal.CHEF_CHANTIER
+        dg_owner.role = None
+        with pytest.raises(
+            ValidationError, match="rôle du Directeur Général ne peut pas être modifié"
+        ):
             dg_owner.save()

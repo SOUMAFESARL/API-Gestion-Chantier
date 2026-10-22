@@ -2,16 +2,17 @@
 
 Couvre :
 1. Ajout d'un collaborateur via /api/v1/invitations/ avec statut INVITE immédiat.
-2. Affectation immédiate à un chantier sans attendre l'activation du compte.
+2. Affectation à un chantier refusée tant que le compte n'est pas activé, acceptée ensuite.
 3. Retrait local d'un collaborateur d'un chantier précis (PATCH est_actif=False et DELETE).
 4. Retrait global d'un collaborateur de toute la plateforme (DELETE /api/v1/invitations/{id}/).
    - Vérification de la clôture automatique de toutes les affectations actives.
    - Révocation des invitations en attente.
    - Désactivation du compte (statut DESACTIVE, is_active=False).
-5. Inviolabilité du compte du Directeur Général / Propriétaire (rejet 400 sur DELETE).
+5. Inviolabilité du compte du Directeur Général / Propriétaire (rejet 403 sur DELETE).
 """
 
 from datetime import date, timedelta
+
 import pytest
 from django.contrib.auth.hashers import make_password
 from django_tenants.utils import schema_context
@@ -111,10 +112,10 @@ def _auth(client, user):
 
 
 @pytest.mark.django_db
-def test_workflow_invitation_et_affectation_immediate_sans_activation(
+def test_workflow_invitation_et_affectation_apres_activation(
     client_tenant, admin_user, chantier_test
 ):
-    """Un collaborateur invité peut être affecté immédiatement à un chantier sans attendre l'activation."""
+    """Un collaborateur invité ne peut être affecté à un chantier qu'une fois son compte activé."""
     client = _auth(client_tenant, admin_user)
 
     # 1. Émission de l'invitation via la route unifiée /api/v1/invitations/
@@ -142,31 +143,40 @@ def test_workflow_invitation_et_affectation_immediate_sans_activation(
         assert u.statut == StatutUtilisateur.INVITE
         assert u.has_usable_password() is False
 
-    # 2. Affectation immédiate au chantier (AVANT activation du compte)
+    # 2. L'affectation à un chantier exige un compte actif : tant que l'invité n'a pas activé
+    # son compte, elle est refusée (400 candidat_invalide)
     payload_aff = {
         "utilisateur_id": str(collab_id),
         "role_projet": RoleProjet.CONDUCTEUR_TRAVAUX,
         "date_debut": str(date.today()),
         "date_fin": str(date.today() + timedelta(days=60)),
     }
-    rep_aff = client.post(
-        f"/api/v1/projets/{chantier_test.id}/affectations/",
-        payload_aff,
-        format="json",
-    )
-    assert rep_aff.status_code == status.HTTP_201_CREATED
-    data_aff = rep_aff.json()
-    assert data_aff["est_actif"] is True
-    assert data_aff["role_projet"] == RoleProjet.CONDUCTEUR_TRAVAUX
-    assert data_aff["utilisateur"]["statut"] == "INVITE"
+    url_aff = f"/api/v1/projets/{chantier_test.id}/affectations/"
+    rep_refus = client.post(url_aff, payload_aff, format="json")
+    assert rep_refus.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep_refus.json()["erreur"]["details"]["code"] == ["candidat_invalide"]
 
-    # 3. Vérification de la visibilité dans la liste globale /api/v1/invitations/
+    # 3. L'invité figure dans la liste globale /api/v1/invitations/, sans chantier
     rep_liste = client.get("/api/v1/invitations/")
     assert rep_liste.status_code == status.HTTP_200_OK
     collab_entry = next((c for c in rep_liste.json() if c["id"] == str(collab_id)), None)
     assert collab_entry is not None
     assert collab_entry["statut"] == "INVITE"
-    assert len(collab_entry["projets"]) >= 1
+    assert collab_entry["projets"] == []
+
+    # 4. Une fois le compte activé, l'affectation est acceptée et apparaît dans la liste
+    with schema_context(SCHEMA):
+        Utilisateur.objects.filter(id=collab_id).update(statut=StatutUtilisateur.ACTIF)
+    rep_aff = client.post(url_aff, payload_aff, format="json")
+    assert rep_aff.status_code == status.HTTP_201_CREATED, rep_aff.json()
+    data_aff = rep_aff.json()
+    assert data_aff["est_actif"] is True
+    assert data_aff["role_projet"] == RoleProjet.CONDUCTEUR_TRAVAUX
+    assert data_aff["utilisateur"]["statut"] == "ACTIF"
+
+    rep_liste = client.get("/api/v1/invitations/")
+    collab_entry = next((c for c in rep_liste.json() if c["id"] == str(collab_id)), None)
+    assert collab_entry["statut"] == "ACTIF"
     assert collab_entry["projets"][0]["reference"] == "PRJ-UNIFIE-001"
 
 
@@ -269,9 +279,21 @@ def test_retrait_global_collaborateur_plateforme(client_tenant, admin_user, chan
 
 @pytest.mark.django_db
 def test_interdiction_retirer_dg_ou_proprietaire(client_tenant, admin_user, dg_user):
-    """Rejette immédiatement avec HTTP 400 toute tentative de retrait du DG / Propriétaire."""
+    """Rejette immédiatement avec HTTP 403 toute tentative de retrait du DG / Propriétaire."""
     client = _auth(client_tenant, admin_user)
 
     rep = client.delete(f"/api/v1/invitations/{dg_user.id}/")
-    assert rep.status_code == status.HTTP_400_BAD_REQUEST
-    assert "propriétaire ne peut pas être désactivé" in str(rep.json()).lower()
+    assert rep.status_code == status.HTTP_403_FORBIDDEN
+    assert rep.json()["erreur"]["code"] == "suppression_dg_interdite"
+    assert "propriétaire ne peut pas être désactivé" in rep.json()["erreur"]["message"].lower()
+
+    # Le DG lui-même ne peut pas non plus se retirer
+    client = _auth(client_tenant, dg_user)
+    rep_dg = client.delete(f"/api/v1/invitations/{dg_user.id}/")
+    assert rep_dg.status_code == status.HTTP_403_FORBIDDEN
+    assert rep_dg.json()["erreur"]["code"] == "suppression_dg_interdite"
+
+    with schema_context(SCHEMA):
+        dg_user.refresh_from_db()
+        assert dg_user.statut == StatutUtilisateur.ACTIF
+        assert dg_user.supprime_le is None

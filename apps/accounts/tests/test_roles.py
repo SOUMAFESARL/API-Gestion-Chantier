@@ -61,8 +61,9 @@ def test_initialiser_roles_par_defaut():
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
         perm_chantier = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.CHANTIER)
         assert perm_chantier.permissions_catalogue.filter(code="chantier.rediger").exists()
+        # Rôles simplifiés (lots 01 et 01b) : le CC ne reçoit aucun droit sur la GED
         perm_ged = RoleModulePermission.objects.get(role=role_cc, module__code=ModuleChoix.GED)
-        assert perm_ged.permissions_catalogue.filter(code="ged.lire").exists()
+        assert not perm_ged.permissions_catalogue.exists()
 
 
 @pytest.mark.django_db
@@ -120,7 +121,9 @@ def test_supprimer_role_avec_reassignation_obligatoire(admin_user):
 
         # Vérifie que le collaborateur a bien été réassigné
         collab.refresh_from_db()
-        assert collab.role_personnalise == role_cible
+        # `role_personnalise` ne désigne plus que les rôles non système : le rôle cible en est un
+        assert collab.role == role_cible
+        assert collab.role_personnalise is None
 
         # Vérifie que l'ancien rôle est supprimé logiquement
         role_source.refresh_from_db()
@@ -166,7 +169,14 @@ def test_api_roles_crud(client_api):
         assert rep_patch.status_code == status.HTTP_200_OK
         assert rep_patch.json()["libelle"] == "Métreur Senior"
 
-        # 5. POST /api/v1/roles/{id}/supprimer/ (Sans substitution -> 400 substitution_obligatoire)
+        # 5. POST /api/v1/roles/{id}/supprimer/ : un rôle porté exige une substitution
+        # (400 substitution_obligatoire) ; un rôle sans porteur se supprime sans substitution
+        collab = Utilisateur.tous_objets.create(
+            email="porteur.metreur@demo.ci",
+            nom="Porteur",
+            role=Role.objects.get(pk=role_id),
+            statut=StatutUtilisateur.ACTIF,
+        )
         rep_del_fail = client_api.post(
             f"/api/v1/roles/{role_id}/supprimer/",
             {},
@@ -186,8 +196,24 @@ def test_api_roles_crud(client_api):
         )
         assert rep_del.status_code == status.HTTP_200_OK
         assert rep_del.json()["role_supprime"] == "METREUR"
-        assert rep_del.json()["utilisateurs_reassignes"] == 0
+        assert rep_del.json()["utilisateurs_reassignes"] == 1
         assert rep_del.json()["affectations_reassignees"] == 0
+        collab.refresh_from_db()
+        assert collab.role == role_conducteur
+
+        # 7. Un rôle sans porteur se supprime sans substitution
+        rep_vide = client_api.post(
+            "/api/v1/roles/",
+            {"code": "ROLE_VIDE", "libelle": "Rôle vide", "permissions_modules": {}},
+            format="json",
+            HTTP_HOST=HOTE,
+        )
+        assert rep_vide.status_code == status.HTTP_201_CREATED
+        rep_del_vide = client_api.post(
+            f"/api/v1/roles/{rep_vide.json()['id']}/supprimer/", {}, format="json", HTTP_HOST=HOTE
+        )
+        assert rep_del_vide.status_code == status.HTTP_200_OK
+        assert rep_del_vide.json()["utilisateurs_reassignes"] == 0
 
 
 @pytest.mark.django_db

@@ -10,6 +10,7 @@ from apps.projets.views import (
     ProjetArretChantierListCreateView,
     ProjetDetailView,
     ProjetListCreateView,
+    ProjetPlanningView,
     ProjetSanteApercuView,
     ProjetSanteDetailView,
     ProjetSanteHistoriqueView,
@@ -156,6 +157,11 @@ urlpatterns = [
         "projets/<uuid:pk>/journal-reports/",
         ProjetJournalReportsConsolideView.as_view(),
         name="projet-journal-reports-consolide",
+    ),
+    path(
+        "projets/<uuid:pk>/planning/",
+        ProjetPlanningView.as_view(),
+        name="projet-planning",
     ),
     # Santé du projet
     path(

@@ -18,6 +18,7 @@ from .historique_date import HistoriqueDate, TypeObjetHistorique
 from .lot import Lot
 from .mise_a_jour_inline import MiseAJourInline
 from .motif_report import MotifReport
+from .parametres_documents import ParametresDocuments
 from .projet import AffectationProjet, Projet
 from .referentiel import ReferentielEntreprise
 from .sante_snapshot import SanteProjetSnapshot
@@ -36,6 +37,7 @@ __all__ = [
     "MiseAJourInline",
     "MotifReport",
     "NiveauAlerteRetard",
+    "ParametresDocuments",
     "Projet",
     "ProjetContrat",
     "ReferentielEntreprise",

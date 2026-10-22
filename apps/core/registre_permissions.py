@@ -74,6 +74,13 @@ REGISTRE: dict[str, DefPermission] = {
             reservee_administration=True,
         ),
         DefPermission(
+            "administration.documents_gerer",
+            "administration",
+            2,
+            "Configurer l'en-tête et le pied des documents",
+            reservee_administration=True,
+        ),
+        DefPermission(
             "administration.abonnement_voir",
             "administration",
             1,

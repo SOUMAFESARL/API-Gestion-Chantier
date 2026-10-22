@@ -162,7 +162,7 @@ class ProjetListCreateView(APIView):
         projets = list(qs)
         context = {
             "request": request,
-            "calendrier_temporel": calendrier_pour_projets(projets),
+            "calendrier": calendrier_pour_projets(projets),
         }
         serializer = ProjetCreationResponseSerializer(projets, many=True, context=context)
         return Response(ResultList(serializer.data), status=status.HTTP_200_OK)

@@ -247,7 +247,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
 
             ctx = getattr(self, "context", None)
-            cal = ctx.get("calendrier_temporel") if ctx else None
+            cal = ctx.get("calendrier") if ctx else None
             setattr(obj, cache_attr, indicateurs_temporels_projet(obj, calendrier=cal))
         return getattr(obj, cache_attr)
 

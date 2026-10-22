@@ -148,6 +148,9 @@ def test_la_liste_ne_fait_pas_une_requete_par_projet(chantier):
     client = APIClient()
     client.force_authenticate(user=chantier["dg"])
     with schema_context(SCHEMA):
+        # Échauffement : la première lecture crée la semaine type de l'entreprise
+        # (`SemaineType.courante()`), un coût unique qui ne dépend pas du nombre de projets.
+        assert client.get("/api/v1/projets/", HTTP_HOST=HOTE).status_code == 200
         with CaptureQueriesContext(connection) as avant:
             assert client.get("/api/v1/projets/", HTTP_HOST=HOTE).status_code == 200
         for rang in range(3):

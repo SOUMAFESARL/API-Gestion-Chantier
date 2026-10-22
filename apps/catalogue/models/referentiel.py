@@ -24,6 +24,7 @@ __all__ = [
 class CategorieReferentiel(models.TextChoices):
     TYPE_PROJET = "TYPE_PROJET", _("Type de projet")
     LOT = "LOT", _("Nom de lot")
+    MODE_EXECUTION = "MODE_EXECUTION", _("Mode d'exécution")
 
 
 def cle_comparaison(libelle: str) -> str:
@@ -50,7 +51,10 @@ class ReferentielPlateforme(ModeleBase):
         max_length=100,
         blank=True,
         default="",
-        help_text=_("Titre de groupe dans la liste — le corps d'état d'un lot."),
+        help_text=_(
+            "Titre de groupe dans la liste — le corps d'état d'un lot ; "
+            "pour un mode d'exécution, le mode de base auquel il se rattache."
+        ),
     )
     ordre = models.PositiveIntegerField(_("ordre"), default=0)
 

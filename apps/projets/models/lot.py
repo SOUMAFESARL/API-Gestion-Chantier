@@ -29,8 +29,7 @@ class Lot(ModeleBase):
     phase = models.CharField(_("phase"), max_length=100, blank=True)
     mode_execution = models.CharField(
         _("mode d'exécution"),
-        max_length=30,
-        choices=ModeExecution.choices,
+        max_length=60,
         default=ModeExecution.REGIE,
     )
     type_bordereau = models.CharField(

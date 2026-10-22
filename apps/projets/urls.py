@@ -86,12 +86,12 @@ urlpatterns = [
     # Référentiels dynamiques : types de projet et noms de lot (plateforme + entreprise)
     path("referentiels/droits/", ReferentielDroitsView.as_view(), name="referentiel-droits"),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots)/$",
+        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/$",
         ReferentielListeView.as_view(),
         name="referentiel-liste",
     ),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots)/(?P<code>[A-Za-z0-9_]+)/$",
+        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
         ReferentielEntreeView.as_view(),
         name="referentiel-entree",
     ),

@@ -42,6 +42,7 @@ from apps.projets.serializers.calendrier import (
     SemaineTypeUpdateSerializer,
 )
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
+from apps.projets.serializers.lot import ModeExecutionField, ModeExecutionLibelleMixin
 from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
     ReferentielVillesResponseSerializer,
@@ -145,7 +146,7 @@ class DureeProjetSerializer(serializers.Serializer):
 
 
 @extend_schema_serializer(component_name="LotProjet")
-class LotSimpleSerializer(serializers.ModelSerializer):
+class LotSimpleSerializer(ModeExecutionLibelleMixin, serializers.ModelSerializer):
     class Meta:
         model = Lot
         fields = [
@@ -153,6 +154,7 @@ class LotSimpleSerializer(serializers.ModelSerializer):
             "code",
             "libelle",
             "mode_execution",
+            "mode_execution_libelle",
             "type_bordereau",
             "date_debut_prevue",
             "date_fin_prevue",
@@ -275,9 +277,7 @@ class ProjetSerializer(serializers.ModelSerializer):
 class LotCreationProjetSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
     libelle = serializers.CharField(max_length=200)
-    mode_execution = serializers.ChoiceField(
-        choices=ModeExecution.choices, default=ModeExecution.REGIE
-    )
+    mode_execution = ModeExecutionField(default=ModeExecution.REGIE.value)
     type_bordereau = serializers.ChoiceField(
         choices=TypeBordereau.choices, default=TypeBordereau.FORFAIT
     )

@@ -1,4 +1,4 @@
-"""`/api/v1/admins/referentiels/{types-projet|lots}/` — référentiels de la plateforme.
+"""`/api/v1/admins/referentiels/{types-projet|lots|modes-execution}/` — référentiels plateforme.
 
 Ce qui s'ajoute ici est proposé aussitôt à toutes les entreprises (lu depuis le
 schéma public), qui ne peuvent pas le retirer. Arbitrage du 16/10/2026.
@@ -21,7 +21,7 @@ from apps.catalogue.models.referentiel import (
 from apps.core.exceptions import LibelleEnDouble
 from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.services.notifications import journaliser_plateforme
-from apps.projets.services.referentiels import CATEGORIES_URL
+from apps.projets.services.referentiels import CATEGORIES_URL, exiger_mode_de_base
 
 __all__ = ["ReferentielPlateformeDetailView", "ReferentielPlateformeListeView"]
 
@@ -76,6 +76,7 @@ class ReferentielPlateformeListeView(APIView):
         saisie = SaisieSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
+        exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
         with schema_context("public"):
             _refuser_doublon(cat, libelle)
             tous = ReferentielPlateforme.tous_objets.filter(categorie=cat)
@@ -118,6 +119,7 @@ class ReferentielPlateformeDetailView(APIView):
         saisie = SaisieSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
+        exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
         with schema_context("public"):
             entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
             _refuser_doublon(cat, libelle, exclure_id=entree.id)

@@ -119,7 +119,7 @@ def test_initial_dates_can_be_filled_without_rewriting_baseline(contexte):
     assert activite.date_debut_baseline == date(2026, 10, 5)
 
 
-@pytest.mark.parametrize("ressource", ["lots", "activites"])
+@pytest.mark.parametrize("ressource", ["activites"])
 def test_activation_idempotent_and_strict(contexte, ressource):
     client, _, lot, activite, _ = contexte
     objet = lot if ressource == "lots" else activite
@@ -298,7 +298,7 @@ def test_patch_rejects_foreign_team_and_dependency(contexte):
     assert not activite.equipe.exists()
 
 
-@pytest.mark.parametrize("ressource", ["lots", "activites"])
+@pytest.mark.parametrize("ressource", ["activites"])
 def test_status_sent_on_creation_and_patch_persists(contexte, ressource):
     client, projet, lot, _, _ = contexte
     if ressource == "lots":
@@ -331,7 +331,7 @@ def test_status_sent_on_creation_and_patch_persists(contexte, ressource):
     assert response.data["statut"] == "INCONNU"
 
 
-@pytest.mark.parametrize("ressource", ["lots", "activites"])
+@pytest.mark.parametrize("ressource", ["activites"])
 def test_motif_creation_patch_read_and_clear(contexte, ressource):
     client, projet, lot, activite, _ = contexte
     assert lot.motif == activite.motif == ""

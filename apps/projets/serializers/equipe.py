@@ -3,9 +3,11 @@ from rest_framework import serializers
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import StatutUtilisateur
+from apps.core.exceptions import RequeteRefusee
 from apps.projets.models import EquipeChantier, MembreEquipeChantier
 from apps.projets.services.equipes import (
     collaborateurs_autorises_projet,
+    message_collaborateur_non_affecte,
     synchroniser_chef_equipe,
 )
 
@@ -91,7 +93,7 @@ class EquipeCreationSerializer(serializers.Serializer):
         for personne in personnes:
             utilisateur = personne.get("utilisateur")
             if utilisateur and utilisateur.pk not in autorises:
-                raise serializers.ValidationError("Collaborateur non affecté à ce projet.")
+                raise RequeteRefusee(message_collaborateur_non_affecte(utilisateur))
             cle = (
                 ("id", utilisateur.pk)
                 if utilisateur
@@ -303,3 +305,19 @@ class EquipeResponseSerializer(serializers.ModelSerializer):
             "est_actif",
         ]
         read_only_fields = fields
+
+
+class EquipeCandidatEquipeSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    nom = serializers.CharField()
+
+
+class CandidatEquipeSerializer(serializers.Serializer):
+    """Un collaborateur que l'on peut ajouter à une équipe du projet."""
+
+    id = serializers.UUIDField()
+    nom_complet = serializers.CharField()
+    role_projet = serializers.CharField(help_text="Code du rôle tenu sur le projet (CP, CT, CC…).")
+    equipes = EquipeCandidatEquipeSerializer(
+        many=True, help_text="Les équipes du projet dont il est déjà membre."
+    )

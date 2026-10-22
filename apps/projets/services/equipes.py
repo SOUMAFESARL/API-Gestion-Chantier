@@ -4,6 +4,9 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.accounts.models import Utilisateur
+from apps.core.enums import RoleProjet, StatutUtilisateur
+from apps.core.exceptions import RequeteRefusee
 from apps.projets.models import AffectationProjet, EquipeChantier, MembreEquipeChantier
 
 
@@ -23,10 +26,76 @@ def collaborateurs_autorises_projet(projet) -> set:
     return autorises
 
 
+def message_collaborateur_non_affecte(utilisateur) -> str:
+    nom = f"{utilisateur.prenom} {utilisateur.nom}".strip() or utilisateur.nom
+    return (
+        f"{nom} n'est pas affecté à ce projet : affectez-le d'abord au projet, "
+        "puis ajoutez-le à une équipe."
+    )
+
+
 def verifier_affectation_collaborateur(projet, utilisateur):
-    """Vérifie qu'un collaborateur est affecté au projet avant de l'ajouter dans une équipe."""
+    """Vérifie qu'un collaborateur est affecté au projet avant de l'ajouter dans une équipe.
+
+    `RequeteRefusee` plutôt qu'une `ValidationError` : le message de la seconde ne parvient
+    pas à l'écran, celui-ci doit dire quoi faire.
+    """
     if utilisateur and utilisateur.pk not in collaborateurs_autorises_projet(projet):
-        raise serializers.ValidationError("Collaborateur non affecté à ce projet.")
+        raise RequeteRefusee(message_collaborateur_non_affecte(utilisateur))
+
+
+def candidats_equipes_projet(projet) -> list[dict]:
+    """Les collaborateurs actifs que l'on peut proposer pour une équipe du projet.
+
+    Ce sont exactement ceux que `verifier_affectation_collaborateur` accepte, restreints aux
+    comptes actifs, avec le rôle qu'ils tiennent sur le projet et les équipes du projet dont
+    ils sont déjà membres (une personne peut appartenir à plusieurs équipes).
+    """
+    autorises = collaborateurs_autorises_projet(projet)
+    utilisateurs = {
+        u.pk: u
+        for u in Utilisateur.objects.filter(
+            pk__in=autorises,
+            is_active=True,
+            statut=StatutUtilisateur.ACTIF,
+            supprime_le__isnull=True,
+        )
+    }
+    roles = dict(
+        AffectationProjet.objects.filter(
+            projet=projet, est_actif=True, utilisateur_id__in=utilisateurs
+        ).values_list("utilisateur_id", "role_projet")
+    )
+    if projet.chef_projet_id in utilisateurs:
+        roles.setdefault(projet.chef_projet_id, RoleProjet.CHEF_PROJET.value)
+    if projet.conducteur_travaux_id in utilisateurs:
+        roles.setdefault(projet.conducteur_travaux_id, RoleProjet.CONDUCTEUR_TRAVAUX.value)
+
+    equipes_par_utilisateur: dict = {}
+    participations = (
+        MembreEquipeChantier.objects.filter(
+            equipe__projet=projet,
+            equipe__supprime_le__isnull=True,
+            equipe__est_actif=True,
+            utilisateur_id__in=utilisateurs,
+        )
+        .select_related("equipe")
+        .order_by("equipe__cree_le", "equipe__id")
+    )
+    for membre in participations:
+        equipes = equipes_par_utilisateur.setdefault(membre.utilisateur_id, {})
+        equipes[membre.equipe_id] = {"id": membre.equipe_id, "nom": membre.equipe.nom}
+
+    resultats = [
+        {
+            "id": u.pk,
+            "nom_complet": f"{u.prenom} {u.nom}".strip() or u.nom,
+            "role_projet": roles.get(u.pk, ""),
+            "equipes": list(equipes_par_utilisateur.get(u.pk, {}).values()),
+        }
+        for u in utilisateurs.values()
+    ]
+    return sorted(resultats, key=lambda r: r["nom_complet"].casefold())
 
 
 def synchroniser_chef_equipe(equipe: EquipeChantier):

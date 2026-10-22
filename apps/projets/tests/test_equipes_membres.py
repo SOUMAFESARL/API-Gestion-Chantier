@@ -221,7 +221,7 @@ def test_membre_non_affecte_refuse(contexte):
     }
     response = client.post(url, corps, format="json")
     assert response.status_code == 400
-    assert "Collaborateur non affecté à ce projet." in str(response.data)
+    assert "n'est pas affecté à ce projet" in response.json()["erreur"]["message"]
 
 
 def test_doublon_refuse(contexte):

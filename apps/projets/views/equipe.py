@@ -17,6 +17,7 @@ from apps.projets.models import (
     Projet,
 )
 from apps.projets.serializers.equipe import (
+    CandidatEquipeSerializer,
     EquipeCreationSerializer,
     EquipeResponseSerializer,
     MembreEquipeCreateSerializer,
@@ -24,6 +25,7 @@ from apps.projets.serializers.equipe import (
 )
 from apps.projets.services.equipes import (
     ajouter_membre_equipe,
+    candidats_equipes_projet,
     modifier_role_membre,
     retirer_membre_equipe,
 )
@@ -114,6 +116,24 @@ class ProjetEquipeListCreateView(BaseEquipeView):
         )
         serializer.is_valid(raise_exception=True)
         return Response(EquipeResponseSerializer(serializer.save()).data, status=201)
+
+
+class ProjetEquipeCandidatsView(BaseEquipeView):
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.gerer_equipes")]
+
+    @extend_schema(
+        tags=["équipes"],
+        summary="Lister les collaborateurs que l'on peut ajouter à une équipe",
+        description=(
+            "Les collaborateurs actifs affectés au projet, avec leur rôle sur le projet et les "
+            "équipes du projet dont ils sont déjà membres. Une personne peut appartenir à "
+            "plusieurs équipes : elle reste proposée."
+        ),
+        responses={200: CandidatEquipeSerializer(many=True), **ERREURS_EQUIPES},
+    )
+    def get(self, request, pk):
+        projet = self.projet(request, pk)
+        return Response(CandidatEquipeSerializer(candidats_equipes_projet(projet), many=True).data)
 
 
 class ProjetEquipeDetailView(BaseEquipeView):

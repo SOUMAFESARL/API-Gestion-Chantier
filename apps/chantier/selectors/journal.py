@@ -18,6 +18,11 @@ from apps.core.enums import ModeExecution
 from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.projets.models import Activite, Projet
 from apps.projets.services.calendrier_ouvre import calendrier_entreprise
+from apps.projets.services.referentiels import (
+    libelle_mode_execution,
+    mode_base,
+    table_modes_execution,
+)
 
 SECTIONS = {
     ModeExecution.REGIE: ["AVANCEMENT", "EFFECTIFS", "MATERIAUX", "LIVRAISONS", "EQUIPEMENTS"],
@@ -96,11 +101,23 @@ def contexte_projet(projet, jour):
     from apps.projets.services.avancement import quantites_synchronisees
 
     intervenants = dict.fromkeys(("CC", "CT", "CP"), "")
+    # Le chef de chantier d'un lot est celui que l'affectation y rattache ; à défaut de lot sur
+    # son affectation, le premier chef de chantier du projet sans lot reste le repli (données
+    # antérieures).
+    chefs_par_lot: dict = {}
+    chef_sans_lot = ""
     for affectation in affectations_actives(projet.id).order_by("cree_le"):
         if affectation.role_projet in intervenants and not intervenants[affectation.role_projet]:
             intervenants[affectation.role_projet] = nom(affectation.utilisateur)
+        if affectation.role_projet == "CC":
+            if affectation.lot_id:
+                chefs_par_lot.setdefault(affectation.lot_id, nom(affectation.utilisateur))
+            elif not chef_sans_lot:
+                chef_sans_lot = nom(affectation.utilisateur)
     if projet.chef_projet_id:
         intervenants["CP"] = nom(projet.chef_projet)
+    # Une seule table code → (mode de base, libellé) pour tous les lots du projet.
+    table_modes = table_modes_execution()
     lots = list(
         lots_disponibles(projet).prefetch_related(
             Prefetch("activites", queryset=Activite.objects.filter(est_actif=True))
@@ -128,21 +145,23 @@ def contexte_projet(projet, jour):
     synchronisees = quantites_synchronisees(projet)
     charges_lots, charges_activites, sections = [], [], []
     for lot in lots:
+        base = mode_base(lot.mode_execution, table_modes)
         charges_lots.append(
             {
                 "id": str(lot.id),
                 "code": lot.code,
                 "nom": lot.libelle,
-                "mode_execution": "REGIE_DIRECTE"
-                if lot.mode_execution == ModeExecution.REGIE
-                else lot.mode_execution,
+                # Le formulaire raisonne sur le mode de base ; le libellé garde le mode choisi.
+                "mode_execution": "REGIE_DIRECTE" if base == ModeExecution.REGIE else base,
+                "mode_execution_libelle": libelle_mode_execution(lot.mode_execution, table_modes),
                 "projet_id": str(projet.id),
                 "projet_nom": projet.nom,
                 "projet_reference": projet.reference,
-                "chef_chantier_nom": intervenants["CC"],
+                # Un lot sans chef rattaché prend le chef sans lot, jamais celui d'un autre lot.
+                "chef_chantier_nom": chefs_par_lot.get(lot.id, chef_sans_lot),
             }
         )
-        for section in SECTIONS.get(lot.mode_execution, []):
+        for section in SECTIONS.get(base, []):
             if section not in sections:
                 sections.append(section)
         for rang, activite in enumerate(lot.activites.all(), 1):
@@ -157,7 +176,7 @@ def contexte_projet(projet, jour):
                     "activite_id": identifiant,
                     "lot_id": str(lot.id),
                     "suivi": "PRODUCTION"
-                    if lot.mode_execution == ModeExecution.SOUS_TRAITANCE_INFORMELLE
+                    if base == ModeExecution.SOUS_TRAITANCE_INFORMELLE
                     else "AVANCEMENT",
                     "code": f"{lot.code}.{rang:02d}",
                     "libelle": activite.libelle,

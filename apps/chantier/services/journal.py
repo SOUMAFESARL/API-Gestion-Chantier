@@ -21,6 +21,7 @@ from apps.core.enums import ActionAudit, ModeExecution, StatutRapport
 from apps.core.exceptions import ErreurMetier, RapportDejaExistant, RapportNonModifiable
 from apps.projets.models import Activite, AffectationProjet, Lot, Projet
 from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+from apps.projets.services.referentiels import mode_base, table_modes_execution
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 
@@ -240,6 +241,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
         nested.is_valid(raise_exception=True)
         saisie[cle] = dict(nested.data)
     lots = {str(ligne.id): ligne for ligne in lots_disponibles(projet)}
+    table_modes = table_modes_execution()
     activites = {
         str(a.id): a
         for a in Activite.objects.filter(lot_id__in=lots, est_actif=True).select_related("lot")
@@ -249,7 +251,8 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
         identifiant = ligne["lot_id"]
         if identifiant not in lots or identifiant in vus:
             raise ValidationError({"lots_travailles": "Lot extérieur, inactif ou dupliqué."})
-        if lots[identifiant].mode_execution == ModeExecution.SOUS_TRAITANCE_INFORMELLE:
+        base_lot = mode_base(lots[identifiant].mode_execution, table_modes)
+        if base_lot == ModeExecution.SOUS_TRAITANCE_INFORMELLE:
             raise ValidationError(
                 {"lots_travailles": "Ce lot se suit par la production des intervenants."}
             )
@@ -261,7 +264,10 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
             cle = (ligne["activite_id"], ligne.get("intervenant", ""))
             if activite is None or cle in lignes_vues:
                 raise ValidationError({section: "Activité extérieure, inactive ou dupliquée."})
-            production = activite.lot.mode_execution == ModeExecution.SOUS_TRAITANCE_INFORMELLE
+            production = (
+                mode_base(activite.lot.mode_execution, table_modes)
+                == ModeExecution.SOUS_TRAITANCE_INFORMELLE
+            )
             if production != (section == "production"):
                 raise ValidationError({section: "Le mode de suivi ne correspond pas au lot."})
             if section == "activites" and str(activite.lot_id) not in vus:
@@ -347,7 +353,11 @@ def valider_soumission(saisie, projet):
             "note_cc",
             "La note doit comporter au moins 10 caractères.",
         )
-        modes = set(lots_disponibles(projet).values_list("mode_execution", flat=True))
+        table_modes = table_modes_execution()
+        modes = {
+            mode_base(code, table_modes)
+            for code in lots_disponibles(projet).values_list("mode_execution", flat=True)
+        }
         if ModeExecution.REGIE in modes:
             exiger(
                 bool(saisie["effectifs"]),

@@ -7,22 +7,22 @@ Règles :
    restreinte aux modules actifs de l'entreprise et aux permissions actives du catalogue (A-04, A-06, A-12).
 """
 
-from django.db import connection, models
+from django.db import connection
 from rest_framework import permissions
 
 from apps.core.enums import RoleGlobal
 from apps.core.registre_permissions import REGISTRE
 
 __all__ = [
-    "APermission",
-    "a_permission",
-    "permissions_effectives",
-    "permissions_du_role",
-    "est_dg",
-    "est_administrateur",
-    "peut_voir_montants",
     "DROITS_ADMIN_AD",
     "DROITS_ADMIN_RESERVES_DG",
+    "APermission",
+    "a_permission",
+    "est_administrateur",
+    "est_dg",
+    "permissions_du_role",
+    "permissions_effectives",
+    "peut_voir_montants",
 ]
 
 # Les 7 droits d'administration fixes de l'AD (B-04)
@@ -34,6 +34,7 @@ DROITS_ADMIN_AD = frozenset({
     "administration.factures_voir",
     "administration.onboarding_suivre",
     "administration.calendrier_gerer",
+    "administration.documents_gerer",
 })
 
 # Droits d'administration strictement reserves au DG (B-04)
@@ -103,7 +104,7 @@ def _obtenir_modules_actifs(tenant=None) -> set[str]:
     # 1. Vérifier les souscriptions EntrepriseModule dans le schéma public
     if tenant and getattr(tenant, "schema_name", "public") != "public":
         try:
-            from apps.catalogue.models import EntrepriseModule, CatalogueModule
+            from apps.catalogue.models import CatalogueModule, EntrepriseModule
 
             em_qs = EntrepriseModule.objects.filter(entreprise=tenant, supprime_le__isnull=True)
             if em_qs.exists():

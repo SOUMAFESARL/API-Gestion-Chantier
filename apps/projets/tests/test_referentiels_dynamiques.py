@@ -70,7 +70,7 @@ def test_ajout_entreprise_puis_retrait(client_dg):
     assert any(e["code"] == "REHABILITATION" for e in client_dg.get(URL_TYPES).json())
 
     doublon = client_dg.post(URL_TYPES, {"libelle": "  rehabilitation "}, format="json")
-    assert doublon.status_code == status.HTTP_400_BAD_REQUEST
+    assert doublon.status_code == status.HTTP_409_CONFLICT
 
     assert client_dg.delete(f"{URL_TYPES}REHABILITATION/").status_code == status.HTTP_204_NO_CONTENT
     assert not any(e["code"] == "REHABILITATION" for e in client_dg.get(URL_TYPES).json())

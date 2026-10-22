@@ -8,8 +8,9 @@ from apps.chantier.services.rapport_journalier import (
     creer_rapport_journalier,
     modifier_rapport_journalier,
 )
-from apps.core.enums import Meteo, RoleGlobal, StatutRapport
+from apps.core.enums import Meteo, StatutRapport
 from apps.projets.models import Lot, Projet
+from apps.projets.serializers.lot import ModeExecutionLibelleMixin
 
 __all__ = [
     "AuteurSimpleSerializer",
@@ -32,12 +33,12 @@ class ProjetSimpleSerializer(serializers.ModelSerializer):
         fields = ["id", "reference", "nom"]
 
 
-class LotSimpleSerializer(serializers.ModelSerializer):
+class LotSimpleSerializer(ModeExecutionLibelleMixin, serializers.ModelSerializer):
     """Représentation allégée d'un lot pour l'imbrication."""
 
     class Meta:
         model = Lot
-        fields = ["id", "code", "libelle", "mode_execution"]
+        fields = ["id", "code", "libelle", "mode_execution", "mode_execution_libelle"]
 
 
 class AuteurSimpleSerializer(serializers.ModelSerializer):

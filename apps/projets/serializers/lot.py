@@ -3,10 +3,43 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.core.enums import ModeExecution, TypeBordereau
+from apps.core.enums import TypeBordereau
 from apps.projets.models import Lot
 from apps.projets.services.sante_calculs import calculer_avancement_physique_lot
 from apps.projets.services.statistiques import statistiques_lots
+
+
+class ModeExecutionField(serializers.CharField):
+    """Un code du référentiel des modes d'exécution, ou déjà porté par un lot (400 sinon)."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("max_length", 60)
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data):
+        from apps.projets.services.referentiels import (
+            code_mode_execution_valide,
+            table_modes_execution,
+        )
+
+        valeur = super().to_internal_value(data)
+        if not code_mode_execution_valide(valeur, table_modes_execution(self.context)):
+            raise serializers.ValidationError(
+                "Choisissez un mode d'exécution dans la liste, ou ajoutez-le."
+            )
+        return valeur
+
+
+class ModeExecutionLibelleMixin(serializers.Serializer):
+    """Ajoute `mode_execution_libelle` ; la table des libellés se calcule une fois par requête."""
+
+    mode_execution_libelle = serializers.SerializerMethodField()
+
+    def get_mode_execution_libelle(self, obj) -> str:
+        from apps.projets.services.referentiels import libelle_mode_execution, table_modes_execution
+
+        table = table_modes_execution(self.context)
+        return libelle_mode_execution(obj.mode_execution, table)
 
 
 class LotCreationSerializer(serializers.Serializer):
@@ -22,7 +55,7 @@ class LotCreationSerializer(serializers.Serializer):
         trim_whitespace=False,
         help_text="Statut d'évolution libre envoyé par le frontend ; chaîne non vide.",
     )
-    mode_execution = serializers.ChoiceField(choices=ModeExecution.choices)
+    mode_execution = ModeExecutionField()
     type_bordereau = serializers.ChoiceField(choices=TypeBordereau.choices)
     budget_initial_montant = serializers.IntegerField(
         required=False,
@@ -146,7 +179,7 @@ class ActivationSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
-class LotResponseSerializer(serializers.ModelSerializer):
+class LotResponseSerializer(ModeExecutionLibelleMixin, serializers.ModelSerializer):
     projet_id = serializers.UUIDField(read_only=True)
     nom = serializers.CharField(source="libelle", read_only=True)
     statut = serializers.CharField(read_only=True)
@@ -189,6 +222,7 @@ class LotResponseSerializer(serializers.ModelSerializer):
             "motif",
             "statut",
             "mode_execution",
+            "mode_execution_libelle",
             "type_bordereau",
             "budget_initial_montant",
             "date_debut_prevue",

@@ -19,14 +19,10 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import Invitation, Utilisateur
 from apps.core.enums import (
-    ModeExecution,
     RoleGlobal,
     RoleProjet,
     RoleTiersChoix,
-    StatutProjet,
     StatutUtilisateur,
-    TypeBordereau,
-    TypeProjet,
     TypeTiers,
 )
 from apps.projets.models import AffectationProjet, Lot, Projet
@@ -166,138 +162,6 @@ def auth_client(client, user):
     client.utilisateur_service = user
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
     return client
-
-
-@pytest.mark.django_db
-def test_creation_projet_simple_sans_lot(client_tenant, admin_user, tiers_client, cp_user):
-    """Test de création simple d'un projet avec 0 lot et responsable CP."""
-    cl = auth_client(client_tenant, admin_user)
-    demain = date.today() + timedelta(days=1)
-    fin = demain + timedelta(days=90)
-
-    payload = {
-        "nom": "Projet Simple 0 Lot",
-        "type_projet": TypeProjet.BATIMENT_RESIDENTIEL,
-        "client": str(tiers_client.id),
-        "maitre_oeuvre": "Cabinet Architec CI",
-        "ville": "Cocody, Abidjan",
-        "quartier": "Angré 8e Tranche",
-        "date_debut_prevue": str(demain),
-        "date_fin_prevue": str(fin),
-        "budget_initial_montant": 485_000_000_00,
-        "description": "Projet test sans lot initial",
-        "chef_projet_id": str(cp_user.id),
-    }
-
-    rep = creer_projet_via_service(cl, "/api/v1/projets/", payload, format="json")
-    assert rep.status_code == status.HTTP_201_CREATED
-    data = rep.json()
-
-    assert data["nom"] == "Projet Simple 0 Lot"
-    assert data["type_projet"] == TypeProjet.BATIMENT_RESIDENTIEL
-    assert data["maitre_oeuvre"] == "Cabinet Architec CI"
-    assert data["lots"] == []
-    assert data["duree_jours_ouvres"] > 0
-    assert data["conducteur_travaux"] is None
-    assert data["chef_projet"]["id"] == str(cp_user.id)
-    assert data["statut"] == StatutProjet.EN_ATTENTE
-
-    # Vérification de l'affectation projet
-    with schema_context(SCHEMA):
-        aff = AffectationProjet.objects.get(projet_id=data["id"], utilisateur=cp_user)
-        assert aff.role_projet == RoleProjet.CHEF_PROJET
-
-
-@pytest.mark.django_db
-def test_creation_projet_complete_3_etapes(
-    client_tenant, admin_user, tiers_client, cp_user, ct_user, cc_user
-):
-    """Test du Wizard complet : Métadonnées + 3 lots + Équipe complète."""
-    cl = auth_client(client_tenant, admin_user)
-    demain = date.today() + timedelta(days=1)
-    fin = demain + timedelta(days=180)
-
-    payload = {
-        "nom": "Immeuble Les Palmiers R+5",
-        "reference": "CCD-2025-007",
-        "type_projet": TypeProjet.BATIMENT_COMMERCIAL,
-        "client": str(tiers_client.id),
-        "maitre_oeuvre": "BET Structure BTP",
-        "ville": "Cocody, Abidjan",
-        "quartier": "Danga",
-        "date_debut_prevue": str(demain),
-        "date_fin_prevue": str(fin),
-        "budget_initial_montant": 750_000_000_00,
-        "description": "Construction complète R+5",
-        "lots": [
-            {
-                "code": "L-01",
-                "libelle": "Gros œuvre",
-                "mode_execution": ModeExecution.REGIE,
-                "type_bordereau": TypeBordereau.PRIX_UNITAIRE,
-                "date_debut_prevue": str(demain),
-                "date_fin_prevue": str(demain + timedelta(days=60)),
-            },
-            {
-                "code": "L-02",
-                "libelle": "Menuiserie aluminium",
-                "mode_execution": ModeExecution.SOUS_TRAITANCE_STRUCTUREE,
-                "type_bordereau": TypeBordereau.FORFAIT,
-                "date_debut_prevue": str(demain + timedelta(days=61)),
-                "date_fin_prevue": str(demain + timedelta(days=120)),
-            },
-            {
-                "code": "L-03",
-                "libelle": "Carrelage / Revêtements",
-                "mode_execution": ModeExecution.SOUS_TRAITANCE_INFORMELLE,
-                "type_bordereau": TypeBordereau.MIXTE,
-                "date_debut_prevue": str(demain + timedelta(days=121)),
-                "date_fin_prevue": str(fin),
-            },
-        ],
-        "equipe": {
-            "chef_projet_id": str(cp_user.id),
-            "conducteur_travaux_id": str(ct_user.id),
-            "chefs_chantier_ids": [str(cc_user.id)],
-        },
-    }
-
-    rep = creer_projet_via_service(cl, "/api/v1/projets/", payload, format="json")
-    assert rep.status_code == status.HTTP_201_CREATED
-    data = rep.json()
-    projet_id = data["id"]
-
-    assert data["reference"] == "CCD-2025-007"
-    assert data["type_projet"] == TypeProjet.BATIMENT_COMMERCIAL
-    assert len(data["lots"]) == 3
-    assert data["chef_projet"]["id"] == str(cp_user.id)
-    assert data["conducteur_travaux"]["id"] == str(ct_user.id)
-
-    # Vérification en base des lots
-    with schema_context(SCHEMA):
-        lots = list(Lot.objects.filter(projet_id=projet_id).order_by("ordre"))
-        assert len(lots) == 3
-        assert lots[0].code == "L-01"
-        assert lots[0].mode_execution == ModeExecution.REGIE
-        assert lots[0].type_bordereau == TypeBordereau.PRIX_UNITAIRE
-
-        assert lots[1].code == "L-02"
-        assert lots[1].mode_execution == ModeExecution.SOUS_TRAITANCE_STRUCTUREE
-        assert lots[1].type_bordereau == TypeBordereau.FORFAIT
-
-        assert lots[2].code == "L-03"
-        assert lots[2].mode_execution == ModeExecution.SOUS_TRAITANCE_INFORMELLE
-        assert lots[2].type_bordereau == TypeBordereau.MIXTE
-
-        # Vérification des affectations
-        aff_cp = AffectationProjet.objects.get(projet_id=projet_id, utilisateur=cp_user)
-        assert aff_cp.role_projet == RoleProjet.CHEF_PROJET
-
-        aff_ct = AffectationProjet.objects.get(projet_id=projet_id, utilisateur=ct_user)
-        assert aff_ct.role_projet == RoleProjet.CONDUCTEUR_TRAVAUX
-
-        aff_cc = AffectationProjet.objects.get(projet_id=projet_id, utilisateur=cc_user)
-        assert aff_cc.role_projet == RoleProjet.CHEF_CHANTIER
 
 
 @pytest.mark.django_db

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-__all__ = ["DefPermission", "REGISTRE"]
+__all__ = ["REGISTRE", "DefPermission"]
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,12 @@ REGISTRE: dict[str, DefPermission] = {
         DefPermission("projets.affecter_membres", "projets", 2, "Affecter des membres aux projets"),
         DefPermission("projets.gerer_equipes", "projets", 2, "Gérer les équipes de chantier"),
         DefPermission("projets.voir_montants", "projets", 3, "Voir les montants financiers du projet"),
+        DefPermission(
+            "projets.referentiels_ajouter",
+            "projets",
+            2,
+            "Ajouter des types, groupes et listes de l'entreprise",
+        ),
         DefPermission("chantier.lire", "chantier", 1, "Consulter les rapports"),
         DefPermission("chantier.rediger", "chantier", 2, "Rédiger et soumettre un rapport"),
         DefPermission("chantier.valider", "chantier", 3, "Valider / rejeter un rapport"),
@@ -65,6 +71,13 @@ REGISTRE: dict[str, DefPermission] = {
             "administration",
             2,
             "Gérer le calendrier des jours ouvrés",
+            reservee_administration=True,
+        ),
+        DefPermission(
+            "administration.documents_gerer",
+            "administration",
+            2,
+            "Configurer l'en-tête et le pied des documents",
             reservee_administration=True,
         ),
         DefPermission(

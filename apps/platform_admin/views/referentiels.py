@@ -1,4 +1,4 @@
-"""`/api/v1/admins/referentiels/{types-projet|lots}/` — référentiels de la plateforme.
+"""`/api/v1/admins/referentiels/{types-projet|lots|modes-execution}/` — référentiels plateforme.
 
 Ce qui s'ajoute ici est proposé aussitôt à toutes les entreprises (lu depuis le
 schéma public), qui ne peuvent pas le retirer. Arbitrage du 16/10/2026.
@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404
 from django_tenants.utils import schema_context
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
-from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,9 +18,10 @@ from apps.catalogue.models.referentiel import (
     cle_comparaison,
     code_depuis_libelle,
 )
+from apps.core.exceptions import LibelleEnDouble
 from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.services.notifications import journaliser_plateforme
-from apps.projets.services.referentiels import CATEGORIES_URL
+from apps.projets.services.referentiels import CATEGORIES_URL, exiger_mode_de_base
 
 __all__ = ["ReferentielPlateformeDetailView", "ReferentielPlateformeListeView"]
 
@@ -47,8 +47,9 @@ def _categorie(segment: str) -> str:
 def _refuser_doublon(categorie: str, libelle: str, exclure_id=None) -> None:
     cle = cle_comparaison(libelle)
     autres = ReferentielPlateforme.objects.filter(categorie=categorie).exclude(id=exclure_id)
-    if any(cle_comparaison(e.libelle) == cle for e in autres):
-        raise ValidationError({"libelle": "Ce libellé figure déjà dans la liste."})
+    doublon = next((e for e in autres if cle_comparaison(e.libelle) == cle), None)
+    if doublon is not None:
+        raise LibelleEnDouble(libelle, doublon.libelle)
 
 
 class ReferentielPlateformeListeView(APIView):
@@ -75,6 +76,7 @@ class ReferentielPlateformeListeView(APIView):
         saisie = SaisieSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
+        exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
         with schema_context("public"):
             _refuser_doublon(cat, libelle)
             tous = ReferentielPlateforme.tous_objets.filter(categorie=cat)
@@ -117,6 +119,7 @@ class ReferentielPlateformeDetailView(APIView):
         saisie = SaisieSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
+        exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
         with schema_context("public"):
             entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
             _refuser_doublon(cat, libelle, exclure_id=entree.id)

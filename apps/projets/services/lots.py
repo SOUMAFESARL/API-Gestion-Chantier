@@ -89,6 +89,12 @@ def lire_excel(fichier, request=None, projet=None):
         raise ValidationError({"fichier": "Classeur Excel invalide."}) from exc
     resultats = []
     erreurs = {}
+    # Un seul contexte pour tout le classeur : il porte le cache de la table des modes d'exécution.
+    context = {}
+    if request:
+        context["request"] = request
+    if projet:
+        context["projet"] = projet
     try:
         feuille = classeur.active
         feuille.reset_dimensions()
@@ -144,11 +150,6 @@ def lire_excel(fichier, request=None, projet=None):
                 except (ValueError, InvalidOperation, OverflowError):
                     erreurs[str(numero)] = {"budget_fcfa": "Montant invalide."}
                     continue
-            context = {}
-            if request:
-                context["request"] = request
-            if projet:
-                context["projet"] = projet
             serializer = LotCreationSerializer(data=data, context=context)
             if serializer.is_valid():
                 resultats.append(serializer.validated_data)

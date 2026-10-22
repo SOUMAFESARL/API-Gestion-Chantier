@@ -212,6 +212,16 @@ class AffectationProjet(ModeleBase):
     # Le périmètre d'un chef de chantier : « Lot 02 — Gros œuvre », « Bâtiment B ».
     # Vide : tout le chantier.
     zone = models.CharField(_("zone"), max_length=120, blank=True, default="")
+    # Le lot dont un chef de chantier a la charge. Si renseigné, `zone` en reprend le code et
+    # le libellé ; la zone libre ne sert plus qu'à l'historique.
+    lot = models.ForeignKey(
+        "projets.Lot",
+        verbose_name=_("lot"),
+        on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
+        related_name="affectations_chef_chantier",
+    )
     # Ce que fait un « autre membre » de l'encadrement, porté par le rôle consultant (VI).
     fonction_membre = models.CharField(
         _("fonction"),

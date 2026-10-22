@@ -52,7 +52,7 @@ from apps.platform_admin.views.referentiels import (
     ReferentielPlateformeDetailView,
     ReferentielPlateformeListeView,
 )
-from apps.platform_admin.views.roles_systeme import RoleSystemeDetailView, RolesSystemeListeView
+from apps.platform_admin.views.roles_systeme import RolesSystemeListeView, RoleSystemeDetailView
 from apps.platform_admin.views.suppression import (
     ApercuSuppressionClientView,
     SupprimerClientDefinitivementView,
@@ -228,12 +228,12 @@ urlpatterns = [
     path("admins/roles-systeme/<uuid:pk>/", RoleSystemeDetailView.as_view(), name="admins-roles-systeme-detail"),
     # Référentiels de la plateforme (types de projet, noms de lot)
     re_path(
-        r"^admins/referentiels/(?P<categorie>types-projet|lots)/$",
+        r"^admins/referentiels/(?P<categorie>types-projet|lots|modes-execution)/$",
         ReferentielPlateformeListeView.as_view(),
         name="admins-referentiels",
     ),
     re_path(
-        r"^admins/referentiels/(?P<categorie>types-projet|lots)/(?P<pk>[0-9a-f-]{36})/$",
+        r"^admins/referentiels/(?P<categorie>types-projet|lots|modes-execution)/(?P<pk>[0-9a-f-]{36})/$",
         ReferentielPlateformeDetailView.as_view(),
         name="admins-referentiels-detail",
     ),

@@ -105,6 +105,24 @@ class RapportDejaExistant(ErreurConflit):
     default_detail = "Un rapport existe déjà pour ce lot à cette date."
 
 
+class LibelleEnDouble(ErreurConflit):
+    """Un libellé figure déjà dans la liste (comparaison sans accents, casse ni espaces).
+
+    Le message nomme l'entrée existante : l'écran l'affiche tel quel, sans retomber sur le
+    texte générique d'une erreur de validation.
+    """
+
+    code_metier = "libelle_en_double"
+    default_detail = "Ce libellé figure déjà dans la liste."
+
+    def __init__(self, libelle: str | None = None, existant: str | None = None):
+        if libelle and existant:
+            detail = f"« {libelle} » figure déjà dans la liste (sous le libellé « {existant} »)."
+        else:
+            detail = None
+        super().__init__(detail, details={"libelle": libelle, "existant": existant})
+
+
 class ModeExecutionVerrouille(ErreurMetier):
     code_metier = "mode_execution_verrouille"
     default_detail = (
@@ -161,6 +179,14 @@ class ActionReserveeDg(ErreurMetier):
     status_code = status.HTTP_403_FORBIDDEN
     code_metier = "action_reservee_dg"
     default_detail = "Seul le Directeur Général a autorité pour modifier ou supprimer des rôles."
+
+
+class ChefProjetProtege(ErreurMetier):
+    """Retirer, désactiver, rétrograder ou nommer un chef de projet est réservé à la direction."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code_metier = "chef_projet_protege"
+    default_detail = "Seule la direction peut retirer ou remplacer le chef de projet."
 
 
 class DgNonAssignableCommeCp(ErreurMetier):

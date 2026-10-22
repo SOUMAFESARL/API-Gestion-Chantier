@@ -328,6 +328,11 @@ def test_contract_isolation_between_tenants_even_with_same_project_id(contexte):
     )
     assert created.status_code == 201
     projet = Projet.objects.get(reference=created.data["reference"])
+    # Les écritures du test laissent des contraintes différées en attente, et
+    # PostgreSQL refuse alors de créer un schéma (« pending trigger events ») :
+    # on les fait jouer maintenant, dans la même transaction.
+    with connection.cursor() as curseur:
+        curseur.execute("SET CONSTRAINTS ALL IMMEDIATE")
     with schema_context("public"):
         tenant = Entreprise(
             schema_name="contrats_autre",

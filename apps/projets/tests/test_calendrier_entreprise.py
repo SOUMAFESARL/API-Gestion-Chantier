@@ -153,7 +153,7 @@ def test_permission_registre_et_droits_ad():
     assert perm.reservee_administration is True
 
     assert "administration.calendrier_gerer" in DROITS_ADMIN_AD
-    assert len(DROITS_ADMIN_AD) == 7
+    assert len(DROITS_ADMIN_AD) == 8
 
 
 def test_permission_dg_ad_et_interdiction_autres_roles(schema_demo):

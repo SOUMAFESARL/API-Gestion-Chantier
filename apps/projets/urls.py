@@ -38,6 +38,7 @@ from apps.projets.views.calendrier import (
 from apps.projets.views.equipe import (
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
+    ProjetEquipeCandidatsView,
     ProjetEquipeDetailView,
     ProjetEquipeListCreateView,
     ProjetEquipeMembreDetailView,
@@ -51,7 +52,11 @@ from apps.projets.views.lot import (
     ProjetLotListCreateView,
     ProjetLotModeleView,
 )
-from apps.projets.views.referentiels import ReferentielEntreeView, ReferentielListeView
+from apps.projets.views.referentiels import (
+    ReferentielDroitsView,
+    ReferentielEntreeView,
+    ReferentielListeView,
+)
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
@@ -80,13 +85,14 @@ urlpatterns = [
         name="projets-motifs-report-alias",
     ),
     # Référentiels dynamiques : types de projet et noms de lot (plateforme + entreprise)
+    path("referentiels/droits/", ReferentielDroitsView.as_view(), name="referentiel-droits"),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots)/$",
+        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/$",
         ReferentielListeView.as_view(),
         name="referentiel-liste",
     ),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots)/(?P<code>[A-Za-z0-9_]+)/$",
+        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
         ReferentielEntreeView.as_view(),
         name="referentiel-entree",
     ),
@@ -97,6 +103,11 @@ urlpatterns = [
         "projets/<uuid:pk>/equipes/statistiques/",
         ProjetEquipeStatistiquesView.as_view(),
         name="projet-equipes-statistiques",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/candidats/",
+        ProjetEquipeCandidatsView.as_view(),
+        name="projet-equipes-candidats",
     ),
     path(
         "projets/<uuid:pk>/equipes/affectations/",

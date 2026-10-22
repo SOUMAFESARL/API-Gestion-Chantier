@@ -5,6 +5,7 @@ from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleProjet, StatutUtilisateur
 from apps.core.permissions import obtenir_portee_role
 from apps.projets.models import AffectationProjet
+from apps.projets.services.affectations import est_chef_projet, peut_gerer_chef_projet
 
 
 def code_role_plateforme(user) -> str:
@@ -42,11 +43,26 @@ class IntervenantAffectationSerializer(serializers.Serializer):
     telephone = serializers.CharField(required=False, allow_blank=True)
 
 
+class LotAffectationSerializer(serializers.Serializer):
+    """Le lot d'un chef de chantier, tel que l'écran l'affiche."""
+
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    libelle = serializers.CharField()
+
+
 class AffectationProjetResponseSerializer(serializers.ModelSerializer):
     """Représentation détaillée d'une affectation de chantier avec masquage PII (C-05)."""
 
     utilisateur = serializers.SerializerMethodField()
     role_projet_libelle = serializers.CharField(source="get_role_projet_display", read_only=True)
+    lot = serializers.SerializerMethodField()
+    modifiable = serializers.SerializerMethodField(
+        help_text=(
+            "Faux quand l'affectation est celle du chef de projet et que l'utilisateur "
+            "courant n'est ni le DG ni un rôle de portée entreprise qui affecte les membres."
+        )
+    )
 
     class Meta:
         model = AffectationProjet
@@ -57,13 +73,46 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
             "role_projet",
             "role_projet_libelle",
             "zone",
+            "lot",
             "fonction_membre",
             "date_debut",
             "date_fin",
             "est_actif",
+            "modifiable",
             "cree_le",
             "modifie_le",
         ]
+
+    @extend_schema_field(LotAffectationSerializer(allow_null=True))
+    def get_lot(self, obj):
+        lot = obj.lot if obj.lot_id else None
+        if lot is None or lot.supprime_le is not None:
+            return None
+        return {"id": lot.id, "code": lot.code, "libelle": lot.libelle}
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_modifiable(self, obj) -> bool:
+        # Le même sérialiseur sert toute une liste : les droits se calculent une seule fois.
+        if not hasattr(self, "_peut_affecter_membres"):
+            from apps.core.droits import a_permission, est_dg
+
+            request = self.context.get("request")
+            user = getattr(request, "user", None)
+            self._peut_affecter_membres = bool(
+                user
+                and getattr(user, "is_authenticated", False)
+                and (
+                    user.is_superuser
+                    or est_dg(user)
+                    or a_permission(user, "projets.affecter_membres", request=request)
+                )
+            )
+            self._peut_gerer_chef_projet = peut_gerer_chef_projet(user, request=request)
+        if not self._peut_affecter_membres:
+            return False
+        if not est_chef_projet(obj.role_projet):
+            return True
+        return self._peut_gerer_chef_projet
 
     @extend_schema_field(IntervenantAffectationSerializer)
     def get_utilisateur(self, obj):
@@ -109,6 +158,9 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
     date_debut = serializers.DateField(required=False, allow_null=True)
     date_fin = serializers.DateField(required=False, allow_null=True)
     zone = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
+    # Le lot d'un chef de chantier ; sa cohérence (projet, suppression, rôle) est vérifiée par
+    # le service, qui répond 400 avec un message lisible. S'il est fourni, il fixe la zone.
+    lot_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     fonction_membre = serializers.CharField(
         required=False, allow_blank=True, max_length=20, default=""
     )
@@ -185,6 +237,7 @@ class AffectationProjetUpdateSerializer(serializers.Serializer):
     date_fin = serializers.DateField(required=False, allow_null=True)
     est_actif = serializers.BooleanField(required=False)
     zone = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    lot_id = serializers.UUIDField(required=False, allow_null=True)
     fonction_membre = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     def validate(self, attrs):

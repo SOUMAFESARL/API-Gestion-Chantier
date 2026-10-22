@@ -15,10 +15,11 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import Role, Utilisateur
-from apps.core.droits import est_dg
+from apps.core.droits import a_permission, est_dg
 from apps.core.enums import RoleProjet
-from apps.core.exceptions import DgNonAssignableCommeCp
-from apps.projets.models import AffectationProjet, Projet
+from apps.core.exceptions import ChefProjetProtege, DgNonAssignableCommeCp, RequeteRefusee
+from apps.core.permissions import obtenir_portee_role
+from apps.projets.models import AffectationProjet, Lot, Projet
 
 
 def verifier_affectable(utilisateur: Utilisateur | None) -> None:
@@ -34,6 +35,49 @@ def verifier_affectable(utilisateur: Utilisateur | None) -> None:
     """
     if utilisateur is not None and est_dg(utilisateur):
         raise DgNonAssignableCommeCp()
+
+
+def peut_gerer_chef_projet(utilisateur, request=None) -> bool:
+    """Qui peut retirer, désactiver, rétrograder ou nommer un chef de projet.
+
+    Décision du 22/10/2026 : le chef de projet est protégé. Seuls le DG et les rôles de
+    portée ENTREPRISE qui détiennent `projets.affecter_membres` y touchent ; un conducteur
+    de travaux, même affecté au chantier, ne le peut pas.
+    """
+    if not utilisateur or not getattr(utilisateur, "is_authenticated", False):
+        return False
+    if utilisateur.is_superuser or est_dg(utilisateur):
+        return True
+    return obtenir_portee_role(utilisateur) == "ENTREPRISE" and a_permission(
+        utilisateur, "projets.affecter_membres", request=request
+    )
+
+
+def verifier_peut_gerer_chef_projet(utilisateur, request=None) -> None:
+    """Lève `ChefProjetProtege` (403) si l'utilisateur ne peut pas toucher au chef de projet."""
+    if not peut_gerer_chef_projet(utilisateur, request=request):
+        raise ChefProjetProtege()
+
+
+def est_chef_projet(role_projet) -> bool:
+    return (role_projet or "").upper() == RoleProjet.CHEF_PROJET
+
+
+def libelle_zone_lot(lot: Lot) -> str:
+    """La zone d'un chef de chantier rattaché à un lot : le code et le libellé du lot."""
+    return f"{lot.code} — {lot.libelle}"[:120]
+
+
+def resoudre_lot_affectation(projet: Projet, role_projet: str, lot_id) -> Lot | None:
+    """Le lot d'une affectation, vérifié : réservé au chef de chantier, dans ce projet, vivant."""
+    if lot_id is None:
+        return None
+    if (role_projet or "").upper() != RoleProjet.CHEF_CHANTIER:
+        raise RequeteRefusee("Le lot ne concerne qu'un chef de chantier.")
+    lot = Lot.objects.filter(pk=lot_id, projet=projet, supprime_le__isnull=True).first()
+    if lot is None:
+        raise RequeteRefusee("Ce lot n'appartient pas à ce projet ou a été supprimé.")
+    return lot
 
 
 def retirer_dg_des_chantiers(*, appliquer: bool = False) -> list[str]:
@@ -99,7 +143,7 @@ def lister_affectations_projet(projet: Projet, actifs_seulement: bool = False):
     """Renvoie les affectations du projet avec chargement optimisé des relations."""
     qs = (
         AffectationProjet.objects.filter(projet=projet, supprime_le__isnull=True)
-        .select_related("utilisateur")
+        .select_related("utilisateur", "lot")
         .order_by("role_projet", "utilisateur__nom", "utilisateur__prenom")
     )
     if actifs_seulement:
@@ -116,6 +160,7 @@ def affecter_collaborateur_projet(
     date_fin=None,
     zone: str = "",
     fonction_membre: str = "",
+    lot_id=None,
     modifie_par: Utilisateur | None = None,
     **kwargs,
 ) -> AffectationProjet:
@@ -131,6 +176,9 @@ def affecter_collaborateur_projet(
         raise ValidationError(_("La date de fin ne peut pas être antérieure à la date de début."))
 
     date_debut_effective = date_debut or timezone.now().date()
+    lot = resoudre_lot_affectation(projet, role_projet, lot_id)
+    if lot:
+        zone = libelle_zone_lot(lot)
 
     with transaction.atomic():
         affectation = AffectationProjet.tous_objets.filter(
@@ -144,6 +192,7 @@ def affecter_collaborateur_projet(
             affectation.date_debut = date_debut_effective
             affectation.date_fin = date_fin
             affectation.zone = zone
+            affectation.lot = lot
             affectation.fonction_membre = fonction_membre
             affectation.est_actif = True
             affectation.supprime_le = None
@@ -154,6 +203,7 @@ def affecter_collaborateur_projet(
                     "date_debut",
                     "date_fin",
                     "zone",
+                    "lot",
                     "fonction_membre",
                     "est_actif",
                     "supprime_le",
@@ -169,6 +219,7 @@ def affecter_collaborateur_projet(
                 date_debut=date_debut_effective,
                 date_fin=date_fin,
                 zone=zone,
+                lot=lot,
                 fonction_membre=fonction_membre,
                 est_actif=True,
                 cree_par=modifie_par,
@@ -220,6 +271,12 @@ def modifier_affectation_projet(
     """Met à jour le rôle, dates ou statut d'une affectation avec synchronisation CP."""
     nouveau_actif = donnees.get("est_actif")
     nouveau_role = donnees.get("role_projet")
+    role_final = nouveau_role or affectation.role_projet
+
+    # Le lot se vérifie avant toute écriture : un refus ne doit rien avoir modifié.
+    lot = None
+    if "lot_id" in donnees:
+        lot = resoudre_lot_affectation(affectation.projet, role_final, donnees["lot_id"])
 
     # Si on désactive ou change le rôle d'un CP, détacher du projet si c'était lui
     if affectation.role_projet == RoleProjet.CHEF_PROJET:
@@ -243,6 +300,18 @@ def modifier_affectation_projet(
         if c in donnees:
             setattr(affectation, c, donnees[c])
             champs.append(c)
+
+    if "lot_id" in donnees:
+        affectation.lot = lot
+        champs.append("lot")
+        if lot:
+            affectation.zone = libelle_zone_lot(lot)
+            if "zone" not in champs:
+                champs.append("zone")
+    elif affectation.lot_id and (role_final or "").upper() != RoleProjet.CHEF_CHANTIER:
+        # Le lot ne suit pas la personne quand elle cesse d'être chef de chantier.
+        affectation.lot = None
+        champs.append("lot")
 
     affectation.save(update_fields=champs)
     verifier_invariant_chef_projet(affectation.projet)

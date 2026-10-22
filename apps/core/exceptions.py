@@ -181,6 +181,14 @@ class ActionReserveeDg(ErreurMetier):
     default_detail = "Seul le Directeur Général a autorité pour modifier ou supprimer des rôles."
 
 
+class ChefProjetProtege(ErreurMetier):
+    """Retirer, désactiver, rétrograder ou nommer un chef de projet est réservé à la direction."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code_metier = "chef_projet_protege"
+    default_detail = "Seule la direction peut retirer ou remplacer le chef de projet."
+
+
 class DgNonAssignableCommeCp(ErreurMetier):
     """Le DG ne tient aucune fonction sur un chantier (décision du 14/10/2026).
 

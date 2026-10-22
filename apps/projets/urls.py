@@ -38,6 +38,7 @@ from apps.projets.views.calendrier import (
 from apps.projets.views.equipe import (
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
+    ProjetEquipeCandidatsView,
     ProjetEquipeDetailView,
     ProjetEquipeListCreateView,
     ProjetEquipeMembreDetailView,
@@ -102,6 +103,11 @@ urlpatterns = [
         "projets/<uuid:pk>/equipes/statistiques/",
         ProjetEquipeStatistiquesView.as_view(),
         name="projet-equipes-statistiques",
+    ),
+    path(
+        "projets/<uuid:pk>/equipes/candidats/",
+        ProjetEquipeCandidatsView.as_view(),
+        name="projet-equipes-candidats",
     ),
     path(
         "projets/<uuid:pk>/equipes/affectations/",

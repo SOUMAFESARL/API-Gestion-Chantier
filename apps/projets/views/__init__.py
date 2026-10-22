@@ -29,6 +29,7 @@ from apps.projets.serializers.swagger import (
     ProjetPatchSerializer,
     ProjetPostSerializer,
 )
+from apps.projets.services.affectations import verifier_peut_gerer_chef_projet
 from apps.projets.services.indicateurs_temporels import calendrier_pour_projets
 from apps.projets.views.activite import (
     ActiviteActivationView,
@@ -353,6 +354,23 @@ class ProjetDetailView(APIView):
         elif not champs_autres:
             if not (est_dg(user) or a_permission(user, "projets.ecrire", request=request)):
                 raise PermissionDenied("Permission projets.ecrire requise.")
+
+        # Le chef de projet est protégé (décision du 22/10/2026) : le retirer ou le remplacer par ce
+        # formulaire est réservé à la direction, comme par les routes d'affectation. En PUT, un
+        # `chef_projet_id` omis vaut `null` : il retirerait lui aussi le chef de projet.
+        # La valeur est lue comme le serializer la lit : `chef_projet_id` d'abord, sinon
+        # l'alias `chef_projet` (`ProjetPostSerializer.to_internal_value`).
+        if "chef_projet_id" in request.data:
+            cle = "chef_projet_id"
+        elif "chef_projet" in request.data:
+            cle = "chef_projet"
+        else:
+            cle = None
+        if cle is not None or not partial:
+            demande = request.data.get(cle) if cle else None
+            actuel = projet.chef_projet_id
+            if (str(demande) if demande else None) != (str(actuel) if actuel else None):
+                verifier_peut_gerer_chef_projet(user, request=request)
 
         serializer = ProjetPatchSerializer(
             projet, data=request.data, partial=partial, context={"request": request}

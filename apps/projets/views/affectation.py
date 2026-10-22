@@ -25,9 +25,11 @@ from apps.projets.serializers.affectation import (
 )
 from apps.projets.services.affectations import (
     affecter_collaborateur_projet,
+    est_chef_projet,
     lister_affectations_projet,
     modifier_affectation_projet,
     revoquer_affectation_projet,
+    verifier_peut_gerer_chef_projet,
 )
 
 __all__ = [
@@ -35,6 +37,20 @@ __all__ = [
     "ProjetAffectationDetailView",
     "ProjetAffectationListCreateView",
 ]
+
+
+def _booleen_drf(valeur) -> bool | None:
+    """Le booléen tel que le lira le serializer (`"no"`, `"off"`… compris), sinon `None`.
+
+    La garde du chef de projet lit la requête brute : si elle reconnaissait moins
+    d'écritures que DRF, `{"est_actif": "no"}` passerait à côté d'elle.
+    """
+    if valeur is None:
+        return None
+    try:
+        return serializers.BooleanField().to_internal_value(valeur)
+    except serializers.ValidationError:
+        return None  # le serializer répondra 400
 
 
 class ProjetAffectationListCreateView(APIView):
@@ -91,14 +107,32 @@ class ProjetAffectationListCreateView(APIView):
         )
         serializer.is_valid(raise_exception=True)
 
+        utilisateur = serializer.validated_data["utilisateur_instance"]
+        role_projet = serializer.validated_data["role_projet"]
+        # Nommer un chef de projet — ou réécrire l'affectation de celui qui l'est — est réservé
+        # à la direction. La ligne existante compte : une réaffectation la réactive et en
+        # change le rôle.
+        existante = AffectationProjet.tous_objets.filter(
+            projet=projet, utilisateur=utilisateur
+        ).first()
+        remplace_un_cp = bool(
+            existante
+            and existante.est_actif
+            and existante.supprime_le is None
+            and est_chef_projet(existante.role_projet)
+        )
+        if est_chef_projet(role_projet) or remplace_un_cp:
+            verifier_peut_gerer_chef_projet(request.user, request=request)
+
         try:
             affectation = affecter_collaborateur_projet(
                 projet=projet,
-                utilisateur=serializer.validated_data["utilisateur_instance"],
-                role_projet=serializer.validated_data["role_projet"],
+                utilisateur=utilisateur,
+                role_projet=role_projet,
                 date_debut=serializer.validated_data.get("date_debut"),
                 date_fin=serializer.validated_data.get("date_fin"),
                 zone=serializer.validated_data.get("zone", ""),
+                lot_id=serializer.validated_data.get("lot_id"),
                 fonction_membre=serializer.validated_data.get("fonction_membre", ""),
                 modifie_par=request.user,
             )
@@ -150,7 +184,7 @@ class ProjetAffectationDetailView(APIView):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur"),
+            AffectationProjet.objects.select_related("utilisateur", "lot"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
@@ -173,11 +207,29 @@ class ProjetAffectationDetailView(APIView):
         verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur"),
+            AffectationProjet.objects.select_related("utilisateur", "lot"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
         )
+
+        # Désactiver, rétrograder, réactiver ou nommer un chef de projet : la direction seule.
+        # Les dates, la zone ou le lot du chef de projet restent modifiables par qui affecte.
+        # Le contrôle lit la requête brute et passe **avant** la validation : sinon une
+        # rétrogradation par un non-dirigeant recevrait un 400 de cohérence de rôle, et non le 403.
+        brut = request.data if isinstance(request.data, dict) else {}
+        role_demande = brut.get("role_projet")
+        nouveau_role = role_demande.strip().upper() if isinstance(role_demande, str) else None
+        actif_demande = _booleen_drf(brut.get("est_actif"))
+        if est_chef_projet(affectation.role_projet):
+            desactive = actif_demande is False
+            reactive = actif_demande is True and not affectation.est_actif
+            retrograde = nouveau_role is not None and not est_chef_projet(nouveau_role)
+            touche_au_cp = desactive or reactive or retrograde
+        else:
+            touche_au_cp = est_chef_projet(nouveau_role)
+        if touche_au_cp:
+            verifier_peut_gerer_chef_projet(request.user, request=request)
 
         serializer = AffectationProjetUpdateSerializer(
             instance=affectation, data=request.data, partial=True
@@ -220,6 +272,9 @@ class ProjetAffectationDetailView(APIView):
         if affectation.utilisateur_id == request.user.id:
             raise PermissionDenied("Vous ne pouvez pas vous retirer vous-même d'un projet.")
 
+        if est_chef_projet(affectation.role_projet):
+            verifier_peut_gerer_chef_projet(request.user, request=request)
+
         hard_param = request.query_params.get("hard", "true").lower()
         suppression_physique = hard_param != "false"
 
@@ -233,6 +288,7 @@ class ProjetAffectationDetailView(APIView):
             "utilisateur_email": getattr(affectation.utilisateur, "email", ""),
             "role_projet": affectation.role_projet,
             "zone": affectation.zone,
+            "lot_id": str(affectation.lot_id) if affectation.lot_id else None,
             "fonction_membre": affectation.fonction_membre,
         }
         identifiant = affectation.pk

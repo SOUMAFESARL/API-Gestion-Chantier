@@ -246,6 +246,22 @@ jobs:
             "$VENV_PYTHON" manage.py gerer_entreprises --activer-abonnement e_3at_btp --plan MAITRE_OEUVRE --duree-jours 365 2>&1 || true
 
             echo ""
+            echo "=== Tâche cron de nuit F3 (00 h 01) ==="
+            # Sans Celery Beat sur cPanel, l'évaluation de nuit du suivi d'avancement
+            # (retards, statuts, alertes, indice de santé) passe par la crontab du
+            # compte — celle de l'écran « Tâches cron ». La ligne porte une marque :
+            # elle est remplacée à chaque déploiement, jamais dupliquée.
+            mkdir -p logs
+            MARQUE="# ccd:evaluer_f3_nuit"
+            LIGNE="1 0 * * * cd \"$PROJECT_DIR\" && { set -a; [ -f .env ] && . ./.env; set +a; } && \"$VENV_PYTHON\" manage.py evaluer_f3_nuit --settings=config.settings.cpanel >> \"$PROJECT_DIR/logs/evaluer_f3_nuit.log\" 2>&1 $MARQUE"
+            if { crontab -l 2>/dev/null | grep -vF "$MARQUE" || true; echo "$LIGNE"; } | crontab -; then
+              crontab -l | grep -F "$MARQUE"
+              echo "Heure du serveur (la crontab suit ce fuseau) : $(date '+%H:%M %Z')"
+            else
+              echo "⚠️  crontab indisponible : ajouter la tâche à la main dans cPanel → Tâches cron."
+            fi
+
+            echo ""
             echo "=== Configuration jeton maintenance dans .env ==="
             if [ -f .env ] && ! grep -q "^MAINTENANCE_TOKEN=" .env; then
               echo "MAINTENANCE_TOKEN=ccd-migration-prod-2026-secure-token" >> .env

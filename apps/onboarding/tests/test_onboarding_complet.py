@@ -29,7 +29,7 @@ def cache_propre():
 
 
 @pytest.fixture
-def admin_user(db):
+def dg_user(db):
     with schema_context(SCHEMA):
         from apps.accounts.models import Invitation
         from apps.onboarding.models import EtapeConfiguration, ProgressionConfiguration
@@ -47,7 +47,8 @@ def admin_user(db):
             password=MOT_DE_PASSE,
             nom="Konan",
             prenom="Yao",
-            role_global=RoleGlobal.ADMIN,
+            # L'étape 1 modifie l'entreprise : droit réservé au DG (`DROITS_ADMIN_RESERVES_DG`).
+            role_global=RoleGlobal.DIRECTEUR_GENERAL,
             statut=StatutUtilisateur.ACTIF,
         )
         yield admin
@@ -59,10 +60,10 @@ def admin_user(db):
         Utilisateur.tous_objets.filter(pk=admin.pk).delete()
 
 
-def auth_client(client, admin_user):
+def auth_client(client, dg_user):
     rep = client.post(
         "/api/v1/auth/token/",
-        {"email": admin_user.email, "mot_de_passe": MOT_DE_PASSE, "origine": "WEB"},
+        {"email": dg_user.email, "mot_de_passe": MOT_DE_PASSE, "origine": "WEB"},
         format="json",
     )
     token = rep.data["access"]
@@ -71,9 +72,9 @@ def auth_client(client, admin_user):
 
 
 @pytest.mark.django_db
-def test_wizard_cycle_complet(client, admin_user):
+def test_wizard_cycle_complet(client, dg_user):
     """Vérifie l'enchaînement réel des 3 étapes du wizard et son récapitulatif."""
-    cl = auth_client(client, admin_user)
+    cl = auth_client(client, dg_user)
 
     # 0. Lecture de la progression initiale
     rep = cl.get("/api/v1/configuration/")
@@ -167,9 +168,9 @@ def test_wizard_cycle_complet(client, admin_user):
 
 
 @pytest.mark.django_db
-def test_rejeu_etape2_sans_duplication(client, admin_user):
+def test_rejeu_etape2_sans_duplication(client, dg_user):
     """Vérifie que la modification de l'étape 2 (retour arrière) met à jour sans dupliquer."""
-    cl = auth_client(client, admin_user)
+    cl = auth_client(client, dg_user)
 
     # 0. Étape 1 : Validation préalable
     rep_val1 = cl.post("/api/v1/configuration/etapes/ENTREPRISE/valider/", {}, format="json")

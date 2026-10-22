@@ -7,13 +7,14 @@ from django_tenants.utils import schema_context
 
 from apps.core.emails import envoyer
 from apps.core.enums import RoleGlobal, StatutProjet
-from apps.projets.services.alertes_retard import detecter_alertes_retard
-from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
 
 logger = logging.getLogger(__name__)
 
+# Aucun import de apps.projets.services en tête de module : le paquet services importe
+# ce module (reprogrammation → notifier_dg_derive_delai), et le worker Celery le charge
+# en premier. Les services s'importent dans le corps des tâches.
+
 __all__ = [
-    "STATUTS_SANTE_FIGES",
     "evaluer_f3_nuit_tous_tenants",
     "notifier_dg_derive_delai",
     "recalculer_sante_projet_task",
@@ -124,7 +125,9 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
     from apps.chantier.models import RapportJournalier
     from apps.core.enums import StatutActivite, StatutEntreprise, StatutLot, StatutRapport
     from apps.projets.models import Activite, Lot, Projet
+    from apps.projets.services.alertes_retard import detecter_alertes_retard
     from apps.projets.services.avancement import synchroniser_rapport_approuve
+    from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
     from apps.projets.services.machine_etats import (
         STATUTS_PROJET_MANUELS_FIXES,
         evaluer_statut_activite,
@@ -305,7 +308,7 @@ def recalculer_sante_projet_task(
 
     from apps.core.enums import BadgeSante
     from apps.projets.models import Projet, SanteProjetSnapshot
-    from apps.projets.services.indice_sante import evaluer_indice_sante
+    from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES, evaluer_indice_sante
     from apps.projets.services.sante_calculs import calculer_avancement_physique_projet
     from apps.projets.services.sante_declencheur import obtenir_cle_recalcul_en_attente
 

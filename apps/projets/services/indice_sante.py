@@ -59,7 +59,6 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import prefetch_related_objects
 from django.utils import timezone
 
-from apps.chantier.services.journal import premier_jour_rapport
 from apps.core.enums import StatutBlocage, StatutProjet, StatutRapport
 from apps.projets.services.calendrier_ouvre import calendrier_entreprise
 from apps.projets.services.sante_calculs import (
@@ -269,6 +268,10 @@ def evaluer_indice_sante(
     date_fin = date_ref
 
     # 5. Jours attendus pour les rapports (7 jours calendaires jusqu'à date_ref comprise)
+    # Import local : au chargement du module, il fermait le cycle
+    # chantier.services → projets.services → projets.tasks → indice_sante → chantier.
+    from apps.chantier.services.journal import premier_jour_rapport
+
     premier_jour = premier_jour_rapport(projet)
 
     dates_attendues: set[date] = set()

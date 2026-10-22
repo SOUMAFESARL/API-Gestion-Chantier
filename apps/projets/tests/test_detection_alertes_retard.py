@@ -591,7 +591,7 @@ def test_branchement_evaluer_f3_nuit_tous_tenants(schema_demo, projet_de_test):
 
     _ = projet_de_test
 
-    with patch("apps.projets.tasks.detecter_alertes_retard") as mock_detect:
+    with patch("apps.projets.services.alertes_retard.detecter_alertes_retard") as mock_detect:
         rapport = evaluer_f3_nuit_tous_tenants()
         assert isinstance(rapport, dict)
         assert mock_detect.called

@@ -14,6 +14,7 @@ from apps.catalogue.models.referentiel import (
     code_depuis_libelle,
 )
 from apps.core.enums import ActionAudit
+from apps.core.exceptions import LibelleEnDouble
 from apps.projets.models import ReferentielEntreprise
 
 __all__ = [
@@ -30,6 +31,7 @@ CATEGORIES_URL = {
     "lots": CategorieReferentiel.LOT,
 }
 
+LONGUEUR_MAX_GROUPE = 100
 PLATEFORME = "PLATEFORME"
 ENTREPRISE = "ENTREPRISE"
 
@@ -50,15 +52,21 @@ def lister_referentiel(categorie: str) -> list[dict]:
     return plateforme + entreprise
 
 
-def ajouter_entree(categorie: str, libelle: str, *, auteur=None) -> dict:
+def ajouter_entree(categorie: str, libelle: str, *, groupe: str = "", auteur=None) -> dict:
     libelle = " ".join((libelle or "").split())
     if not libelle:
         raise ValidationError({"libelle": "Saisissez un libellé."})
+    groupe = " ".join((groupe or "").split())
+    if len(groupe) > LONGUEUR_MAX_GROUPE:
+        raise ValidationError(
+            {"groupe": f"Le groupe ne peut pas dépasser {LONGUEUR_MAX_GROUPE} caractères."}
+        )
 
     existantes = lister_referentiel(categorie)
     cle = cle_comparaison(libelle)
-    if any(cle_comparaison(e["libelle"]) == cle for e in existantes):
-        raise ValidationError({"libelle": "Ce libellé figure déjà dans la liste."})
+    doublon = next((e for e in existantes if cle_comparaison(e["libelle"]) == cle), None)
+    if doublon is not None:
+        raise LibelleEnDouble(libelle, doublon["libelle"])
 
     codes = {e["code"] for e in existantes} | set(
         ReferentielEntreprise.tous_objets.filter(categorie=categorie).values_list("code", flat=True)
@@ -71,16 +79,16 @@ def ajouter_entree(categorie: str, libelle: str, *, auteur=None) -> dict:
         rang += 1
 
     entree = ReferentielEntreprise.objects.create(
-        categorie=categorie, code=code, libelle=libelle, cree_par=auteur
+        categorie=categorie, code=code, libelle=libelle, groupe=groupe, cree_par=auteur
     )
     journaliser(
         action=ActionAudit.CREATION,
         type_entite="referentiel_entreprise",
         entite_id=entree.pk,
         utilisateur_id=getattr(auteur, "pk", None),
-        valeur_apres={"categorie": categorie, "code": code, "libelle": libelle},
+        valeur_apres={"categorie": categorie, "code": code, "libelle": libelle, "groupe": groupe},
     )
-    return {"code": code, "libelle": libelle, "groupe": "", "origine": ENTREPRISE}
+    return {"code": code, "libelle": libelle, "groupe": groupe, "origine": ENTREPRISE}
 
 
 def retirer_entree(categorie: str, code: str, *, auteur=None) -> None:

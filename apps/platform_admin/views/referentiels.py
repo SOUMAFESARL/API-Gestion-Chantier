@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404
 from django_tenants.utils import schema_context
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
-from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,6 +18,7 @@ from apps.catalogue.models.referentiel import (
     cle_comparaison,
     code_depuis_libelle,
 )
+from apps.core.exceptions import LibelleEnDouble
 from apps.platform_admin.permissions import EstSuperAdminPlateforme, exiger_superviseur
 from apps.platform_admin.services.notifications import journaliser_plateforme
 from apps.projets.services.referentiels import CATEGORIES_URL
@@ -47,8 +47,9 @@ def _categorie(segment: str) -> str:
 def _refuser_doublon(categorie: str, libelle: str, exclure_id=None) -> None:
     cle = cle_comparaison(libelle)
     autres = ReferentielPlateforme.objects.filter(categorie=categorie).exclude(id=exclure_id)
-    if any(cle_comparaison(e.libelle) == cle for e in autres):
-        raise ValidationError({"libelle": "Ce libellé figure déjà dans la liste."})
+    doublon = next((e for e in autres if cle_comparaison(e.libelle) == cle), None)
+    if doublon is not None:
+        raise LibelleEnDouble(libelle, doublon.libelle)
 
 
 class ReferentielPlateformeListeView(APIView):

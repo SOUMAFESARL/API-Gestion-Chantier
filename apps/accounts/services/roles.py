@@ -13,7 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.models import Module, Permission, Role, RoleModulePermission, Utilisateur
+from apps.accounts.models import Module, Role, RoleModulePermission, Utilisateur
 from apps.catalogue.models import CatalogueModule, CataloguePermission
 from apps.core.enums import (
     MODULES_DETAILS,
@@ -21,7 +21,7 @@ from apps.core.enums import (
     RoleGlobal,
     StatutUtilisateur,
 )
-from apps.core.exceptions import ActionReserveeDg, RoleSubstitutionObligatoire
+from apps.core.exceptions import ActionReserveeDg
 from apps.core.registre_permissions import REGISTRE
 
 ROLES_SYSTEME_INFOS = {
@@ -146,6 +146,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.affecter_membres",
             "projets.gerer_equipes",
             "projets.voir_montants",
+            "projets.referentiels_ajouter",
         ),
         "chantier": ("chantier.lire", "chantier.rediger", "chantier.valider"),
         "pilotage": ("pilotage.lire", "pilotage.voir_montants"),
@@ -161,6 +162,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.resilier_archiver",
             "projets.affecter_membres",
             "projets.gerer_equipes",
+            "projets.referentiels_ajouter",
         ),
         "chantier": ("chantier.lire", "chantier.rediger", "chantier.valider"),
         "pilotage": ("pilotage.lire",),
@@ -175,6 +177,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.changer_statut",
             "projets.resilier_archiver",
             "projets.voir_montants",
+            "projets.referentiels_ajouter",
         ),
         "chantier": ("chantier.lire", "chantier.rediger", "chantier.valider"),
         "pilotage": ("pilotage.lire",),
@@ -196,6 +199,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.affecter_membres",
             "projets.gerer_equipes",
             "projets.voir_montants",
+            "projets.referentiels_ajouter",
         ),
         "chantier": ("chantier.lire", "chantier.rediger"),
         "pilotage": ("pilotage.lire",),
@@ -578,8 +582,9 @@ def supprimer_role(
     - Si le rôle est attribué, l'une des deux options (reassigner_vers_role ou supprimer_collaborateurs) est obligatoire.
     - La suppression et les opérations associées sont exécutées dans une transaction atomique.
     """
-    from apps.accounts.services.utilisateurs import desactiver_collaborateur_plateforme
     from django.db.models import Q
+
+    from apps.accounts.services.utilisateurs import desactiver_collaborateur_plateforme
 
     # 1. Rôle système immuable (DG)
     if role.est_systeme:
@@ -717,8 +722,9 @@ def rattacher_collaborateur_a_role(
     - Seul le DG ou un Admin peut conférer le rôle ADMIN.
     """
     from django.core.exceptions import ValidationError
+
     from apps.core.droits import est_dg
-    from apps.core.enums import RoleGlobal, StatutUtilisateur
+    from apps.core.enums import RoleGlobal
 
     # Règle 1 : Immutabilité du compte Propriétaire / DG
     if est_dg(collaborateur):

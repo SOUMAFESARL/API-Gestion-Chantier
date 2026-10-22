@@ -111,10 +111,20 @@ def test_acces_et_isolation(contexte):
     client, abonnement, admin = contexte
     client.force_authenticate(None)
     assert client.get(URL).status_code == 401
-    admin.role_global = RoleGlobal.CHEF_PROJET
-    client.force_authenticate(admin)
+    # Le rôle effectif suit la FK `role`, posée à la création : changer
+    # `role_global` en mémoire ne retire rien. On crée donc un vrai chef de projet.
+    with schema_context("demo"):
+        chef = Utilisateur.objects.create_user(
+            email="rappel.chef@demo.ci",
+            password="MotDePasse1!",
+            nom="Test",
+            prenom="Chef",
+            role_global=RoleGlobal.CHEF_PROJET,
+            statut=StatutUtilisateur.ACTIF,
+        )
+    client.force_authenticate(chef)
     assert client.get(URL).status_code == 403
-    admin.role_global = RoleGlobal.ADMIN
+    client.force_authenticate(admin)
     public = APIClient(headers={"host": "localhost"})
     public.force_authenticate(admin)
     assert public.get(URL).status_code == 403

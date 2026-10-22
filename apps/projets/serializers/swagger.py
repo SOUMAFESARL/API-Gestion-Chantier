@@ -309,8 +309,8 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
         )
     )
     maitre_ouvrage = serializers.SerializerMethodField()
-    duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
-    duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
+    duree_jours_ouvres = serializers.SerializerMethodField()
+    duree = serializers.SerializerMethodField()
     contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
 
     avancement_theorique = serializers.SerializerMethodField(
@@ -326,15 +326,44 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     def get_avancement_reel(self, obj) -> float:
         return statistiques_lots(obj.lots.all())["avancement_pondere"]
 
+    def _calendrier(self):
+        """Le calendrier construit une fois par la vue de liste ; None pour un objet isolé."""
+        ctx = getattr(self, "context", None)
+        return ctx.get("calendrier") if ctx else None
+
     def _indicateurs_temporels(self, obj) -> dict:
         # Un seul calcul par projet et par réponse : les deux champs le partagent.
         if not hasattr(obj, "_indicateurs_temporels_cache"):
             from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
 
-            ctx = getattr(self, "context", None)
-            cal = ctx.get("calendrier_temporel") if ctx else None
-            obj._indicateurs_temporels_cache = indicateurs_temporels_projet(obj, calendrier=cal)
+            obj._indicateurs_temporels_cache = indicateurs_temporels_projet(
+                obj, calendrier=self._calendrier()
+            )
         return obj._indicateurs_temporels_cache
+
+    def _jours_ouvres(self, obj) -> int | None:
+        """Jours ouvrés du projet, sur le calendrier partagé s'il existe (sinon celui du modèle)."""
+        cal = self._calendrier()
+        if cal is None:
+            return obj.duree_jours_ouvres
+        if not obj.date_debut_prevue or not obj.date_fin_prevue:
+            return None
+        from apps.projets.services.sante_calculs import compter_jours_ouvres
+
+        return compter_jours_ouvres(obj.date_debut_prevue, obj.date_fin_prevue, cal)
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_duree_jours_ouvres(self, obj) -> int | None:
+        return self._jours_ouvres(obj)
+
+    @extend_schema_field(DureeProjetSerializer(allow_null=True))
+    def get_duree(self, obj) -> dict | None:
+        from apps.projets.services.durees import duree_calendaire
+
+        duree = duree_calendaire(obj.date_debut_prevue, obj.date_fin_prevue)
+        if duree is None:
+            return None
+        return {**duree, "jours_ouvres": self._jours_ouvres(obj)}
 
     @extend_schema_field(serializers.FloatField())
     def get_avancement_theorique(self, obj) -> float:

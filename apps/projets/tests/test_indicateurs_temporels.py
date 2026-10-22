@@ -368,3 +368,202 @@ def test_calendrier_pour_lots_bornes(schema_demo):
     cal = calendrier_pour_lots([l1, l2], date_reference=date(2026, 4, 1))
     assert cal is not None
 
+
+@pytest.mark.django_db
+def test_calendrier_partage_ne_change_pas_les_valeurs(schema_demo):
+    """Passer le calendrier de la liste rend exactement les valeurs du calcul isolé."""
+    lot = MagicMock(
+        date_debut_baseline=date(2026, 10, 5),
+        date_fin_baseline=date(2026, 10, 16),
+        date_debut_prevue=None,
+        date_fin_prevue=None,
+        activites=MagicMock(all=MagicMock(return_value=[])),
+        avancement=Decimal("10.0"),
+    )
+    lot_voisin = MagicMock(
+        date_debut_baseline=date(2025, 1, 6),
+        date_fin_baseline=date(2027, 6, 30),
+        date_debut_prevue=None,
+        date_fin_prevue=None,
+        activites=MagicMock(all=MagicMock(return_value=[])),
+        avancement=Decimal("0.0"),
+    )
+    reference = date(2026, 10, 7)
+    partage = calendrier_pour_lots([lot, lot_voisin], reference)
+
+    assert indicateurs_temporels_lot(lot, reference, partage) == indicateurs_temporels_lot(
+        lot, reference
+    )
+
+
+# ==============================================================================
+# 4. UN SEUL CALENDRIER ET UN NOMBRE DE REQUÊTES CONSTANT DANS LES LISTES
+# ==============================================================================
+
+
+def _ajouter_lots(projet, combien):
+    """Ajoute des lots budgétés et datés autour d'aujourd'hui, comme `LOT-01`."""
+    today = timezone.localdate()
+    depart = projet.lots.count() + 1
+    for rang in range(depart, depart + combien):
+        Lot.objects.create(
+            projet=projet,
+            code=f"LOT-X{rang:02d}",
+            libelle=f"Lot supplémentaire {rang}",
+            mode_execution=ModeExecution.REGIE,
+            type_bordereau=TypeBordereau.FORFAIT,
+            budget_initial_montant=100_000_000,
+            date_debut_baseline=today - timedelta(days=rang),
+            date_fin_baseline=today + timedelta(days=rang),
+            ordre=rang,
+        )
+
+
+def _ajouter_projets(modele, combien):
+    """Ajoute des projets, chacun avec deux lots, pour le portefeuille."""
+    today = timezone.localdate()
+    for rang in range(combien):
+        projet = Projet.objects.create(
+            reference=f"PRJ-IND-X{rang}",
+            nom=f"Chantier supplémentaire {rang}",
+            client=modele.client,
+            chef_projet=modele.chef_projet,
+            ville="Abidjan",
+            budget_initial_montant=1_000_000_000,
+            date_debut_prevue=today - timedelta(days=30 + rang),
+            date_fin_prevue=today + timedelta(days=30 + rang),
+            statut=StatutProjet.EN_COURS,
+        )
+        _ajouter_lots(projet, 2)
+
+
+@pytest.fixture
+def compteur_calendriers(monkeypatch):
+    """Compte les constructions de calendrier faites par le service des indicateurs."""
+    from apps.projets.services import indicateurs_temporels
+
+    appels = []
+    reel = indicateurs_temporels.calendrier_entreprise
+
+    def espion(debut, fin):
+        appels.append((debut, fin))
+        return reel(debut, fin)
+
+    monkeypatch.setattr(indicateurs_temporels, "calendrier_entreprise", espion)
+    return appels
+
+
+@pytest.mark.django_db
+def test_liste_des_lots_un_calendrier_et_requetes_constantes(
+    client_tenant,
+    dg_user,
+    projet_avec_lot_budgete,
+    compteur_calendriers,
+    django_assert_max_num_queries,
+):
+    """Un calendrier par requête, et autant de requêtes pour 2 lots que pour 6."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    client_tenant.force_authenticate(user=dg_user)
+    projet = projet_avec_lot_budgete["projet"]
+    url = f"/api/v1/projets/{projet.id}/lots/"
+
+    # Échauffement : la première lecture crée la semaine type de l'entreprise.
+    assert client_tenant.get(url).status_code == status.HTTP_200_OK
+    compteur_calendriers.clear()
+    with schema_context(SCHEMA), CaptureQueriesContext(connection) as avant:
+        reponse = client_tenant.get(url)
+    assert reponse.status_code == status.HTTP_200_OK
+    assert len(reponse.json()) == 2
+    assert len(compteur_calendriers) == 1
+
+    with schema_context(SCHEMA):
+        _ajouter_lots(projet, 4)
+
+    compteur_calendriers.clear()
+    with schema_context(SCHEMA), django_assert_max_num_queries(len(avant.captured_queries)):
+        reponse = client_tenant.get(url)
+    assert reponse.status_code == status.HTTP_200_OK
+    assert len(reponse.json()) == 6
+    assert len(compteur_calendriers) == 1
+
+
+@pytest.mark.django_db
+def test_portefeuille_un_calendrier_et_requetes_constantes(
+    client_tenant,
+    dg_user,
+    projet_avec_lot_budgete,
+    compteur_calendriers,
+    django_assert_max_num_queries,
+):
+    """Le tableau de bord construit un calendrier ; son coût ne dépend pas du nombre de projets."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    client_tenant.force_authenticate(user=dg_user)
+    url = "/api/v1/tableau-de-bord/"
+
+    # Échauffement : semaine type, météo et caches se remplissent à la première lecture.
+    assert client_tenant.get(url).status_code == status.HTTP_200_OK
+    compteur_calendriers.clear()
+    with schema_context(SCHEMA), CaptureQueriesContext(connection) as avant:
+        reponse = client_tenant.get(url)
+    assert reponse.status_code == status.HTTP_200_OK
+    assert len(compteur_calendriers) == 1
+    projets_avant = len(reponse.json()["projets"])
+
+    with schema_context(SCHEMA):
+        _ajouter_projets(projet_avec_lot_budgete["projet"], 4)
+
+    compteur_calendriers.clear()
+    with schema_context(SCHEMA), django_assert_max_num_queries(len(avant.captured_queries)):
+        reponse = client_tenant.get(url)
+    assert reponse.status_code == status.HTTP_200_OK
+    assert len(reponse.json()["projets"]) == projets_avant + 4
+    assert len(compteur_calendriers) == 1
+
+
+# ==============================================================================
+# 5. DURÉES DU PROJET DANS LA LISTE (calendrier partagé)
+# ==============================================================================
+
+
+@pytest.mark.django_db
+def test_liste_des_projets_rend_les_durees_du_modele(
+    client_tenant, dg_user, projet_avec_lot_budgete
+):
+    """Le chemin avec calendrier partagé rend les mêmes durées que le modèle.
+
+    `duree_jours_ouvres` et `duree` de la liste ne doivent pas différer de
+    `Projet.duree_jours_ouvres` et `Projet.duree_calendaire`, ni pour un projet daté
+    ni pour un projet sans `date_debut_prevue` (valeurs nulles).
+    """
+    projet = projet_avec_lot_budgete["projet"]
+    with schema_context(SCHEMA):
+        sans_date = Projet.objects.create(
+            reference="PRJ-IND-SANS-DATE",
+            nom="Chantier sans date de début",
+            client=projet.client,
+            chef_projet=projet.chef_projet,
+            ville="Abidjan",
+            budget_initial_montant=1_000_000_000,
+            date_debut_prevue=None,
+            statut=StatutProjet.EN_COURS,
+        )
+        attendu_jours_ouvres = projet.duree_jours_ouvres
+        attendu_duree = projet.duree_calendaire
+
+    client_tenant.force_authenticate(user=dg_user)
+    reponse = client_tenant.get("/api/v1/projets/")
+    assert reponse.status_code == status.HTTP_200_OK
+    par_reference = {item["reference"]: item for item in reponse.json()}
+
+    entree = par_reference[projet.reference]
+    assert attendu_jours_ouvres is not None
+    assert entree["duree_jours_ouvres"] == attendu_jours_ouvres
+    assert entree["duree"] == attendu_duree
+
+    entree_sans_date = par_reference[sans_date.reference]
+    assert entree_sans_date["duree"] is None
+    assert entree_sans_date["duree_jours_ouvres"] is None

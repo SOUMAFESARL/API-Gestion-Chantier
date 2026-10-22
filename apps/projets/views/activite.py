@@ -4,26 +4,45 @@ Schéma : tenant.
 Module CDC : 1 (Gestion des Projets).
 """
 
+from decimal import ROUND_HALF_UP, Decimal
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.audit.services import journaliser
+from apps.core.enums import ActionAudit, RoleProjet
+from apps.core.exceptions import ErreurMetier, RequeteRefusee
+from apps.core.ip_restriction import extraire_ip_client
 from apps.core.permissions import GardePermissionProjet
-from apps.projets.models import Activite, Lot, Projet
+from apps.projets.models import Activite, AffectationProjet, Lot, MiseAJourInline, Projet
 from apps.projets.serializers import (
+    ActiviteAvancementSerializer,
     ActiviteCreationSerializer,
     ActiviteModificationSerializer,
     ActiviteSerializer,
+    MiseAJourInlineSerializer,
 )
 from apps.projets.serializers.lot import ActivationSerializer
+from apps.projets.services.avancement import recalculer_apres_quantites
+from apps.projets.services.calendrier import MSG_EXIGER_DATES_LOT
+from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+from apps.projets.services.sante_calculs import calculer_avancement_physique_activite
+from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
-__all__ = ["ActiviteDetailView", "LotActiviteListCreateView"]
+__all__ = [
+    "ActiviteActivationView",
+    "ActiviteAvancementHistoriqueView",
+    "ActiviteAvancementView",
+    "ActiviteDetailView",
+    "LotActiviteListCreateView",
+]
 
 ERREURS_ACTIVITES = {
     401: OpenApiResponse(description="Authentification requise."),
@@ -117,12 +136,8 @@ class LotActiviteListCreateView(APIView):
             pk=lot_id,
         )
         self.check_object_permissions(request, lot)
-        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
-
         verifier_statut_projet_pour_ecriture(lot.projet)
         if not lot.est_actif:
-            from rest_framework.exceptions import ValidationError
-
             raise ValidationError({"lot": "Le lot est désactivé."})
 
         serializer = ActiviteCreationSerializer(
@@ -131,8 +146,6 @@ class LotActiviteListCreateView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         activite = serializer.save()
-        from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
         declencher_recalcul_sante(
             projet_id=lot.projet_id,
             declencheur_type="ACTIVITE_CREATION",
@@ -168,8 +181,6 @@ class ActiviteDetailView(APIView):
         activite = get_object_or_404(queryset, pk=pk)
         self.check_object_permissions(request, activite)
         if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-            from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
-
             verifier_statut_projet_pour_ecriture(activite.lot.projet)
         if verrou:
             # Sérialise aussi les dépendances entre lots : projet, lot, activité.
@@ -219,8 +230,6 @@ class ActiviteDetailView(APIView):
         projet_id = activite.lot.projet_id if activite.lot else None
         activite.delete(utilisateur=request.user)
         if projet_id:
-            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
             declencher_recalcul_sante(
                 projet_id=projet_id,
                 declencheur_type="ACTIVITE_SUPPRESSION",
@@ -256,8 +265,6 @@ class ActiviteDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         activite_modifiee = serializer.save()
         if activite.lot and activite.lot.projet_id:
-            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
             declencher_recalcul_sante(
                 projet_id=activite.lot.projet_id,
                 declencheur_type="ACTIVITE_MODIFICATION",
@@ -291,20 +298,187 @@ class ActiviteActivationView(ActiviteDetailView):
         etat = serializer.validated_data["est_actif"]
         if etat:
             if not activite.lot.date_debut_prevue or not activite.lot.date_fin_prevue:
-                from apps.core.exceptions import RequeteRefusee
-                from apps.projets.services.calendrier import MSG_EXIGER_DATES_LOT
-
                 raise RequeteRefusee(MSG_EXIGER_DATES_LOT)
             if not activite.lot.est_actif:
                 raise ValidationError({"lot": "Réactivez le lot avant l'activité."})
         activite.est_actif = etat
         activite.save(update_fields=["est_actif", "modifie_le"])
         if activite.lot and activite.lot.projet_id:
-            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
             declencher_recalcul_sante(
                 projet_id=activite.lot.projet_id,
                 declencheur_type="ACTIVITE_ACTIVATION",
                 declencheur_id=activite.id,
             )
         return Response(ActiviteSerializer(activite, context={"request": request}).data)
+
+
+class ActiviteAvancementView(APIView):
+    """Mise à jour manuelle de l'avancement d'une activité (F3, SFD §5.2)."""
+
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Mettre à jour manuellement l'avancement d'une activité",
+        tags=["activités"],
+        description=(
+            "Mise à jour manuelle de la quantité réalisée d'une activité (F3). "
+            "Seuls le Conducteur de Travaux (CT) et le Chef de Projet (CP) affectés "
+            "au projet peuvent effectuer cette action. Le commentaire doit comporter "
+            "au moins 10 caractères. La quantité ne peut pas diminuer (422). "
+            "Recalcule l'avancement de l'activité, du lot et du projet, le statut, "
+            "l'indice de santé et les alertes de retard."
+        ),
+        request=ActiviteAvancementSerializer,
+        responses={
+            200: ActiviteSerializer,
+            400: OpenApiResponse(description="Commentaire trop court ou données invalides."),
+            403: OpenApiResponse(description="Droits insuffisants (CT ou CP affecté requis)."),
+            422: OpenApiResponse(description="Règle métier violée (quantité en diminution)."),
+            **ERREURS_ACTIVITES,
+        },
+    )
+    @transaction.atomic
+    def patch(self, request, pk):
+        activite = get_object_or_404(
+            Activite.objects.select_related("lot", "lot__projet").filter(
+                lot__supprime_le__isnull=True,
+                lot__projet__supprime_le__isnull=True,
+            ),
+            pk=pk,
+        )
+        projet = activite.lot.projet
+
+        # Contrôle des droits : CT et CP affectés au projet seulement (SFD §3)
+        if not self._utilisateur_est_ct_ou_cp_affecte(request.user, projet):
+            raise PermissionDenied(
+                "Seuls le Conducteur de Travaux et le Chef de Projet affectés à ce projet "
+                "sont autorisés à mettre à jour manuellement l'avancement."
+            )
+
+        get_object_or_404(Projet.objects.select_for_update(), pk=projet.pk)
+        get_object_or_404(Lot.objects.select_for_update(), pk=activite.lot_id)
+        activite = get_object_or_404(
+            Activite.objects.select_related("lot", "lot__projet")
+            .filter(pk=pk)
+            .select_for_update(of=("self",)),
+            pk=pk,
+        )
+
+        verifier_statut_projet_pour_ecriture(projet)
+
+        serializer = ActiviteAvancementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        nouvelle_quantite = serializer.validated_data["quantite_realisee"]
+        commentaire = serializer.validated_data["commentaire"]
+
+        # RG-F3-02 : une quantité inférieure à la quantité actuelle est refusée en 422
+        if nouvelle_quantite < activite.quantite_realisee:
+            raise ErreurMetier("L'avancement d'une activité ne peut pas diminuer.")
+
+        quantite_avant = activite.quantite_realisee
+        avancement_avant = activite.avancement
+
+        activite.quantite_realisee = nouvelle_quantite
+        av_act_apres = calculer_avancement_physique_activite(activite)
+        avancement_apres = Decimal(str(av_act_apres)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        activite.save(update_fields=["quantite_realisee", "modifie_le"])
+
+        MiseAJourInline.objects.create(
+            activite=activite,
+            auteur=request.user,
+            quantite_avant=quantite_avant,
+            quantite_apres=nouvelle_quantite,
+            avancement_avant=avancement_avant,
+            avancement_apres=avancement_apres,
+            commentaire=commentaire,
+            source="F3_INLINE",
+            cree_par=request.user,
+        )
+
+        journaliser(
+            action=ActionAudit.MODIFICATION,
+            type_entite="activite",
+            entite_id=activite.pk,
+            utilisateur_id=request.user.pk,
+            valeur_avant={
+                "quantite_realisee": str(quantite_avant),
+                "avancement": str(avancement_avant),
+            },
+            valeur_apres={
+                "quantite_realisee": str(nouvelle_quantite),
+                "avancement": str(avancement_apres),
+                "commentaire": commentaire,
+            },
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
+
+        recalculer_apres_quantites(
+            activites=[activite],
+            projet=projet,
+            declencheur_type="F3_INLINE",
+            declencheur_id=activite.pk,
+        )
+
+        activite.refresh_from_db()
+        return Response(
+            ActiviteSerializer(activite, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @staticmethod
+    def _utilisateur_est_ct_ou_cp_affecte(user, projet) -> bool:
+        if not user or not user.is_authenticated:
+            return False
+        if projet.chef_projet_id == user.id or projet.conducteur_travaux_id == user.id:
+            return True
+
+        roles_autorises = {RoleProjet.CHEF_PROJET, RoleProjet.CONDUCTEUR_TRAVAUX}
+        return AffectationProjet.objects.filter(
+            projet=projet,
+            utilisateur=user,
+            role_projet__in=roles_autorises,
+            est_actif=True,
+            supprime_le__isnull=True,
+        ).exists()
+
+
+class ActiviteAvancementHistoriqueView(APIView):
+    """Historique des mises à jour manuelles d'une activité (F3, SFD §5.3)."""
+
+    permission_classes = [
+        IsAuthenticated,
+        GardePermissionProjet.pour("projets.lire"),
+    ]
+
+    @extend_schema(
+        summary="Historique des mises à jour manuelles d'avancement d'une activité",
+        tags=["activités"],
+        description=(
+            "Renvoie les mises à jour manuelles (MiseAJourInline) d'une activité "
+            "ordonnées de la plus récente à la plus ancienne."
+        ),
+        responses={200: MiseAJourInlineSerializer(many=True), **ERREURS_ACTIVITES},
+    )
+    def get(self, request, pk):
+        activite = get_object_or_404(
+            Activite.objects.select_related("lot", "lot__projet").filter(
+                lot__supprime_le__isnull=True,
+                lot__projet__supprime_le__isnull=True,
+            ),
+            pk=pk,
+        )
+        self.check_object_permissions(request, activite)
+        mises_a_jour = (
+            activite.mises_a_jour_inline.filter(supprime_le__isnull=True)
+            .select_related("auteur")
+            .order_by("-cree_le")
+        )
+        serializer = MiseAJourInlineSerializer(
+            mises_a_jour, many=True, context={"request": request}
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)

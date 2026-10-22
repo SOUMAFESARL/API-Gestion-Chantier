@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "quantites_du_journal",
     "quantites_synchronisees",
+    "recalculer_apres_quantites",
     "synchroniser_rapport_approuve",
 ]
 
@@ -90,6 +91,69 @@ def quantites_synchronisees(projet) -> dict[str, Decimal]:
     return cumuls
 
 
+def recalculer_apres_quantites(
+    activites,
+    projet=None,
+    declencheur_type: str = "RAPPORT_APPROBATION",
+    declencheur_id: uuid.UUID | str | None = None,
+) -> None:
+    """Recalcule et propage l'avancement après mise à jour des quantités réalisées.
+
+    Chaîne de recalcul (F3) partagée entre l'approbation de rapport et la mise à jour inline :
+    1. Calcule et enregistre l'avancement de chaque activité touchée.
+    2. Identifie les lots parents, recalcule et enregistre leur avancement.
+    3. Recalcule et enregistre l'avancement réel du projet.
+    4. Réévalue le statut du projet via machine d'états.
+    5. Déclenche le recalcul réactif de l'indice de santé.
+    6. Détecte les alertes de retard du projet.
+
+    Les étapes 3 à 6 ne s'exécutent que si ``projet`` est fourni : il n'est jamais
+    déduit des activités, pour qu'un rapport sans projet ne recalcule que ses
+    activités et leurs lots, comme avant la factorisation.
+    """
+    lots_touches_ids: set[uuid.UUID] = set()
+    for activite in activites:
+        av_act = calculer_avancement_physique_activite(activite)
+        activite.avancement = Decimal(str(av_act)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        activite.save(update_fields=["avancement"])
+        if activite.lot_id:
+            lots_touches_ids.add(activite.lot_id)
+
+    if lots_touches_ids:
+        lots = list(
+            Lot.objects.filter(pk__in=lots_touches_ids, supprime_le__isnull=True)
+            .select_for_update()
+            .order_by("pk")
+        )
+        for lot in lots:
+            av_lot = calculer_avancement_physique_lot(lot)
+            lot.avancement = Decimal(str(av_lot)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            lot.save(update_fields=["avancement"])
+
+    if projet:
+        projet_pk = getattr(projet, "pk", projet)
+        projet = Projet.objects.select_for_update().get(pk=projet_pk)
+        av_projet, _ = calculer_avancement_physique_projet(projet)
+        projet.avancement_reel = Decimal(str(av_projet)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        projet.save(update_fields=["avancement_reel"])
+
+        evaluer_statut_projet(projet)
+
+        declencher_recalcul_sante(
+            projet_id=projet.pk,
+            declencheur_type=declencheur_type,
+            declencheur_id=declencheur_id,
+        )
+
+        detecter_alertes_retard(projet)
+
+
 @transaction.atomic
 def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
     """Synchronise les quantités d'un rapport approuvé avec l'avancement physique.
@@ -144,52 +208,26 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
         .order_by("pk")
     )
 
-    lots_touches_ids: set[uuid.UUID] = set()
+    activites_modifiees = []
     for activite in activites_touchees:
         q_ajoute = cumuls.get(activite.pk, Decimal("0"))
         if q_ajoute > Decimal("0"):
             q_actuelle = activite.quantite_realisee or Decimal("0.000")
             activite.quantite_realisee = q_actuelle + q_ajoute
-            av_act = calculer_avancement_physique_activite(activite)
-            activite.avancement = Decimal(str(av_act)).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            activite.save(update_fields=["quantite_realisee", "avancement"])
-            if activite.lot_id:
-                lots_touches_ids.add(activite.lot_id)
+            activite.save(update_fields=["quantite_realisee"])
+            activites_modifiees.append(activite)
 
-    if lots_touches_ids:
-        lots = list(
-            Lot.objects.filter(pk__in=lots_touches_ids, supprime_le__isnull=True)
-            .select_for_update()
-            .order_by("pk")
-        )
-        for lot in lots:
-            av_lot = calculer_avancement_physique_lot(lot)
-            lot.avancement = Decimal(str(av_lot)).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            lot.save(update_fields=["avancement"])
-
+    projet = None
     if rapport.projet_id:
         projet = Projet.objects.select_for_update().get(pk=rapport.projet_id)
-        av_projet, _ = calculer_avancement_physique_projet(projet)
-        projet.avancement_reel = Decimal(str(av_projet)).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
-        projet.save(update_fields=["avancement_reel"])
+
+    recalculer_apres_quantites(
+        activites=activites_modifiees,
+        projet=projet,
+        declencheur_type="RAPPORT_APPROBATION",
+        declencheur_id=rapport.pk,
+    )
 
     RapportJournalier.objects.filter(pk=rapport.pk).update(f3_sync_done=True)
-
-    if rapport.projet_id:
-        evaluer_statut_projet(projet)
-
-        declencher_recalcul_sante(
-            projet_id=rapport.projet_id,
-            declencheur_type="RAPPORT_APPROBATION",
-            declencheur_id=rapport.pk,
-        )
-
-        detecter_alertes_retard(projet)
 
     return True

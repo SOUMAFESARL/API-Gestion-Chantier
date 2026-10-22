@@ -75,7 +75,8 @@ def test_invalid_patch_is_atomic(contexte, ressource, data):
     client, _, lot, activite, _ = contexte
     objet = lot if ressource == "lots" else activite
     response = client.patch(f"/api/v1/{ressource}/{objet.pk}/", data, format="json")
-    assert response.status_code == 400, response.data
+    status_attendu = 403 if ressource == "activites" and "avancement" in data else 400
+    assert response.status_code == status_attendu, response.data
     objet.refresh_from_db()
     assert objet.est_actif
     assert objet.budget_initial_montant is None

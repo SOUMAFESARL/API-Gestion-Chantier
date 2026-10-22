@@ -10,6 +10,7 @@ from apps.projets.views import (
     ProjetArretChantierListCreateView,
     ProjetDetailView,
     ProjetListCreateView,
+    ProjetPlanningView,
     ProjetSanteApercuView,
     ProjetSanteDetailView,
     ProjetSanteHistoriqueView,
@@ -18,6 +19,8 @@ from apps.projets.views import (
 )
 from apps.projets.views.activite import (
     ActiviteActivationView,
+    ActiviteAvancementHistoriqueView,
+    ActiviteAvancementView,
     ActiviteDetailView,
     LotActiviteListCreateView,
 )
@@ -25,6 +28,12 @@ from apps.projets.views.affectation import (
     CollaborateursAffectablesView,
     ProjetAffectationDetailView,
     ProjetAffectationListCreateView,
+)
+from apps.projets.views.calendrier import (
+    CalendrierEntrepriseView,
+    ExceptionCalendrierDetailView,
+    ExceptionCalendrierListCreateView,
+    SemaineTypeView,
 )
 from apps.projets.views.equipe import (
     ProjetEquipeAffectationDetailView,
@@ -149,6 +158,11 @@ urlpatterns = [
         ProjetJournalReportsConsolideView.as_view(),
         name="projet-journal-reports-consolide",
     ),
+    path(
+        "projets/<uuid:pk>/planning/",
+        ProjetPlanningView.as_view(),
+        name="projet-planning",
+    ),
     # Santé du projet
     path(
         "projets/<uuid:pk>/sante/",
@@ -216,6 +230,16 @@ urlpatterns = [
         name="activite-activation",
     ),
     path(
+        "activites/<uuid:pk>/avancement/",
+        ActiviteAvancementView.as_view(),
+        name="activite-avancement",
+    ),
+    path(
+        "activites/<uuid:pk>/avancement/historique/",
+        ActiviteAvancementHistoriqueView.as_view(),
+        name="activite-avancement-historique",
+    ),
+    path(
         "activites/<uuid:pk>/",
         ActiviteDetailView.as_view(),
         name="activite-detail",
@@ -242,5 +266,22 @@ urlpatterns = [
         "alertes-retard/<uuid:pk>/resoudre/",
         AlerteRetardResoudreView.as_view(),
         name="alerte-retard-resoudre",
+    ),
+    # Calendrier d'entreprise (SFD F3 §6 & Erratum E-4)
+    path("calendrier/", CalendrierEntrepriseView.as_view(), name="calendrier-entreprise"),
+    path(
+        "calendrier/semaine-type/",
+        SemaineTypeView.as_view(),
+        name="calendrier-semaine-type",
+    ),
+    path(
+        "calendrier/exceptions/",
+        ExceptionCalendrierListCreateView.as_view(),
+        name="calendrier-exceptions",
+    ),
+    path(
+        "calendrier/exceptions/<uuid:pk>/",
+        ExceptionCalendrierDetailView.as_view(),
+        name="calendrier-exception-detail",
     ),
 ]

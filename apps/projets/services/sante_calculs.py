@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
+from django.db.models import QuerySet
 from django_tenants.utils import get_public_schema_name, schema_context
 
 from apps.core.enums import BadgeSante, StatutActivite
@@ -167,7 +168,12 @@ def ponderer_lots_par_budget(lots) -> float:
     Seuls les lots actifs, non supprimés, et disposant d'un budget initial > 0 sont inclus.
     Retourne 0.0 si aucun lot n'a de budget.
     """
-    lots_iterable = lots.all() if hasattr(lots, "all") else lots
+    # Un QuerySet est parcouru tel quel : lui rappeler `.all()` le clone et jette son cache de
+    # préchargement, soit une requête par projet dans les listes. Seul un gestionnaire (`.all`
+    # sans être un QuerySet) doit être résolu.
+    lots_iterable = (
+        lots if isinstance(lots, QuerySet) or not hasattr(lots, "all") else lots.all()
+    )
     lots_actifs = [
         lot for lot in lots_iterable
         if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None

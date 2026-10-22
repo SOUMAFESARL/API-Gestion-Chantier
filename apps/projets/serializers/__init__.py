@@ -21,14 +21,25 @@ from apps.core.enums import (
 )
 from apps.projets.models import AffectationProjet, Lot, Projet
 from apps.projets.serializers.activite import (
+    ActiviteAvancementSerializer,
     ActiviteCreationSerializer,
     ActiviteModificationSerializer,
     ActiviteSerializer,
+    MiseAJourInlineSerializer,
 )
 from apps.projets.serializers.arret_chantier import (
     ArretChantierCreateSerializer,
     ArretChantierSerializer,
     ArretChantierUpdateSerializer,
+)
+from apps.projets.serializers.calendrier import (
+    CalendrierQuerySerializer,
+    CalendrierResponseSerializer,
+    ExceptionCalendrierCreateSerializer,
+    ExceptionCalendrierResponseSerializer,
+    JourFerieResponseSerializer,
+    SemaineTypeSerializer,
+    SemaineTypeUpdateSerializer,
 )
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
 from apps.projets.serializers.meteo import (
@@ -53,20 +64,27 @@ from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
+    "ActiviteAvancementSerializer",
     "ActiviteCreationSerializer",
     "ActiviteModificationSerializer",
     "ActiviteSerializer",
     "ArretChantierCreateSerializer",
     "ArretChantierSerializer",
     "ArretChantierUpdateSerializer",
+    "CalendrierQuerySerializer",
+    "CalendrierResponseSerializer",
     "ChefProjetEnrichiSerializer",
     "ChefProjetInviteSerializer",
     "DureeProjetSerializer",
     "EquipeCreationSerializer",
+    "ExceptionCalendrierCreateSerializer",
+    "ExceptionCalendrierResponseSerializer",
     "HistoriqueDateSerializer",
+    "JourFerieResponseSerializer",
     "LotCreationProjetSerializer",
     "LotSimpleSerializer",
     "MeteoResponseSerializer",
+    "MiseAJourInlineSerializer",
     "MotifReportCreationSerializer",
     "MotifReportSerializer",
     "ProjetCreationSerializer",
@@ -77,6 +95,8 @@ __all__ = [
     "SanteApercuSerializer",
     "SanteDetailResponseSerializer",
     "SanteHistoriqueItemSerializer",
+    "SemaineTypeSerializer",
+    "SemaineTypeUpdateSerializer",
     "TableauDeBordResponseSerializer",
 ]
 
@@ -227,7 +247,7 @@ class ProjetSerializer(serializers.ModelSerializer):
             from apps.projets.services.indicateurs_temporels import indicateurs_temporels_projet
 
             ctx = getattr(self, "context", None)
-            cal = ctx.get("calendrier_temporel") if ctx else None
+            cal = ctx.get("calendrier") if ctx else None
             setattr(obj, cache_attr, indicateurs_temporels_projet(obj, calendrier=cal))
         return getattr(obj, cache_attr)
 

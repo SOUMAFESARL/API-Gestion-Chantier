@@ -31,6 +31,9 @@ from apps.projets.serializers.swagger import (
 )
 from apps.projets.services.indicateurs_temporels import calendrier_pour_projets
 from apps.projets.views.activite import (
+    ActiviteActivationView,
+    ActiviteAvancementHistoriqueView,
+    ActiviteAvancementView,
     ActiviteDetailView,
     LotActiviteListCreateView,
 )
@@ -39,7 +42,14 @@ from apps.projets.views.arret_chantier import (
     ArretChantierDetailView,
     ProjetArretChantierListCreateView,
 )
+from apps.projets.views.calendrier import (
+    CalendrierEntrepriseView,
+    ExceptionCalendrierDetailView,
+    ExceptionCalendrierListCreateView,
+    SemaineTypeView,
+)
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
+from apps.projets.views.planning import ProjetPlanningView
 from apps.projets.views.reprogrammation import (
     ActiviteHistoriqueDatesView,
     ActiviteReprogrammerView,
@@ -59,12 +69,18 @@ from apps.projets.views.sante import (
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
+    "ActiviteActivationView",
+    "ActiviteAvancementHistoriqueView",
+    "ActiviteAvancementView",
     "ActiviteDetailView",
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",
     "AlerteRetardListView",
     "AlerteRetardResoudreView",
     "ArretChantierDetailView",
+    "CalendrierEntrepriseView",
+    "ExceptionCalendrierDetailView",
+    "ExceptionCalendrierListCreateView",
     "GlobalJournalReportsView",
     "LotActiviteListCreateView",
     "LotHistoriqueDatesView",
@@ -76,11 +92,13 @@ __all__ = [
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
+    "ProjetPlanningView",
     "ProjetReprogrammerView",
     "ProjetSanteApercuView",
     "ProjetSanteDetailView",
     "ProjetSanteHistoriqueView",
     "ReferentielVillesView",
+    "SemaineTypeView",
     "TableauDeBordView",
 ]
 
@@ -144,7 +162,7 @@ class ProjetListCreateView(APIView):
         projets = list(qs)
         context = {
             "request": request,
-            "calendrier_temporel": calendrier_pour_projets(projets),
+            "calendrier": calendrier_pour_projets(projets),
         }
         serializer = ProjetCreationResponseSerializer(projets, many=True, context=context)
         return Response(ResultList(serializer.data), status=status.HTTP_200_OK)

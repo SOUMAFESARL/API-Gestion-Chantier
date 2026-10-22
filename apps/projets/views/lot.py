@@ -58,15 +58,8 @@ class ProjetLotListCreateView(APIView):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
         lots = list(projet.lots.prefetch_related("activites"))
-        context = {
-            "request": request,
-            "calendrier_temporel": calendrier_pour_lots(lots),
-        }
-        return Response(
-            LotResponseSerializer(
-                lots, many=True, context=context
-            ).data
-        )
+        context = {"request": request, "calendrier": calendrier_pour_lots(lots)}
+        return Response(LotResponseSerializer(lots, many=True, context=context).data)
 
     @extend_schema(
         tags=["lots"],

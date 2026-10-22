@@ -31,6 +31,9 @@ from apps.projets.serializers.swagger import (
 )
 from apps.projets.services.indicateurs_temporels import calendrier_pour_projets
 from apps.projets.views.activite import (
+    ActiviteActivationView,
+    ActiviteAvancementHistoriqueView,
+    ActiviteAvancementView,
     ActiviteDetailView,
     LotActiviteListCreateView,
 )
@@ -65,6 +68,9 @@ from apps.projets.views.sante import (
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
+    "ActiviteActivationView",
+    "ActiviteAvancementHistoriqueView",
+    "ActiviteAvancementView",
     "ActiviteDetailView",
     "ActiviteHistoriqueDatesView",
     "ActiviteReprogrammerView",

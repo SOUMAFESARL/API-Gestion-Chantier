@@ -80,8 +80,10 @@ def test_creation_and_statistics(contexte):
         "budget_activites_montant": 40000,
     }
     direction = Utilisateur.objects.create_user(
-        email="statistiques.direction@demo.ci", password="Test12345!",
-        nom="Direction", role_global=RoleGlobal.ADMIN,
+        email="statistiques.direction@demo.ci",
+        password="Test12345!",
+        nom="Direction",
+        role_global=RoleGlobal.ADMIN,
     )
     lecteur = APIClient(HTTP_HOST="demo.localhost")
     lecteur.force_authenticate(direction)
@@ -105,7 +107,6 @@ def test_creation_and_statistics(contexte):
         {"unite": "FAUX"},
         {"budget_initial_montant": -1},
         {"date_debut_prevue": "2026-10-11", "date_fin_prevue": "2026-10-04"},
-        {"quantite_realisee": 2},
         {"lot_id": "FAUX"},
     ],
 )
@@ -166,7 +167,11 @@ def test_dependency_team_scope_and_permissions(contexte):
 
 def test_colaborateur_create_read_clear(contexte):
     client, _, lot, user = contexte
-    created = client.post(f"/api/v1/lots/{lot.pk}/activites/", {"libelle": "Responsable", "responsable_id": str(user.pk)}, format="json")
+    created = client.post(
+        f"/api/v1/lots/{lot.pk}/activites/",
+        {"libelle": "Responsable", "responsable_id": str(user.pk)},
+        format="json",
+    )
     assert created.status_code == 201, created.data
     assert str(created.data["responsable_id"]) == str(user.pk)
     assert "dependance" not in created.data

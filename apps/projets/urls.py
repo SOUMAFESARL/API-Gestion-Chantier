@@ -18,6 +18,8 @@ from apps.projets.views import (
 )
 from apps.projets.views.activite import (
     ActiviteActivationView,
+    ActiviteAvancementHistoriqueView,
+    ActiviteAvancementView,
     ActiviteDetailView,
     LotActiviteListCreateView,
 )
@@ -220,6 +222,16 @@ urlpatterns = [
         "activites/<uuid:pk>/activation/",
         ActiviteActivationView.as_view(),
         name="activite-activation",
+    ),
+    path(
+        "activites/<uuid:pk>/avancement/",
+        ActiviteAvancementView.as_view(),
+        name="activite-avancement",
+    ),
+    path(
+        "activites/<uuid:pk>/avancement/historique/",
+        ActiviteAvancementHistoriqueView.as_view(),
+        name="activite-avancement-historique",
     ),
     path(
         "activites/<uuid:pk>/",

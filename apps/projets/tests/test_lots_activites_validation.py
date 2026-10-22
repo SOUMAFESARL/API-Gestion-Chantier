@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.projets.models import AffectationProjet
 from apps.projets.serializers.activite import ActiviteModificationSerializer
@@ -79,7 +79,6 @@ def test_partial_rename_does_not_inject_defaults(objets, ressource):
         {"date_fin_prevue": None},
         {"budget_initial_montant": -1},
         {"est_actif": False},
-        {"avancement": 10},
     ],
 )
 def test_invalid_or_protected_fields_rejected(objets, ressource, data):
@@ -89,6 +88,33 @@ def test_invalid_or_protected_fields_rejected(objets, ressource, data):
         if ressource == "lot"
         else ActiviteModificationSerializer(activite, data=data, partial=True, context={"lot": lot})
     )
+    assert not serializer.is_valid()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"avancement": 10},
+        {"quantite_realisee": 3},
+    ],
+)
+def test_activite_modification_refuse_champs_avancement_403(objets, data):
+    """RG-F3-01 : la modification ordinaire refuse avancement et quantite_realisee (403)."""
+    lot, activite = objets
+    serializer = ActiviteModificationSerializer(
+        activite, data=data, partial=True, context={"lot": lot}
+    )
+    with pytest.raises(PermissionDenied) as exc_info:
+        serializer.is_valid()
+    assert (
+        str(exc_info.value)
+        == "L'avancement se met à jour par un rapport approuvé ou par la mise à jour manuelle."
+    )
+
+
+def test_lot_modification_refuse_avancement(objets):
+    lot, _ = objets
+    serializer = LotModificationSerializer(lot, data={"avancement": 10}, partial=True)
     assert not serializer.is_valid()
 
 
@@ -225,6 +251,8 @@ def test_colaborateur_scope_and_patch_preservation(objets):
 
 def test_old_dependency_field_rejected(objets):
     lot, activite = objets
-    serializer = ActiviteModificationSerializer(activite, data={"dependance": None}, partial=True, context={"lot": lot})
+    serializer = ActiviteModificationSerializer(
+        activite, data={"dependance": None}, partial=True, context={"lot": lot}
+    )
     assert not serializer.is_valid()
     assert "dependance" in serializer.errors

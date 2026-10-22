@@ -21,9 +21,11 @@ from apps.core.enums import (
 )
 from apps.projets.models import AffectationProjet, Lot, Projet
 from apps.projets.serializers.activite import (
+    ActiviteAvancementSerializer,
     ActiviteCreationSerializer,
     ActiviteModificationSerializer,
     ActiviteSerializer,
+    MiseAJourInlineSerializer,
 )
 from apps.projets.serializers.arret_chantier import (
     ArretChantierCreateSerializer,
@@ -62,6 +64,7 @@ from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
+    "ActiviteAvancementSerializer",
     "ActiviteCreationSerializer",
     "ActiviteModificationSerializer",
     "ActiviteSerializer",
@@ -81,6 +84,7 @@ __all__ = [
     "LotCreationProjetSerializer",
     "LotSimpleSerializer",
     "MeteoResponseSerializer",
+    "MiseAJourInlineSerializer",
     "MotifReportCreationSerializer",
     "MotifReportSerializer",
     "ProjetCreationSerializer",

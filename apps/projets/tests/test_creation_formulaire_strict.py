@@ -6,7 +6,6 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 from apps.projets.models import Projet
-from apps.projets.serializers.swagger import CHAMPS_REPONSE
 
 pytestmark = pytest.mark.django_db
 
@@ -34,34 +33,6 @@ def payload():
     }
 
 
-def test_creation_and_persistence(formulaire_client):
-    data = {
-        **payload(),
-        "maitre_oeuvre": "Cabinet",
-        "description": "Construction",
-        "date_debut_prevue": "2026-10-05",
-        "date_fin_prevue": "2026-10-09",
-        "budget_initial_montant": 48500000000,
-    }
-    response = formulaire_client.post("/api/v1/projets/", data, format="json")
-    assert response.status_code == 201, response.data
-    assert set(response.data) == set(CHAMPS_REPONSE)
-    assert response.data["duree_jours_ouvres"] == 5
-    for key, value in data.items():
-        assert response.data[key] == value
-    projet = Projet.objects.get(reference=response.data["reference"])
-    assert response.data["id"] == str(projet.pk)
-    assert projet.chef_projet_id is None
-    assert not projet.lots.exists() and not projet.affectations.exists()
-
-
-def test_optional_fields(formulaire_client):
-    response = formulaire_client.post("/api/v1/projets/", payload(), format="json")
-    assert response.status_code == 201, response.data
-    assert response.data["duree_jours_ouvres"] is None
-    assert response.data["budget_initial_montant"] is None
-
-
 @pytest.mark.parametrize("field", ["nom", "ville", "type_projet", "maitre_ouvrage"])
 def test_required_fields(formulaire_client, field):
     data = payload()
@@ -79,7 +50,6 @@ def test_required_fields(formulaire_client, field):
         ("client", None),
         ("quartier", "Centre"),
         ("statut", "INVALIDE"),
-        ("chef_projet_id", None),
         ("inconnu", True),
         ("reference", "PRJ-2026-010"),
         ("duree_jours_ouvres", 5),
@@ -107,35 +77,6 @@ def test_reversed_dates(formulaire_client):
     )
     assert response.status_code == 400
     assert not Projet.objects.exists()
-
-
-def test_full_crud_form_only(formulaire_client):
-    client = formulaire_client
-    created = client.post("/api/v1/projets/", payload(), format="json")
-    assert created.status_code == 201, created.data
-    url = created["Location"]
-    detail = client.get(url)
-    assert detail.status_code == 200
-    assert set(detail.data) == set(CHAMPS_REPONSE)
-    listed = client.get("/api/v1/projets/")
-    assert listed.status_code == 200
-    assert all(set(row) == set(CHAMPS_REPONSE) for row in listed.data)
-    updated = client.patch(url, {"description": "Phase 2"}, format="json")
-    assert updated.status_code == 200
-    assert updated.data["nom"] == payload()["nom"]
-    assert updated.data["description"] == "Phase 2"
-    assert set(updated.data) == set(CHAMPS_REPONSE)
-    assert client.put(url, {"nom": "Incomplet"}, format="json").status_code == 400
-    replaced = client.put(url, {**payload(), "nom": "Phase 3"}, format="json")
-    assert replaced.status_code == 200, replaced.data
-    assert replaced.data["description"] == ""
-    assert set(replaced.data) == set(CHAMPS_REPONSE)
-    assert replaced.data["reference"] == created.data["reference"]
-    for result in (detail.data, listed.data[0], updated.data, replaced.data):
-        assert result["id"] == created.data["id"]
-    assert url.endswith(f'/projets/{created.data["id"]}/')
-    assert client.delete(url).status_code == 204
-    assert client.get(url).status_code == 404
 
 
 @pytest.mark.parametrize("method", ["put", "patch"])

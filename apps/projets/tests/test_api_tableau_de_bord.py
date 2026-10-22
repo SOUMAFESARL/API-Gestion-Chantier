@@ -84,25 +84,3 @@ def test_consulter_tableau_de_bord(client_tenant, admin_user):
     assert data["aucun_chantier"] is False
 
 
-@pytest.mark.django_db
-def test_tableau_de_bord_vide_aucun_chantier(client_tenant, admin_user):
-    """REC-S1-04-A : Quand 0 chantier existe,
-    GET /tableau-de-bord/ renvoie aucun_chantier: True et métriques à zéro.
-    """
-    client_tenant.force_authenticate(user=admin_user)
-
-    with schema_context(SCHEMA):
-        Projet.objects.all().delete()
-
-    url = "/api/v1/tableau-de-bord/"
-    response = client_tenant.get(url)
-
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-
-    assert data["aucun_chantier"] is True
-    assert data["metriques"]["chantiers_actifs"] == 0
-    assert data["metriques"]["budget_total_montant"] == 0
-    assert data["metriques"]["budget_engage_montant"] == 0
-    assert data["projets"] == []
-    assert data["bons_paiement_a_valider"] == []

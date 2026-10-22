@@ -316,21 +316,18 @@ def test_tableau_de_bord_scoping_par_affectation(fixtures_cloisonnement):
 
 
 def test_annuaire_collaborateurs_projets_cloisonnes(fixtures_cloisonnement):
-    """Les collaborateurs ne voient pas les equipes et projets tiers."""
+    """Un rôle de portée projet ne lit pas l'annuaire de l'entreprise ; le DG, si.
+
+    L'annuaire exige `administration.collaborateurs_voir` (refonte des droits) :
+    le CT du chantier A ne peut donc pas y découvrir les chantiers des autres.
+    """
     f = fixtures_cloisonnement
     client = APIClient()
 
-    # CT A consulte l'annuaire des collaborateurs
     _auth(client, f["ct_a"])
     rep = client.get("/api/v1/parametres/collaborateurs/", HTTP_HOST=HOTE)
-    assert rep.status_code == status.HTTP_200_OK
-    data = rep.json()
-
-    # Trouver l'entrée de CC B (qui n'est que sur le Chantier B)
-    cc_b_entry = next((u for u in data if u["id"] == str(f["cc_b"].id)), None)
-    assert cc_b_entry is not None
-    # Pour CT A, les projets de CC B ne doivent pas afficher le Chantier B
-    assert cc_b_entry["projets"] == []
+    assert rep.status_code == status.HTTP_403_FORBIDDEN
+    assert str(f["projet_b"].id) not in rep.content.decode()
 
     # En revanche, pour le DG, les projets de CC B affichent bien Chantier B
     _auth(client, f["dg"])

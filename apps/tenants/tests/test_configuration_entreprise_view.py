@@ -1,4 +1,5 @@
 import io
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django_tenants.utils import schema_context
@@ -77,9 +78,9 @@ def test_lecture_configuration_entreprise(client, visiteur_demo):
 
 
 @pytest.mark.django_db
-def test_post_configuration_entreprise_par_admin(client, admin_demo):
-    """Un administrateur peut enregistrer la configuration en POST."""
-    client.force_authenticate(user=admin_demo)
+def test_post_configuration_entreprise_par_dg_complet(client, dg_demo):
+    """Le DG (seul titulaire de `entreprise_modifier`) enregistre la configuration en POST."""
+    client.force_authenticate(user=dg_demo)
     reponse = client.post(
         "/api/v1/parametres/configuration/",
         {
@@ -133,10 +134,10 @@ def test_post_configuration_entreprise_refuse_aux_non_admins(client, visiteur_de
 
 
 @pytest.mark.django_db
-def test_post_configuration_entreprise_avec_logo(client, admin_demo, settings, tmp_path):
+def test_post_configuration_entreprise_avec_logo(client, dg_demo, settings, tmp_path):
     """POST avec fichier_logo multipart génère les 3 variantes de logos."""
     settings.MEDIA_ROOT = tmp_path
-    client.force_authenticate(user=admin_demo)
+    client.force_authenticate(user=dg_demo)
     image = _creer_image_test()
 
     reponse = client.post(
@@ -156,10 +157,10 @@ def test_post_configuration_entreprise_avec_logo(client, admin_demo, settings, t
 
 
 @pytest.mark.django_db
-def test_post_configuration_entreprise_retirer_logo(client, admin_demo, settings, tmp_path):
+def test_post_configuration_entreprise_retirer_logo(client, dg_demo, settings, tmp_path):
     """POST avec retirer_logo=True efface le logo."""
     settings.MEDIA_ROOT = tmp_path
-    client.force_authenticate(user=admin_demo)
+    client.force_authenticate(user=dg_demo)
 
     # D'abord on met un logo
     client.post(
@@ -180,9 +181,9 @@ def test_post_configuration_entreprise_retirer_logo(client, admin_demo, settings
 
 
 @pytest.mark.django_db
-def test_patch_configuration_entreprise(client, admin_demo):
-    """La méthode PATCH reste également fonctionnelle sur /parametres/configuration/."""
-    client.force_authenticate(user=admin_demo)
+def test_patch_configuration_entreprise(client, dg_demo):
+    """La méthode PATCH reste également fonctionnelle sur /parametres/configuration/ pour le DG."""
+    client.force_authenticate(user=dg_demo)
     reponse = client.patch(
         "/api/v1/parametres/configuration/",
         {"nom_commercial": "Patch Test"},
@@ -193,9 +194,9 @@ def test_patch_configuration_entreprise(client, admin_demo):
 
 
 @pytest.mark.django_db
-def test_post_entreprise_retrocompatibilite(client, admin_demo):
-    """L'ancienne route /api/v1/entreprise/ accepte maintenant aussi le POST."""
-    client.force_authenticate(user=admin_demo)
+def test_post_entreprise_retrocompatibilite(client, dg_demo):
+    """L'ancienne route /api/v1/entreprise/ accepte maintenant aussi le POST (DG)."""
+    client.force_authenticate(user=dg_demo)
     reponse = client.post(
         "/api/v1/entreprise/",
         {"nom_commercial": "Retro POST Test"},
@@ -203,3 +204,25 @@ def test_post_entreprise_retrocompatibilite(client, admin_demo):
     )
     assert reponse.status_code == status.HTTP_200_OK
     assert reponse.data["nom_commercial"] == "Retro POST Test"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("methode", "url"),
+    [
+        ("post", "/api/v1/parametres/configuration/"),
+        ("patch", "/api/v1/parametres/configuration/"),
+        ("post", "/api/v1/entreprise/"),
+        ("patch", "/api/v1/entreprise/"),
+    ],
+)
+def test_modification_entreprise_refusee_a_l_admin(client, admin_demo, methode, url):
+    """`entreprise_modifier` est réservé au DG : l'ADMIN reçoit 403 et rien n'est modifié."""
+    client.force_authenticate(user=admin_demo)
+    corps = {"nom_commercial": "Prise de contrôle ADMIN"}
+    reponse = getattr(client, methode)(url, corps, format="json")
+    assert reponse.status_code == status.HTTP_403_FORBIDDEN
+
+    with schema_context("public"):
+        entreprise = Entreprise.objects.get(schema_name=SCHEMA)
+        assert entreprise.nom_commercial != "Prise de contrôle ADMIN"

@@ -151,10 +151,15 @@ def test_suppression_propre_complete_entreprise():
 
 @pytest.mark.django_db
 @override_settings(MAINTENANCE_TOKEN=JETON_TEST)
-def test_activer_ou_renouveler_abonnement():
+def test_activer_ou_renouveler_abonnement(monkeypatch):
     """Vérifie l'activation souveraine d'un abonnement via service et via endpoint."""
     from apps.billing.models import Abonnement, Plan
     from apps.tenants.services.nettoyage import activer_ou_renouveler_abonnement
+
+    # Le service recharge l'entreprise depuis la base : un drapeau posé sur l'instance du test
+    # est perdu, et l'enregistrement du statut créerait (et migrerait) le schéma manquant.
+    # Ce test ne porte que sur l'abonnement : le drapeau est posé sur la classe.
+    monkeypatch.setattr(Entreprise, "auto_create_schema", False)
 
     schema_test = "temp_test_abo"
     plan = Plan.objects.create(

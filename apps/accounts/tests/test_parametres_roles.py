@@ -92,12 +92,15 @@ def _auth(client, user):
 
 
 @pytest.mark.django_db
-def test_get_parametres_roles_liste(client_tenant, collaborateur_user):
-    """Tout collaborateur authentifié peut lister les rôles dans les paramètres."""
+def test_get_parametres_roles_liste(client_tenant, collaborateur_user, admin_user):
+    """Lister les rôles exige de gérer les collaborateurs ou les rôles (AD oui, CT non)."""
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
 
     client = _auth(client_tenant, collaborateur_user)
+    assert client.get("/api/v1/parametres/roles/").status_code == status.HTTP_403_FORBIDDEN
+
+    client = _auth(client_tenant, admin_user)
     rep = client.get("/api/v1/parametres/roles/")
     assert rep.status_code == status.HTTP_200_OK
     data = rep.json()
@@ -110,7 +113,7 @@ def test_get_parametres_roles_liste(client_tenant, collaborateur_user):
 
 @pytest.mark.django_db
 def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
-    """Un administrateur (AD) peut créer un rôle personnalisé avec sa matrice."""
+    """Un administrateur (AD) crée un rôle personnalisé, dans la limite de ses droits (B-08)."""
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
 
@@ -121,18 +124,31 @@ def test_post_parametres_roles_creer_par_admin(client_tenant, admin_user):
         "description": "Responsable de l'équipe gros œuvre sur chantier",
         "permissions_modules": {
             ModuleChoix.CHANTIER: ["chantier.lire", "chantier.rediger"],
-            ModuleChoix.GED: ["ged.lire"],
-            ModuleChoix.TIERS: [],
+            ModuleChoix.TIERS: ["tiers.lire"],
+            ModuleChoix.GED: [],
         },
     }
     rep = client.post("/api/v1/parametres/roles/", payload, format="json")
-    assert rep.status_code == status.HTTP_201_CREATED
+    assert rep.status_code == status.HTTP_201_CREATED, rep.json()
     data = rep.json()
     assert data["code"] == "CHEF_EQUIPE"
     assert data["libelle"] == "Chef d'Équipe Maçonnerie"
     assert "chantier.rediger" in data["permissions_modules"][ModuleChoix.CHANTIER]
-    assert "ged.lire" in data["permissions_modules"][ModuleChoix.GED]
-    assert data["permissions_modules"][ModuleChoix.TIERS] == []
+    assert "tiers.lire" in data["permissions_modules"][ModuleChoix.TIERS]
+    assert data["permissions_modules"][ModuleChoix.GED] == []
+
+    # B-08 : l'AD ne donne que ce qu'il possède — `projets.voir_montants` est réservé aux détenteurs
+    rep_excessif = client.post(
+        "/api/v1/parametres/roles/",
+        {
+            "code": "CHEF_EQUIPE_FINANCE",
+            "libelle": "Chef d'Équipe Finance",
+            "permissions_modules": {ModuleChoix.PROJETS: ["projets.lire", "projets.voir_montants"]},
+        },
+        format="json",
+    )
+    assert rep_excessif.status_code == status.HTTP_403_FORBIDDEN
+    assert "que vous possédez" in rep_excessif.json()["erreur"]["message"]
 
 
 @pytest.mark.django_db
@@ -169,39 +185,58 @@ def test_post_parametres_roles_refuse_aux_collaborateurs(client_tenant, collabor
 
 
 @pytest.mark.django_db
-def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user):
-    """Un administrateur peut modifier les permissions d'un rôle existant via PATCH et POST."""
+def test_modifier_permissions_role_en_post_et_patch(client_tenant, admin_user, dg_user):
+    """Le DG modifie les permissions d'un rôle système via PATCH et POST ; l'AD n'y a pas droit.
+
+    Les rôles système ne se modifient que par le DG ; l'AD modifie les rôles personnalisés,
+    dans la limite des droits qu'il possède.
+    """
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
         role_cc = Role.objects.get(code=RoleGlobal.CHEF_CHANTIER)
+        role_perso = Role.objects.create(
+            code="CHEF_EQUIPE_MODIF", libelle="Chef d'Équipe", est_systeme=False, est_actif=True
+        )
 
+    # 1. L'AD ne peut pas modifier un rôle système (403)
     client = _auth(client_tenant, admin_user)
+    rep_refus = client.patch(
+        f"/api/v1/parametres/roles/{role_cc.id}/",
+        {"permissions_modules": {ModuleChoix.CHANTIER: ["chantier.lire"]}},
+        format="json",
+    )
+    assert rep_refus.status_code == status.HTTP_403_FORBIDDEN
+    assert rep_refus.json()["erreur"]["code"] == "modification_role_systeme_interdite"
 
-    # 1. Modification via PATCH
+    # 2. L'AD modifie un rôle personnalisé, via PATCH puis via POST
+    rep_ad = client.patch(
+        f"/api/v1/parametres/roles/{role_perso.id}/",
+        {"permissions_modules": {ModuleChoix.CHANTIER: ["chantier.lire"]}},
+        format="json",
+    )
+    assert rep_ad.status_code == status.HTTP_200_OK
+    assert "chantier.lire" in rep_ad.json()["permissions_modules"][ModuleChoix.CHANTIER]
+
+    # 3. Le DG modifie un rôle système via PATCH
+    client = _auth(client_tenant, dg_user)
     rep_patch = client.patch(
         f"/api/v1/parametres/roles/{role_cc.id}/",
-        {
-            "permissions_modules": {
-                ModuleChoix.GED: ["ged.lire"],
-            }
-        },
+        {"permissions_modules": {ModuleChoix.CHANTIER: ["chantier.lire", "chantier.valider"]}},
         format="json",
     )
     assert rep_patch.status_code == status.HTTP_200_OK
-    assert "ged.lire" in rep_patch.json()["permissions_modules"][ModuleChoix.GED]
+    assert "chantier.valider" in rep_patch.json()["permissions_modules"][ModuleChoix.CHANTIER]
 
-    # 2. Modification via POST (supporté pour flexibilité frontend)
+    # 4. Modification via POST (supporté pour flexibilité frontend)
     rep_post = client.post(
         f"/api/v1/parametres/roles/{role_cc.id}/",
-        {
-            "permissions_modules": {
-                ModuleChoix.GED: ["ged.lire", "ged.televerser"],
-            }
-        },
+        {"permissions_modules": {ModuleChoix.CHANTIER: ["chantier.lire", "chantier.rediger"]}},
         format="json",
     )
     assert rep_post.status_code == status.HTTP_200_OK
-    assert "ged.televerser" in rep_post.json()["permissions_modules"][ModuleChoix.GED]
+    perms_chantier = rep_post.json()["permissions_modules"][ModuleChoix.CHANTIER]
+    assert "chantier.rediger" in perms_chantier
+    assert "chantier.valider" not in perms_chantier
 
 
 @pytest.mark.django_db
@@ -215,6 +250,13 @@ def test_supprimer_role_avec_reassignation_par_admin(client_tenant, admin_user):
             libelle="Rôle Temporaire",
             est_systeme=False,
             est_actif=True,
+        )
+        # Le rôle est porté par un collaborateur : la substitution devient obligatoire
+        Utilisateur.tous_objets.create(
+            email="porteur.temporaire@demo.ci",
+            nom="Porteur",
+            role=role_custom,
+            statut=StatutUtilisateur.ACTIF,
         )
 
     client = _auth(client_tenant, admin_user)

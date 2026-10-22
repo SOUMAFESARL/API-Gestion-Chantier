@@ -41,13 +41,9 @@ def dg_user(db):
             statut=StatutUtilisateur.ACTIF,
             is_owner=True,
         )
+        # Pas de nettoyage après le yield : la transaction du test est annulée, et supprimer les
+        # rôles échoue dès qu'un utilisateur les référence (FK protégée `Utilisateur.role`).
         yield dg
-        AffectationProjet.tous_objets.all().delete()
-        Projet.tous_objets.all().delete()
-        Tiers.tous_objets.all().delete()
-        Role.tous_objets.all().delete()
-        Utilisateur.tous_objets.filter(email="adjoint@demo.ci").delete()
-        Utilisateur.tous_objets.filter(pk=dg.pk).delete()
 
 
 @pytest.fixture
@@ -64,7 +60,6 @@ def admin_delegue_user(db):
             is_owner=False,
         )
         yield admin
-        Utilisateur.tous_objets.filter(pk=admin.pk).delete()
 
 
 @pytest.fixture
@@ -81,7 +76,6 @@ def conducteur_user(db):
             is_owner=False,
         )
         yield ct
-        Utilisateur.tous_objets.filter(pk=ct.pk).delete()
 
 
 def auth_client(client, user):
@@ -99,14 +93,19 @@ def auth_client(client, user):
 def test_rec_s1_10_a_action_reservee_dg(
     client_tenant, dg_user, admin_delegue_user, conducteur_user
 ):
-    """REC-S1-10-A : Seul le DG peut créer, modifier ou supprimer un rôle
-    (403 action_reservee_dg pour les autres).
+    """REC-S1-10-A : La gestion des rôles est fermée à qui n'a pas `administration.roles_gerer`,
+    et plusieurs gestes restent réservés au DG (403 pour les autres).
+
+    Règle actuelle : l'AD détient `roles_gerer` (7 droits fixes) — il crée des rôles dans la
+    limite de ses propres droits, mais ne modifie pas les rôles système et ne supprime pas
+    le rôle AD.
     """
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
         role_vi = Role.objects.get(code=RoleGlobal.VISITEUR)
+        role_ad = Role.objects.get(code=RoleGlobal.ADMIN)
 
-    # 1. Un conducteur de travaux tente de créer un rôle
+    # 1. Un conducteur de travaux (sans `roles_gerer`) tente de créer un rôle
     cl_ct = auth_client(client_tenant, conducteur_user)
     rep1 = cl_ct.post(
         "/api/v1/roles/",
@@ -116,38 +115,59 @@ def test_rec_s1_10_a_action_reservee_dg(
     assert rep1.status_code == status.HTTP_403_FORBIDDEN
     assert rep1.json()["erreur"]["code"] == "action_reservee_dg"
 
-    # 2. Un administrateur délégué tente de créer un rôle
+    # 2. Un administrateur délégué crée un rôle dans la limite de ses droits, pas au-delà
     cl_ad = auth_client(client_tenant, admin_delegue_user)
     rep2 = cl_ad.post(
         "/api/v1/roles/",
         {"code": "TEST_AD", "libelle": "Test AD", "permissions_modules": {}},
         format="json",
     )
-    assert rep2.status_code == status.HTTP_403_FORBIDDEN
-    assert rep2.json()["erreur"]["code"] == "action_reservee_dg"
+    assert rep2.status_code == status.HTTP_201_CREATED
+    rep2b = cl_ad.post(
+        "/api/v1/roles/",
+        {
+            "code": "TEST_AD_MONTANTS",
+            "libelle": "Test AD montants",
+            "permissions_modules": {"projets": ["projets.lire", "projets.voir_montants"]},
+        },
+        format="json",
+    )
+    assert rep2b.status_code == status.HTTP_403_FORBIDDEN
+    assert rep2b.json()["erreur"]["code"] == "action_reservee_dg"
 
-    # 3. L'administrateur délégué tente de modifier un rôle existant
+    # 3. L'administrateur délégué tente de modifier un rôle système
     rep3 = cl_ad.patch(
         f"/api/v1/roles/{role_vi.id}/",
         {"libelle": "Visiteur Modifié"},
         format="json",
     )
     assert rep3.status_code == status.HTTP_403_FORBIDDEN
-    assert rep3.json()["erreur"]["code"] == "action_reservee_dg"
+    assert rep3.json()["erreur"]["code"] == "modification_role_systeme_interdite"
 
-    # 4. L'administrateur délégué tente de supprimer un rôle
+    # 4. L'administrateur délégué tente de supprimer le rôle AD : réservé au DG
     rep4 = cl_ad.post(
-        f"/api/v1/roles/{role_vi.id}/supprimer/",
+        f"/api/v1/roles/{role_ad.id}/supprimer/",
         {"role_substitution_id": str(role_vi.id)},
         format="json",
     )
     assert rep4.status_code == status.HTTP_403_FORBIDDEN
     assert rep4.json()["erreur"]["code"] == "action_reservee_dg"
 
+    # 5. Et un rôle système n'est supprimable par personne (le DG y compris)
+    rep5 = cl_ad.post(
+        f"/api/v1/roles/{role_vi.id}/supprimer/",
+        {"role_substitution_id": str(role_ad.id)},
+        format="json",
+    )
+    assert rep5.status_code == status.HTTP_400_BAD_REQUEST
+    assert "rôles système ne peuvent pas être supprimés" in rep5.json()["erreur"]["message"]
+
 
 @pytest.mark.django_db
 def test_rec_s1_10_b_substitution_obligatoire(client_tenant, dg_user):
-    """REC-S1-10-B : La suppression exige role_substitution_id (400 substitution_obligatoire)."""
+    """REC-S1-10-B : Supprimer un rôle porté par un collaborateur exige role_substitution_id
+    (400 substitution_obligatoire) ; un rôle sans porteur se supprime directement.
+    """
     with schema_context(SCHEMA):
         initialiser_roles_par_defaut()
         role_custom = Role.objects.create(
@@ -155,6 +175,20 @@ def test_rec_s1_10_b_substitution_obligatoire(client_tenant, dg_user):
             libelle="Spécialiste Façade",
             est_systeme=False,
             est_actif=True,
+        )
+        role_vide = Role.objects.create(
+            code="ROLE_SANS_PORTEUR",
+            libelle="Rôle sans porteur",
+            est_systeme=False,
+            est_actif=True,
+        )
+        Utilisateur.objects.create_user(
+            email="facade@demo.ci",
+            password=MOT_DE_PASSE,
+            nom="Traoré",
+            prenom="Issa",
+            role=role_custom,
+            statut=StatutUtilisateur.ACTIF,
         )
 
     cl_dg = auth_client(client_tenant, dg_user)
@@ -167,6 +201,14 @@ def test_rec_s1_10_b_substitution_obligatoire(client_tenant, dg_user):
     )
     assert rep.status_code == status.HTTP_400_BAD_REQUEST
     assert rep.json()["erreur"]["code"] == "substitution_obligatoire"
+
+    # Rôle sans porteur : aucune substitution nécessaire
+    rep_vide = cl_dg.post(
+        f"/api/v1/roles/{role_vide.id}/supprimer/",
+        {},
+        format="json",
+    )
+    assert rep_vide.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.django_db
@@ -234,7 +276,8 @@ def test_rec_s1_10_c_suppression_et_reaffectation_atomique(client_tenant, dg_use
     # Vérifications en base de données
     with schema_context(SCHEMA):
         collaborateur.refresh_from_db()
-        assert collaborateur.role_personnalise == role_ct
+        # `role_personnalise` ne désigne plus que les rôles non système : le CT en est un
+        assert collaborateur.role == role_ct
 
         affectation.refresh_from_db()
         assert affectation.est_actif is True

@@ -210,16 +210,25 @@ def test_collaborateurs_suspendre_et_reactiver(client_tenant, dg_user, collab_us
 
 @pytest.mark.django_db
 def test_collaborateurs_suspendre_regles_securite(client_tenant, dg_user, admin_user):
-    """Vérifie l'impossibilité de s'auto-suspendre (400) ou de suspendre un DG/Owner (403)."""
-    # 1. DG essaie de se suspendre lui-même -> 400
+    """Le DG / Owner ne peut être suspendu par personne, lui-même compris (403)."""
+    message = "ne peut pas être suspendu"
+
+    # 1. Le DG essaie de se suspendre lui-même -> 403 (la protection du DG prime)
     _auth(client_tenant, dg_user)
     rep_auto = client_tenant.post(f"/api/v1/parametres/collaborateurs/{dg_user.id}/suspendre/", HTTP_HOST=HOTE)
-    assert rep_auto.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep_auto.status_code == status.HTTP_403_FORBIDDEN
+    assert message in rep_auto.json()["erreur"]["message"]
 
-    # 2. Admin essaie de suspendre le DG -> 400
+    # 2. Un admin essaie de suspendre le DG -> 403
     _auth(client_tenant, admin_user)
     rep_dg = client_tenant.post(f"/api/v1/parametres/collaborateurs/{dg_user.id}/suspendre/", HTTP_HOST=HOTE)
-    assert rep_dg.status_code == status.HTTP_400_BAD_REQUEST
+    assert rep_dg.status_code == status.HTTP_403_FORBIDDEN
+    assert message in rep_dg.json()["erreur"]["message"]
+
+    # 3. Le DG est resté actif
+    with schema_context(SCHEMA):
+        dg_user.refresh_from_db()
+        assert dg_user.statut == StatutUtilisateur.ACTIF
 
 
 @pytest.mark.django_db

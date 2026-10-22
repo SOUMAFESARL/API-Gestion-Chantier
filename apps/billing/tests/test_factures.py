@@ -7,10 +7,11 @@ from django_tenants.utils import schema_context
 from pypdf import PdfReader
 from rest_framework.test import APIClient
 
+from apps.accounts.models import Utilisateur
 from apps.billing.models import Facture, Plan
 from apps.billing.services.paiement import PaiementAbonnementService
 from apps.billing.tests.test_cinetpay import entreprise_et_admin  # noqa: F401
-from apps.core.enums import RoleGlobal
+from apps.core.enums import RoleGlobal, StatutUtilisateur
 from apps.tenants.models import Entreprise
 
 pytestmark = pytest.mark.django_db
@@ -89,11 +90,22 @@ def test_autre_entreprise_inaccessible(facture_api, suffixe):
 
 
 def test_anonyme_et_role_refuses(facture_api):
-    client, paiement, contexte = facture_api
+    client, paiement, _ = facture_api
     client.force_authenticate(user=None)
     assert client.get(paiement["facture_url"]).status_code == 401
-    contexte["admin"].role_global = RoleGlobal.CHEF_PROJET
-    client.force_authenticate(contexte["admin"])
+    # Le compte de la fixture est le DG propriétaire, et le rôle effectif suit
+    # la FK `role` posée à la création : on crée de vrais comptes sans droit
+    # `administration.factures_voir` (chef de projet) pour vérifier le refus.
+    with schema_context("demo"):
+        chef = Utilisateur.objects.create_user(
+            email="chef.factures@demo.ci",
+            password="MotDePasse1!",
+            nom="Chef",
+            prenom="Projet",
+            role_global=RoleGlobal.CHEF_PROJET,
+            statut=StatutUtilisateur.ACTIF,
+        )
+    client.force_authenticate(chef)
     assert client.get(paiement["facture_url"]).status_code == 403
     assert client.get(paiement["facture_pdf_url"]).status_code == 403
 

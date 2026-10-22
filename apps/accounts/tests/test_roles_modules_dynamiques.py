@@ -175,7 +175,7 @@ def test_permissions_modules_format_liste_codes_dynamique(client_api):
             libelle="Auditeur Test",
             permissions_modules={
                 "projets": ["projets.lire", "projets.changer_statut"],
-                "ged": ["ged.lire"],
+                "tiers": ["tiers.lire"],
             },
         )
 
@@ -189,11 +189,12 @@ def test_permissions_modules_format_liste_codes_dynamique(client_api):
 
         assert "projets.lire" in perms_modules["projets"]
         assert "projets.changer_statut" in perms_modules["projets"]
-        assert "ged.lire" in perms_modules["ged"]
+        assert "tiers.lire" in perms_modules["tiers"]
 
+        # Le module GED n'expose plus de permission au catalogue : sa liste reste vide
+        assert perms_modules["ged"] == []
         assert perms_modules["chantier"] == []
         assert perms_modules["pilotage"] == []
-        assert perms_modules["tiers"] == []
 
 
 @pytest.mark.django_db

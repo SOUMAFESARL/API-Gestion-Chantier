@@ -26,7 +26,11 @@ def client_tenant():
 
 @pytest.fixture
 def entreprise_et_admin(db):
-    """Prépare les plans BTP, une entreprise de test et un administrateur."""
+    """Prépare les plans BTP, une entreprise de test et son DG.
+
+    `administration.abonnement_gerer` est réservé au DG (`DROITS_ADMIN_RESERVES_DG`) :
+    la clé `admin` désigne donc le compte DG propriétaire, seul à pouvoir payer.
+    """
     call_command("peupler_plans", verbosity=0)
 
     with schema_context(get_public_schema_name()):
@@ -55,7 +59,8 @@ def entreprise_et_admin(db):
             password="MotDePasse1!",
             nom="Konan",
             prenom="Aya",
-            role_global=RoleGlobal.ADMIN,
+            role_global=RoleGlobal.DIRECTEUR_GENERAL,
+            is_owner=True,
             statut=StatutUtilisateur.ACTIF,
         )
 
@@ -116,6 +121,31 @@ def test_initier_paiement_cinetpay(client_tenant, entreprise_et_admin):
         assert facture.statut == Facture.Statut.EMISE
         assert facture.numero.startswith(f"FAC-{timezone.localdate().year}-")
         assert facture.montant_ttc_fcfa == 49000
+
+
+@pytest.mark.django_db
+def test_initier_paiement_reserve_au_dg(client_tenant, entreprise_et_admin):
+    """`administration.abonnement_gerer` est réservé au DG : un ADMIN et un anonyme sont refusés."""
+    url = "/api/v1/cinetpay/initier/"
+    payload = {"plan_code": Plan.Code.MAITRE_OEUVRE, "cycle": "MENSUEL"}
+
+    reponse = client_tenant.post(url, payload, format="json")
+    assert reponse.status_code == status.HTTP_401_UNAUTHORIZED
+
+    with schema_context(SCHEMA):
+        administrateur = Utilisateur.objects.create_user(
+            email="ad.cinetpay@demo.ci",
+            password="MotDePasse1!",
+            nom="Kouassi",
+            prenom="Paul",
+            role_global=RoleGlobal.ADMIN,
+            statut=StatutUtilisateur.ACTIF,
+        )
+    client_tenant.force_authenticate(user=administrateur)
+    assert client_tenant.post(url, payload, format="json").status_code == status.HTTP_403_FORBIDDEN
+
+    with schema_context(get_public_schema_name()):
+        assert not PaiementAbonnement.objects.exists()
 
 
 @pytest.mark.django_db

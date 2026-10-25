@@ -295,6 +295,36 @@ def test_obtenir_meteo_panne_reseau_renvoie_temperature_non_disponible():
     assert resultat["temperature"] is None
 
 
+def test_un_echec_de_la_meteo_est_garde_en_cache():
+    """Un service injoignable n'est pas rappelé à chaque chargement du tableau de bord.
+
+    Sans ce cache, chaque appel attendait le délai réseau (jusqu'à 2,5 s) avant de répondre.
+    """
+    from django.core.cache import cache
+
+    cache.clear()
+    with patch("urllib.request.urlopen", side_effect=URLError("injoignable")) as appel:
+        premier = obtenir_meteo("Yamoussoukro", pays="CI")
+        second = obtenir_meteo("Yamoussoukro", pays="CI")
+
+    assert appel.call_count == 1
+    assert premier["raison"] == second["raison"] == "SERVICE_INDISPONIBLE"
+    cache.clear()
+
+
+def test_l_echec_d_une_ville_ne_bloque_pas_les_autres():
+    """La clé d'échec est celle de la localité, comme celle du relevé."""
+    from django.core.cache import cache
+
+    cache.clear()
+    with patch("urllib.request.urlopen", side_effect=URLError("injoignable")) as appel:
+        obtenir_meteo("Yamoussoukro", pays="CI")
+        obtenir_meteo("Bouaké", pays="CI")
+
+    assert appel.call_count == 2
+    cache.clear()
+
+
 # ---------------------------------------------------------------------------
 # 3. Tests des Endpoints API
 # ---------------------------------------------------------------------------

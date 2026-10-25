@@ -67,6 +67,13 @@ def migrer_bd_vue(request):
     out = StringIO()
     try:
         call_command("migrate_schemas", interactive=False, stdout=out)
+        # Rattrapage des inscriptions restées en PROVISIONNEMENT. `passenger_wsgi.py` le
+        # faisait à chaque démarrage ; c'est désormais le déploiement qui s'en charge. Un
+        # échec ici ne doit pas masquer des migrations réussies : il est écrit dans la sortie.
+        try:
+            call_command("provisionner_inscriptions", stdout=out)
+        except Exception as exc_provisionnement:
+            out.write(f"\nÉchec du provisionnement des inscriptions : {exc_provisionnement}\n")
         call_command("remplir_registre_global", stdout=out)
         call_command("synchroniser_catalogue_permissions", stdout=out)
         call_command("propager_roles_systeme", stdout=out)

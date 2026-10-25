@@ -153,13 +153,47 @@ jobs:
             **/*.xlsx
             **/.kilo/**
 
+      # C'est désormais la **seule** voie des migrations : `passenger_wsgi.py` ne migre plus au
+      # démarrage, et l'étape SSH ci-dessous ne tourne pas tant que CPANEL_PROJECT_DIR est vide.
+      # Un échec doit donc faire échouer le déploiement, et non passer sous un `|| true`.
       - name: Déclencher les migrations et la synchronisation des registres (API)
         shell: bash
+        env:
+          MAINTENANCE_TOKEN: ${{ secrets.MAINTENANCE_TOKEN }}
         run: |
-          sleep 5
-          curl -k -s -X POST "https://api-chantier.soumafe.com/api/v1/maintenance/migrer-bd/" \
-            -H "Content-Type: application/json" \
-            -H "X-Maintenance-Token: ${{ secrets.MAINTENANCE_TOKEN }}" || true
+          set -uo pipefail
+          if [ -z "$MAINTENANCE_TOKEN" ]; then
+            echo "::error::Secret MAINTENANCE_TOKEN absent : les migrations ne peuvent pas être lancées."
+            exit 1
+          fi
+
+          # Passenger redémarre sur tmp/restart.txt : le premier appel paie le démarrage.
+          for tentative in 1 2 3 4 5 6; do
+            sleep 10
+            code=$(curl -sS -o /tmp/migration.json -w '%{http_code}' \
+              --connect-timeout 15 --max-time 600 \
+              -X POST "https://api-chantier.soumafe.com/api/v1/maintenance/migrer-bd/" \
+              -H "Content-Type: application/json" \
+              -H "X-Maintenance-Token: $MAINTENANCE_TOKEN") || code="000"
+
+            if [ "$code" = "200" ] && grep -q '"statut": *"succes"' /tmp/migration.json; then
+              echo "Migrations appliquées (tentative $tentative)."
+              python3 -c "import json; print(json.load(open('/tmp/migration.json'))['output'])"
+              exit 0
+            fi
+
+            echo "Tentative $tentative : HTTP $code"
+            head -c 2000 /tmp/migration.json 2>/dev/null || true
+            echo
+            # 403 et 404 ne se corrigent pas en réessayant : jeton ou empreinte à revoir.
+            if [ "$code" = "403" ] || [ "$code" = "404" ]; then
+              echo "::error::Endpoint de migration refusé (HTTP $code) : vérifier le secret MAINTENANCE_TOKEN et MAINTENANCE_TOKEN_SHA256."
+              exit 1
+            fi
+          done
+
+          echo "::error::Les migrations n'ont pas pu être appliquées après 6 tentatives."
+          exit 1
 
       - name: Appliquer les migrations Django (SSH)
         if: ${{ vars.CPANEL_PROJECT_DIR != '' }}

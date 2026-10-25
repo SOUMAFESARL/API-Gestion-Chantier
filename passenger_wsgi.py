@@ -7,52 +7,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.cpanel")
 
-import logging
-from django.core.wsgi import get_wsgi_application  # noqa: E402
+from django.core.wsgi import get_wsgi_application
 
-logger = logging.getLogger("passenger_wsgi")
-
-# Exécution automatique des migrations (django-tenants) au démarrage Passenger
-def _auto_migrate():
-    lock_path = Path(__file__).resolve().parent / "tmp" / "migration.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_file = None
-    try:
-        try:
-            import fcntl
-            lock_file = open(lock_path, "w")
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (ImportError, AttributeError):
-            lock_file = None
-
-        import django
-        django.setup()
-        from django.core.management import call_command
-        call_command("migrate_schemas", interactive=False)
-        try:
-            call_command("provisionner_inscriptions")
-        except Exception as exc_prov:
-            logger.error("Erreur lors du provisionnement automatique Passenger : %s", exc_prov)
-        try:
-            call_command("remplir_registre_global")
-            call_command("synchroniser_catalogue_permissions")
-            call_command("propager_roles_systeme")
-        except Exception as exc_sync:
-            logger.error("Erreur lors de la synchronisation registre/catalogue Passenger : %s", exc_sync)
-
-        if lock_file:
-            try:
-                import fcntl
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
-                lock_file.close()
-            except Exception:
-                pass
-    except (BlockingIOError, OSError):
-        # Un autre processus Passenger est déjà en train de migrer
-        pass
-    except Exception as exc:
-        logger.error("Erreur lors de l'auto-migration Passenger : %s", exc)
-
-_auto_migrate()
-
+# Aucune migration ici. Passenger relance un processus après 2 à 4 minutes
+# d'inactivité, et en ajoute un pour chaque requête simultanée en trop : migrer
+# au démarrage faisait payer les migrations de tous les tenants, plus quatre
+# commandes de synchronisation, à chacun de ces démarrages — 7 à 10 s mesurées
+# en production le 25/10/2026, dont les deux tiers pour ce seul bloc.
+# Les migrations passent au déploiement, par l'endpoint `maintenance/migrer-bd/`.
 application = get_wsgi_application()

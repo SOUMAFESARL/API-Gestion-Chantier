@@ -247,3 +247,14 @@ def test_endpoints_destructifs_fermes_par_defaut(methode, url):
     """Même avec le bon jeton, purge et suppression répondent 404 sans MAINTENANCE_DESTRUCTIF."""
     resp = getattr(Client(), methode)(url, HTTP_X_MAINTENANCE_TOKEN=JETON_TEST)
     assert resp.status_code == 404
+
+
+def test_l_empreinte_par_defaut_est_configuree():
+    """Sans empreinte, migrer-bd répond 404 et le déploiement ne peut plus migrer la base.
+
+    `passenger_wsgi.py` ne migre plus au démarrage : cette valeur par défaut est ce qui
+    permet au workflow d'appeler l'endpoint sans dépendre du `.env` du serveur.
+    """
+    import re
+
+    assert re.fullmatch(r"[0-9a-f]{64}", settings.MAINTENANCE_TOKEN_SHA256)

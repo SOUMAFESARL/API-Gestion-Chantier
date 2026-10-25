@@ -68,9 +68,11 @@ PG_DUMP_CHEMIN = config("PG_DUMP_CHEMIN", default="pg_dump")
 # d'entreprises à quiconque lisait le code. Le jeton vit dans le secret GitHub
 # `MAINTENANCE_TOKEN` ; son empreinte peut être publique, elle ne permet pas de le retrouver.
 # Vide : les endpoints répondent 404.
+# Empreinte du jeton généré le 25/10/2026. Le changer : générer un nouveau jeton dans le
+# secret GitHub, remplacer cette valeur, déployer — l'ancien jeton cesse aussitôt de valoir.
 MAINTENANCE_TOKEN_SHA256 = config(
     "MAINTENANCE_TOKEN_SHA256",
-    default="",
+    default="6401f9e9e5ac2a8f1ff0a3e0f341a1f25d745d683fbdfbfcde2884955dd4598c",
 ).strip().lower()
 
 # Purge et suppression d'entreprises : fermées tant qu'on ne les ouvre pas explicitement

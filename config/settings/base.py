@@ -63,8 +63,19 @@ SAUVEGARDES_SUPPRESSION_DIR = config(
 SAUVEGARDES_SUPPRESSION_JOURS = config("SAUVEGARDES_SUPPRESSION_JOURS", default=30, cast=int)
 PG_DUMP_CHEMIN = config("PG_DUMP_CHEMIN", default="pg_dump")
 
-# Jeton des endpoints /api/v1/maintenance/ : uniquement par variable
-MAINTENANCE_TOKEN = config("MAINTENANCE_TOKEN", default="ccd-migration-prod-2026-secure-token")
+# Jeton des endpoints /api/v1/maintenance/ — seule son **empreinte SHA-256** est ici.
+# Le dépôt est public : le jeton en clair qui servait de défaut ouvrait la suppression
+# d'entreprises à quiconque lisait le code. Le jeton vit dans le secret GitHub
+# `MAINTENANCE_TOKEN` ; son empreinte peut être publique, elle ne permet pas de le retrouver.
+# Vide : les endpoints répondent 404.
+MAINTENANCE_TOKEN_SHA256 = config(
+    "MAINTENANCE_TOKEN_SHA256",
+    default="",
+).strip().lower()
+
+# Purge et suppression d'entreprises : fermées tant qu'on ne les ouvre pas explicitement
+# dans le `.env` du serveur, même avec le bon jeton.
+MAINTENANCE_DESTRUCTIF = config("MAINTENANCE_DESTRUCTIF", default=False, cast=bool)
 
 
 def _liste(valeur: str) -> list[str]:

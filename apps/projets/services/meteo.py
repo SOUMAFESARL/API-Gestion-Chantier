@@ -33,6 +33,12 @@ logger = logging.getLogger(__name__)
 
 DUREE_CACHE_SECONDES = 1800  # 30 minutes
 
+# Un **échec** se garde aussi, mais moins longtemps. Sans cela, un Open-Meteo injoignable
+# était rappelé à chaque chargement du tableau de bord, qui attendait jusqu'au délai de
+# 2,5 s avant d'afficher quoi que ce soit — mesuré en local le 25/10/2026 : 0,4 s perdue
+# à chaque appel, le relevé n'étant jamais mis en cache.
+DUREE_CACHE_ECHEC_SECONDES = 300  # 5 minutes
+
 # **Les pays où la météo s'affiche — une décision de produit, pas une limite
 # technique.** Le référentiel des localités couvre les neuf pays de
 # l'inscription et sait résoudre leurs coordonnées ; Open-Meteo couvre le monde.
@@ -162,6 +168,10 @@ def obtenir_meteo(ville: str, pays: str = "CI", portee: str = PORTEE_CHANTIER) -
     if isinstance(en_cache, dict):
         return {**en_cache, "portee": portee}
 
+    cle_echec = f"{cle_cache}_echec"
+    if cache.get(cle_echec):
+        return meteo_indisponible(RAISON_SERVICE_INDISPONIBLE, nom_canonique, portee)
+
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={latitude}&longitude={longitude}"
@@ -181,6 +191,7 @@ def obtenir_meteo(ville: str, pays: str = "CI", portee: str = PORTEE_CHANTIER) -
                     reponse.status,
                     nom_canonique,
                 )
+                cache.set(cle_echec, True, timeout=DUREE_CACHE_ECHEC_SECONDES)
                 return meteo_indisponible(RAISON_SERVICE_INDISPONIBLE, nom_canonique, portee)
 
             corps = json.loads(reponse.read().decode("utf-8"))
@@ -214,4 +225,5 @@ def obtenir_meteo(ville: str, pays: str = "CI", portee: str = PORTEE_CHANTIER) -
             url,
             exc,
         )
+        cache.set(cle_echec, True, timeout=DUREE_CACHE_ECHEC_SECONDES)
         return meteo_indisponible(RAISON_SERVICE_INDISPONIBLE, nom_canonique, portee)

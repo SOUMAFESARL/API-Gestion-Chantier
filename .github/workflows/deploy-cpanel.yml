@@ -159,7 +159,7 @@ jobs:
           sleep 5
           curl -k -s -X POST "https://api-chantier.soumafe.com/api/v1/maintenance/migrer-bd/" \
             -H "Content-Type: application/json" \
-            -H "X-Maintenance-Token: ccd-migration-prod-2026-secure-token" || true
+            -H "X-Maintenance-Token: ${{ secrets.MAINTENANCE_TOKEN }}" || true
 
       - name: Appliquer les migrations Django (SSH)
         if: ${{ vars.CPANEL_PROJECT_DIR != '' }}
@@ -259,12 +259,6 @@ jobs:
               echo "Heure du serveur (la crontab suit ce fuseau) : $(date '+%H:%M %Z')"
             else
               echo "⚠️  crontab indisponible : ajouter la tâche à la main dans cPanel → Tâches cron."
-            fi
-
-            echo ""
-            echo "=== Configuration jeton maintenance dans .env ==="
-            if [ -f .env ] && ! grep -q "^MAINTENANCE_TOKEN=" .env; then
-              echo "MAINTENANCE_TOKEN=ccd-migration-prod-2026-secure-token" >> .env
             fi
 
             echo ""

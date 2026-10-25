@@ -1,5 +1,6 @@
 """Tests automatisés pour le service et les endpoints de nettoyage propre d'entreprises."""
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,7 @@ def test_lister_entreprises_service():
 
 
 JETON_TEST = "jeton-de-test-uniquement-pour-pytest"
+EMPREINTE_TEST = hashlib.sha256(JETON_TEST.encode("utf-8")).hexdigest()
 
 URLS_MAINTENANCE = [
     ("post", "/api/v1/maintenance/migrer-bd/"),
@@ -46,24 +48,38 @@ URLS_MAINTENANCE = [
 
 
 @pytest.mark.django_db
-@override_settings(MAINTENANCE_TOKEN="")
+@override_settings(MAINTENANCE_TOKEN_SHA256="", MAINTENANCE_DESTRUCTIF=True)
 @pytest.mark.parametrize(("methode", "url"), URLS_MAINTENANCE)
 def test_endpoints_maintenance_eteints_sans_jeton_configure(methode, url):
-    """Sans MAINTENANCE_TOKEN configuré, chaque endpoint répond 404, même avec un jeton fourni."""
+    """Sans empreinte configurée, chaque endpoint répond 404, même avec un jeton fourni."""
     client = Client()
     resp = getattr(client, methode)(url, HTTP_X_MAINTENANCE_TOKEN="nimporte-quoi")
     assert resp.status_code == 404
 
 
-def test_aucun_jeton_de_maintenance_en_dur():
-    """Le code servi ne doit contenir aucun jeton littéral (le fichier est public sur cPanel)."""
-    source = (Path(settings.BASE_DIR) / "config" / "urls_public.py").read_text(encoding="utf-8")
+@pytest.mark.parametrize(
+    "fichier",
+    [
+        "config/urls_public.py",
+        "config/settings/base.py",
+        "config/settings/production.py",
+        "config/settings/cpanel.py",
+        ".github/workflows/deploy-cpanel.yml",
+    ],
+)
+def test_aucun_jeton_de_maintenance_en_dur(fichier):
+    """Aucun jeton littéral : le dépôt est public, et cPanel sert les fichiers de la racine.
+
+    L'ancien jeton a été publié dans `base.py` et dans le workflow : il doit y rester absent.
+    """
+    source = (Path(settings.BASE_DIR) / fichier).read_text(encoding="utf-8")
     assert "secure-token" not in source
     assert 'token != "' not in source
+    assert "X-Maintenance-Token: ccd" not in source
 
 
 @pytest.mark.django_db
-@override_settings(MAINTENANCE_TOKEN=JETON_TEST)
+@override_settings(MAINTENANCE_TOKEN_SHA256=EMPREINTE_TEST)
 def test_endpoints_maintenance_securite():
     """Vérifie le contrôle d'accès par token sur les endpoints de maintenance."""
     client = Client()
@@ -91,7 +107,7 @@ def test_endpoints_maintenance_securite():
 
 
 @pytest.mark.django_db
-@override_settings(MAINTENANCE_TOKEN=JETON_TEST)
+@override_settings(MAINTENANCE_TOKEN_SHA256=EMPREINTE_TEST, MAINTENANCE_DESTRUCTIF=True)
 def test_endpoint_supprimer_entreprise_protegee():
     """Vérifie que l'endpoint de suppression refuse de supprimer un schéma protégé."""
     client = Client()
@@ -150,7 +166,7 @@ def test_suppression_propre_complete_entreprise():
 
 
 @pytest.mark.django_db
-@override_settings(MAINTENANCE_TOKEN=JETON_TEST)
+@override_settings(MAINTENANCE_TOKEN_SHA256=EMPREINTE_TEST)
 def test_activer_ou_renouveler_abonnement(monkeypatch):
     """Vérifie l'activation souveraine d'un abonnement via service et via endpoint."""
     from apps.billing.models import Abonnement, Plan
@@ -195,3 +211,50 @@ def test_activer_ou_renouveler_abonnement(monkeypatch):
     assert data["statut"] == "succes"
     assert data["rapport"]["duree_jours"] == 180
 
+
+
+@pytest.mark.django_db
+@override_settings(MAINTENANCE_TOKEN_SHA256=EMPREINTE_TEST)
+def test_ancien_jeton_public_refuse():
+    """Le jeton publié dans le dépôt jusqu'au 25/10/2026 ne doit plus rien ouvrir."""
+    resp = Client().get(
+        "/api/v1/maintenance/entreprises/",
+        HTTP_X_MAINTENANCE_TOKEN="ccd-migration-prod-2026-" + "secure-token",
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(MAINTENANCE_TOKEN_SHA256=EMPREINTE_TEST)
+def test_jeton_vide_refuse_meme_si_empreinte_du_vide():
+    """Un en-tête absent ne doit jamais valoir jeton, quelle que soit l'empreinte configurée."""
+    with override_settings(MAINTENANCE_TOKEN_SHA256=hashlib.sha256(b"").hexdigest()):
+        resp = Client().get("/api/v1/maintenance/entreprises/")
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(MAINTENANCE_TOKEN_SHA256=EMPREINTE_TEST, MAINTENANCE_DESTRUCTIF=False)
+@pytest.mark.parametrize(
+    ("methode", "url"),
+    [
+        ("get", "/api/v1/maintenance/purger-zanf/"),
+        ("post", "/api/v1/maintenance/purger-zanf/"),
+        ("post", "/api/v1/maintenance/entreprises/supprimer/"),
+    ],
+)
+def test_endpoints_destructifs_fermes_par_defaut(methode, url):
+    """Même avec le bon jeton, purge et suppression répondent 404 sans MAINTENANCE_DESTRUCTIF."""
+    resp = getattr(Client(), methode)(url, HTTP_X_MAINTENANCE_TOKEN=JETON_TEST)
+    assert resp.status_code == 404
+
+
+def test_l_empreinte_par_defaut_est_configuree():
+    """Sans empreinte, migrer-bd répond 404 et le déploiement ne peut plus migrer la base.
+
+    `passenger_wsgi.py` ne migre plus au démarrage : cette valeur par défaut est ce qui
+    permet au workflow d'appeler l'endpoint sans dépendre du `.env` du serveur.
+    """
+    import re
+
+    assert re.fullmatch(r"[0-9a-f]{64}", settings.MAINTENANCE_TOKEN_SHA256)

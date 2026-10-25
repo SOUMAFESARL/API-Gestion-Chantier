@@ -20,6 +20,7 @@ def sante(_request):
     return JsonResponse({"statut": "ok", "portee": "public"})
 
 
+import hashlib
 import hmac
 from io import StringIO
 from django.core.management import call_command
@@ -29,17 +30,28 @@ from django.views.decorators.csrf import csrf_exempt
 def _refuser_maintenance(request):
     """Contrôle du jeton de maintenance. Renvoie une réponse d'erreur, ou None si autorisé.
 
-    - aucun jeton configuré (`MAINTENANCE_TOKEN` vide) : 404, l'endpoint est éteint ;
+    - aucune empreinte configurée (`MAINTENANCE_TOKEN_SHA256` vide) : 404, l'endpoint est éteint ;
     - jeton absent ou faux : 403 ;
-    - comparaison à temps constant (`hmac.compare_digest`).
+    - on compare des **empreintes**, à temps constant : le serveur ne détient jamais le jeton.
     """
-    attendu = getattr(settings, "MAINTENANCE_TOKEN", "") or ""
+    attendu = getattr(settings, "MAINTENANCE_TOKEN_SHA256", "") or ""
     if not attendu:
         return JsonResponse({"erreur": "Ressource introuvable."}, status=404)
     fourni = request.headers.get("X-Maintenance-Token") or ""
-    if not hmac.compare_digest(fourni.encode("utf-8"), attendu.encode("utf-8")):
+    empreinte = hashlib.sha256(fourni.encode("utf-8")).hexdigest()
+    if not fourni or not hmac.compare_digest(empreinte, attendu):
         return JsonResponse({"erreur": "Non autorisé"}, status=403)
     return None
+
+
+def _refuser_destructif(request):
+    """Comme `_refuser_maintenance`, et en plus fermé sans `MAINTENANCE_DESTRUCTIF`.
+
+    Le 404 vient **avant** le contrôle du jeton : un endpoint fermé ne dit pas qu'il existe.
+    """
+    if not getattr(settings, "MAINTENANCE_DESTRUCTIF", False):
+        return JsonResponse({"erreur": "Ressource introuvable."}, status=404)
+    return _refuser_maintenance(request)
 
 
 @csrf_exempt
@@ -66,7 +78,7 @@ def migrer_bd_vue(request):
 @csrf_exempt
 def purger_zanf_vue(request):
     """Exécute ou inspecte la purge des schémas et références 'zanf' sur commande."""
-    refus = _refuser_maintenance(request)
+    refus = _refuser_destructif(request)
     if refus is not None:
         return refus
 
@@ -159,7 +171,7 @@ def inspecter_entreprises_prod_vue(request):
 @csrf_exempt
 def supprimer_entreprise_prod_vue(request):
     """Suppression propre et atomique d'une entreprise (schéma + dépendances public)."""
-    refus = _refuser_maintenance(request)
+    refus = _refuser_destructif(request)
     if refus is not None:
         return refus
 

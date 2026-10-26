@@ -1,0 +1,2951 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Découpage de projet</title>
+<style>
+:root{--fond:#f6f7f9;--carte:#fff;--texte:#1d2330;--doux:#6b7280;--bord:#dfe3ea;--accent:#1f5fae;--accent-doux:#e8f0fb;--erreur:#b42318;--erreur-fond:#fdecea;--alerte:#b54708;--alerte-fond:#fff4e5;--ok:#067647;--ok-fond:#eef7f0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fond);color:var(--texte);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{padding:14px 16px;background:var(--carte);border-bottom:1px solid var(--bord)}
+h1{font-size:17px;margin:0}
+.sous{color:var(--doux);font-size:12.5px;margin-top:2px}
+main{padding:16px;display:grid;gap:16px}
+.gauche{display:grid;gap:16px;min-width:0}
+.carte{background:var(--carte);border:1px solid var(--bord);border-radius:8px;padding:14px;min-width:0}
+.carte h2{font-size:14px;margin:0 0 10px}
+.ligne-outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;border:1px solid var(--bord);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--texte)}
+button:hover{border-color:var(--accent)}
+button.primaire{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.mini{padding:1px 6px;font-size:12px}
+select,input[type=text],textarea{font:inherit;border:1px solid var(--bord);border-radius:6px;padding:4px 8px;background:#fff;color:var(--texte)}
+input:disabled{background:var(--fond);color:var(--doux)}
+textarea{width:100%;resize:vertical}
+.niveaux{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.niveau{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border:1px solid var(--bord);border-radius:6px;padding:4px 8px;background:var(--fond)}
+.niveau .rang{font-size:11px;color:var(--doux);min-width:18px}
+.niveau input[type=text]{width:110px;padding:2px 6px}
+.niveau input.erreur{border-color:var(--erreur);background:var(--erreur-fond)}
+.niveau select{padding:2px 4px;max-width:180px;font-size:12.5px}
+.defile{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%}
+th,td{border-bottom:1px solid var(--bord);padding:3px 4px;text-align:left;vertical-align:middle}
+th{font-size:12px;color:var(--doux);font-weight:600}
+td.num{color:var(--doux);font-size:12px;width:28px}
+td input{width:100%;min-width:120px;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:4px}
+td input:hover{border-color:var(--bord)}
+td input:focus{border-color:var(--accent);background:#fff;outline:none}
+td.repete input{color:#a7adb8}
+td.hors-liste input{text-decoration:underline dotted var(--alerte);text-underline-offset:3px}
+td.autre-liste input,td.meme-parent input{background:var(--alerte-fond);border-color:#f5c98a}
+td.vide input{background:var(--erreur-fond);border-color:#f3b8b2}
+tr.doublon td{background:var(--alerte-fond)}
+tr.sans-effet td input{color:#a7adb8;font-style:italic}
+td.actions{white-space:nowrap;width:1%}
+.cellule{display:flex;align-items:center}
+.cellule input{flex:1}
+button.deroule{border:0;background:transparent;color:var(--doux);padding:2px 4px;font-size:12px}
+button.deroule:hover{color:var(--accent)}
+.deroulant{position:fixed;z-index:10;background:#fff;border:1px solid var(--bord);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.12);overflow:auto;font-size:13px}
+.deroulant .groupe-titre{position:sticky;top:0;background:var(--fond);color:var(--doux);font-size:11px;font-weight:600;padding:4px 10px}
+.deroulant .option{padding:5px 10px;cursor:pointer}
+.deroulant .option:hover,.deroulant .option.active{background:var(--accent-doux)}
+.deroulant .vide-liste{padding:8px 10px;color:var(--doux)}
+.valeurs{max-height:260px;overflow:auto;margin-top:8px;border:1px solid var(--bord);border-radius:6px}
+.valeurs th{position:sticky;top:0;background:var(--carte)}
+.ajout{display:grid;gap:6px;margin-top:8px}
+.messages{margin-top:8px;font-size:12.5px}
+.err{color:var(--erreur)}.warn{color:var(--alerte)}.ok{color:var(--ok)}.info{color:var(--doux)}
+.note{font-size:12px;color:var(--doux);margin:8px 0 0}
+.note:empty{display:none}
+.arbre ul{list-style:none;margin:0;padding-left:16px;border-left:1px dashed var(--bord)}
+.arbre>ul{padding-left:0;border:0}
+.arbre li{padding:2px 0}
+.code{font-family:Consolas,monospace;font-size:12px;color:var(--doux);margin-right:6px}
+.etiq{font-size:11px;background:var(--accent-doux);color:var(--accent);border-radius:10px;padding:0 7px;margin-left:6px;white-space:nowrap}
+.feuille>.etiq{background:var(--ok-fond);color:var(--ok)}
+.etiq.entreprise{background:var(--ok-fond);color:var(--ok)}
+pre{background:var(--fond);border:1px solid var(--bord);border-radius:6px;padding:10px;max-height:340px;overflow:auto;font-size:12px;margin:10px 0 0}
+dialog{border:1px solid var(--bord);border-radius:8px;padding:16px;max-width:460px;color:var(--texte)}
+dialog::backdrop{background:rgba(0,0,0,.25)}
+dialog p{margin:0;white-space:pre-line}
+dialog .ligne-outils{justify-content:flex-end;margin-top:14px}
+.formulaire{display:grid;gap:6px;margin-top:10px}
+.formulaire label{font-size:13px}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1d2330;color:#fff;padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.visible{opacity:1}
+[hidden]{display:none !important}
+nav.onglets{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+nav.onglets button.actif{background:var(--accent);color:#fff;border-color:var(--accent)}
+.grille{font-size:13px}
+.grille td,.grille th{padding:5px 6px;white-space:nowrap}
+.grille tr.ligne{cursor:pointer}
+.grille tr.ligne:hover td{background:var(--fond)}
+.grille tr.choisie td{background:var(--accent-doux)}
+.grille tr.racine td{font-weight:600}
+.num-droite{text-align:right}
+.bascule{display:inline-block;width:16px;color:var(--doux)}
+.point{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-left:6px;vertical-align:middle}
+.statut{font-size:11px;border-radius:10px;padding:1px 8px;white-space:nowrap}
+.s-planifie{background:#eef1f5;color:#475467}
+.s-en-cours{background:var(--accent-doux);color:var(--accent)}
+.s-en-retard{background:var(--erreur-fond);color:var(--erreur)}
+.s-suspendu{background:var(--alerte-fond);color:var(--alerte)}
+.s-cloture{background:var(--ok-fond);color:var(--ok)}
+.indicateurs{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+.indicateur{background:var(--fond);border:1px solid var(--bord);border-radius:6px;padding:8px 10px;font-size:12px}
+.indicateur b{display:block;font-size:17px}
+.detail h2{margin-bottom:2px}
+.detail section{border-top:1px solid var(--bord);padding-top:10px;margin-top:10px}
+.detail h3{font-size:13px;margin:0 0 6px}
+.champs{display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;font-size:13px}
+.champs input,.champs select{width:100%;min-width:0}
+input[type=date],input[type=number]{font:inherit;border:1px solid var(--bord);border-radius:6px;padding:3px 6px;background:#fff;color:var(--texte)}
+.effets{margin:8px 0 0;padding-left:18px;font-size:13px}
+.historique{margin:0;padding-left:18px}
+.historique li{font-size:12.5px;margin-bottom:6px}
+#vue-regles{grid-template-columns:1fr !important}
+.schemas{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.barre-zone{position:relative;height:22px;margin:4px 0}
+.barre{position:absolute;top:3px;height:16px;border-radius:4px;font-size:11px;color:#fff;padding:0 6px;line-height:16px;white-space:nowrap;overflow:hidden}
+.b-parent{background:#5b7fb8}.b-enfant{background:var(--ok)}.b-prolonge{background:var(--alerte)}
+.b-base{background:transparent;border:1.5px dashed var(--doux);color:var(--doux);line-height:13px}
+.boite{border:1.5px solid var(--bord);border-radius:8px;padding:6px 10px;margin-top:6px;font-size:12.5px;background:var(--carte)}
+.boite .boite{margin-left:12px}
+.boite.cle{border-color:var(--accent)}
+@media (min-width:1000px){main{grid-template-columns:minmax(0,1fr) 320px}.droite{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto}}
+button:disabled{opacity:.45;cursor:not-allowed}
+.puce{display:inline-flex;align-items:center;gap:4px;font-size:12px;background:var(--fond);border:1px solid var(--bord);border-radius:12px;padding:1px 8px}
+.ligne-chemin td{color:#a7adb8;font-style:italic}
+.etiq.alerte{background:var(--alerte-fond);color:var(--alerte)}
+.bandeau-hors-ligne{background:var(--alerte-fond);color:var(--alerte);border:1px solid #f5c98a;border-radius:6px;padding:8px 10px;margin:8px 0 0;font-size:13px}
+.alerte-carte{border:1px solid var(--bord);border-left:4px solid var(--alerte);border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px}
+.alerte-carte.n-critique{border-left-color:var(--erreur)}
+.alerte-carte.n-modere{border-left-color:#d4a72c}
+#barre-utilisateur select{max-width:260px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Démarrage d'un projet : découpage</h1>
+  <div class="sous">Prototype de réflexion. La liste des lots est celle du référentiel actuel ; les phases, les lots routiers et les modèles sont des exemples à remplacer.</div>
+  <nav class="onglets">
+    <button data-onglet="creation" class="actif">1. Création</button>
+    <button data-onglet="projet">2. Projet</button>
+    <button data-onglet="journal">3. Journal du jour</button>
+    <button data-onglet="alertes">4. Alertes</button>
+    <button data-onglet="regles">5. Règles en images</button>
+  </nav>
+  <div id="barre-utilisateur" class="ligne-outils" style="margin-top:10px" hidden>
+    <label>Je suis <select id="utilisateur"></select></label>
+    <label>Date du jour (simulée) <input type="date" id="date-ref"></label>
+    <span id="resume-droits" class="note" style="margin:0;cursor:help"></span>
+  </div>
+</header>
+<main id="vue-creation">
+  <div class="gauche">
+    <section class="carte">
+      <h2>0. Listes de valeurs</h2>
+      <div class="ligne-outils">
+        <label>Agir en tant que
+          <select id="role">
+            <option value="plateforme">Super admin (plateforme)</option>
+            <option value="entreprise" selected>Entreprise</option>
+          </select>
+        </label>
+        <label>Liste <select id="liste-choisie"></select></label>
+        <button id="nouvelle-liste">＋ Nouvelle liste</button>
+        <button id="reinitialiser">Réinitialiser les données</button>
+      </div>
+      <div id="liste-detail"></div>
+      <p class="note">Les valeurs de la plateforme sont proposées à toutes les entreprises. Une entreprise y ajoute les siennes sans pouvoir retirer celles de la plateforme. Une valeur tapée dans le tableau hors liste n'entre pas dans la liste. Listes et modèles sont gardés dans ce navigateur.</p>
+    </section>
+    <section class="carte">
+      <h2>1. Projet, modèle et niveaux</h2>
+      <div class="ligne-outils">
+        <label>Type de projet <select id="type-projet"></select></label>
+        <label>Modèle <select id="modele"></select></label>
+      </div>
+      <div id="actions-modele" class="ligne-outils" style="margin-top:8px"></div>
+      <p id="note-modele" class="note warn"></p>
+      <div id="niveaux" class="niveaux"></div>
+      <p class="note">Chaque niveau choisit la liste où il puise ses propositions, ou aucune. Changer de liste ne modifie aucune valeur déjà saisie. ✕ retire un niveau du projet, ＋ en insère un. La récursion se fait après la création, dans l'arbre.</p>
+    </section>
+    <section class="carte">
+      <h2>2. Tableau</h2>
+      <div class="ligne-outils">
+        <button id="ajouter">＋ Ligne vide</button>
+        <button id="importer">Importer un Excel</button>
+        <input type="file" id="fichier" accept=".xlsx,.xls,.csv" hidden>
+        <button id="exporter">Exporter en Excel</button>
+      </div>
+      <div class="defile"><table id="tableau"><thead></thead><tbody></tbody></table></div>
+      <div id="messages" class="messages"></div>
+      <p class="note">Une ligne = une feuille : son dernier élément rempli. Rouge : bloquant. Orange : valeur d'une autre liste ou même nom que le parent. Souligné en pointillé : hors de la liste du niveau. Survoler une cellule marquée donne l'explication.</p>
+    </section>
+    <section class="carte">
+      <div class="ligne-outils"><button class="primaire" id="creer">Créer le projet</button><span class="note" style="margin:0">Montre ce que le backend recevrait.</span></div>
+      <div id="resultat" hidden><pre id="json"></pre><div class="ligne-outils" style="margin-top:8px"><button class="primaire" id="ouvrir-projet">Ouvrir le projet créé →</button></div></div>
+    </section>
+  </div>
+  <aside class="carte droite">
+    <h2>Arbre produit <span id="resume" class="note"></span></h2>
+    <div id="arbre" class="arbre"></div>
+  </aside>
+</main>
+
+<main id="vue-projet" hidden>
+  <div class="gauche">
+    <section class="carte">
+      <h2 id="titre-projet">Projet</h2>
+      <div class="ligne-outils">
+        <button id="inserer-niveau">Insérer un niveau</button>
+        <button id="projet-demo">Recharger la démonstration</button>
+      </div>
+      <div id="niveaux-alerte" class="ligne-outils" style="margin-top:8px"></div>
+      <div id="indicateurs" class="indicateurs"></div>
+      <p id="note-sante" class="note"></p>
+    </section>
+    <section class="carte">
+      <h2>Vue en arbre</h2>
+      <div class="defile">
+        <table class="grille" id="grille">
+          <thead><tr><th>Élément</th><th>Niveau</th><th>Dates prévues</th><th class="num-droite">Montant</th><th class="num-droite">Physique</th><th class="num-droite">Temporel</th><th class="num-droite">Écart</th><th>Statut</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="note">Change de personne dans « Je suis » : chacun ne voit et ne modifie que ce que ses permissions et son périmètre permettent. Les boutons grisés disent quelle permission manque. Point vert : élément commencé. « +N j » : dérive sur la baseline contractuelle (rouge au-delà de 30 jours). Montants en millions de FCFA ; « ••• » sans projets.voir_montants.</p>
+    </section>
+    <section class="carte">
+      <h2>Affectations et équipes</h2>
+      <div id="affectations"></div>
+    </section>
+    <section class="carte">
+      <h2>Historique des modifications</h2>
+      <ul id="historique" class="historique"></ul>
+    </section>
+  </div>
+  <aside class="carte droite detail" id="detail-projet"></aside>
+</main>
+
+<main id="vue-journal" hidden>
+  <div class="gauche">
+    <section class="carte" id="journal-entete"></section>
+    <section class="carte" id="journal-communes"></section>
+    <div id="journal-parties" class="gauche"></div>
+  </div>
+  <aside class="carte droite" id="journal-circuit"></aside>
+</main>
+
+<main id="vue-alertes" hidden>
+  <div class="gauche"><section class="carte" id="alertes"></section></div>
+  <aside class="carte droite" id="alertes-aide"></aside>
+</main>
+
+<main id="vue-regles" hidden>
+  <div class="schemas">
+    <section class="carte">
+      <h2>Un journal, plusieurs mains</h2>
+      <div class="boite cle"><b>Journal du 16/11</b> · un seul par projet et par jour
+        <div class="boite">Partie « Bâtiment A » · rédigée par Yao · visée par Kouamé</div>
+        <div class="boite">Partie « Gros œuvre » · rédigée par Traoré · visée par N'Guessan</div>
+        <div class="boite">Parties communes : météo, horaires · pas de visa séparé</div>
+      </div>
+      <p class="note">Chaque feuille a un seul rédacteur, celui du périmètre le plus précis. Le visa se donne partie par partie ; le journal est visé quand toutes le sont, puis approuvé une fois, sur tout le projet. Hors connexion, chacun synchronise sa partie ; rien n'est fusionné en silence.</p>
+    </section>
+    <section class="carte">
+      <h2>Alertes sans bruit</h2>
+      <div class="boite"><b>Phase</b>
+        <div class="boite"><b>Ouvrage</b>
+          <div class="boite cle"><b>Lot</b> · « Alerter à ce niveau » ✓ · une alerte, avec ses causes
+            <div class="boite">Feuille en retard → cause, pas alerte</div>
+            <div class="boite">Jalon non atteint → alerte toujours</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Destinataires : la permission projets.alertes_voir dans le périmètre, et le seuil personnel (Modéré, Élevé, Critique).</p>
+    </section>
+    <section class="carte">
+      <h2>Les dates : deux mouvements</h2>
+      <p class="note">Vers le bas, un parent encadre ses enfants. Vers le haut, un enfant qui dépasse déclenche une alerte ; si on confirme, le parent est prolongé, jusqu'au projet s'il le faut. La baseline ne bouge jamais.</p>
+      <div class="info" style="font-size:12px;margin-top:10px">1. L'activité tient dans son lot : acceptée</div>
+      <div class="barre-zone"><div class="barre b-parent" style="left:0;width:70%">Lot</div></div>
+      <div class="barre-zone"><div class="barre b-enfant" style="left:10%;width:40%">Activité</div></div>
+      <div class="info" style="font-size:12px;margin-top:10px">2. L'activité dépasse : alerte, puis prolongation confirmée</div>
+      <div class="barre-zone"><div class="barre b-base" style="left:0;width:70%">baseline du lot (immuable)</div></div>
+      <div class="barre-zone"><div class="barre b-parent" style="left:0;width:70%">Lot</div><div class="barre b-prolonge" style="left:70%;width:18%">prolongé</div></div>
+      <div class="barre-zone"><div class="barre b-enfant" style="left:40%;width:48%">Activité</div></div>
+      <p class="note">Prolonger le projet ou un élément commencé : CP ou DG seulement, avec un motif. La dérive (fin − baseline) alerte le DG au-delà de 30 jours. Un parent ne rétrécit jamais tout seul.</p>
+    </section>
+    <section class="carte">
+      <h2>L'avancement remonte des feuilles</h2>
+      <div class="boite cle"><b>Gros œuvre</b> · enveloppe 60 M · somme 44 M · <b>55,7 %</b>
+        <div class="boite">Fouilles · 8 M · 100 %</div>
+        <div class="boite">Béton de propreté · 6 M · 75 %</div>
+        <div class="boite">Semelles · 30 M · 40 %</div>
+      </div>
+      <p class="note">(8 × 100 + 6 × 75 + 30 × 40) ÷ 44 = 55,7 %. Le poids d'un élément est le montant connu le plus précis :</p>
+      <ul class="effets">
+        <li><b>complet</b> : tous les enfants chiffrés → la somme des enfants ;</li>
+        <li><b>enveloppe</b> : montants incomplets → l'enveloppe ; la part non chiffrée compte pour 0 % ;</li>
+        <li><b>indisponible</b> : aucun montant connu → pas d'avancement affiché.</li>
+      </ul>
+      <p class="note">Temporel d'un parent : moyenne des temporels de ses enfants, avec les mêmes poids ; ses propres dates si ses enfants sont incomplets.</p>
+    </section>
+    <section class="carte">
+      <h2>Les formules F3 avec l'arbre</h2>
+      <table>
+        <thead><tr><th>F3</th><th>Aujourd'hui</th><th>Avec l'arbre</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Activité : réalisé / prévu</td><td>Feuille : quantité, ou pourcentage déclaré</td></tr>
+          <tr><td>2</td><td>Lot : pondéré par la quantité prévue</td><td>Tout parent : pondéré par le montant</td></tr>
+          <tr><td>3</td><td>Projet : pondéré par le budget, 0 % sans budget</td><td>Règle de tout parent, « indisponible » sans montant</td></tr>
+          <tr><td>4</td><td>Temporel lot ; projet pondéré par les lots</td><td>Feuille : ses dates ; parent : pondéré par ses enfants</td></tr>
+          <tr><td>5</td><td>Écart du lot et du projet</td><td>Écart de chaque élément</td></tr>
+          <tr><td>6</td><td>Indice de santé du projet</td><td>Inchangé ; « partiel » si l'écart est indisponible</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="carte">
+      <h2>Détailler une feuille commencée</h2>
+      <div class="ligne-outils" style="align-items:flex-start">
+        <div style="flex:1;min-width:140px"><div class="info">Avant</div><div class="boite"><b>Élévation murs</b> · 10 M · 40 %</div></div>
+        <div style="flex:2;min-width:200px"><div class="info">Après</div>
+          <div class="boite cle"><b>Élévation murs</b> · enveloppe 10 M · 40 %
+            <div class="boite">Réalisé avant détail · 4 M · 100 % · clôturé</div>
+            <div class="boite">Murs RDC · à chiffrer</div>
+            <div class="boite">Murs R+1 · à chiffrer</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">4 M acquis sur une enveloppe de 10 M : l'avancement ne bouge pas. Il reste 6 M à répartir sur les nouveaux éléments.</p>
+    </section>
+    <section class="carte">
+      <h2>Insérer un niveau dans un projet rempli</h2>
+      <div class="ligne-outils" style="align-items:flex-start">
+        <div style="flex:1;min-width:140px"><div class="info">Avant</div>
+          <div class="boite"><b>Gros œuvre</b> (phase)<div class="boite">Maçonnerie (lot)<div class="boite">Murs (activité)</div></div></div>
+        </div>
+        <div style="flex:1;min-width:160px"><div class="info">Après</div>
+          <div class="boite"><b>Gros œuvre</b> (phase)<div class="boite cle">Général (ouvrage)<div class="boite">Maçonnerie (lot)<div class="boite">Murs (activité)</div></div></div></div>
+        </div>
+      </div>
+      <p class="note">Un élément intermédiaire est créé sous chaque parent : l'arbre reste valide. On le renomme (« Bâtiment A ») ou on le scinde ensuite.</p>
+    </section>
+    <section class="carte">
+      <h2>Périmètres : qui déclare quoi</h2>
+      <div class="boite"><b>Projet</b> · rapport global
+        <div class="boite"><b>Bâtiment A</b> · chef Yao
+          <div class="boite"><b>Gros œuvre</b> · chef Traoré<div class="boite">Murs RDC → déclarée par <b>Traoré</b></div></div>
+          <div class="boite">Peinture → déclarée par <b>Yao</b></div>
+        </div>
+        <div class="boite"><b>VRD</b>, aucun chef → <b>rapport global</b></div>
+      </div>
+      <p class="note">Le périmètre le plus précis l'emporte : une quantité n'est jamais déclarée deux fois. Les anciens rapports gardent leur photographie.</p>
+    </section>
+    <section class="carte">
+      <h2>Modèles et listes</h2>
+      <div class="boite"><b>Plateforme</b> (super admin) : existe une seule fois, lue par toutes les entreprises
+        <div class="boite">Modèle « Bâtiment » · listes Phases et Lots</div>
+      </div>
+      <div class="boite"><b>Entreprise</b>
+        <div class="boite">« Bâtiment (personnalisé) » : copie liée à l'original par identifiant ; l'original reste visible</div>
+        <div class="boite">Ses propres modèles et listes ; elle enrichit les listes plateforme sans en retirer de valeurs</div>
+      </div>
+      <div class="boite"><b>Projet</b> : reçoit une copie de son modèle ; plus rien ne le modifie de l'extérieur</div>
+    </section>
+    <section class="carte">
+      <h2>Statut et modifications</h2>
+      <ul class="effets">
+        <li>Chaque élément est jugé sur <b>lui-même</b> : son écart et la dérive de ses dates. Les enfants en retard sont signalés, sans imposer leur statut.</li>
+        <li><b>Clôturer</b> : feuilles seulement. Un parent est clôturé quand tous ses enfants le sont.</li>
+        <li><b>Suspendre</b> : n'importe quel élément ; la suspension descend vers tous ses descendants.</li>
+        <li><b>Élément commencé</b> : au moins une feuille en dessous porte une mesure. Le modifier (ajouter, déplacer, chiffrer, désactiver) est un <b>avenant</b> : motif obligatoire et historique.</li>
+        <li><b>Retirer</b> : suppression logique sans mesure ; désactivation avec mesures.</li>
+        <li><b>Deux frères</b> ne portent jamais le même intitulé (A-6).</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<dialog id="dialogue"><p id="dialogue-texte"></p><div id="dialogue-contenu"></div><div id="dialogue-boutons" class="ligne-outils"></div></dialog>
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+const TYPES_PROJET = [
+  ["BATIMENT_RESIDENTIEL", "Bâtiment — Résidentiel"],
+  ["BATIMENT_COMMERCIAL", "Bâtiment — Commercial"],
+  ["TP_ROUTE", "TP — Route"],
+  ["TP_GENIE_CIVIL", "TP — Génie civil"],
+  ["VRD", "VRD"],
+  ["INFRASTRUCTURE_INDUSTRIELLE", "Infrastructure industrielle"],
+];
+
+// Le référentiel des lots est repris de catalogue/migrations/0011_peupler_referentiels.py.
+const LOTS_REFERENTIEL = [
+  ["Voiries et réseaux divers", [
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "VRD2 - Drainage général, murs de soutènement, traitement des déchets",
+    "VRD3 - Assainissement eaux pluviales, eaux usées, eaux vannes, station d’épuration",
+    "VRD4 - Alimentation en eau potable, arrosage, bâches à eau (sanitaire et sécurité incendie)",
+    "VRD5 - Alimentation électricité, locaux transfo, groupes électrogènes, éclairage public",
+    "VRD6 - Alimentation télécommunications",
+    "VRD7 - Jardins, plantations d’arbres, d’arbustes et engazonnement",
+    "VRD8 - Mobilier urbain et signalétique extérieure",
+    "VRD9 - Terrains de sports"]],
+  ["Lots architecturaux", [
+    "Fondations profondes", "Gros œuvre", "Étanchéité des toitures terrasses et autres",
+    "Menuiserie intérieure en bois", "Menuiserie aluminium", "Vitrerie", "Menuiserie métallique",
+    "Revêtements durs décoratifs", "Revêtements durs", "Revêtements souples",
+    "Faux plafonds (staff, acoustique ou diffusant)", "Peinture", "Teintures, rideaux, stores", "Signalétique"]],
+  ["Lots techniques", [
+    "Plomberie sanitaire, ventilation mécanique contrôlée", "Climatisation", "Électricité courant fort",
+    "Distribution du courant régulé", "Détection, extinction, report d’alarmes techniques",
+    "Sonorisation des salles de langue, conférence, projection", "Ascenseurs", "Portes coupe-feu",
+    "Sécurité incendie", "Nacelle de nettoyage des façades", "Paratonnerre"]],
+  ["Télécommunication et informatique", ["Réseau informatique", "Téléphonie, interphonie", "Installation TV"]],
+  ["Sécurité d’accès", [
+    "Système de sécurité d’accès par lecteur biométrique, digicode", "Système de caméras de surveillance",
+    "Anti-intrusion", "GTB/GTC"]],
+  ["Décoration", [
+    "Décoration habillage muraux (salle de conférence, bibliothèque)", "Décoration mobilier salle de conférence (sièges)",
+    "Décoration plafond salle de conférence", "Rideaux décoratifs salle de conférence"]],
+  ["Mobilier", [
+    "MOB.1 Mobilier bureaux, académique",
+    "MOB.2 Mobilier logement étudiants et enseignants, logements de fonction et astreintes",
+    "MOB.3 Mobilier restauration et centre médical", "MOB.4 Mobilier urbain de jardin", "MOB.5 Mobilier bibliothèque"]],
+  ["Équipements", [
+    "EQU.1 Équipements scientifiques de laboratoires spécialisés et ateliers",
+    "EQU.2 Équipements de laboratoires de langue et multimédia", "EQU.3 Équipements de cuisine et vaissellerie",
+    "EQU.4 Équipements informatiques pour l’administration",
+    "EQU.5 Équipements de reprographie centrale et photocopie en bureaux",
+    "EQU.6 Équipements didactiques divers (tableaux)", "EQU.7 Équipements sportifs", "EQU.8 Équipements médicaux",
+    "EQU.9 Équipements téléenseignement, visioconférence"]],
+];
+
+const plateforme = (libelle, groupe = "") => ({ libelle, groupe, origine: "plateforme" });
+
+const LISTES_INITIALES = [
+  { id: "phases", nom: "Phases (exemple)", origine: "plateforme", valeurs: [
+    "Études", "Préparation de chantier", "Infrastructure", "Superstructure", "Second œuvre", "Finitions", "Réception",
+  ].map((v) => plateforme(v)) },
+  { id: "lots", nom: "Lots (référentiel actuel)", origine: "plateforme",
+    valeurs: LOTS_REFERENTIEL.flatMap(([groupe, noms]) => noms.map((n) => plateforme(n, groupe))) },
+  { id: "lots-route", nom: "Lots routiers (exemple)", origine: "plateforme", valeurs: [
+    "Terrassements", "Chaussée", "Assainissement et drainage", "Ouvrages d'art", "Signalisation et équipements",
+  ].map((v) => plateforme(v)) },
+];
+
+const MODELES_INITIAUX = [
+  {
+    id: "m-batiment", nom: "Bâtiment", origine: "plateforme", version: 1,
+    types: ["BATIMENT_RESIDENTIEL", "BATIMENT_COMMERCIAL"],
+    niveaux: [
+      { id: "phase", libelle: "Phase", liste: "phases" },
+      { id: "ouvrage", libelle: "Ouvrage", liste: null },
+      { id: "lot", libelle: "Lot", liste: "lots" },
+      { id: "activite", libelle: "Activité", liste: null },
+    ],
+    lignes: [
+      ["Préparation de chantier", "Bâtiment A", "VRD1 - Terrassements généraux, voirie, parkings, clôture", "Implantation"],
+      ["Infrastructure", "Bâtiment A", "Gros œuvre", "Fouilles en rigole"],
+      ["Infrastructure", "Bâtiment A", "Gros œuvre", "Béton de propreté"],
+      ["Superstructure", "Bâtiment A", "Gros œuvre", "Élévation murs"],
+      ["Superstructure", "Bâtiment A", "Gros œuvre", "Chaînages"],
+      ["Superstructure", "Bâtiment B", "Gros œuvre", "Élévation murs"],
+      ["Second œuvre", "Bâtiment A", "Électricité courant fort", "Saignées et fourreaux"],
+      ["Second œuvre", "Bâtiment A", "Plomberie sanitaire, ventilation mécanique contrôlée", ""],
+      ["Finitions", "Bâtiment A", "Peinture", "Peinture intérieure"],
+    ],
+  },
+  {
+    id: "m-route", nom: "Route", origine: "plateforme", version: 1,
+    types: ["TP_ROUTE", "VRD"],
+    niveaux: [
+      { id: "phase", libelle: "Phase", liste: "phases" },
+      { id: "section", libelle: "Section", liste: null },
+      { id: "lot", libelle: "Lot", liste: "lots-route" },
+      { id: "activite", libelle: "Activité", liste: null },
+    ],
+    lignes: [
+      ["Études", "PK0 à PK5", "Terrassements", "Levé topographique"],
+      ["Infrastructure", "PK0 à PK5", "Terrassements", "Décapage"],
+      ["Infrastructure", "PK0 à PK5", "Terrassements", "Remblais"],
+      ["Superstructure", "PK0 à PK5", "Chaussée", "Couche de base"],
+      ["Infrastructure", "PK5 à PK10", "Terrassements", "Déblais"],
+      ["Infrastructure", "PK5 à PK10", "Assainissement et drainage", "Caniveaux"],
+    ],
+  },
+];
+
+const ORIGINES = { plateforme: "Plateforme", entreprise: "Entreprise" };
+const CLE_STOCKAGE = "proto-decoupage-v2";
+
+const $ = (s) => document.querySelector(s);
+const propre = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
+// Même règle que `cle_comparaison` du backend : sans accents, casse ni espaces superflus.
+const cle = (s) => propre(s).replace(/œ/g, "oe").replace(/Œ/g, "OE")
+  .normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function el(tag, props = {}, ...enfants) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of enfants) if (c != null) e.append(c);
+  return e;
+}
+
+const bouton = (text, onclick, classe = "") => el("button", { class: classe, text, onclick });
+
+/* ---------- Données (listes et modèles) ---------- */
+
+let { listes, modeles } = charger();
+let listeChoisie = listes[0]?.id;
+
+function charger() {
+  try {
+    const d = JSON.parse(localStorage.getItem(CLE_STOCKAGE) || "null");
+    if (d?.listes && d?.modeles) return d;
+    // Version précédente du prototype : seules les listes étaient gardées.
+    const anciennes = JSON.parse(localStorage.getItem("proto-decoupage-listes-v1") || "null");
+    if (Array.isArray(anciennes)) return { listes: anciennes, modeles: structuredClone(MODELES_INITIAUX) };
+  } catch { /* stockage indisponible : on repart des données initiales */ }
+  return { listes: structuredClone(LISTES_INITIALES), modeles: structuredClone(MODELES_INITIAUX) };
+}
+
+function sauver() {
+  try { localStorage.setItem(CLE_STOCKAGE, JSON.stringify({ listes, modeles })); } catch { /* sans effet */ }
+}
+
+const role = () => $("#role").value;
+const enPlateforme = () => role() === "plateforme";
+const listeParId = (id) => listes.find((l) => l.id === id);
+const modeleParId = (id) => modeles.find((m) => m.id === id);
+// Le super admin ne voit que la plateforme ; l'entreprise voit la plateforme et ce qui est à elle.
+const listesVisibles = () => (enPlateforme() ? listes.filter((l) => l.origine === "plateforme") : listes);
+const modelesVisibles = () => (enPlateforme() ? modeles.filter((m) => m.origine === "plateforme") : modeles);
+
+/* ---------- Listes ---------- */
+
+const peutModifierListe = (l) => l.origine === role();
+const peutAjouterValeur = (l) => role() === "entreprise" || l.origine === "plateforme";
+
+function apresModifListes() {
+  sauver();
+  rendreListes();
+  rendreNiveaux();
+  rafraichirEtats();
+}
+
+function rendreListes() {
+  const visibles = listesVisibles();
+  if (!visibles.some((l) => l.id === listeChoisie)) listeChoisie = visibles[0]?.id;
+  $("#liste-choisie").replaceChildren(...visibles.map((l) =>
+    el("option", { value: l.id, text: `${l.nom} (${l.valeurs.length})` })));
+  $("#liste-choisie").value = listeChoisie || "";
+
+  const zone = $("#liste-detail");
+  zone.replaceChildren();
+  const l = listeParId(listeChoisie);
+  if (!l) { zone.append(el("p", { class: "note", text: "Aucune liste." })); return; }
+
+  const proprio = peutModifierListe(l);
+  zone.append(el("div", { class: "ligne-outils", style: "margin-top:10px" },
+    el("input", {
+      type: "text", value: l.nom, disabled: !proprio, "aria-label": "Nom de la liste", id: "nom-liste",
+      oninput: (e) => {
+        l.nom = e.target.value;
+        sauver();
+        $("#liste-choisie").selectedOptions[0].textContent = `${l.nom} (${l.valeurs.length})`;
+        rendreNiveaux();
+      },
+    }),
+    el("span", { class: "etiq " + l.origine, text: ORIGINES[l.origine] }),
+    proprio ? bouton("Supprimer la liste", () => supprimerListe(l), "mini") : null));
+
+  const corps = el("tbody");
+  l.valeurs.forEach((v, i) => corps.append(el("tr", {},
+    el("td", { text: v.libelle }),
+    el("td", { class: "info", text: v.groupe || "" }),
+    el("td", {}, el("span", { class: "etiq " + v.origine, text: ORIGINES[v.origine] })),
+    el("td", { class: "actions" }, v.origine === role()
+      ? el("button", { class: "mini", title: "Retirer cette valeur", text: "✕",
+          onclick: () => { l.valeurs.splice(i, 1); apresModifListes(); } })
+      : null))));
+  if (!l.valeurs.length) corps.append(el("tr", {}, el("td", { class: "info", colspan: 4, text: "Liste vide." })));
+  zone.append(el("div", { class: "valeurs" }, el("table", {},
+    el("thead", {}, el("tr", {}, el("th", { text: "Valeur" }), el("th", { text: "Groupe" }), el("th", { text: "Origine" }), el("th", {}))),
+    corps)));
+
+  if (peutAjouterValeur(l)) {
+    const zoneTexte = el("textarea", { rows: 3, placeholder: "Une valeur par ligne : on peut coller une colonne Excel." });
+    const groupe = el("input", { type: "text", placeholder: "Groupe (facultatif)" });
+    zone.append(el("div", { class: "ajout" }, zoneTexte, el("div", { class: "ligne-outils" }, groupe,
+      bouton("Ajouter à la liste", () => ajouterValeurs(l, zoneTexte.value, groupe.value), "primaire"))));
+  } else {
+    zone.append(el("p", { class: "note", text: "Le super admin ne peut pas ajouter de valeurs à une liste d'entreprise." }));
+  }
+}
+
+function ajouterValeurs(l, texte, groupe) {
+  const existants = new Set(l.valeurs.map((v) => cle(v.libelle)));
+  let ajoutees = 0;
+  let ignorees = 0;
+  texte.split(/\r?\n/).map(propre).filter(Boolean).forEach((libelle) => {
+    if (existants.has(cle(libelle))) { ignorees++; return; }
+    existants.add(cle(libelle));
+    l.valeurs.push({ libelle, groupe: propre(groupe), origine: role() });
+    ajoutees++;
+  });
+  apresModifListes();
+  toast(`${ajoutees} valeur(s) ajoutée(s)` + (ignorees ? `, ${ignorees} déjà présente(s)` : "") + ".");
+}
+
+function nouvelleListe() {
+  const l = { id: "l" + Date.now(), nom: "Nouvelle liste", origine: role(), valeurs: [] };
+  listes.push(l);
+  listeChoisie = l.id;
+  apresModifListes();
+  $("#nom-liste")?.select();
+}
+
+function supprimerListe(l) {
+  demander(`Supprimer la liste « ${l.nom} » ? Les niveaux qui l'utilisent n'auront plus de propositions ; les valeurs du tableau ne changent pas.`,
+    [["Supprimer la liste", () => {
+      listes = listes.filter((x) => x !== l);
+      for (const n of [...etat.niveaux, ...modeles.flatMap((m) => m.niveaux)]) if (n.liste === l.id) n.liste = null;
+      apresModifListes();
+    }, "primaire"]]);
+}
+
+/* ---------- Modèles ---------- */
+
+// La mention vient du lien avec l'original, jamais du nom seul.
+function nomModele(m) {
+  if (m.origine === "plateforme") return m.nom;
+  if (m.origineId) return `${m.nom} (personnalisé)`;
+  const homonyme = modeles.some((p) => p.origine === "plateforme" && cle(p.nom) === cle(m.nom));
+  return homonyme ? `${m.nom} (entreprise)` : m.nom;
+}
+
+function rendreModeles() {
+  const sel = $("#modele");
+  const type = $("#type-projet").value;
+  const visibles = modelesVisibles();
+  const courant = visibles.find((m) => m.id === etat.modele);
+  const option = (m) => el("option", { value: m.id, text: nomModele(m) });
+  const pourType = visibles.filter((m) => (m.types || []).includes(type));
+  const autres = visibles.filter((m) => !(m.types || []).includes(type));
+  sel.replaceChildren();
+  if (!courant) sel.append(el("option", { value: "", text: "— tableau non enregistré —" }));
+  if (pourType.length) sel.append(el("optgroup", { label: "Pour ce type de projet" }, ...pourType.map(option)));
+  if (autres.length) sel.append(el("optgroup", { label: "Autres modèles" }, ...autres.map(option)));
+  sel.value = courant ? courant.id : "";
+
+  const zone = $("#actions-modele");
+  zone.replaceChildren();
+  if (courant && courant.origine === role()) {
+    zone.append(bouton("Mettre à jour ce modèle", () => mettreAJourModele(courant)));
+  }
+  if (courant && courant.origine === "plateforme" && !enPlateforme()) {
+    zone.append(bouton("Personnaliser ce modèle", () => personnaliser(courant)));
+  }
+  zone.append(bouton("Enregistrer comme nouveau modèle", nouveauModele));
+  if (courant && courant.origine === role()) {
+    zone.append(bouton("Supprimer ce modèle", () => supprimerModele(courant)));
+  }
+
+  const note = $("#note-modele");
+  note.replaceChildren();
+  if (courant?.origineId) {
+    const original = modeleParId(courant.origineId);
+    if (!original) note.append("Le modèle plateforme d'origine a été supprimé ; ta version reste utilisable.");
+    else if ((original.version || 1) > (courant.origineVersion || 1)) {
+      note.append(`Le modèle plateforme « ${original.nom} » a été modifié depuis ta personnalisation. `,
+        bouton("Voir l'original", () => changerModele(original.id), "mini"));
+    }
+  }
+}
+
+function changerModele(id) {
+  demander("Remplacer le tableau par ce modèle ? Les modifications non enregistrées seront perdues.",
+    [["Charger le modèle", () => chargerModele(id), "primaire"]], rendreModeles);
+}
+
+function contenuModele() {
+  return {
+    niveaux: etat.niveaux.map((n) => ({ id: n.id, libelle: propre(n.libelle), liste: n.liste || null })),
+    lignes: etat.lignes.map((l) => etat.niveaux.map((n) => propre(l.v[n.id]))).filter((r) => r.some(Boolean)),
+  };
+}
+
+function peutEnregistrer() {
+  if (etat.bloquants) { toast("Corrige d'abord les erreurs bloquantes (en rouge)."); return false; }
+  const listePrivee = etat.niveaux.some((n) => listeParId(n.liste)?.origine === "entreprise");
+  if (enPlateforme() && listePrivee) { toast("Un modèle plateforme ne peut puiser que dans des listes plateforme."); return false; }
+  return true;
+}
+
+function mettreAJourModele(m) {
+  if (!peutEnregistrer()) return;
+  Object.assign(m, contenuModele());
+  if (m.origine === "plateforme") m.version = (m.version || 1) + 1;
+  sauver();
+  rendreModeles();
+  toast(`Modèle « ${nomModele(m)} » mis à jour.`);
+}
+
+function personnaliser(m) {
+  if (!peutEnregistrer()) return;
+  const existant = modeles.find((x) => x.origineId === m.id);
+  if (existant) { toast(`Ce modèle est déjà personnalisé : choisis « ${nomModele(existant)} ».`); return; }
+  const copie = {
+    id: "m" + Date.now(), nom: m.nom, origine: "entreprise", origineId: m.id, origineVersion: m.version || 1,
+    types: [...(m.types || [])], ...contenuModele(),
+  };
+  modeles.push(copie);
+  etat.modele = copie.id;
+  sauver();
+  rendreModeles();
+  toast(`« ${nomModele(copie)} » créé à partir du tableau actuel.`);
+}
+
+function nouveauModele() {
+  if (!peutEnregistrer()) return;
+  const courant = modeleParId(etat.modele);
+  const nom = el("input", { type: "text", value: courant ? courant.nom + " (copie)" : "", placeholder: "Nom du modèle" });
+  const cases = TYPES_PROJET.map(([code, libelle]) => {
+    const c = el("input", { type: "checkbox", value: code, checked: code === $("#type-projet").value });
+    return { c, label: el("label", {}, c, " " + libelle) };
+  });
+  const contenu = el("div", { class: "formulaire" }, nom,
+    el("div", { class: "note", text: "Proposé en tête pour les types de projet :" }), ...cases.map((x) => x.label));
+  demander(`Enregistrer le tableau comme nouveau modèle ${enPlateforme() ? "plateforme" : "de l'entreprise"}.`, [["Enregistrer", () => {
+    const n = propre(nom.value);
+    if (!n) { toast("Donne un nom au modèle."); return false; }
+    if (modeles.some((x) => x.origine === role() && !x.origineId && cle(x.nom) === cle(n))) {
+      toast("Un de tes modèles porte déjà ce nom."); return false;
+    }
+    const m = { id: "m" + Date.now(), nom: n, origine: role(), version: 1,
+      types: cases.filter((x) => x.c.checked).map((x) => x.c.value), ...contenuModele() };
+    modeles.push(m);
+    etat.modele = m.id;
+    sauver();
+    rendreModeles();
+    toast(nomModele(m) !== n
+      ? `Enregistré. Un modèle plateforme porte déjà ce nom : le tien s'affiche « ${nomModele(m)} ».`
+      : `Modèle « ${n} » enregistré.`);
+    return true;
+  }, "primaire"]], null, contenu);
+  nom.select();
+}
+
+function supprimerModele(m) {
+  demander(`Supprimer le modèle « ${nomModele(m)} » ? Les projets déjà créés ne changent pas ; les versions personnalisées restent.`,
+    [["Supprimer le modèle", () => {
+      modeles = modeles.filter((x) => x !== m);
+      etat.modele = null;
+      sauver();
+      rendreModeles();
+    }, "primaire"]]);
+}
+
+/* ---------- Projet ---------- */
+
+let etat = { modele: null, niveaux: [], lignes: [] };
+let seqLigne = 0;
+let seqNiveau = 0;
+const nouvelleLigne = (v) => ({ id: ++seqLigne, v: { ...v } });
+
+function chargerModele(id) {
+  const m = modeleParId(id);
+  if (!m) return;
+  etat = {
+    modele: id,
+    niveaux: m.niveaux.map((n) => ({ ...n })),
+    lignes: m.lignes.map((vals) => nouvelleLigne(Object.fromEntries(m.niveaux.map((n, i) => [n.id, vals[i] || ""])))),
+  };
+  $("#resultat").hidden = true;
+  rendreModeles();
+  rendreTout();
+}
+
+function rendreTout() {
+  rendreNiveaux();
+  rendreTableau();
+}
+
+function rendreNiveaux() {
+  const zone = $("#niveaux");
+  zone.replaceChildren();
+  etat.niveaux.forEach((n, i) => {
+    const proposees = listesVisibles();
+    const actuelle = listeParId(n.liste);
+    // Une liste d'entreprise reste affichée côté super admin pour ne pas perdre le réglage en silence.
+    if (actuelle && !proposees.includes(actuelle)) proposees.push(actuelle);
+    const choix = el("select", {
+      "aria-label": "Liste du niveau", title: "Liste dont ce niveau tire ses propositions",
+      onchange: (e) => { n.liste = e.target.value || null; rafraichirEtats(); },
+    }, el("option", { value: "", text: "aucune liste" }), ...proposees.map((l) =>
+      el("option", { value: l.id, text: l.origine === "entreprise" ? `${l.nom} (entreprise)` : l.nom })));
+    choix.value = actuelle ? actuelle.id : "";
+    zone.append(el("div", { class: "niveau" },
+      el("span", { class: "rang", text: "N" + (i + 1) }),
+      el("input", { type: "text", value: n.libelle, "aria-label": "Libellé du niveau", "data-niveau": n.id,
+        oninput: (e) => { n.libelle = e.target.value; rendreTableau(); } }),
+      choix,
+      el("button", { class: "mini", title: "Insérer un niveau après", text: "＋", onclick: () => insererNiveau(i) }),
+      el("button", { class: "mini", title: "Retirer ce niveau du projet", text: "✕", onclick: () => supprimerNiveau(i) })));
+  });
+}
+
+function rendreTableau() {
+  const niv = etat.niveaux;
+  $("#tableau thead").replaceChildren(el("tr", {},
+    el("th", { text: "#" }), ...niv.map((n) => el("th", { text: n.libelle })), el("th", {})));
+  const corps = $("#tableau tbody");
+  corps.replaceChildren();
+  etat.lignes.forEach((l, k) => {
+    const tr = el("tr", { "data-ligne": l.id }, el("td", { class: "num", text: k + 1 }));
+    niv.forEach((n, j) => {
+      const inp = el("input", {
+        type: "text", value: l.v[n.id] || "", autocomplete: "off",
+        "aria-label": n.libelle + ", ligne " + (k + 1), "data-niveau": n.id,
+      });
+      inp.addEventListener("change", () => modifierCellule(l, j, inp));
+      inp.addEventListener("click", () => ouvrir(inp, l, j, false));
+      inp.addEventListener("input", () => ouvrir(inp, l, j, true));
+      inp.addEventListener("keydown", (e) => clavier(e, inp, l, j));
+      inp.addEventListener("blur", () => { if (ouvert?.inp === inp) fermer(); });
+      const fleche = el("button", {
+        class: "deroule", tabindex: "-1", title: "Voir la liste", text: "▾",
+        onmousedown: (e) => e.preventDefault(),
+        onclick: () => { if (ouvert?.inp === inp) fermer(); else { inp.focus(); ouvrir(inp, l, j, false); } },
+      });
+      tr.append(el("td", {}, el("div", { class: "cellule" }, inp, fleche)));
+    });
+    tr.append(el("td", { class: "actions" },
+      el("button", { class: "mini", title: "Monter", text: "↑", onclick: () => deplacer(k, -1) }),
+      el("button", { class: "mini", title: "Descendre", text: "↓", onclick: () => deplacer(k, 1) }),
+      el("button", { class: "mini", title: "Insérer une ligne sœur dessous", text: "＋", onclick: () => insererLigne(k) }),
+      el("button", { class: "mini", title: "Supprimer la ligne", text: "✕", onclick: () => supprimerLigne(k) })));
+    corps.append(tr);
+  });
+  rafraichirEtats();
+}
+
+// Met à jour valeurs, marques et messages sans reconstruire le tableau, pour ne pas perdre le focus.
+function rafraichirEtats() {
+  const niv = etat.niveaux;
+  const rangs = [...document.querySelectorAll("#tableau tbody tr")];
+  const joindre = (vals) => vals.map(cle).join("\u0001");
+
+  // Niveaux : un libellé vide ou répété rend l'arbre et l'import Excel ambigus.
+  const libelles = niv.map((n) => cle(n.libelle));
+  const libelleFautif = (i) => !libelles[i] || libelles.indexOf(libelles[i]) !== libelles.lastIndexOf(libelles[i]);
+  const niveauxFautifs = niv.filter((_, i) => libelleFautif(i)).length;
+  document.querySelectorAll("#niveaux input[data-niveau]").forEach((inp) => {
+    inp.classList.toggle("erreur", libelleFautif(niv.findIndex((n) => n.id === inp.dataset.niveau)));
+  });
+
+  const contenus = niv.map((n) => {
+    const l = listeParId(n.liste);
+    return l ? new Set(l.valeurs.map((v) => cle(v.libelle))) : null;
+  });
+  const nomListe = (i) => listeParId(niv[i].liste)?.nom;
+
+  // `fin` : index de la dernière cellule remplie. Avant elle, une cellule vide est un niveau sauté.
+  const analyses = etat.lignes.map((l) => {
+    const vals = niv.map((n) => propre(l.v[n.id]));
+    let fin = -1;
+    vals.forEach((v, j) => { if (v) fin = j; });
+    const trous = vals.slice(0, fin + 1).filter((v) => !v).length;
+    return { vals, fin, trous, chemin: joindre(vals.slice(0, fin + 1)), valide: fin >= 0 && !trous };
+  });
+  const occurrences = new Map();
+  const prefixes = new Set();
+  analyses.filter((a) => a.valide).forEach((a) => {
+    occurrences.set(a.chemin, (occurrences.get(a.chemin) || 0) + 1);
+    for (let i = 0; i < a.fin; i++) prefixes.add(joindre(a.vals.slice(0, i + 1)));
+  });
+
+  const compte = { trous: 0, doublons: 0, sansEffet: 0, vides: 0, autreListe: 0, memeParent: 0, horsListe: 0 };
+  analyses.forEach((a, k) => {
+    const tr = rangs[k];
+    const doublon = a.valide && occurrences.get(a.chemin) > 1;
+    const inutile = a.valide && !doublon && prefixes.has(a.chemin);
+    tr.classList.toggle("doublon", doublon);
+    tr.classList.toggle("sans-effet", inutile || a.fin < 0);
+    if (doublon) compte.doublons++;
+    if (inutile) compte.sansEffet++;
+    if (a.fin < 0) compte.vides++;
+    compte.trous += a.trous;
+    const prec = analyses[k - 1];
+    let memePrefixe = !!prec;
+    niv.forEach((n, j) => {
+      const td = tr.children[j + 1];
+      const inp = td.querySelector("input");
+      if (inp !== document.activeElement) inp.value = etat.lignes[k].v[n.id] || "";
+      td.classList.toggle("vide", !a.vals[j] && j < a.fin);
+      memePrefixe = memePrefixe && !!a.vals[j] && cle(prec.vals[j]) === cle(a.vals[j]);
+      td.classList.toggle("repete", memePrefixe && j < a.fin);
+
+      // Avertissements, du plus probable au plus bénin : colonnes inversées, parent répété, coquille.
+      let marque = "";
+      let explication = "";
+      const v = a.vals[j];
+      if (v && !contenus[j]?.has(cle(v))) {
+        const autre = contenus.findIndex((c, i) => i !== j && c?.has(cle(v)));
+        if (autre >= 0) {
+          marque = "autre-liste";
+          explication = `« ${v} » appartient à la liste « ${nomListe(autre)} » du niveau ${niv[autre].libelle} : colonnes inversées ?`;
+        }
+      }
+      if (!marque && v && j > 0 && cle(a.vals[j - 1]) === cle(v)) {
+        marque = "meme-parent";
+        explication = "Même nom que son parent : valeur dans la mauvaise colonne ?";
+      }
+      if (!marque && v && contenus[j] && !contenus[j].has(cle(v))) {
+        marque = "hors-liste";
+        explication = `Hors de la liste « ${nomListe(j)} » : coquille ?`;
+      }
+      for (const c of ["autre-liste", "meme-parent", "hors-liste"]) td.classList.toggle(c, c === marque);
+      inp.title = explication;
+      if (marque === "autre-liste") compte.autreListe++;
+      if (marque === "meme-parent") compte.memeParent++;
+      if (marque === "hors-liste") compte.horsListe++;
+    });
+  });
+
+  const valides = analyses.filter((a) => a.valide).length;
+  const avertissements = [];
+  if (compte.autreListe) avertissements.push(`${compte.autreListe} valeur(s) appartiennent à la liste d'un autre niveau : colonnes inversées ?`);
+  if (compte.memeParent) avertissements.push(`${compte.memeParent} valeur(s) portent le même nom que leur parent.`);
+  if (compte.horsListe) avertissements.push(`${compte.horsListe} valeur(s) hors de la liste de leur niveau : coquilles ?`);
+
+  const m = $("#messages");
+  m.replaceChildren();
+  if (niveauxFautifs) m.append(el("div", { class: "err", text: `${niveauxFautifs} niveau(x) sans libellé ou au libellé répété.` }));
+  if (compte.trous) m.append(el("div", { class: "err", text: `${compte.trous} cellule(s) vide(s) au milieu d'une ligne : un niveau ne peut pas être sauté.` }));
+  if (compte.doublons) m.append(el("div", { class: "err", text: `${compte.doublons} ligne(s) en double : même chemin complet.` }));
+  avertissements.forEach((t) => m.append(el("div", { class: "warn", text: t })));
+  if (compte.sansEffet) m.append(el("div", { class: "info", text: `${compte.sansEffet} ligne(s) sans effet : leur dernier élément a des enfants sur d'autres lignes. Elles seront ignorées.` }));
+  if (compte.vides) m.append(el("div", { class: "info", text: `${compte.vides} ligne(s) vide(s), ignorée(s).` }));
+  if (!valides) m.append(el("div", { class: "err", text: "Aucune ligne exploitable." }));
+  etat.bloquants = niveauxFautifs + compte.trous + compte.doublons + (valides ? 0 : 1);
+  etat.avertissements = avertissements;
+  if (!etat.bloquants) {
+    m.append(el("div", { class: "ok", text: `${valides - compte.sansEffet} feuille(s), prêtes à créer` + (avertissements.length ? " après vérification des avertissements." : ".") }));
+  }
+  rendreArbre(analyses);
+}
+
+/* ---------- Menu déroulant des cellules ---------- */
+
+const deroulant = el("div", { class: "deroulant", role: "listbox", hidden: true });
+deroulant.addEventListener("mousedown", (e) => e.preventDefault());
+document.body.append(deroulant);
+let ouvert = null;
+
+// Propositions d'un niveau : sa liste, puis les valeurs déjà saisies à ce niveau dans le projet.
+function propositions(j) {
+  const n = etat.niveaux[j];
+  const l = listeParId(n.liste);
+  const vues = new Set();
+  const res = [];
+  (l ? l.valeurs : []).forEach((v) => {
+    if (vues.has(cle(v.libelle))) return;
+    vues.add(cle(v.libelle));
+    res.push({ valeur: v.libelle, groupe: v.groupe || l.nom });
+  });
+  etat.lignes.forEach((li) => {
+    const v = propre(li.v[n.id]);
+    if (!v || vues.has(cle(v))) return;
+    vues.add(cle(v));
+    res.push({ valeur: v, groupe: "Déjà dans le projet" });
+  });
+  return res;
+}
+
+// `filtrer` : vrai quand on tape, faux quand on ouvre la liste entière (clic ou ▾).
+function ouvrir(inp, ligne, j, filtrer) {
+  const filtre = filtrer ? cle(inp.value) : "";
+  const items = propositions(j).filter((p) => !filtre || cle(p.valeur).includes(filtre));
+  ouvert = { inp, ligne, j, items, index: items.findIndex((p) => cle(p.valeur) === cle(inp.value)) };
+  deroulant.replaceChildren();
+  if (!items.length) {
+    const avecListe = listeParId(etat.niveaux[j].liste);
+    deroulant.append(el("div", { class: "vide-liste",
+      text: avecListe ? "Aucune valeur ne correspond : saisie libre." : "Pas de liste pour ce niveau : saisie libre." }));
+  }
+  let groupe;
+  items.forEach((p, i) => {
+    if (p.groupe !== groupe) {
+      groupe = p.groupe;
+      deroulant.append(el("div", { class: "groupe-titre", text: groupe }));
+    }
+    deroulant.append(el("div", { class: "option", role: "option", "data-i": i, text: p.valeur, onclick: () => choisir(i) }));
+  });
+  deroulant.hidden = false;
+  placer();
+  surligner();
+}
+
+function placer() {
+  const r = ouvert.inp.getBoundingClientRect();
+  const largeur = Math.max(r.width, 300);
+  deroulant.style.width = largeur + "px";
+  deroulant.style.left = Math.max(8, Math.min(r.left, innerWidth - largeur - 8)) + "px";
+  deroulant.style.top = r.bottom + 2 + "px";
+  deroulant.style.maxHeight = Math.min(320, Math.max(140, innerHeight - r.bottom - 12)) + "px";
+}
+
+function surligner() {
+  deroulant.querySelectorAll(".option").forEach((o) => o.classList.toggle("active", +o.dataset.i === ouvert.index));
+  deroulant.querySelector(".option.active")?.scrollIntoView({ block: "nearest" });
+}
+
+function fermer() {
+  deroulant.hidden = true;
+  ouvert = null;
+}
+
+function choisir(i) {
+  const { inp, ligne, j, items } = ouvert;
+  inp.value = items[i].valeur;
+  fermer();
+  modifierCellule(ligne, j, inp);
+}
+
+function clavier(e, inp, ligne, j) {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (ouvert?.inp !== inp) { ouvrir(inp, ligne, j, false); return; }
+    const n = ouvert.items.length;
+    if (!n) return;
+    const bas = e.key === "ArrowDown";
+    ouvert.index = ouvert.index < 0 ? (bas ? 0 : n - 1) : (ouvert.index + (bas ? 1 : n - 1)) % n;
+    surligner();
+  } else if (e.key === "Enter" && ouvert?.inp === inp && ouvert.index >= 0) {
+    e.preventDefault();
+    choisir(ouvert.index);
+  } else if (e.key === "Escape" && ouvert) {
+    fermer();
+  }
+}
+
+window.addEventListener("scroll", () => { if (ouvert) placer(); }, true);
+window.addEventListener("resize", () => { if (ouvert) fermer(); });
+
+/* ---------- Édition du tableau ---------- */
+
+function modifierCellule(ligne, j, inp) {
+  // Le dialogue de renommage est ouvert : la perte de focus qu'il provoque ne doit pas relancer la saisie.
+  if ($("#dialogue").open) return;
+  const n = etat.niveaux[j];
+  const nouvelle = propre(inp.value);
+  const ancienne = ligne.v[n.id] || "";
+  if (nouvelle === ancienne) { inp.value = nouvelle; return; }
+  const appliquer = (lignes) => {
+    lignes.forEach((l) => { l.v[n.id] = nouvelle; });
+    inp.value = nouvelle;
+    rafraichirEtats();
+    if (lignes.length > 1) toast(`Renommé sur ${lignes.length} lignes.`);
+  };
+  // Une cellule encore vide ne concerne que sa ligne.
+  if (!propre(ancienne)) { appliquer([ligne]); return; }
+  const groupe = etat.lignes.filter((l) =>
+    etat.niveaux.slice(0, j).every((p) => cle(l.v[p.id]) === cle(ligne.v[p.id])) && cle(l.v[n.id]) === cle(ancienne));
+  if (groupe.length < 2) { appliquer([ligne]); return; }
+  demander(`« ${ancienne} » regroupe ${groupe.length} lignes. Que veux-tu faire ?`, [
+    ["Cette ligne seulement", () => appliquer([ligne])],
+    [`Renommer sur les ${groupe.length} lignes`, () => appliquer(groupe), "primaire"],
+  ], () => { inp.value = ancienne; });
+}
+
+function deplacer(k, d) {
+  const c = k + d;
+  if (c < 0 || c >= etat.lignes.length) return;
+  [etat.lignes[k], etat.lignes[c]] = [etat.lignes[c], etat.lignes[k]];
+  rendreTableau();
+}
+
+// La nouvelle ligne reprend les parents de la feuille de la ligne de base : elle en est la sœur.
+function insererLigne(k) {
+  const niv = etat.niveaux;
+  const base = etat.lignes[k];
+  let fin = -1;
+  niv.forEach((n, j) => { if (base && propre(base.v[n.id])) fin = j; });
+  const v = {};
+  niv.forEach((n, j) => { v[n.id] = j < fin ? base.v[n.id] : ""; });
+  const ligne = nouvelleLigne(v);
+  etat.lignes.splice(k + 1, 0, ligne);
+  rendreTableau();
+  focaliser(ligne, niv[Math.max(fin, 0)]);
+}
+
+function ajouterLigneVide() {
+  const ligne = nouvelleLigne({});
+  etat.lignes.push(ligne);
+  rendreTableau();
+  focaliser(ligne, etat.niveaux[0]);
+}
+
+function focaliser(ligne, niveau) {
+  if (niveau) document.querySelector(`tr[data-ligne="${ligne.id}"] input[data-niveau="${niveau.id}"]`)?.focus();
+}
+
+function supprimerLigne(k) {
+  etat.lignes.splice(k, 1);
+  rendreTableau();
+}
+
+function insererNiveau(i) {
+  etat.niveaux.splice(i + 1, 0, { id: `n${Date.now()}-${++seqNiveau}`, libelle: "Nouveau niveau", liste: null });
+  rendreTout();
+}
+
+function supprimerNiveau(i) {
+  const n = etat.niveaux[i];
+  if (etat.niveaux.length <= 1) { toast("Il faut au moins un niveau."); return; }
+  const faire = () => {
+    etat.niveaux.splice(i, 1);
+    etat.lignes.forEach((l) => delete l.v[n.id]);
+    rendreTout();
+  };
+  if (etat.lignes.some((l) => propre(l.v[n.id]))) {
+    demander(`Le niveau « ${n.libelle} » contient des valeurs. Le retirer du projet efface ces valeurs.`, [["Retirer le niveau", faire, "primaire"]]);
+  } else faire();
+}
+
+function rendreArbre(analyses) {
+  const niv = etat.niveaux;
+  const racine = { enfants: new Map() };
+  analyses.filter((a) => a.valide).forEach((a) => {
+    let noeud = racine;
+    for (let j = 0; j <= a.fin; j++) {
+      const val = a.vals[j];
+      if (!noeud.enfants.has(cle(val))) noeud.enfants.set(cle(val), { intitule: val, niveau: niv[j].libelle, enfants: new Map() });
+      noeud = noeud.enfants.get(cle(val));
+    }
+  });
+
+  let nbFeuilles = 0;
+  const plat = [];
+  const construire = (noeud, prefixe) => {
+    const ul = el("ul");
+    let i = 0;
+    for (const e of noeud.enfants.values()) {
+      const code = prefixe ? `${prefixe}.${++i}` : String(++i);
+      const feuille = e.enfants.size === 0;
+      if (feuille) nbFeuilles++;
+      plat.push({ code, niveau: e.niveau, intitule: e.intitule, parent: prefixe || null });
+      const li = el("li", { class: feuille ? "feuille" : "" },
+        el("span", { class: "code", text: code }), e.intitule, el("span", { class: "etiq", text: e.niveau }));
+      if (!feuille) li.append(construire(e, code));
+      ul.append(li);
+    }
+    return ul;
+  };
+  $("#arbre").replaceChildren(construire(racine, ""));
+  $("#resume").textContent = `${plat.length} éléments · ${nbFeuilles} feuilles`;
+  etat.plat = plat;
+}
+
+function creer() {
+  if (enPlateforme()) { toast("Le super admin construit des modèles ; la création de projet se fait côté entreprise."); return; }
+  if (etat.bloquants) { toast("Corrige d'abord les erreurs bloquantes (en rouge)."); return; }
+  const faire = () => {
+    const modele = modeleParId(etat.modele);
+    const charge = {
+      type_projet: $("#type-projet").value,
+      modele: modele ? nomModele(modele) : null,
+      gabarit: etat.niveaux.map((n, i) => ({ ordre: i + 1, libelle: propre(n.libelle), liste: listeParId(n.liste)?.nom ?? null })),
+      elements: etat.plat,
+    };
+    $("#json").textContent = JSON.stringify(charge, null, 2);
+    $("#resultat").hidden = false;
+    $("#resultat").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+  if (!etat.avertissements.length) { faire(); return; }
+  demander("Avertissements :\n• " + etat.avertissements.join("\n• ") + "\n\nCréer le projet quand même ?",
+    [["Créer quand même", faire, "primaire"]]);
+}
+
+/* ---------- Excel ---------- */
+
+let chargementXlsx;
+function chargerXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  chargementXlsx ??= new Promise((ok, ko) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = ok;
+    s.onerror = () => { chargementXlsx = null; ko(new Error("Bibliothèque Excel indisponible (connexion ?).")); };
+    document.head.append(s);
+  });
+  return chargementXlsx;
+}
+
+async function importer(fichier) {
+  if (etat.niveaux.some((n, i) => {
+    const c = cle(n.libelle);
+    return !c || etat.niveaux.findIndex((x) => cle(x.libelle) === c) !== i;
+  })) { toast("Corrige d'abord les libellés de niveaux : l'import s'appuie sur eux."); return; }
+  try {
+    await chargerXlsx();
+    const classeur = XLSX.read(await fichier.arrayBuffer());
+    const feuille = classeur.Sheets[classeur.SheetNames[0]];
+    const lignes = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: "", raw: false });
+    if (!lignes.length) { toast("Fichier vide."); return; }
+    const niv = etat.niveaux;
+    const entete = lignes[0].map(cle);
+    const index = niv.map((n) => entete.indexOf(cle(n.libelle)));
+    const manquants = niv.filter((_, i) => index[i] < 0).map((n) => n.libelle);
+    if (manquants.length) { toast("Colonnes absentes du fichier : " + manquants.join(", ")); return; }
+    const nouvelles = lignes.slice(1)
+      .filter((r) => r.some((c) => propre(c)))
+      .map((r) => nouvelleLigne(Object.fromEntries(niv.map((n, i) => [n.id, propre(r[index[i]])]))));
+    if (!nouvelles.length) { toast("Aucune ligne dans le fichier."); return; }
+    demander(`${nouvelles.length} ligne(s) lues dans « ${fichier.name} ».`, [
+      ["Ajouter à la suite", () => { etat.lignes.push(...nouvelles); rendreTableau(); }],
+      ["Remplacer le tableau", () => { etat.lignes = nouvelles; rendreTableau(); }, "primaire"],
+    ]);
+  } catch (e) {
+    toast(e.message || "Lecture du fichier impossible.");
+  }
+}
+
+async function exporter() {
+  try {
+    await chargerXlsx();
+    const niv = etat.niveaux;
+    const donnees = [niv.map((n) => n.libelle), ...etat.lignes.map((l) => niv.map((n) => l.v[n.id] || ""))];
+    const classeur = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(classeur, XLSX.utils.aoa_to_sheet(donnees), "Découpage");
+    XLSX.writeFile(classeur, "decoupage_projet.xlsx");
+  } catch (e) {
+    toast(e.message || "Export impossible.");
+  }
+}
+
+/* ---------- Utilitaires ---------- */
+
+// Une action qui rend `false` garde le dialogue ouvert (saisie à corriger).
+function demander(message, boutons, siAnnule, contenu) {
+  const d = $("#dialogue");
+  $("#dialogue-texte").textContent = message;
+  $("#dialogue-contenu").replaceChildren(...(contenu ? [contenu] : []));
+  const zone = $("#dialogue-boutons");
+  zone.replaceChildren(el("button", { text: "Annuler", onclick: () => d.close() }));
+  let choisi = false;
+  boutons.forEach(([texte, action, classe]) =>
+    zone.append(el("button", { class: classe || "", text: texte, onclick: () => {
+      if (action() === false) return;
+      choisi = true;
+      d.close();
+    } })));
+  d.onclose = () => { if (!choisi && siAnnule) siAnnule(); };
+  d.showModal();
+}
+
+let minuterie;
+function toast(texte) {
+  const z = $("#toast");
+  z.textContent = texte;
+  z.classList.add("visible");
+  clearTimeout(minuterie);
+  minuterie = setTimeout(() => z.classList.remove("visible"), 4000);
+}
+
+/* ---------- Onglets ---------- */
+
+const ONGLETS = ["creation", "projet", "journal", "alertes", "regles"];
+let ongletCourant = "creation";
+
+function afficherOnglet(nom) {
+  if (ouvert) fermer();
+  ongletCourant = nom;
+  for (const o of ONGLETS) {
+    $("#vue-" + o).hidden = o !== nom;
+    $(`nav.onglets [data-onglet="${o}"]`).classList.toggle("actif", o === nom);
+  }
+  $("#barre-utilisateur").hidden = !["projet", "journal", "alertes"].includes(nom);
+  rafraichir();
+}
+
+function rafraichir() {
+  if (!projet) projetDemo();
+  calculs = new Map();
+  rendreBarreUtilisateur();
+  if (ongletCourant === "projet") rendreProjet();
+  if (ongletCourant === "journal") rendreJournal();
+  if (ongletCourant === "alertes") rendreAlertes();
+}
+
+/* ---------- Projet : l'arbre après la création ---------- */
+
+const MOTIFS = ["Intempéries", "Retard d'approvisionnement", "Demande du maître d'ouvrage", "Avenant au marché",
+  "Erreur de saisie", "Autre"];
+const SEUIL_RETARD = 10;
+const SEUILS_ALERTE = [["CRITIQUE", 25], ["ELEVE", 15], ["MODERE", 5]];
+const RANG_ALERTE = { MODERE: 1, ELEVE: 2, CRITIQUE: 3 };
+const LIBELLES_ALERTE = { MODERE: "Modéré", ELEVE: "Élevé", CRITIQUE: "Critique" };
+
+// Les permissions du registre que le prototype simule. Aucune règle ne dépend du nom d'un rôle.
+const PERMISSIONS = {
+  voir_tout: "projets.voir_tout", voir_montants: "projets.voir_montants", decouper: "projets.decouper",
+  chiffrer: "projets.chiffrer", planifier: "projets.planifier", prolonger: "projets.prolonger",
+  avenants_gerer: "projets.avenants_gerer", mesurer: "projets.mesurer", rouvrir: "projets.rouvrir",
+  changer_statut: "projets.changer_statut", affecter_membres: "projets.affecter_membres",
+  gerer_equipes: "projets.gerer_equipes", alertes_voir: "projets.alertes_voir",
+  alertes_traiter: "projets.alertes_traiter", rediger: "chantier.rediger", viser: "chantier.viser",
+  valider: "chantier.valider",
+};
+
+// Les rôles ne sont que des paquets de permissions par défaut, modifiables par l'entreprise.
+const ROLES = {
+  DG: { libelle: "Directeur général", perms: Object.keys(PERMISSIONS), seuil: "CRITIQUE" },
+  DO: { libelle: "Directeur des opérations", perms: ["voir_tout", "voir_montants", "alertes_voir", "alertes_traiter"], seuil: "ELEVE" },
+  CP: { libelle: "Chef de projet", perms: ["voir_tout", "voir_montants", "decouper", "chiffrer", "planifier",
+    "prolonger", "avenants_gerer", "mesurer", "rouvrir", "changer_statut", "affecter_membres", "gerer_equipes",
+    "alertes_voir", "alertes_traiter", "valider"], seuil: "MODERE" },
+  CT: { libelle: "Conducteur de travaux", perms: ["voir_tout", "planifier", "mesurer", "gerer_equipes",
+    "alertes_voir", "alertes_traiter", "viser"], seuil: "MODERE" },
+  CC: { libelle: "Chef de chantier", perms: ["rediger"], seuil: null },
+};
+
+let projet = null;
+let seqElement = 0;
+let selection = null;
+const replies = new Set();
+let calculs = new Map();
+
+const elem = (id) => projet.elements[id];
+const racine = () => elem(projet.racine);
+const enfantsDe = (id, tous = false) => Object.values(projet.elements)
+  .filter((x) => x.parent === id && (tous || x.actif)).sort((a, b) => a.ordre - b.ordre);
+const libelleNiveau = (e) => (e.niveau < 0 ? "Projet" : projet.niveaux[e.niveau]);
+const descendants = (e) => enfantsDe(e.id, true).flatMap((c) => [c, ...descendants(c)]);
+const estFeuille = (e) => e.parent !== null && !enfantsDe(e.id).length;
+
+function ancetres(e) {
+  const r = [];
+  for (let p = e.parent; p !== null && elem(p); p = elem(p).parent) r.push(elem(p));
+  return r;
+}
+
+const actifJusquEnHaut = (e) => [e, ...ancetres(e)].every((x) => x.actif);
+const chemin = (p) => (p.parent === null ? `${p.intitule} (racine)`
+  : [...ancetres(p)].reverse().filter((x) => x.parent !== null).map((x) => x.intitule).concat(p.intitule).join(" › "));
+const cheminCourt = (p) => [...ancetres(p)].reverse().filter((x) => x.parent !== null).slice(-2)
+  .map((x) => x.intitule).concat(p.intitule).join(" › ");
+
+// Commencé : au moins une feuille en dessous porte une mesure, désactivée ou non.
+function commence(e) {
+  const enf = enfantsDe(e.id, true);
+  if (enf.length) return enf.some(commence);
+  return e.cloture || e.qRealisee > 0 || e.pct > 0;
+}
+
+function ajouterAuProjet(props) {
+  const x = { id: "e" + ++seqElement, parent: null, niveau: 0, intitule: "", debut: null, fin: null,
+    baseDebut: null, baseFin: null, contrDebut: null, contrFin: null, montant: null, montantInitial: null,
+    enveloppe: null, mode: "quantite", unite: "", qPrevue: null, qInitiale: null, qRealisee: 0, pct: 0,
+    cloture: false, suspendu: false, actif: true, titulaire: "", equipes: [], debutReel: null, finReelle: null,
+    ordre: seqElement, ...props };
+  if (x.debut && !x.baseDebut) { x.baseDebut = x.debut; x.baseFin = x.fin; }
+  if (x.baseDebut && !x.contrDebut) { x.contrDebut = x.baseDebut; x.contrFin = x.baseFin; }
+  if (x.montant && x.montantInitial == null) x.montantInitial = x.montant;
+  if (x.qPrevue && x.qInitiale == null) x.qInitiale = x.qPrevue;
+  projet.elements[x.id] = x;
+  return x;
+}
+
+const versDate = (s) => new Date(s + "T00:00:00");
+const versTexte = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const ajouterJours = (s, n) => { const d = versDate(s); d.setDate(d.getDate() + n); return versTexte(d); };
+const dateCourte = (s) => (s ? versDate(s).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—");
+const joursEntre = (a, b) => Math.round((versDate(b) - versDate(a)) / 86400000);
+const montantCourt = (v) => (v == null ? "—" : (v / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M");
+const pourcent = (v) => (v == null ? "indispo." : v.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %");
+const points = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}`);
+const nombre = (v) => (v == null ? "—" : Number(v).toLocaleString("fr-FR", { maximumFractionDigits: 2 }));
+
+function joursOuvres(a, b) {
+  let n = 0;
+  for (let d = versDate(a), fin = versDate(b); d <= fin; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() > 0 && d.getDay() < 6) n++;
+  }
+  return n;
+}
+
+function jourOuvreSuivant(s) {
+  let d = ajouterJours(s, 1);
+  while ([0, 6].includes(versDate(d).getDay())) d = ajouterJours(d, 1);
+  return d;
+}
+
+/* Qui suis-je, que puis-je faire, que puis-je voir. */
+
+const moi = () => projet.affectations.find((a) => a.id === projet.moi) || projet.affectations[0];
+const aPerm = (a, code) => !!a && ROLES[a.role].perms.includes(code);
+const contient = (a, e) => !a.perimetres.length || [e, ...ancetres(e)].some((x) => a.perimetres.includes(x.id));
+const surToutLeProjet = (a) => !a.perimetres.length;
+// Une permission s'exerce dans le périmètre : le rôle l'a, ET l'élément est dans le périmètre.
+const peut = (code, e = racine()) => aPerm(moi(), code) && contient(moi(), e);
+const voitTout = () => aPerm(moi(), "voir_tout");
+const voitMontants = () => aPerm(moi(), "voir_montants");
+const visible = (e) => voitTout() || contient(moi(), e);
+const surLeChemin = (e) => !visible(e) && moi().perimetres.some((p) => elem(p) && ancetres(elem(p)).includes(e));
+const libellePerimetre = (a) => (a.perimetres.length
+  ? a.perimetres.map((id) => elem(id)?.intitule ?? "?").join(", ") : "tout le projet");
+
+function geste(libelle, code, e, action, classe = "mini") {
+  const ok = peut(code, e);
+  return el("button", { class: classe, text: libelle, disabled: !ok,
+    title: ok ? PERMISSIONS[code] : `Permission manquante dans votre périmètre : ${PERMISSIONS[code]}`, onclick: action });
+}
+
+function temporelDates(debut, fin) {
+  if (!debut || !fin) return null;
+  if (projet.ref < debut) return 0;
+  if (projet.ref >= fin) return 100;
+  const total = joursOuvres(debut, fin);
+  return total ? Math.min(100, (joursOuvres(debut, projet.ref) / total) * 100) : 100;
+}
+
+// F3 généralisée : la feuille se mesure, tout parent pondère ses enfants par le montant connu le plus précis.
+// Le temporel se lit sur la baseline contractuelle (§11bis).
+function calculer(e) {
+  if (calculs.has(e.id)) return calculs.get(e.id);
+  const enf = enfantsDe(e.id);
+  const tempPropre = temporelDates(e.contrDebut || e.debut, e.contrFin || e.fin);
+  let r;
+  if (!enf.length) {
+    let phys = e.cloture ? 100 : e.mode === "pourcentage" ? e.pct : e.mode === "jalon" ? 0
+      : e.qPrevue > 0 ? Math.min(100, (e.qRealisee / e.qPrevue) * 100) : 0;
+    if (e.parent === null) phys = null;
+    // Un jalon sans montant ne pèse rien, sans rendre son parent incomplet.
+    const poids = e.montant > 0 ? e.montant : e.mode === "jalon" ? 0 : null;
+    r = { phys, temp: tempPropre, poids, mode: e.parent === null ? "vide" : "feuille", exclus: 0 };
+  } else {
+    const rs = enf.map(calculer);
+    const somme = rs.reduce((s, x) => s + (x.poids || 0), 0);
+    const complet = rs.every((x) => x.poids != null) && somme > 0;
+    const poids = complet ? somme : e.enveloppe > 0 ? e.enveloppe : null;
+    const contrib = rs.filter((x) => x.poids != null && x.phys != null);
+    const sc = contrib.reduce((s, x) => s + x.poids, 0);
+    let phys = null;
+    let mode = "indisponible";
+    if (sc > 0) {
+      const denom = complet ? sc : Math.max(e.enveloppe || 0, sc);
+      phys = contrib.reduce((s, x) => s + x.phys * x.poids, 0) / denom;
+      mode = complet ? "complet" : e.enveloppe > 0 ? "enveloppe" : "partiel";
+    }
+    const ct = rs.filter((x) => x.poids > 0 && x.temp != null);
+    const st = ct.reduce((s, x) => s + x.poids, 0);
+    const temp = complet && st > 0 && ct.length === rs.filter((x) => x.poids > 0).length
+      ? ct.reduce((s, x) => s + x.temp * x.poids, 0) / st : tempPropre;
+    r = { phys, temp, poids, mode, exclus: rs.length - contrib.length, somme, complet };
+  }
+  r.ecart = r.phys != null && r.temp != null ? r.temp - r.phys : null;
+  calculs.set(e.id, r);
+  return r;
+}
+
+const physProjet = () => { calculs = new Map(); return calculer(racine()).phys; };
+
+function statutDe(e) {
+  if ([e, ...ancetres(e)].some((x) => x.suspendu)) return "Suspendu";
+  const enf = enfantsDe(e.id);
+  if (enf.length ? enf.every((c) => statutDe(c) === "Clôturé") : e.cloture) return "Clôturé";
+  const c = calculer(e);
+  if ((e.fin && projet.ref > e.fin) || (c.ecart != null && c.ecart > SEUIL_RETARD)) return "En retard";
+  if (commence(e) || (e.debut && projet.ref >= e.debut)) return "En cours";
+  return "Planifié";
+}
+
+const CLASSES_STATUT = { "Planifié": "planifie", "En cours": "en-cours", "En retard": "en-retard", "Suspendu": "suspendu", "Clôturé": "cloture" };
+
+function heritage(e, champ) {
+  for (const x of [e, ...ancetres(e)]) if (propre(x[champ])) return { valeur: x[champ], source: x };
+  return null;
+}
+
+function equipesEffectives(e) {
+  for (const x of [e, ...ancetres(e)]) if (x.equipes?.length) return { ids: x.equipes, source: x };
+  return null;
+}
+
+const nomEquipe = (id) => projet.equipes.find((q) => q.id === id)?.nom ?? "?";
+
+/* Le déclarant d'une feuille se déduit des affectations : le périmètre le plus précis l'emporte. */
+
+const redacteursPour = (id) => projet.affectations.filter((a) => aPerm(a, "rediger")
+  && (a.perimetres.length ? a.perimetres.includes(id) : id === projet.racine));
+
+function partieDe(f) {
+  for (const x of [f, ...ancetres(f)]) if (redacteursPour(x.id).length) return x.id;
+  return null;
+}
+
+function declarant(e) {
+  const p = partieDe(e);
+  return p ? `${redacteursPour(p).map((a) => a.nom).join(", ")} (partie « ${elem(p).intitule} »)` : "personne : rapport global sans rédacteur";
+}
+
+// Applique `modif` sur une copie de l'arbre, mesure, puis rétablit l'original : sert aux aperçus.
+function simuler(modif, mesurer) {
+  const original = projet.elements;
+  const seq = seqElement;
+  projet.elements = structuredClone(original);
+  try {
+    modif();
+    calculs = new Map();
+    return mesurer();
+  } finally {
+    projet.elements = original;
+    seqElement = seq;
+    calculs = new Map();
+  }
+}
+
+function tracer(quoi, motif = null) {
+  projet.historique.unshift({ date: projet.ref, auteur: `${moi().nom} (${ROLES[moi().role].libelle})`, quoi, motif });
+}
+
+const tronquer = (effets, n = 8) => (effets.length > n ? [...effets.slice(0, n), `… et ${effets.length - n} autre(s)`] : effets);
+
+function champsMotif() {
+  const motif = el("select", {}, ...MOTIFS.map((m) => el("option", { value: m, text: m })));
+  const justification = el("textarea", { rows: 3, placeholder: "Justification : 30 caractères au moins (RG-11)" });
+  return {
+    bloc: el("div", { class: "formulaire" }, el("label", {}, "Motif ", motif), justification),
+    lire: () => {
+      const j = propre(justification.value);
+      if (j.length < 30) { toast("La justification doit faire au moins 30 caractères (RG-11)."); return null; }
+      return `${motif.value} : ${j}`;
+    },
+  };
+}
+
+function confirmer({ titre, effets = [], motifRequis = false, interdit = null, libelle = "Confirmer", action, contenuEnPlus = null }) {
+  const m = motifRequis && !interdit ? champsMotif() : null;
+  const contenu = el("div", {},
+    effets.length ? el("ul", { class: "effets" }, ...tronquer(effets).map((t) => el("li", { text: t }))) : null,
+    contenuEnPlus,
+    interdit ? el("p", { class: "note err", text: interdit }) : null,
+    m ? el("p", { class: "note warn", text: "Motif obligatoire : la modification est tracée." }) : null,
+    m ? m.bloc : null);
+  demander(titre, interdit ? [] : [[libelle, () => {
+    const motif = m ? m.lire() : null;
+    if (m && !motif) return false;
+    return action(motif) !== false;
+  }, "primaire"]], null, contenu);
+}
+
+function changementsFeuilles(id, modif) {
+  const feuilles = [elem(id), ...descendants(elem(id))].filter((x) => x.actif && estFeuille(x)).map((x) => x.id);
+  const lire = () => new Map(feuilles.map((f) => [f, {
+    decl: declarant(elem(f)),
+    tit: heritage(elem(f), "titulaire")?.valeur || "aucun",
+    eq: (equipesEffectives(elem(f))?.ids || []).map(nomEquipe).join(", ") || "aucune",
+  }]));
+  const avant = lire();
+  const apres = simuler(modif, lire);
+  const effets = [];
+  for (const f of feuilles) {
+    const a = avant.get(f);
+    const b = apres.get(f);
+    if (a.decl !== b.decl) effets.push(`« ${elem(f).intitule} » : déclarée par ${a.decl} → ${b.decl}`);
+    if (a.tit !== b.tit) effets.push(`« ${elem(f).intitule} » : titulaire ${a.tit} → ${b.tit}`);
+    if (a.eq !== b.eq) effets.push(`« ${elem(f).intitule} » : équipes ${a.eq} → ${b.eq}`);
+  }
+  return effets;
+}
+
+/* Dates : un parent encadre ses enfants ; un enfant qui dépasse prolonge ses parents, après confirmation. */
+
+function prolongations(id, debut, fin, champs = ["debut", "fin"]) {
+  const [cd, cf] = champs;
+  const liste = [];
+  let d = debut;
+  let f = fin;
+  for (const p of ancetres(elem(id))) {
+    if (!p[cd] || !p[cf]) continue;
+    const nd = d < p[cd] ? d : p[cd];
+    const nf = f > p[cf] ? f : p[cf];
+    if (nd === p[cd] && nf === p[cf]) break;
+    liste.push({ id: p.id, debut: nd, fin: nf });
+    d = nd;
+    f = nf;
+  }
+  return liste;
+}
+
+// Prolonger le projet ou un élément commencé exige projets.prolonger sur cet élément.
+function refusProlongation(prol) {
+  const refus = prol.filter((p) => (elem(p.id).parent === null || commence(elem(p.id))) && !peut("prolonger", elem(p.id)));
+  return refus.length
+    ? `La prolongation touche ${refus.map((p) => `« ${elem(p.id).intitule} »`).join(", ")} : il faut ${PERMISSIONS.prolonger} sur ces éléments.`
+    : null;
+}
+
+function appliquerProlongations(prol, cause, motif) {
+  for (const p of prol) {
+    const x = elem(p.id);
+    x.debut = p.debut;
+    x.fin = p.fin;
+    tracer(`« ${x.intitule} » prolongé jusqu'au ${dateCourte(p.fin)} par « ${cause} »`, motif);
+  }
+}
+
+function modifierDates(id, debut, fin) {
+  const e = elem(id);
+  if (!debut || !fin || debut > fin) { toast("Dates invalides : le début doit précéder la fin."); return; }
+  if (e.mode === "jalon" && debut !== fin) { toast("Un jalon n'a pas de durée : début = fin."); return; }
+  const horsCadre = enfantsDe(id).find((c) => (c.debut && c.debut < debut) || (c.fin && c.fin > fin));
+  if (horsCadre) { toast(`Refusé : « ${horsCadre.intitule} » sortirait de ces dates. Un parent encadre ses enfants.`); return; }
+  const prol = prolongations(id, debut, fin);
+  const reprogrammation = !!e.debut;
+  const successeurs = Object.values(projet.elements).filter((s) => s.actif && (s.predecesseurs || []).includes(id) && s.debut && s.debut <= fin);
+  const decaler = el("input", { type: "checkbox", checked: true });
+  const appliquer = (motif) => {
+    e.debut = debut;
+    e.fin = fin;
+    if (!e.baseDebut) { e.baseDebut = debut; e.baseFin = fin; e.contrDebut = debut; e.contrFin = fin; }
+    appliquerProlongations(prol, e.intitule, motif);
+    tracer(`${reprogrammation ? "Reprogrammation" : "Planification"} de « ${e.intitule} » : ${dateCourte(debut)} → ${dateCourte(fin)}`, motif);
+    if (decaler.checked) {
+      for (const s of successeurs) {
+        const duree = joursEntre(s.debut, s.fin);
+        const nd = ajouterJours(fin, 1);
+        s.debut = nd;
+        s.fin = ajouterJours(nd, duree);
+        appliquerProlongations(prolongations(s.id, s.debut, s.fin), s.intitule, motif);
+        tracer(`« ${s.intitule} » décalé après « ${e.intitule} »`, motif);
+      }
+    }
+    rafraichir();
+  };
+  if (!prol.length && !reprogrammation && !successeurs.length) { appliquer(null); return; }
+  confirmer({
+    titre: prol.length
+      ? `Ces dates dépassent le parent. Confirmer prolonge ${prol.length} élément(s) :`
+      : reprogrammation ? "Reprogrammation : la baseline ne bouge pas." : "Planification",
+    effets: prol.map((p) => { const x = elem(p.id); return `« ${x.intitule} » (${libelleNiveau(x)}) : ${dateCourte(x.debut)} → ${dateCourte(x.fin)} devient ${dateCourte(p.debut)} → ${dateCourte(p.fin)}`; }),
+    contenuEnPlus: successeurs.length ? el("label", { class: "note" }, decaler,
+      ` Décaler aussi ${successeurs.length} successeur(s) : ${successeurs.map((s) => s.intitule).join(", ")}`) : null,
+    motifRequis: reprogrammation || prol.length > 0,
+    interdit: refusProlongation(prol),
+    libelle: prol.length ? "Prolonger et enregistrer" : "Enregistrer",
+    action: appliquer,
+  });
+}
+
+/* Avenant : seul acte qui change la baseline contractuelle (§11bis). */
+
+function avenant(id) {
+  const e = elem(id);
+  if (!e.contrDebut) { toast("Planifiez d'abord l'élément : un avenant modifie un engagement existant."); return; }
+  const numero = el("input", { type: "text", placeholder: "N° (ex. AV-03)" });
+  const objet = el("input", { type: "text", placeholder: "Objet de l'avenant" });
+  const debut = el("input", { type: "date", value: e.contrDebut });
+  const fin = el("input", { type: "date", value: e.contrFin });
+  const contenu = el("div", { class: "formulaire" }, numero, objet,
+    el("div", { class: "champs" }, "Début contractuel", debut, "Fin contractuelle", fin),
+    el("p", { class: "note", text: "Document signé : joint dans le vrai produit. La baseline v0 et les dates prévues ne bougent pas." }));
+  demander(`Avenant sur « ${e.intitule} »`, [["Enregistrer l'avenant", () => {
+    if (!propre(numero.value) || !propre(objet.value)) { toast("Numéro et objet sont obligatoires."); return false; }
+    if (!debut.value || !fin.value || debut.value > fin.value) { toast("Dates contractuelles invalides."); return false; }
+    const prol = prolongations(id, debut.value, fin.value, ["contrDebut", "contrFin"]);
+    const avant = e.fin && e.contrFin ? joursEntre(e.contrFin, e.fin) : 0;
+    e.contrDebut = debut.value;
+    e.contrFin = fin.value;
+    for (const p of prol) { elem(p.id).contrDebut = p.debut; elem(p.id).contrFin = p.fin; }
+    const apres = e.fin ? joursEntre(e.contrFin, e.fin) : 0;
+    tracer(`Avenant ${propre(numero.value)} (${propre(objet.value)}) : « ${e.intitule} » contractuel ${dateCourte(debut.value)} → ${dateCourte(fin.value)}${prol.length ? `, ${prol.length} parent(s) suivent` : ""} ; dérive contractuelle ${avant > 0 ? "+" : ""}${avant} j → ${apres > 0 ? "+" : ""}${apres} j`);
+    rafraichir();
+    return true;
+  }, "primaire"]], null, contenu);
+}
+
+function modifierMontant(id, valeur) {
+  const e = elem(id);
+  const feuille = !enfantsDe(id).length;
+  const champ = feuille ? "montant" : "enveloppe";
+  const v = valeur > 0 ? Math.round(valeur) : null;
+  const avant = physProjet();
+  const apres = simuler(() => { elem(id)[champ] = v; }, () => calculer(racine()).phys);
+  confirmer({
+    titre: `${feuille ? "Montant" : "Enveloppe"} de « ${e.intitule} » : ${montantCourt(e[champ])} → ${montantCourt(v)}`,
+    effets: [`Avancement physique du projet : ${pourcent(avant)} → ${pourcent(apres)}`],
+    motifRequis: commence(e),
+    libelle: "Enregistrer",
+    action: (motif) => {
+      e[champ] = v;
+      if (feuille && e.montantInitial == null) e.montantInitial = v;
+      tracer(`${feuille ? "Montant" : "Enveloppe"} de « ${e.intitule} » : ${montantCourt(v)}`, motif);
+      rafraichir();
+    },
+  });
+}
+
+/* Métré : mode de mesure, unité et quantité prévue (§11bis). */
+
+function modifierMetre(id, mode, unite, qPrevue) {
+  const e = elem(id);
+  const dejaCommence = commence(e);
+  if (dejaCommence && mode !== e.mode) { toast("Feuille commencée : son mode de mesure ne change plus."); return; }
+  if (dejaCommence && e.mode === "quantite" && unite !== e.unite) { toast("Feuille commencée : l'unité ne change plus. Détaillez la feuille ou créez-en une autre."); return; }
+  if (mode === "quantite" && qPrevue != null && qPrevue < e.qRealisee) {
+    toast(`Refusé : ${nombre(qPrevue)} est inférieur au réalisé (${nombre(e.qRealisee)}). Corrigez le réalisé, ou clôturez.`);
+    return;
+  }
+  const avantF = calculer(e).phys;
+  const avantP = physProjet();
+  const apres = simuler(() => Object.assign(elem(id), { mode, unite, qPrevue }),
+    () => ({ f: calculer(elem(id)).phys, p: calculer(racine()).phys }));
+  confirmer({
+    titre: `Métré de « ${e.intitule} »`,
+    effets: [`Feuille : ${pourcent(avantF)} → ${pourcent(apres.f)}`, `Projet : ${pourcent(avantP)} → ${pourcent(apres.p)}`],
+    motifRequis: dejaCommence,
+    libelle: "Enregistrer",
+    action: (motif) => {
+      Object.assign(e, { mode, unite, qPrevue });
+      if (mode === "jalon" && e.debut) e.fin = e.debut;
+      if (e.qInitiale == null && qPrevue) e.qInitiale = qPrevue;
+      tracer(`Métré de « ${e.intitule} » : ${mode === "quantite" ? `${nombre(qPrevue)} ${unite}` : mode === "jalon" ? "jalon" : "pourcentage déclaré"}`, motif);
+      rafraichir();
+    },
+  });
+}
+
+function noterMesure(f, date) {
+  if (!f.debutReel) f.debutReel = date;
+}
+
+function enregistrerMesure(id, valeur) {
+  const e = elem(id);
+  if (e.mode === "quantite" && !(e.qPrevue > 0)) { toast("Renseignez d'abord l'unité et la quantité prévue : aucune mesure sans elles."); return; }
+  if (e.mode === "quantite") e.qRealisee = valeur;
+  else e.pct = Math.min(100, Math.max(0, valeur));
+  noterMesure(e, projet.ref);
+  tracer(`Mise à jour tracée de « ${e.intitule} » : ${e.mode === "quantite" ? `${nombre(valeur)} / ${nombre(e.qPrevue)} ${e.unite}` : `${valeur} % déclaré`}`);
+  rafraichir();
+}
+
+function modifierExecution(id, titulaire, equipes) {
+  const effets = changementsFeuilles(id, () => { elem(id).titulaire = titulaire; elem(id).equipes = equipes; });
+  const appliquer = () => {
+    const e = elem(id);
+    e.titulaire = titulaire;
+    e.equipes = equipes;
+    tracer(`Exécution de « ${e.intitule} » : titulaire ${titulaire || "hérité"}, équipes ${equipes.map(nomEquipe).join(", ") || "héritées"}`);
+    rafraichir();
+  };
+  if (!effets.length) { appliquer(); return; }
+  confirmer({ titre: "Effets sur les feuilles en dessous :", effets, libelle: "Enregistrer", action: appliquer });
+}
+
+function cloturer(id) {
+  const e = elem(id);
+  confirmer({ titre: `${e.mode === "jalon" ? "Marquer le jalon atteint" : "Clôturer"} « ${e.intitule} » ? Son avancement passe à 100 %.`, libelle: "Confirmer",
+    action: () => { e.cloture = true; e.finReelle = projet.ref; noterMesure(e, projet.ref); tracer(`Clôture de « ${e.intitule} »`); rafraichir(); } });
+}
+
+function rouvrir(id) {
+  const e = elem(id);
+  confirmer({ titre: `Rouvrir « ${e.intitule} » ? L'avancement redevient mesuré, la fin réelle est effacée.`, motifRequis: true, libelle: "Rouvrir",
+    action: (motif) => { e.cloture = false; e.finReelle = null; tracer(`Réouverture de « ${e.intitule} »`, motif); rafraichir(); } });
+}
+
+function suspendre(id) {
+  const e = elem(id);
+  const n = descendants(e).filter((x) => x.actif).length;
+  confirmer({
+    titre: e.suspendu ? `Lever la suspension de « ${e.intitule} » ?` : `Suspendre « ${e.intitule} »${n ? ` et ses ${n} descendant(s)` : ""} ?`,
+    libelle: e.suspendu ? "Lever" : "Suspendre",
+    action: () => { e.suspendu = !e.suspendu; tracer(`${e.suspendu ? "Suspension" : "Levée de suspension"} de « ${e.intitule} »`); rafraichir(); },
+  });
+}
+
+const frereHomonyme = (parentId, nom, saufId = null) =>
+  enfantsDe(parentId).some((x) => x.id !== saufId && cle(x.intitule) === cle(nom));
+
+function renommer(id) {
+  const e = elem(id);
+  const champ = el("input", { type: "text", value: e.intitule });
+  demander("Nouvel intitulé", [["Renommer", () => {
+    const n = propre(champ.value);
+    if (!n) { toast("Intitulé vide."); return false; }
+    if (e.parent !== null && frereHomonyme(e.parent, n, id)) { toast("Un élément frère porte déjà ce nom (A-6)."); return false; }
+    tracer(`« ${e.intitule} » renommé « ${n} »`);
+    e.intitule = n;
+    rafraichir();
+    return true;
+  }, "primaire"]], null, champ);
+  champ.select();
+}
+
+function niveauxPossibles(p) {
+  const enf = enfantsDe(p.id);
+  if (enf.length) return [enf[0].niveau];
+  const r = p.niveau >= 0 ? [p.niveau] : [];
+  if (p.niveau + 1 < projet.niveaux.length) r.push(p.niveau + 1);
+  return r;
+}
+
+function ajouterEnfant(id) {
+  const p = elem(id);
+  const devientParent = !enfantsDe(id).length && p.parent !== null;
+  if (devientParent && commence(p)) { toast("Feuille commencée : utilisez « Détailler » (A-5)."); return; }
+  const niveaux = niveauxPossibles(p);
+  if (!niveaux.length) { toast("Aucun niveau possible sous cet élément."); return; }
+  const nom = el("input", { type: "text", placeholder: "Intitulé" });
+  const choix = el("select", {}, ...niveaux.map((n) =>
+    el("option", { value: n, text: n === p.niveau ? `${projet.niveaux[n]} (récursion)` : projet.niveaux[n] })));
+  const m = commence(p) ? champsMotif() : null;
+  const contenu = el("div", { class: "formulaire" }, nom, el("label", {}, "Niveau ", choix),
+    devientParent && p.montant ? el("p", { class: "note", text: `« ${p.intitule} » devient un parent : son montant (${montantCourt(p.montant)}) devient son enveloppe.` }) : null,
+    m ? el("p", { class: "note warn", text: "Élément commencé : c'est une modification tracée." }) : null, m ? m.bloc : null);
+  demander(`Ajouter un élément sous « ${p.intitule} »`, [["Ajouter", () => {
+    const n = propre(nom.value);
+    if (!n) { toast("Intitulé vide."); return false; }
+    if (frereHomonyme(id, n)) { toast("Un élément frère porte déjà ce nom (A-6)."); return false; }
+    const motif = m ? m.lire() : null;
+    if (m && !motif) return false;
+    if (devientParent) { p.enveloppe = p.montant; p.montant = null; }
+    const x = ajouterAuProjet({ parent: id, niveau: +choix.value, intitule: n });
+    tracer(`Ajout de « ${n} » sous « ${p.intitule} »`, motif);
+    selection = x.id;
+    replies.delete(id);
+    rafraichir();
+    return true;
+  }, "primaire"]], null, contenu);
+  nom.focus();
+}
+
+/* Déplacer : sous un parent du niveau juste au-dessus, ou du même niveau (récursion). */
+
+function parentsPossibles(e) {
+  const interdits = new Set([e.id, ...descendants(e).map((x) => x.id)]);
+  return Object.values(projet.elements).filter((p) => {
+    if (!p.actif || interdits.has(p.id) || p.id === e.parent || !peut("decouper", p)) return false;
+    if (!(p.niveau === e.niveau - 1 || (p.niveau === e.niveau && p.parent !== null))) return false;
+    const enf = enfantsDe(p.id);
+    if (enf.some((c) => c.niveau !== e.niveau)) return false;
+    if (!enf.length && p.parent !== null && commence(p)) return false;
+    return !frereHomonyme(p.id, e.intitule);
+  });
+}
+
+function appliquerDeplacement(id, pid) {
+  const e = elem(id);
+  const ancien = elem(e.parent);
+  const p = elem(pid);
+  if (!enfantsDe(pid).length && p.parent !== null) { p.enveloppe = p.montant; p.montant = null; }
+  e.parent = pid;
+  e.ordre = ++seqElement;
+  if (!enfantsDe(ancien.id).length && ancien.parent !== null) { ancien.montant = ancien.enveloppe; ancien.enveloppe = null; }
+}
+
+function effetsDeplacement(id, pid) {
+  const e = elem(id);
+  const ancienId = e.parent;
+  const effets = changementsFeuilles(id, () => appliquerDeplacement(id, pid));
+  calculs = new Map();
+  const av = { ancien: calculer(elem(ancienId)).phys, nouveau: calculer(elem(pid)).phys };
+  const ap = simuler(() => appliquerDeplacement(id, pid), () => ({
+    ancien: calculer(elem(ancienId)).phys,
+    nouveau: calculer(elem(pid)).phys,
+    prol: e.debut && e.fin ? prolongations(id, e.debut, e.fin) : [],
+    ancienFeuille: !enfantsDe(ancienId).length,
+  }));
+  effets.push(`Physique de « ${elem(ancienId).intitule} » : ${pourcent(av.ancien)} → ${pourcent(ap.ancien)}`);
+  effets.push(`Physique de « ${elem(pid).intitule} » : ${pourcent(av.nouveau)} → ${pourcent(ap.nouveau)}`);
+  if (ap.ancienFeuille && elem(ancienId).parent !== null) {
+    effets.push(`« ${elem(ancienId).intitule} » n'a plus d'enfant : il redevient une feuille, son enveloppe devient son montant.`);
+  }
+  if (!enfantsDe(pid).length && elem(pid).parent !== null) {
+    effets.push(`« ${elem(pid).intitule} » devient un parent : son montant devient son enveloppe.`);
+  }
+  ap.prol.forEach((p) => effets.push(`« ${elem(p.id).intitule} » prolongé : ${dateCourte(p.debut)} → ${dateCourte(p.fin)}`));
+  return {
+    effets,
+    motif: commence(e) || commence(elem(ancienId)) || commence(elem(pid)) || ap.prol.length > 0,
+    interdit: refusProlongation(ap.prol),
+  };
+}
+
+function deplacer(id) {
+  const e = elem(id);
+  const candidats = parentsPossibles(e);
+  if (!candidats.length) { toast("Aucun parent possible dans votre périmètre (règles A-1, A-2 et A-6)."); return; }
+  const choix = el("select", {}, ...candidats.map((p) =>
+    el("option", { value: p.id, text: chemin(p) + (p.niveau === e.niveau ? " (récursion)" : "") })));
+  const zoneEffets = el("div");
+  const m = champsMotif();
+  const maj = () => {
+    const r = effetsDeplacement(id, choix.value);
+    zoneEffets.replaceChildren(el("div", { class: "note", text: "Aperçu des effets :" }),
+      el("ul", { class: "effets" }, ...tronquer(r.effets).map((t) => el("li", { text: t }))),
+      r.interdit ? el("p", { class: "note err", text: r.interdit }) : null,
+      r.motif ? el("p", { class: "note warn", text: "Un élément concerné est commencé, ou une date est prolongée : motif obligatoire." }) : null);
+    m.bloc.hidden = !r.motif;
+    return r;
+  };
+  choix.addEventListener("change", maj);
+  demander(`Déplacer « ${e.intitule} » sous :`, [["Déplacer", () => {
+    const r = maj();
+    if (r.interdit) { toast(r.interdit); return false; }
+    const motif = r.motif ? m.lire() : null;
+    if (r.motif && !motif) return false;
+    const ancien = elem(e.parent).intitule;
+    appliquerDeplacement(id, choix.value);
+    if (e.debut && e.fin) appliquerProlongations(prolongations(id, e.debut, e.fin), e.intitule, motif);
+    tracer(`« ${e.intitule} » déplacé de « ${ancien} » vers « ${elem(choix.value).intitule} »`, motif);
+    selection = id;
+    rafraichir();
+    return true;
+  }, "primaire"]], null, el("div", { class: "formulaire" }, choix, zoneEffets, m.bloc));
+  maj();
+}
+
+/* Dupliquer une branche : structure, unités, quantités, montants, mode, titulaire ; rien de mesuré ni daté. */
+
+function dupliquer(id) {
+  const e = elem(id);
+  const candidats = [elem(e.parent), ...parentsPossibles(e)].filter((p, i, t) => p && t.indexOf(p) === i && peut("decouper", p));
+  const choix = el("select", {}, ...candidats.map((p) => el("option", { value: p.id, text: chemin(p) })));
+  const nom = el("input", { type: "text", value: `${e.intitule} (copie)` });
+  demander(`Dupliquer « ${e.intitule} »`, [["Dupliquer", () => {
+    const n = propre(nom.value);
+    if (!n || frereHomonyme(choix.value, n)) { toast("Donnez un nom libre parmi ses frères (A-6)."); return false; }
+    const copier = (source, parent, intitule) => {
+      const x = ajouterAuProjet({ parent, niveau: source.niveau, intitule, montant: source.montant, enveloppe: source.enveloppe,
+        mode: source.mode, unite: source.unite, qPrevue: source.qPrevue, titulaire: source.titulaire });
+      enfantsDe(source.id).forEach((c) => copier(c, x.id, c.intitule));
+      return x;
+    };
+    const p = elem(choix.value);
+    if (!enfantsDe(p.id).length && p.parent !== null) { p.enveloppe = p.montant; p.montant = null; }
+    const x = copier(e, choix.value, n);
+    tracer(`« ${e.intitule} » dupliqué en « ${n} » sous « ${p.intitule} »`);
+    selection = x.id;
+    rafraichir();
+    return true;
+  }, "primaire"]], null, el("div", { class: "formulaire" }, el("label", {}, "Sous ", choix), nom,
+    el("p", { class: "note", text: "Copiés : structure, unités, quantités, montants, mode, titulaire. Pas les mesures, dates, baselines, affectations ni équipes." })));
+}
+
+/* Détailler : la feuille devient parent ; si elle est commencée, ses mesures passent à « Réalisé avant détail ». */
+
+function detailler(id) {
+  const e = elem(id);
+  if (e.mode === "jalon") { toast("Un jalon ne se détaille pas."); return; }
+  const niveaux = [e.niveau, ...(e.niveau + 1 < projet.niveaux.length ? [e.niveau + 1] : [])];
+  const choix = el("select", {}, ...niveaux.map((n) =>
+    el("option", { value: n, text: n === e.niveau ? `${projet.niveaux[n]} (récursion)` : projet.niveaux[n] })));
+  const noms = el("textarea", { rows: 4, placeholder: "Un nouvel élément par ligne" });
+  const dejaCommence = commence(e);
+  const c = calculer(e);
+  const realise = dejaCommence && e.montant ? Math.round((e.montant * c.phys) / 100) : null;
+  const m = dejaCommence ? champsMotif() : null;
+  let explication = "";
+  if (dejaCommence) {
+    explication = `Feuille commencée : un enfant « Réalisé avant détail » reçoit ses mesures${realise != null ? ` et ${montantCourt(realise)} (montant × ${pourcent(c.phys)})` : ""}, clôturé à 100 %.`;
+    if (e.montant) explication += ` Reste à répartir : ${montantCourt(e.montant - realise)}.`;
+  } else if (e.montant) {
+    explication = `Son montant (${montantCourt(e.montant)}) devient son enveloppe.`;
+  }
+  const contenu = el("div", { class: "formulaire" }, el("label", {}, "Niveau des enfants ", choix), noms,
+    explication ? el("p", { class: dejaCommence ? "note warn" : "note", text: explication }) : null, m ? m.bloc : null);
+  demander(`Détailler « ${e.intitule} »`, [["Détailler", () => {
+    const liste = noms.value.split(/\r?\n/).map(propre).filter(Boolean);
+    if (!liste.length) { toast("Indiquez au moins un élément."); return false; }
+    const cles = liste.map(cle).concat(dejaCommence ? [cle("Réalisé avant détail")] : []);
+    if (new Set(cles).size !== cles.length) { toast("Deux éléments portent le même nom (A-6)."); return false; }
+    const motif = m ? m.lire() : null;
+    if (m && !motif) return false;
+    const niveau = +choix.value;
+    if (dejaCommence) {
+      const finRealise = !e.debut ? null : projet.ref < e.debut ? e.debut : projet.ref < e.fin ? projet.ref : e.fin;
+      ajouterAuProjet({ parent: id, niveau, intitule: "Réalisé avant détail", montant: realise, mode: e.mode,
+        unite: e.unite, qPrevue: e.mode === "quantite" ? e.qRealisee || null : null, qRealisee: e.qRealisee,
+        pct: e.mode === "pourcentage" ? 100 : 0, cloture: true, debut: e.debut, fin: finRealise,
+        debutReel: e.debutReel, finReelle: finRealise });
+    }
+    liste.forEach((n) => ajouterAuProjet({ parent: id, niveau, intitule: n }));
+    Object.assign(e, { enveloppe: e.montant, montant: null, qRealisee: 0, qPrevue: null, pct: 0, cloture: false, unite: "" });
+    tracer(`« ${e.intitule} » détaillé en ${liste.length + (dejaCommence ? 1 : 0)} élément(s)`, motif);
+    replies.delete(id);
+    rafraichir();
+    return true;
+  }, "primaire"]], null, contenu);
+  noms.focus();
+}
+
+/* Insérer un niveau : un élément intermédiaire sous chaque parent concerné garde l'arbre valide. */
+
+function insererNiveauProjet() {
+  const n = projet.niveaux;
+  const position = el("select", {},
+    el("option", { value: -1, text: `En tête, avant « ${n[0]} »` }),
+    ...n.map((lib, i) => el("option", { value: i, text: i < n.length - 1 ? `Entre « ${lib} » et « ${n[i + 1]} »` : `À la fin, après « ${lib} »` })));
+  const libelle = el("input", { type: "text", placeholder: "Libellé du niveau (ex. Ouvrage)" });
+  const defaut = el("input", { type: "text", value: "Général" });
+  const m = commence(racine()) ? champsMotif() : null;
+  const contenu = el("div", { class: "formulaire" }, position, libelle,
+    el("label", {}, "Intitulé des éléments intermédiaires ", defaut), m ? m.bloc : null);
+  demander("Insérer un niveau", [["Insérer", () => {
+    const lib = propre(libelle.value);
+    const nomDefaut = propre(defaut.value) || "Général";
+    if (!lib) { toast("Donnez un libellé au niveau."); return false; }
+    if (n.some((x) => cle(x) === cle(lib))) { toast("Ce libellé de niveau existe déjà (C-4)."); return false; }
+    const motif = m ? m.lire() : null;
+    if (m && !motif) return false;
+    const i = +position.value;
+    n.splice(i + 1, 0, lib);
+    projet.niveauxAlerte.splice(i + 1, 0, false);
+    for (const x of Object.values(projet.elements)) if (x.niveau > i) x.niveau++;
+    let crees = 0;
+    for (const p of Object.values(projet.elements).filter((x) => x.niveau === i)) {
+      const enf = enfantsDe(p.id, true).filter((c) => c.niveau === i + 2);
+      if (!enf.length) continue;
+      const bornes = (champ, plus) => {
+        const dates = enf.map((c) => c[champ]).filter(Boolean).sort();
+        return dates[plus ? dates.length - 1 : 0] || null;
+      };
+      const inter = ajouterAuProjet({ parent: p.id, niveau: i + 1, intitule: nomDefaut,
+        debut: bornes("debut", false), fin: bornes("fin", true), baseDebut: bornes("baseDebut", false),
+        baseFin: bornes("baseFin", true), contrDebut: bornes("contrDebut", false), contrFin: bornes("contrFin", true) });
+      enf.forEach((c) => { c.parent = inter.id; });
+      crees++;
+    }
+    tracer(`Niveau « ${lib} » inséré : ${crees} élément(s) « ${nomDefaut} » créés`, motif);
+    rafraichir();
+    return true;
+  }, "primaire"]], null, contenu);
+}
+
+function retirer(id) {
+  const e = elem(id);
+  const avecMesures = commence(e);
+  const sousArbre = [e, ...descendants(e)];
+  const avant = physProjet();
+  const apres = simuler(() => {
+    if (avecMesures) elem(id).actif = false;
+    else sousArbre.forEach((x) => delete projet.elements[x.id]);
+  }, () => calculer(racine()).phys);
+  confirmer({
+    titre: avecMesures
+      ? `« ${e.intitule} » porte des mesures : il sera désactivé (sorti des calculs, historique conservé).`
+      : `Supprimer « ${e.intitule} »${sousArbre.length > 1 ? ` et ses ${sousArbre.length - 1} descendant(s)` : ""} ? Suppression logique.`,
+    effets: [`Avancement physique du projet : ${pourcent(avant)} → ${pourcent(apres)}`],
+    motifRequis: avecMesures,
+    libelle: avecMesures ? "Désactiver" : "Supprimer",
+    action: (motif) => {
+      const parent = elem(e.parent);
+      if (avecMesures) e.actif = false;
+      else sousArbre.forEach((x) => delete projet.elements[x.id]);
+      if (!enfantsDe(parent.id).length && parent.parent !== null) { parent.montant = parent.enveloppe; parent.enveloppe = null; }
+      tracer(`${avecMesures ? "Désactivation" : "Suppression"} de « ${e.intitule} »`, motif);
+      selection = parent.id;
+      rafraichir();
+    },
+  });
+}
+
+/* Historique de l'avancement : une photographie à chaque approbation de journal (et chaque semaine). */
+
+function photographier() {
+  calculs = new Map();
+  projet.photos = projet.photos.filter((p) => p.date !== projet.ref);
+  projet.photos.push({ date: projet.ref, valeurs: Object.fromEntries(Object.values(projet.elements)
+    .filter((x) => x.actif).map((x) => [x.id, calculer(x).phys])) });
+  projet.photos.sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+function tendance(e) {
+  const serie = projet.photos.map((p) => ({ date: p.date, v: p.valeurs[e.id] })).filter((p) => p.v != null).slice(-4);
+  if (serie.length < 2) return { serie, fin: null };
+  const a = serie[0];
+  const b = serie[serie.length - 1];
+  const vitesse = (b.v - a.v) / Math.max(1, joursEntre(a.date, b.date));
+  const fin = vitesse > 0 && b.v < 100 ? ajouterJours(b.date, Math.ceil((100 - b.v) / vitesse)) : null;
+  return { serie, fin, vitesse };
+}
+
+/* Rendu de la vue projet */
+
+function rendreBarreUtilisateur() {
+  const sel = $("#utilisateur");
+  sel.replaceChildren(...projet.affectations.map((a) => el("option", { value: a.id, text: `${a.nom} — ${ROLES[a.role].libelle}` })));
+  sel.value = moi().id;
+  $("#date-ref").value = projet.ref;
+  const m = moi();
+  const resume = $("#resume-droits");
+  resume.textContent = `Périmètre : ${libellePerimetre(m)} · ${ROLES[m.role].perms.length} permission(s)${projet.horsLigne.includes(m.id) ? " · HORS CONNEXION" : ""}`;
+  resume.title = ROLES[m.role].perms.map((p) => PERMISSIONS[p]).join("\n");
+}
+
+function lignesArbre(e, profondeur, corps) {
+  if (!visible(e) && !surLeChemin(e)) return;
+  const enf = enfantsDe(e.id);
+  const bascule = el("span", { class: "bascule", text: enf.length ? (replies.has(e.id) ? "▸" : "▾") : "" });
+  if (enf.length) {
+    bascule.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (replies.has(e.id)) replies.delete(e.id); else replies.add(e.id);
+      rafraichir();
+    });
+  }
+  const indentation = { style: `padding-left:${6 + profondeur * 16}px` };
+  if (!visible(e)) {
+    corps.append(el("tr", { class: "ligne-chemin", title: "Hors de votre périmètre : seul le chemin est visible." },
+      el("td", indentation, bascule, e.intitule), el("td", { class: "info", text: libelleNiveau(e) }),
+      el("td", { colspan: 6, class: "info", text: "hors périmètre" })));
+    if (!replies.has(e.id)) enf.forEach((x) => lignesArbre(x, profondeur + 1, corps));
+    return;
+  }
+  const c = calculer(e);
+  const st = statutDe(e);
+  const derive = e.fin && (e.contrFin || e.baseFin) ? joursEntre(e.contrFin || e.baseFin, e.fin) : 0;
+  const retards = enf.length
+    ? descendants(e).filter((x) => x.actif && estFeuille(x) && statutDe(x) === "En retard").length : 0;
+  let montant = enf.length
+    ? (e.enveloppe ? `${montantCourt(c.somme || null)} / env. ${montantCourt(e.enveloppe)}` : montantCourt(c.somme || null))
+    : montantCourt(e.montant);
+  if (!voitMontants()) montant = "•••";
+  const depasse = estFeuille(e) && e.mode === "quantite" && e.qPrevue > 0 && e.qRealisee > e.qPrevue;
+  corps.append(el("tr", {
+    class: "ligne" + (e.id === selection ? " choisie" : "") + (e.parent === null ? " racine" : ""),
+    onclick: () => { selection = e.id; rafraichir(); },
+  },
+  el("td", indentation, bascule, e.intitule,
+    commence(e) ? el("span", { class: "point", title: "Commencé : au moins une mesure en dessous" }) : null,
+    e.mode === "jalon" && estFeuille(e) ? el("span", { class: "etiq", text: "jalon" }) : null,
+    estFeuille(e) && e.mode === "quantite" && !(e.qPrevue > 0) && !e.cloture ? el("span", { class: "etiq", text: "à compléter" }) : null,
+    depasse ? el("span", { class: "etiq alerte", text: `dépassement +${Math.round((e.qRealisee / e.qPrevue - 1) * 100)} %` }) : null),
+  el("td", { class: "info", text: libelleNiveau(e) }),
+  el("td", { text: e.debut ? `${dateCourte(e.debut)} → ${dateCourte(e.fin)}` : "—" },
+    derive > 0 ? el("span", { class: derive > 30 ? "err" : "warn", text: ` +${derive} j`,
+      title: `Fin contractuelle : ${dateCourte(e.contrFin)}${derive > 30 ? " ; alerte au DG" : ""}` }) : null),
+  el("td", { class: "num-droite", text: montant }),
+  el("td", { class: "num-droite", text: pourcent(c.phys) }),
+  el("td", { class: "num-droite", text: pourcent(c.temp) }),
+  el("td", { class: "num-droite " + (c.ecart > SEUIL_RETARD ? "err" : ""), text: points(c.ecart) }),
+  el("td", {}, el("span", { class: "statut s-" + CLASSES_STATUT[st], text: st }),
+    retards && st !== "En retard" ? el("span", { class: "warn", style: "font-size:11px", text: ` · ${retards} en retard` }) : null)));
+  if (!replies.has(e.id)) enf.forEach((x) => lignesArbre(x, profondeur + 1, corps));
+}
+
+const MODES_CALCUL = {
+  feuille: "son montant",
+  complet: "la somme de ses enfants, tous chiffrés",
+  enveloppe: "son enveloppe : montants incomplets, la part non chiffrée compte pour 0 %",
+  partiel: "montants incomplets et pas d'enveloppe : seuls les enfants chiffrés comptent",
+  indisponible: "aucun montant connu : avancement indisponible",
+  vide: "aucun élément",
+};
+
+function section(titre, ...contenu) {
+  return el("section", {}, el("h3", { text: titre }), ...contenu);
+}
+
+function rendreDetail() {
+  const zone = $("#detail-projet");
+  zone.replaceChildren();
+  const e = selection && projet.elements[selection];
+  if (!e || !e.actif || !visible(e)) {
+    zone.append(el("p", { class: "note", text: "Clique sur un élément de ton périmètre pour le voir et le modifier." }));
+    return;
+  }
+  const racineSel = e.parent === null;
+  const feuille = estFeuille(e);
+  const c = calculer(e);
+  zone.append(el("h2", { text: e.intitule }), el("div", { class: "info", style: "font-size:12.5px",
+    text: `${libelleNiveau(e)} · ${racineSel ? "racine" : feuille ? "feuille" : "parent"} · ${commence(e) ? "commencé" : "non commencé"}` }));
+
+  const gestes = el("div", { class: "ligne-outils", style: "margin-top:10px" }, geste("Renommer", "decouper", e, () => renommer(e.id)));
+  if (!feuille || !commence(e)) gestes.append(geste("＋ Enfant", "decouper", e, () => ajouterEnfant(e.id)));
+  if (!racineSel) gestes.append(geste("Déplacer", "decouper", e, () => deplacer(e.id)), geste("Dupliquer", "decouper", e, () => dupliquer(e.id)));
+  if (feuille && e.mode !== "jalon") gestes.append(geste("Détailler", "decouper", e, () => detailler(e.id)));
+  if (feuille && !e.cloture) gestes.append(geste(e.mode === "jalon" ? "Jalon atteint" : "Clôturer", "mesurer", e, () => cloturer(e.id)));
+  if (feuille && e.cloture) gestes.append(geste("Rouvrir", "rouvrir", e, () => rouvrir(e.id)));
+  gestes.append(geste(e.suspendu ? "Lever la suspension" : "Suspendre", "changer_statut", e, () => suspendre(e.id)));
+  gestes.append(geste("Avenant", "avenants_gerer", e, () => avenant(e.id)));
+  if (!racineSel) gestes.append(geste(commence(e) ? "Désactiver" : "Supprimer", "decouper", e, () => retirer(e.id)));
+  zone.append(gestes);
+
+  const sourceTemporel = feuille || racineSel && !enfantsDe(e.id).length ? "ses dates contractuelles"
+    : c.complet ? "moyenne pondérée des enfants" : "ses propres dates : enfants incomplets";
+  const t = tendance(e);
+  zone.append(section("Calcul", el("div", { class: "champs" },
+    "Physique", el("b", { text: pourcent(c.phys) }),
+    "Temporel", el("span", { text: `${pourcent(c.temp)} (${sourceTemporel})` }),
+    "Écart", el("span", { class: c.ecart > SEUIL_RETARD ? "err" : "", text: c.ecart == null ? "—" : `${points(c.ecart)} pts` }),
+    "Poids", el("span", { text: !voitMontants() ? "•••" : c.poids == null ? "aucun : ne pèse rien au-dessus" : montantCourt(c.poids) }),
+    "Base", el("span", { class: "info", text: MODES_CALCUL[c.mode] + (c.exclus ? ` · ${c.exclus} enfant(s) exclu(s)` : "") }),
+    "Tendance", el("span", { class: "info", text: t.serie.length ? t.serie.map((p) => `${dateCourte(p.date)} : ${pourcent(p.v)}`).join(" · ") : "aucune photographie" }),
+    "Fin estimée", el("span", { class: "info", text: t.fin ? `${dateCourte(t.fin)} (affichage seulement)` : "—" }))));
+
+  const debut = el("input", { type: "date", value: e.debut });
+  const fin = el("input", { type: "date", value: e.fin });
+  const deriveContr = e.fin && e.contrFin ? joursEntre(e.contrFin, e.fin) : 0;
+  const deriveTotale = e.fin && e.baseFin ? joursEntre(e.baseFin, e.fin) : 0;
+  const predecesseurs = (e.predecesseurs || []).map((p) => elem(p)?.intitule).filter(Boolean);
+  zone.append(section("Dates", el("div", { class: "champs" },
+    "Début prévu", debut, "Fin prévue", fin,
+    "Contractuelle", el("span", { class: "info", text: e.contrDebut ? `${dateCourte(e.contrDebut)} → ${dateCourte(e.contrFin)}` : "posée à la première saisie" }),
+    "Baseline v0", el("span", { class: "info", text: e.baseDebut ? `${dateCourte(e.baseDebut)} → ${dateCourte(e.baseFin)} (immuable)` : "—" }),
+    "Dérive", el("span", { class: deriveContr > 30 ? "err" : deriveContr > 0 ? "warn" : "info",
+      text: `${deriveContr > 0 ? "+" : ""}${deriveContr} j sur le contractuel${deriveContr > 30 ? " : alerte au DG" : ""} · ${deriveTotale > 0 ? "+" : ""}${deriveTotale} j sur l'initial` }),
+    "Réelles", el("span", { class: "info", text: `${dateCourte(e.debutReel)} → ${dateCourte(e.finReelle)}` }),
+    predecesseurs.length ? "Après" : null, predecesseurs.length ? el("span", { class: "info", text: predecesseurs.join(", ") }) : null),
+  el("div", { class: "ligne-outils", style: "margin-top:6px" },
+    geste(e.debut ? "Reprogrammer" : "Planifier", "planifier", e, () => modifierDates(e.id, debut.value, fin.value), "primaire"))));
+
+  if (voitMontants()) {
+    const champMontant = el("input", { type: "number", min: 0, step: 100000, value: feuille ? e.montant : e.enveloppe });
+    const lignesMontant = [feuille ? "Montant courant" : "Enveloppe", champMontant];
+    if (feuille && e.montantInitial != null) lignesMontant.push("Initial", el("span", { class: "info", text: montantCourt(e.montantInitial) }));
+    if (!feuille) {
+      lignesMontant.push("Somme", el("span", { text: montantCourt(c.somme || null) }));
+      if (e.enveloppe && c.somme) {
+        const ec = c.somme - e.enveloppe;
+        lignesMontant.push("Écart", el("span", { class: ec > 0 ? "warn" : "info",
+          text: `${ec > 0 ? "+" : ""}${montantCourt(ec)}${ec > 0 ? " : la somme dépasse l'enveloppe" : ""}` }));
+      }
+    }
+    zone.append(section("Montant (FCFA)", el("div", { class: "champs" }, ...lignesMontant),
+      el("div", { class: "ligne-outils", style: "margin-top:6px" },
+        geste("Enregistrer", "chiffrer", e, () => modifierMontant(e.id, Number(champMontant.value)), "primaire"))));
+  }
+
+  if (feuille) {
+    const mode = el("select", {}, el("option", { value: "quantite", text: "Quantité" }),
+      el("option", { value: "pourcentage", text: "Pourcentage déclaré" }), el("option", { value: "jalon", text: "Jalon (atteint / non atteint)" }));
+    mode.value = e.mode;
+    const unite = el("input", { type: "text", value: e.unite, placeholder: "m³, m²…" });
+    const prevue = el("input", { type: "number", min: 0, value: e.qPrevue });
+    zone.append(section("Métré", el("div", { class: "champs" }, "Mode", mode, "Unité", unite, "Prévue (courante)", prevue,
+      e.qInitiale != null ? "Initiale" : null, e.qInitiale != null ? el("span", { class: "info", text: `${nombre(e.qInitiale)} ${e.unite}` }) : null),
+    el("div", { class: "ligne-outils", style: "margin-top:6px" }, geste("Enregistrer", "chiffrer", e,
+      () => modifierMetre(e.id, mode.value, propre(unite.value), Number(prevue.value) || null), "primaire"))));
+
+    if (e.mode !== "jalon") {
+      const valeur = el("input", { type: "number", min: 0, value: e.mode === "quantite" ? e.qRealisee : e.pct });
+      const depasse = e.mode === "quantite" && e.qPrevue > 0 && e.qRealisee > e.qPrevue;
+      zone.append(section("Mesure hors journal", el("div", { class: "champs" },
+        e.mode === "quantite" ? "Réalisé cumulé" : "Déclaré (%)", valeur),
+      depasse ? el("p", { class: "note warn", text: `Dépassement : ${nombre(e.qRealisee)} réalisés pour ${nombre(e.qPrevue)} prévus. Le calcul reste plafonné à 100 %.` }) : null,
+      e.cloture ? el("p", { class: "note ok", text: "Clôturée : avancement 100 %." }) : null,
+      el("p", { class: "note", text: "D'ordinaire, la mesure vient du journal approuvé. Ici, mise à jour tracée." }),
+      el("div", { class: "ligne-outils", style: "margin-top:6px" }, geste("Enregistrer", "mesurer", e,
+        () => enregistrerMesure(e.id, Number(valeur.value) || 0), "primaire"))));
+    }
+  }
+
+  const ht = heritage(e, "titulaire");
+  const he = equipesEffectives(e);
+  const titulaire = el("input", { type: "text", value: e.titulaire, placeholder: ht && !e.titulaire ? `hérité : ${ht.valeur}` : "aucun" });
+  const cases = projet.equipes.map((q) => ({ id: q.id, c: el("input", { type: "checkbox", checked: e.equipes.includes(q.id) }) }));
+  const affectesIci = projet.affectations.filter((a) => a.perimetres.includes(e.id));
+  zone.append(section("Exécution et périmètre", el("div", { class: "champs" },
+    "Titulaire", titulaire,
+    "Équipes ici", el("div", {}, ...cases.map((x) => el("label", { style: "display:block;font-size:12.5px" }, x.c, " " + nomEquipe(x.id)))),
+    "Équipes effectives", el("span", { class: "info", text: he ? `${he.ids.map(nomEquipe).join(", ")}${he.source !== e ? ` (héritées de « ${he.source.intitule} »)` : ""}` : "aucune" }),
+    feuille ? "Déclarée par" : null, feuille ? el("span", { text: declarant(e) }) : null,
+    "Affectés ici", el("span", { class: "info", text: affectesIci.map((a) => `${a.nom} (${a.role})`).join(", ") || "personne" })),
+  el("p", { class: "note", text: "Titulaire et équipes : hérités vers le bas, une affectation plus bas remplace celle d'en haut." }),
+  el("div", { class: "ligne-outils", style: "margin-top:6px" },
+    geste("Enregistrer", "gerer_equipes", e, () => modifierExecution(e.id, propre(titulaire.value), cases.filter((x) => x.c.checked).map((x) => x.id)), "primaire"))));
+}
+
+function rendreAffectations() {
+  const zone = $("#affectations");
+  zone.replaceChildren();
+  const gerer = peut("affecter_membres");
+  const corps = el("tbody");
+  for (const a of projet.affectations) {
+    const role = el("select", { disabled: !gerer, onchange: (ev) => {
+      a.role = ev.target.value;
+      a.seuil = ROLES[a.role].seuil;
+      tracer(`${a.nom} passe ${ROLES[a.role].libelle} sur ce projet`);
+      rafraichir();
+    } }, ...Object.entries(ROLES).map(([code, r]) => el("option", { value: code, text: r.libelle })));
+    role.value = a.role;
+    const seuil = el("select", { disabled: !(gerer || a.id === moi().id) || !aPerm(a, "alertes_voir"), onchange: (ev) => {
+      a.seuil = ev.target.value || null;
+      rafraichir();
+    } }, el("option", { value: "", text: "aucune" }), ...Object.entries(LIBELLES_ALERTE).map(([code, l]) => el("option", { value: code, text: `dès ${l}` })));
+    seuil.value = a.seuil || "";
+    const puces = el("div", { class: "ligne-outils" }, ...(a.perimetres.length ? a.perimetres : [null]).map((pid) => pid
+      ? el("span", { class: "puce" }, elem(pid)?.intitule ?? "?", gerer ? el("button", { class: "mini", text: "✕", title: "Retirer ce périmètre",
+        onclick: () => { a.perimetres = a.perimetres.filter((x) => x !== pid); rafraichir(); } }) : null)
+      : el("span", { class: "puce", text: "tout le projet" })));
+    if (gerer) {
+      const ajout = el("select", { onchange: (ev) => {
+        if (ev.target.value && !a.perimetres.includes(ev.target.value)) a.perimetres.push(ev.target.value);
+        tracer(`Périmètre de ${a.nom} : ${libellePerimetre(a)}`);
+        rafraichir();
+      } }, el("option", { value: "", text: "＋ périmètre" }), ...Object.values(projet.elements)
+        .filter((x) => x.actif && x.parent !== null && !estFeuille(x)).map((x) => el("option", { value: x.id, text: chemin(x) })));
+      puces.append(ajout);
+    }
+    corps.append(el("tr", {}, el("td", { text: a.nom }), el("td", {}, role), el("td", {}, puces), el("td", {}, seuil)));
+  }
+  zone.append(el("div", { class: "defile" }, el("table", { class: "grille" },
+    el("thead", {}, el("tr", {}, el("th", { text: "Collaborateur" }), el("th", { text: "Rôle sur ce projet" }),
+      el("th", { text: "Périmètre(s)" }), el("th", { text: "Alertes" }))), corps)));
+  if (gerer) {
+    const nom = el("input", { type: "text", placeholder: "Nom" });
+    const role = el("select", {}, ...Object.entries(ROLES).map(([code, r]) => el("option", { value: code, text: r.libelle })));
+    role.value = "CC";
+    zone.append(el("div", { class: "ligne-outils", style: "margin-top:8px" }, nom, role, bouton("Affecter", () => {
+      if (!propre(nom.value)) { toast("Nom obligatoire."); return; }
+      projet.affectations.push({ id: "u" + Date.now(), nom: propre(nom.value), role: role.value, perimetres: [], seuil: ROLES[role.value].seuil });
+      tracer(`${propre(nom.value)} affecté comme ${ROLES[role.value].libelle}`);
+      rafraichir();
+    }, "mini")));
+  }
+  const equipes = el("div", { class: "ligne-outils", style: "margin-top:12px" }, el("b", { text: "Équipes :" }),
+    ...projet.equipes.map((q) => el("span", { class: "puce", text: `${q.nom} · ${q.nature}` })));
+  if (peut("gerer_equipes")) {
+    const nom = el("input", { type: "text", placeholder: "Nouvelle équipe" });
+    const nature = el("select", {}, el("option", { text: "Interne" }), el("option", { text: "Sous-traitante" }));
+    equipes.append(nom, nature, bouton("Créer", () => {
+      if (!propre(nom.value)) return;
+      projet.equipes.push({ id: "q" + Date.now(), nom: propre(nom.value), nature: nature.value });
+      rafraichir();
+    }, "mini"));
+  }
+  zone.append(equipes, el("p", { class: "note", text: "Le rôle est propre à l'affectation. Une permission s'exerce dans le périmètre. Une équipe s'affecte depuis le panneau d'un élément." }));
+}
+
+function rendreNiveauxAlerte() {
+  const zone = $("#niveaux-alerte");
+  zone.replaceChildren(el("span", { class: "note", style: "margin:0", text: "Alerter à ce niveau :" }));
+  projet.niveaux.forEach((lib, i) => {
+    const c = el("input", { type: "checkbox", checked: !!projet.niveauxAlerte[i], disabled: !peut("decouper"),
+      onchange: (ev) => { projet.niveauxAlerte[i] = ev.target.checked; rafraichir(); } });
+    zone.append(el("label", { class: "puce" }, c, " " + lib));
+  });
+}
+
+function rendreProjet() {
+  const R = racine();
+  const m = moi();
+  const focus = visible(R) ? R : elem(m.perimetres[0]) || R;
+  $("#titre-projet").textContent = visible(R) ? R.intitule : `${R.intitule} · votre périmètre : ${libellePerimetre(m)}`;
+  $("#inserer-niveau").disabled = !peut("decouper");
+  const c = calculer(focus);
+  const derive = focus.fin && focus.contrFin ? joursEntre(focus.contrFin, focus.fin) : 0;
+  const feuilles = Object.values(projet.elements).filter((x) => x.actif && estFeuille(x) && visible(x)).length;
+  const indicateur = (titre, valeur, classe = "") => el("div", { class: "indicateur" }, el("span", { class: "info", text: titre }), el("b", { class: classe, text: valeur }));
+  $("#indicateurs").replaceChildren(
+    indicateur(focus === R ? "Physique" : `Physique · ${focus.intitule}`, pourcent(c.phys)),
+    indicateur("Temporel", pourcent(c.temp)),
+    indicateur("Écart", c.ecart == null ? "indispo." : `${points(c.ecart)} pts`, c.ecart > SEUIL_RETARD ? "err" : ""),
+    indicateur("Statut", statutDe(focus)),
+    indicateur("Fin prévue", focus.fin ? dateCourte(focus.fin) + (derive ? ` (+${derive} j)` : "") : "—", derive > 30 ? "err" : ""),
+    indicateur("Feuilles visibles", String(feuilles)));
+  $("#note-sante").textContent = c.ecart == null
+    ? "Indice de santé : écart indisponible (aucun montant connu). Il est calculé sur les rapports, les blocages et les incidents seulement, et affiché « partiel »."
+    : "Indice de santé : son score de délais (40 %) se calcule sur cet écart. La dérive se mesure sur la baseline contractuelle.";
+  rendreNiveauxAlerte();
+  const corps = $("#grille tbody");
+  corps.replaceChildren();
+  lignesArbre(R, 0, corps);
+  rendreAffectations();
+  $("#historique").replaceChildren(...(projet.historique.length
+    ? projet.historique.map((h) => el("li", {}, el("b", { text: `${dateCourte(h.date)} · ${h.auteur} · ` }), h.quoi,
+      h.motif ? el("div", { class: "info", text: "Motif : " + h.motif }) : null))
+    : [el("li", { class: "info", text: "Aucune modification pour l'instant." })]));
+  rendreDetail();
+}
+
+/* ---------- Journal du jour : un seul journal, écrit à plusieurs mains ---------- */
+
+const CLE_GLOBALE = "__global";
+const STATUTS_PARTIE = { A_REDIGER: "À rédiger", PRETE: "Prête", VISEE: "Visée", REJETEE: "Rejetée", ABSENTE: "Non renseignée" };
+const STATUTS_JOURNAL = { BROUILLON: "En rédaction", SOUMIS: "Soumis, visas en cours", VISE: "Visé, à approuver", APPROUVE: "Approuvé" };
+const METEOS = ["", "Ensoleillé", "Nuageux", "Pluie", "Orage"];
+
+function feuilleActive(f) {
+  if (!f.actif || !estFeuille(f) || f.cloture || !actifJusquEnHaut(f)) return false;
+  if (f.mode === "jalon") return !!f.fin && f.fin <= projet.ref;
+  return (f.debut && f.debut <= projet.ref && projet.ref <= f.fin) || commence(f);
+}
+
+function partiesDuJour() {
+  const parties = new Map();
+  const feuilles = Object.values(projet.elements).filter(feuilleActive).sort((a, b) => (chemin(a) < chemin(b) ? -1 : 1));
+  for (const f of feuilles) {
+    const k = partieDe(f) || CLE_GLOBALE;
+    if (!parties.has(k)) parties.set(k, []);
+    parties.get(k).push(f);
+  }
+  return parties;
+}
+
+const libellePartie = (k) => (k === CLE_GLOBALE ? "Rapport global" : `« ${elem(k)?.intitule ?? "?"} »`);
+
+function journalDuJour() {
+  if (!projet.journal || projet.journal.date !== projet.ref) {
+    projet.journal = { date: projet.ref, statut: "BROUILLON", communes: { meteo: "", debut: "07:30", fin: "17:00" },
+      parties: {}, local: {} };
+  }
+  const j = projet.journal;
+  for (const k of partiesDuJour().keys()) {
+    j.parties[k] ??= { statut: "A_REDIGER", version: 1, lignes: {}, effectifs: {}, visee: null, commentaire: "" };
+  }
+  return j;
+}
+
+const estRedacteur = (a = moi()) => aPerm(a, "rediger");
+const peutRediger = (k, a = moi()) => aPerm(a, "rediger") && k !== CLE_GLOBALE
+  && (a.perimetres.length ? a.perimetres.includes(k) : k === projet.racine);
+
+function peutViser(k, a = moi()) {
+  if (!aPerm(a, "viser")) return false;
+  if (!a.perimetres.length) return true;
+  return k !== CLE_GLOBALE && contient(a, elem(k));
+}
+
+function profondeurVisa(a, k) {
+  if (!a.perimetres.length) return -1;
+  return Math.max(...a.perimetres.filter((p) => k === p || ancetres(elem(k)).some((x) => x.id === p)).map((p) => ancetres(elem(p)).length));
+}
+
+// Le viseur attendu est le plus précis ; un viseur sur tout le projet peut le remplacer.
+function viseurAttendu(k) {
+  const candidats = projet.affectations.filter((a) => peutViser(k, a));
+  candidats.sort((x, y) => profondeurVisa(y, k) - profondeurVisa(x, k));
+  return candidats[0] || null;
+}
+
+const peutApprouver = (a = moi()) => aPerm(a, "valider") && surToutLeProjet(a);
+const horsLigne = () => projet.horsLigne.includes(moi().id);
+const localDe = (id = moi().id) => (projet.journal.local[id] ??= { parties: {}, communes: {}, intentions: [] });
+
+function donneesPartie(k) {
+  return (horsLigne() && projet.journal.local[moi().id]?.parties[k]) || projet.journal.parties[k];
+}
+
+function ecrirePartie(k, modif) {
+  if (horsLigne()) {
+    const loc = localDe();
+    if (!loc.parties[k]) {
+      const p = projet.journal.parties[k];
+      loc.parties[k] = { base: p.version, lignes: structuredClone(p.lignes), effectifs: structuredClone(p.effectifs) };
+    }
+    modif(loc.parties[k]);
+  } else {
+    const p = projet.journal.parties[k];
+    modif(p);
+    p.version++;
+  }
+}
+
+const partieEditable = (k) => {
+  const j = projet.journal;
+  const p = j.parties[k];
+  return peutRediger(k) && (j.statut === "BROUILLON" ? p.statut === "A_REDIGER" : p.statut === "REJETEE");
+};
+
+function erreursPartie(k) {
+  const d = donneesPartie(k);
+  return (partiesDuJour().get(k) || []).filter((f) => {
+    const l = d.lignes[f.id] || {};
+    return l.travaillee && !(Number(l.q) > 0) && !l.atteint && !propre(l.obs);
+  }).map((f) => f.intitule);
+}
+
+function marquerPrete(k, silencieux = false) {
+  const erreurs = erreursPartie(k);
+  if (erreurs.length) return `Observation obligatoire pour les feuilles travaillées sans quantité : ${erreurs.join(", ")}.`;
+  if (horsLigne() && !silencieux) {
+    localDe().intentions.push({ type: "prete", partie: k });
+    return "Hors connexion : « prête » sera envoyé au retour du réseau.";
+  }
+  projet.journal.parties[k].statut = "PRETE";
+  projet.journal.parties[k].version++;
+  return null;
+}
+
+function soumettre(force = false) {
+  const j = projet.journal;
+  if (j.statut !== "BROUILLON") return "Le journal n'est plus en rédaction.";
+  if (horsLigne() && !force) {
+    localDe().intentions.push({ type: "soumettre" });
+    return "Hors connexion : la soumission partira au retour du réseau, si les conditions tiennent toujours.";
+  }
+  for (const [k, p] of Object.entries(j.parties)) if (p.statut !== "PRETE") { p.statut = "ABSENTE"; tracer(`Journal du ${dateCourte(j.date)} : partie ${libellePartie(k)} non renseignée`); }
+  j.statut = "SOUMIS";
+  tracer(`Journal du ${dateCourte(j.date)} soumis`);
+  return null;
+}
+
+function soumettreAvecConfirmation() {
+  const j = journalDuJour();
+  const manquantes = Object.entries(j.parties).filter(([, p]) => p.statut !== "PRETE").map(([k]) => libellePartie(k));
+  const faire = () => { const err = soumettre(); toast(err || "Journal soumis : les visas peuvent commencer."); rafraichir(); };
+  if (!manquantes.length) { faire(); return; }
+  confirmer({ titre: "Certaines parties ne sont pas prêtes. Soumettre quand même ?",
+    effets: manquantes.map((m) => `${m} : sera marquée « non renseignée »`), libelle: "Soumettre quand même", action: faire });
+}
+
+function viser(k) {
+  const j = projet.journal;
+  const p = j.parties[k];
+  p.statut = "VISEE";
+  p.visee = { par: moi().nom, le: projet.ref, remplacant: viseurAttendu(k)?.id !== moi().id };
+  if (Object.values(j.parties).every((x) => x.statut === "VISEE")) {
+    j.statut = "VISE";
+    tracer(`Journal du ${dateCourte(j.date)} visé dans toutes ses parties`);
+  }
+}
+
+function rejeter(k) {
+  const commentaire = el("textarea", { rows: 3, placeholder: "Ce qu'il faut corriger" });
+  demander(`Rejeter la partie ${libellePartie(k)} ?`, [["Rejeter", () => {
+    if (!propre(commentaire.value)) { toast("Le commentaire est obligatoire."); return false; }
+    const j = projet.journal;
+    Object.assign(j.parties[k], { statut: "REJETEE", commentaire: propre(commentaire.value), visee: null });
+    if (j.statut === "VISE") j.statut = "SOUMIS";
+    tracer(`Partie ${libellePartie(k)} rejetée : ${propre(commentaire.value)}`);
+    rafraichir();
+    return true;
+  }, "primaire"]], null, el("div", { class: "formulaire" }, commentaire,
+    el("p", { class: "note", text: "Seule cette partie est rouverte ; les autres gardent leur visa." })));
+}
+
+function approuver() {
+  const j = projet.journal;
+  let reportees = 0;
+  for (const p of Object.values(j.parties)) {
+    if (p.statut === "ABSENTE") continue;
+    for (const [fid, l] of Object.entries(p.lignes)) {
+      const f = elem(fid);
+      if (!f || !f.actif) continue;
+      if (f.mode === "quantite" && Number(l.q) > 0) { f.qRealisee += Number(l.q); noterMesure(f, j.date); reportees++; }
+      if (f.mode === "pourcentage" && l.q !== "" && l.q != null) { f.pct = Math.min(100, Math.max(0, Number(l.q))); noterMesure(f, j.date); reportees++; }
+      if (f.mode === "jalon" && l.atteint) { f.cloture = true; f.finReelle = j.date; noterMesure(f, j.date); reportees++; }
+    }
+  }
+  j.statut = "APPROUVE";
+  tracer(`Journal du ${dateCourte(j.date)} approuvé : ${reportees} mesure(s) reportée(s) sur les feuilles, toute la chaîne recalculée`);
+  photographier();
+}
+
+function synchroniser(id) {
+  const j = projet.journal;
+  const loc = j?.local[id];
+  if (!loc) return [];
+  const rapport = [];
+  for (const [k, copie] of Object.entries(loc.parties)) {
+    const p = j.parties[k];
+    if (!p) { rapport.push(`${libellePartie(k)} : la partie n'existe plus, rien n'est envoyé.`); delete loc.parties[k]; continue; }
+    if (j.statut === "APPROUVE" || p.statut === "VISEE") {
+      rapport.push(`${libellePartie(k)} : NON ENVOYÉE, la partie a été ${j.statut === "APPROUVE" ? "approuvée" : `visée par ${p.visee?.par}`} pendant la coupure. Copie gardée sur l'appareil.`);
+      continue;
+    }
+    if (p.version !== copie.base) {
+      rapport.push(`${libellePartie(k)} : NON ENVOYÉE, elle a été modifiée par quelqu'un d'autre pendant la coupure. Copie gardée sur l'appareil.`);
+      continue;
+    }
+    const feuilles = new Set((partiesDuJour().get(k) || []).map((f) => f.id));
+    for (const [fid, ligne] of Object.entries(copie.lignes)) {
+      if (!feuilles.has(fid)) { rapport.push(`« ${elem(fid)?.intitule ?? fid} » : ligne refusée, la feuille ne relève plus de cette partie.`); continue; }
+      p.lignes[fid] = ligne;
+    }
+    p.effectifs = copie.effectifs;
+    p.version++;
+    delete loc.parties[k];
+    rapport.push(`${libellePartie(k)} : envoyée.`);
+  }
+  for (const [champ, valeur] of Object.entries(loc.communes)) {
+    j.communes[champ] = valeur;
+    tracer(`Partie commune « ${champ} » : ${valeur} (envoyée au retour du réseau, la dernière saisie l'emporte)`);
+  }
+  loc.communes = {};
+  const intentions = loc.intentions;
+  loc.intentions = [];
+  for (const it of intentions) {
+    if (it.type === "prete") {
+      const p = j.parties[it.partie];
+      if (!p || !["A_REDIGER", "REJETEE"].includes(p.statut)) { rapport.push(`« Prête » pour ${libellePartie(it.partie)} : sans objet, l'état a changé.`); continue; }
+      rapport.push(`« Prête » pour ${libellePartie(it.partie)} : ${marquerPrete(it.partie, true) || "appliqué"}.`);
+    }
+    if (it.type === "soumettre") rapport.push(`Soumission : ${soumettre(true) || "effectuée"}.`);
+  }
+  return rapport;
+}
+
+function basculerConnexion() {
+  const id = moi().id;
+  if (projet.horsLigne.includes(id)) {
+    projet.horsLigne = projet.horsLigne.filter((x) => x !== id);
+    const rapport = synchroniser(id);
+    if (rapport.length) demander("Retour du réseau : synchronisation", [], null, el("ul", { class: "effets" }, ...rapport.map((t) => el("li", { text: t }))));
+  } else {
+    projet.horsLigne.push(id);
+    toast("Coupure simulée : la saisie est gardée sur l'appareil.");
+  }
+  rafraichir();
+}
+
+function ligneFeuille(k, f, editable) {
+  const d = donneesPartie(k);
+  const l = d.lignes[f.id] || {};
+  const maj = (champ, valeur) => {
+    ecrirePartie(k, (x) => { x.lignes[f.id] = { ...(x.lignes[f.id] || {}), [champ]: valeur }; });
+    rafraichir();
+  };
+  let saisie;
+  let repere = "";
+  if (f.mode === "jalon") {
+    saisie = el("label", {}, el("input", { type: "checkbox", checked: !!l.atteint, disabled: !editable, onchange: (ev) => maj("atteint", ev.target.checked) }), " atteint aujourd'hui");
+    repere = `jalon du ${dateCourte(f.fin)}`;
+  } else {
+    saisie = el("input", { type: "number", min: 0, value: l.q ?? "", disabled: !editable, style: "width:90px",
+      placeholder: f.mode === "quantite" ? "quantité" : "% cumulé", onchange: (ev) => maj("q", ev.target.value) });
+    repere = f.mode === "quantite"
+      ? `cumul veille ${nombre(f.qRealisee)} / ${nombre(f.qPrevue)} ${f.unite}`
+      : `déclaré ${nombre(f.pct)} % (saisir l'avancement cumulé)`;
+  }
+  const depasse = f.mode === "quantite" && f.qPrevue > 0 && f.qRealisee + (Number(l.q) || 0) > f.qPrevue;
+  return el("tr", {},
+    el("td", {}, el("div", { text: f.intitule }), el("div", { class: "info", style: "font-size:11.5px", text: cheminCourt(f) })),
+    el("td", { class: "info", style: "font-size:12px", text: repere }),
+    el("td", {}, saisie, depasse ? el("div", { class: "warn", style: "font-size:11.5px", text: `dépasse le prévu de ${nombre(f.qRealisee + Number(l.q) - f.qPrevue)} ${f.unite} : à confirmer` }) : null),
+    el("td", {}, el("input", { type: "checkbox", checked: !!l.travaillee, disabled: !editable, title: "Travaillée aujourd'hui", onchange: (ev) => maj("travaillee", ev.target.checked) })),
+    el("td", {}, el("input", { type: "text", value: l.obs ?? "", disabled: !editable, placeholder: "observation", onchange: (ev) => maj("obs", ev.target.value) })));
+}
+
+function cartePartie(k, feuilles) {
+  const j = projet.journal;
+  const p = j.parties[k];
+  const editable = partieEditable(k);
+  const redacteurs = k === CLE_GLOBALE ? [] : redacteursPour(k);
+  const attendu = viseurAttendu(k);
+  const local = horsLigne() && projet.journal.local[moi().id]?.parties[k];
+  const carte = el("section", { class: "carte partie" },
+    el("div", { class: "ligne-outils", style: "justify-content:space-between" },
+      el("h2", { style: "margin:0", text: `Partie ${libellePartie(k)}` }),
+      el("span", { class: "statut s-" + ({ A_REDIGER: "planifie", PRETE: "en-cours", VISEE: "cloture", REJETEE: "en-retard", ABSENTE: "suspendu" })[p.statut], text: STATUTS_PARTIE[p.statut] })),
+    el("div", { class: "info", style: "font-size:12.5px;margin-top:4px",
+      text: `Rédaction : ${redacteurs.map((a) => a.nom).join(", ") || "aucun rédacteur : passer par une suppléance"} · Visa attendu : ${attendu ? attendu.nom : "un viseur sur tout le projet"}${p.visee ? ` · Visée par ${p.visee.par}${p.visee.remplacant ? " (en remplacement)" : ""}` : ""}` }),
+    local ? el("p", { class: "note warn", text: "Saisie gardée sur l'appareil : elle partira au retour du réseau." }) : null,
+    p.commentaire && p.statut === "REJETEE" ? el("p", { class: "note err", text: `Rejet : ${p.commentaire}` }) : null);
+  const corps = el("tbody", {}, ...feuilles.map((f) => ligneFeuille(k, f, editable)));
+  carte.append(el("div", { class: "defile" }, el("table", { class: "grille" },
+    el("thead", {}, el("tr", {}, el("th", { text: "Feuille" }), el("th", { text: "Repère" }), el("th", { text: "Aujourd'hui" }),
+      el("th", { text: "Travaillée" }), el("th", { text: "Observation" }))), corps)));
+  const equipes = [...new Set(feuilles.flatMap((f) => equipesEffectives(f)?.ids || []))];
+  if (equipes.length) {
+    const d = donneesPartie(k);
+    carte.append(el("div", { class: "ligne-outils", style: "margin-top:8px" }, el("span", { class: "note", style: "margin:0", text: "Effectifs présents :" }),
+      ...equipes.map((q) => el("label", { class: "puce" }, nomEquipe(q) + " ", el("input", { type: "number", min: 0, style: "width:60px",
+        value: d.effectifs[q] ?? "", disabled: !editable,
+        onchange: (ev) => { ecrirePartie(k, (x) => { x.effectifs[q] = ev.target.value; }); rafraichir(); } })))));
+  }
+  const actions = el("div", { class: "ligne-outils", style: "margin-top:8px" });
+  if (editable) actions.append(bouton("Marquer prête", () => { const msg = marquerPrete(k); if (msg) toast(msg); rafraichir(); }, "primaire"));
+  if (peutRediger(k) && j.statut === "BROUILLON" && p.statut === "PRETE") {
+    actions.append(bouton("Reprendre", () => { p.statut = "A_REDIGER"; p.version++; rafraichir(); }));
+  }
+  if (j.statut === "SOUMIS" && ["PRETE", "ABSENTE"].includes(p.statut) && peutViser(k)) {
+    actions.append(bouton(p.statut === "ABSENTE" ? "Viser (constat d'absence)" : "Viser", () => { viser(k); rafraichir(); }, "primaire"));
+  }
+  if (["SOUMIS", "VISE"].includes(j.statut) && p.statut !== "REJETEE" && p.statut !== "ABSENTE" && (peutViser(k) || peutApprouver())) {
+    actions.append(bouton("Rejeter la partie", () => rejeter(k)));
+  }
+  carte.append(actions);
+  return carte;
+}
+
+function rendreJournal() {
+  const j = journalDuJour();
+  const parties = partiesDuJour();
+  const m = moi();
+  const entete = $("#journal-entete");
+  const hl = horsLigne();
+  entete.replaceChildren(
+    el("div", { class: "ligne-outils", style: "justify-content:space-between" },
+      el("h2", { style: "margin:0", text: `Journal du ${dateCourte(j.date)} · ${racine().intitule}` }),
+      el("span", { class: "statut s-" + ({ BROUILLON: "planifie", SOUMIS: "en-cours", VISE: "en-cours", APPROUVE: "cloture" })[j.statut], text: STATUTS_JOURNAL[j.statut] })),
+    hl ? el("p", { class: "bandeau-hors-ligne", text: "📡 Connexion perdue. Votre saisie est gardée sur l'appareil ; elle partira au retour du réseau, partie par partie." }) : "",
+    el("p", { class: "note", text: "Un seul journal par projet et par jour. Chaque feuille active a un seul rédacteur : celui dont le périmètre est le plus précis. Le visa se donne partie par partie ; le journal est visé quand toutes ses parties le sont, puis approuvé une seule fois." }));
+  const actions = el("div", { class: "ligne-outils", style: "margin-top:8px" });
+  if (estRedacteur() && j.statut === "BROUILLON") actions.append(bouton("Soumettre le journal", soumettreAvecConfirmation, "primaire"));
+  const aViser = [...parties.keys()].filter((k) => j.statut === "SOUMIS" && ["PRETE", "ABSENTE"].includes(j.parties[k].statut) && peutViser(k));
+  if (aViser.length > 1) actions.append(bouton(`Viser toutes mes parties (${aViser.length})`, () => { aViser.forEach(viser); rafraichir(); }, "primaire"));
+  if (j.statut === "VISE") {
+    const b = bouton("Approuver le journal", () => { approuver(); toast("Journal approuvé : les mesures sont reportées sur les feuilles."); rafraichir(); }, "primaire");
+    b.disabled = !peutApprouver();
+    b.title = peutApprouver() ? PERMISSIONS.valider : `Il faut ${PERMISSIONS.valider} sur tout le projet`;
+    actions.append(b);
+  }
+  actions.append(bouton(hl ? "Revenir en ligne" : "Simuler une coupure de réseau", basculerConnexion));
+  actions.append(bouton("Jour ouvré suivant →", () => { projet.ref = jourOuvreSuivant(projet.ref); rafraichir(); }));
+  entete.append(actions);
+
+  const communes = $("#journal-communes");
+  const editableCommunes = estRedacteur() && j.statut === "BROUILLON";
+  const valeurCommune = (champ) => (hl && localDe().communes[champ] !== undefined ? localDe().communes[champ] : j.communes[champ]);
+  const ecrireCommune = (champ, valeur) => { if (hl) localDe().communes[champ] = valeur; else j.communes[champ] = valeur; rafraichir(); };
+  const meteo = el("select", { disabled: !editableCommunes, onchange: (ev) => ecrireCommune("meteo", ev.target.value) },
+    ...METEOS.map((x) => el("option", { value: x, text: x || "—" })));
+  meteo.value = valeurCommune("meteo");
+  communes.replaceChildren(el("h2", { text: "Parties communes" }), el("div", { class: "ligne-outils" },
+    el("label", {}, "Météo ", meteo),
+    el("label", {}, "Début ", el("input", { type: "text", value: valeurCommune("debut"), style: "width:70px", disabled: !editableCommunes, onchange: (ev) => ecrireCommune("debut", ev.target.value) })),
+    el("label", {}, "Fin ", el("input", { type: "text", value: valeurCommune("fin"), style: "width:70px", disabled: !editableCommunes, onchange: (ev) => ecrireCommune("fin", ev.target.value) }))),
+  el("p", { class: "note", text: "Remplies une fois, par n'importe quel rédacteur. Pas de visa séparé : l'approbation les couvre." }));
+
+  const zone = $("#journal-parties");
+  zone.replaceChildren();
+  const visibles = [...parties.entries()].filter(([k]) => voitTout() || (k !== CLE_GLOBALE && contient(m, elem(k))) || peutRediger(k));
+  if (!visibles.length) zone.append(el("section", { class: "carte" }, el("p", { class: "note", text: "Aucune feuille active ce jour-là dans votre périmètre." })));
+  visibles.forEach(([k, feuilles]) => zone.append(cartePartie(k, feuilles)));
+
+  const circuit = $("#journal-circuit");
+  const lignes = [...parties.keys()].map((k) => el("li", {}, `${libellePartie(k)} : `, el("b", { text: STATUTS_PARTIE[j.parties[k].statut] })));
+  circuit.replaceChildren(el("h2", { text: "Circuit" }),
+    el("ol", { class: "effets" },
+      el("li", {}, "Rédiger et marquer prête : ", el("b", { text: PERMISSIONS.rediger }), ", périmètre le plus précis"),
+      el("li", {}, "Soumettre : n'importe quel rédacteur"),
+      el("li", {}, "Viser chaque partie : ", el("b", { text: PERMISSIONS.viser }), " sur un périmètre qui la contient"),
+      el("li", {}, "Approuver : ", el("b", { text: PERMISSIONS.valider }), " sur tout le projet")),
+    el("h3", { text: "État des parties", style: "font-size:13px;margin:12px 0 4px" }), el("ul", { class: "effets" }, ...lignes),
+    el("p", { class: "note", text: `Vous : ${m.nom}, ${ROLES[m.role].libelle}, périmètre ${libellePerimetre(m)}.` }));
+}
+
+/* ---------- Alertes de retard ---------- */
+
+function causesRetard(e) {
+  return [e, ...descendants(e)].filter((f) => f.actif && estFeuille(f) && statutDe(f) === "En retard")
+    .map((f) => ({ f, c: calculer(f) }))
+    .sort((a, b) => (b.c.poids || 0) * Math.max(b.c.ecart || 0, 1) - (a.c.poids || 0) * Math.max(a.c.ecart || 0, 1))
+    .slice(0, 5)
+    .map(({ f, c }) => `« ${f.intitule} » : écart ${points(c.ecart)} pts${f.fin && projet.ref > f.fin ? `, fin dépassée (${dateCourte(f.fin)})` : ""}`);
+}
+
+function alertesCalculees() {
+  calculs = new Map();
+  const liste = [];
+  for (const e of Object.values(projet.elements)) {
+    if (!e.actif || !actifJusquEnHaut(e)) continue;
+    const suivi = e.parent === null || projet.niveauxAlerte[e.niveau];
+    const c = calculer(e);
+    if (suivi && c.ecart != null) {
+      const niveau = SEUILS_ALERTE.find(([, s]) => c.ecart > s)?.[0];
+      if (niveau) liste.push({ cle: e.id, element: e, niveau, motif: `Écart de ${points(c.ecart)} points`, causes: causesRetard(e) });
+    }
+    if (e.mode === "jalon" && estFeuille(e) && !e.cloture && e.fin && e.fin < projet.ref) {
+      liste.push({ cle: e.id + ":jalon", element: e, niveau: "ELEVE", motif: `Jalon non atteint au ${dateCourte(e.fin)}`, causes: [] });
+    }
+  }
+  for (const a of liste) {
+    const etat = (projet.alertesEtat[a.cle] ??= { statut: "OUVERTE", niveauMax: a.niveau, depuis: projet.ref });
+    // Déduplication avec escalade : une alerte ne fait que monter ; une escalade rouvre une alerte classée.
+    if (RANG_ALERTE[a.niveau] > RANG_ALERTE[etat.niveauMax]) {
+      etat.niveauMax = a.niveau;
+      if (["RESOLUE", "IGNOREE"].includes(etat.statut)) etat.statut = "OUVERTE";
+    }
+    a.etat = etat;
+    a.destinataires = projet.affectations.filter((u) => aPerm(u, "alertes_voir") && u.seuil
+      && RANG_ALERTE[a.niveau] >= RANG_ALERTE[u.seuil] && contient(u, a.element));
+  }
+  return liste.sort((x, y) => RANG_ALERTE[y.niveau] - RANG_ALERTE[x.niveau]);
+}
+
+let seulementLesMiennes = false;
+
+function rendreAlertes() {
+  const zone = $("#alertes");
+  const m = moi();
+  const toutes = alertesCalculees();
+  const liste = toutes.filter((a) => (voitTout() || contient(m, a.element)) && aPerm(m, "alertes_voir"))
+    .filter((a) => !seulementLesMiennes || a.destinataires.includes(m));
+  zone.replaceChildren(
+    el("div", { class: "ligne-outils", style: "justify-content:space-between" }, el("h2", { style: "margin:0", text: `Alertes de retard au ${dateCourte(projet.ref)}` }),
+      el("label", { class: "note", style: "margin:0" }, el("input", { type: "checkbox", checked: seulementLesMiennes,
+        onchange: (ev) => { seulementLesMiennes = ev.target.checked; rafraichir(); } }), " seulement celles que je reçois")),
+    !aPerm(m, "alertes_voir") ? el("p", { class: "note err", text: `Il faut ${PERMISSIONS.alertes_voir} pour voir les alertes.` }) : "");
+  if (aPerm(m, "alertes_voir") && !liste.length) zone.append(el("p", { class: "note", text: "Aucune alerte." }));
+  for (const a of liste) {
+    const statut = a.etat.statut;
+    const traiter = (nouveau) => { a.etat.statut = nouveau; tracer(`Alerte « ${a.element.intitule} » : ${nouveau.toLowerCase()}`); rafraichir(); };
+    const actions = el("div", { class: "ligne-outils", style: "margin-top:6px" },
+      ...[["EN_COURS", "En cours"], ["RESOLUE", "Résolue"], ["IGNOREE", "Ignorée"]].map(([code, lib]) => {
+        const b = bouton(lib, () => traiter(code), "mini");
+        b.disabled = statut === code || !peut("alertes_traiter", a.element);
+        b.title = peut("alertes_traiter", a.element) ? PERMISSIONS.alertes_traiter : `Permission manquante : ${PERMISSIONS.alertes_traiter}`;
+        return b;
+      }));
+    zone.append(el("div", { class: `alerte-carte n-${a.niveau.toLowerCase()}` },
+      el("div", { class: "ligne-outils", style: "justify-content:space-between" },
+        el("b", { text: `${a.element.parent === null ? "Projet" : libelleNiveau(a.element)} · ${chemin(a.element)}` }),
+        el("span", { class: "etiq", text: `${LIBELLES_ALERTE[a.niveau]} · ${statut.replace("_", " ").toLowerCase()}` })),
+      el("div", { text: a.motif + (a.element.parent === null ? " (dans le vrai produit : l'indice de santé)" : "") }),
+      a.causes.length ? el("ul", { class: "effets" }, ...a.causes.map((t) => el("li", { text: t }))) : null,
+      el("div", { class: "info", style: "font-size:12px;margin-top:4px",
+        text: `Destinataires : ${a.destinataires.map((u) => `${u.nom} (dès ${LIBELLES_ALERTE[u.seuil]})`).join(", ") || "personne"}` }),
+      actions));
+  }
+  $("#alertes-aide").replaceChildren(el("h2", { text: "Comment naît une alerte" }), el("ul", { class: "effets" },
+    el("li", { text: `Aux niveaux cochés « Alerter à ce niveau » (vue projet) : ${projet.niveaux.filter((_, i) => projet.niveauxAlerte[i]).join(", ") || "aucun"}, et sur le projet.` }),
+    el("li", { text: "Écart au-delà de 5, 15, 25 points : Modéré, Élevé, Critique." }),
+    el("li", { text: "Un jalon non atteint à sa date alerte toujours." }),
+    el("li", { text: "Les feuilles en retard sont des causes, pas des alertes." }),
+    el("li", { text: `Destinataires : ${PERMISSIONS.alertes_voir} dans le périmètre, et seuil personnel atteint.` })));
+}
+
+/* ---------- Création et démonstration ---------- */
+
+const aujourdhui = () => versTexte(new Date());
+
+function projetVide(niveaux) {
+  seqElement = 0;
+  projet = { niveaux, niveauxAlerte: niveaux.map((_, i) => i === Math.max(0, niveaux.length - 2)), elements: {},
+    historique: [], ref: aujourdhui(), racine: null, affectations: [], equipes: [], journal: null,
+    alertesEtat: {}, photos: [], horsLigne: [], moi: null };
+}
+
+function ouvrirProjetCree() {
+  const niveaux = etat.niveaux.map((n) => propre(n.libelle));
+  projetVide(niveaux);
+  const R = ajouterAuProjet({ parent: null, niveau: -1, intitule: `Nouveau projet (${$("#type-projet").selectedOptions[0].textContent})` });
+  projet.racine = R.id;
+  const parCode = new Map();
+  for (const x of etat.plat) {
+    const n = ajouterAuProjet({ parent: x.parent ? parCode.get(x.parent) : R.id, niveau: niveaux.indexOf(propre(x.niveau)), intitule: x.intitule });
+    parCode.set(x.code, n.id);
+  }
+  projet.affectations = [{ id: "u-moi", nom: "Moi", role: "CP", perimetres: [], seuil: "MODERE" }];
+  projet.moi = "u-moi";
+  selection = R.id;
+  replies.clear();
+  afficherOnglet("projet");
+  toast("Projet créé : sans dates ni montants, son avancement est indisponible.");
+}
+
+function projetDemo() {
+  projetVide(["Phase", "Ouvrage", "Lot", "Activité"]);
+  projet.niveauxAlerte = [false, false, true, false];
+  projet.ref = "2026-11-16";
+  const R = ajouterAuProjet({ parent: null, niveau: -1, intitule: "Résidence Les Palmiers (démonstration)",
+    debut: "2026-09-01", fin: "2027-03-31", titulaire: "Régie" });
+  projet.racine = R.id;
+  const d = (parent, niveau, intitule, debut, fin, plus = {}) => ajouterAuProjet({ parent: parent.id, niveau, intitule, debut, fin, ...plus });
+  const infra = d(R, 0, "Infrastructure", "2026-09-01", "2026-11-30");
+  const batA1 = d(infra, 1, "Bâtiment A", "2026-09-01", "2026-11-30");
+  const go1 = d(batA1, 2, "Gros œuvre", "2026-09-01", "2026-11-30", { enveloppe: 60e6 });
+  d(go1, 3, "Fouilles en rigole", "2026-09-01", "2026-09-30", { montant: 8e6, unite: "m³", qPrevue: 120, qRealisee: 120, cloture: true, debutReel: "2026-09-01", finReelle: "2026-09-29" });
+  const beton = d(go1, 3, "Béton de propreté", "2026-09-21", "2026-10-16", { montant: 6e6, unite: "m³", qPrevue: 40, qRealisee: 30, debutReel: "2026-09-22" });
+  const semelles = d(go1, 3, "Semelles et longrines", "2026-10-01", "2026-11-30", { montant: 30e6, unite: "m³", qPrevue: 200, qRealisee: 80, debutReel: "2026-10-02" });
+  semelles.predecesseurs = [beton.id];
+  d(go1, 3, "Réception des fondations", "2026-11-13", "2026-11-13", { mode: "jalon" });
+  const sup = d(R, 0, "Superstructure", "2026-11-02", "2027-02-26");
+  const batA2 = d(sup, 1, "Bâtiment A", "2026-11-02", "2027-02-26");
+  const go2 = d(batA2, 2, "Gros œuvre", "2026-11-02", "2026-12-31", { titulaire: "BTP Ivoire (sous-traitant)", enveloppe: 90e6 });
+  const elev = d(go2, 3, "Élévation murs", "2026-11-02", "2026-12-31");
+  const rdc = d(elev, 3, "Murs RDC", "2026-11-02", "2026-11-27", { montant: 20e6, unite: "m²", qPrevue: 400, qRealisee: 250, debutReel: "2026-11-02" });
+  const r1 = d(elev, 3, "Murs R+1", "2026-11-30", "2026-12-31", { montant: 20e6, unite: "m²", qPrevue: 400 });
+  r1.predecesseurs = [rdc.id];
+  d(go2, 3, "Chaînages", "2026-11-16", "2026-12-31", { montant: 15e6, mode: "pourcentage", pct: 10, debutReel: "2026-11-16" });
+  const elec = d(batA2, 2, "Électricité courant fort", "2027-01-04", "2027-02-26");
+  d(elec, 3, "Saignées et fourreaux", "2027-01-04", "2027-02-12");
+  d(elec, 3, "Tirage des câbles", "2027-01-18", "2027-02-26");
+  const finitions = d(R, 0, "Finitions", "2027-02-01", "2027-03-31");
+  const batA3 = d(finitions, 1, "Bâtiment A", "2027-02-01", "2027-03-31");
+  d(batA3, 2, "Peinture", "2027-02-15", "2027-03-31", { montant: 25e6 });
+  d(batA3, 2, "Réception provisoire", "2027-03-31", "2027-03-31", { mode: "jalon" });
+
+  projet.equipes = [
+    { id: "q-terr", nom: "Équipe terrassement", nature: "Interne" },
+    { id: "q-mac", nom: "Équipe maçonnerie", nature: "Interne" },
+    { id: "q-btp", nom: "BTP Ivoire", nature: "Sous-traitante" },
+  ];
+  batA1.equipes = ["q-terr"];
+  batA2.equipes = ["q-mac"];
+  go2.equipes = ["q-btp"];
+  projet.affectations = [
+    { id: "u-cp", nom: "Kouassi Aya", role: "CP", perimetres: [], seuil: "MODERE" },
+    { id: "u-ct", nom: "Kouamé Jean", role: "CT", perimetres: [], seuil: "MODERE" },
+    { id: "u-ct2", nom: "N'Guessan Paul", role: "CT", perimetres: [batA2.id], seuil: "MODERE" },
+    { id: "u-yao", nom: "Yao Konan", role: "CC", perimetres: [batA1.id, batA2.id], seuil: null },
+    { id: "u-tra", nom: "Traoré Issa", role: "CC", perimetres: [go2.id], seuil: null },
+    { id: "u-do", nom: "Bamba Awa", role: "DO", perimetres: [], seuil: "ELEVE" },
+    { id: "u-dg", nom: "Diallo Moussa", role: "DG", perimetres: [], seuil: "CRITIQUE" },
+  ];
+  projet.moi = "u-cp";
+
+  // Trois semaines d'historique, pour la tendance et la fin estimée.
+  calculs = new Map();
+  const actuel = Object.fromEntries(Object.values(projet.elements).map((x) => [x.id, calculer(x).phys]));
+  projet.photos = [3, 2, 1].map((k) => ({ date: ajouterJours(projet.ref, -7 * k),
+    valeurs: Object.fromEntries(Object.entries(actuel).map(([id, v]) => [id, v == null ? null : v * (1 - 0.15 * k)])) }));
+  calculs = new Map();
+  photographier();
+  selection = go2.id;
+  replies.clear();
+}
+
+/* ---------- Démarrage ---------- */
+
+$("#type-projet").append(...TYPES_PROJET.map(([code, libelle]) => el("option", { value: code, text: libelle })));
+$("#type-projet").addEventListener("change", rendreModeles);
+$("#modele").addEventListener("change", (e) => { if (e.target.value) changerModele(e.target.value); });
+$("#role").addEventListener("change", () => {
+  rendreListes();
+  rendreModeles();
+  rendreNiveaux();
+  rafraichirEtats();
+});
+$("#liste-choisie").addEventListener("change", (e) => { listeChoisie = e.target.value; rendreListes(); });
+$("#nouvelle-liste").addEventListener("click", nouvelleListe);
+$("#reinitialiser").addEventListener("click", () =>
+  demander("Revenir aux listes et aux modèles d'origine ? Tout ce qui a été ajouté sera perdu.",
+    [["Réinitialiser", () => {
+      ({ listes, modeles } = { listes: structuredClone(LISTES_INITIALES), modeles: structuredClone(MODELES_INITIAUX) });
+      sauver();
+      rendreListes();
+      chargerModele("m-batiment");
+    }, "primaire"]]));
+$("#ajouter").addEventListener("click", ajouterLigneVide);
+$("#importer").addEventListener("click", () => $("#fichier").click());
+$("#fichier").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (f) importer(f);
+});
+$("#exporter").addEventListener("click", exporter);
+$("#creer").addEventListener("click", creer);
+
+rendreListes();
+chargerModele(modeleParId("m-batiment") ? "m-batiment" : modelesVisibles()[0]?.id);
+if (!etat.modele) { rendreModeles(); rendreTout(); }
+
+document.querySelectorAll("nav.onglets button").forEach((b) => b.addEventListener("click", () => afficherOnglet(b.dataset.onglet)));
+$("#ouvrir-projet").addEventListener("click", ouvrirProjetCree);
+$("#date-ref").addEventListener("change", (e) => { if (e.target.value) { projet.ref = e.target.value; rafraichir(); } });
+$("#utilisateur").addEventListener("change", (e) => { projet.moi = e.target.value; rafraichir(); });
+$("#inserer-niveau").addEventListener("click", insererNiveauProjet);
+$("#projet-demo").addEventListener("click", () => { projetDemo(); rafraichir(); });
+projetDemo();
+</script>
+</body>
+</html>

@@ -2,8 +2,11 @@
 
 from rest_framework import serializers
 
-from apps.accounts.models import Module, Permission, Role, RoleModulePermission
-from apps.accounts.services.roles import compter_utilisateurs_et_affectations
+from apps.accounts.models import Permission, Role, RoleModulePermission
+from apps.accounts.services.roles import (
+    compter_utilisateurs_et_affectations,
+    modules_locaux_ouverts,
+)
 
 __all__ = [
     "PermissionItemSerializer",
@@ -49,17 +52,14 @@ def _construire_tableau_dynamique_modules(role: Role):
         RoleModulePermission.objects.filter(
             role=role,
             supprime_le__isnull=True,
-            module__est_actif=True,
-            module__supprime_le__isnull=True,
+            module__in=modules_locaux_ouverts(),
         )
         .select_related("module")
         .prefetch_related("permissions_catalogue")
         .order_by("module__ordre", "module__code")
     )
 
-    modules_actifs = list(
-        Module.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
-    )
+    modules_actifs = list(modules_locaux_ouverts())
     modules_couverts = set()
 
     resultats = []
@@ -139,9 +139,7 @@ def _valider_permissions_modules_structure(value):
 
     modules_valides = {
         m.lower()
-        for m in Module.objects.filter(est_actif=True, supprime_le__isnull=True).values_list(
-            "code", flat=True
-        )
+        for m in modules_locaux_ouverts().values_list("code", flat=True)
     }
     perms_cat_valides = {
         c.lower()
@@ -230,9 +228,7 @@ class RoleSerializer(serializers.ModelSerializer):
 
     def get_permissions_modules(self, obj: Role) -> dict[str, list[str]]:
         """Dictionnaire dynamique associant chaque module actif à la liste ordonnée de ses codes de permissions."""
-        modules_actifs = list(
-            Module.objects.filter(est_actif=True, supprime_le__isnull=True).order_by("ordre", "code")
-        )
+        modules_actifs = list(modules_locaux_ouverts())
         rpm_qs = (
             RoleModulePermission.objects.filter(
                 role=obj,

@@ -10,8 +10,15 @@ def migrer_portee_roles(apps, schema_editor):
     RoleModulePermission = apps.get_model("accounts", "RoleModulePermission")
     ModeleRole = apps.get_model("catalogue", "ModeleRole")
 
-    roles_systeme = ["DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"]
-    for mr in ModeleRole.objects.filter(code__in=roles_systeme):
+    # Les rôles système sont les gabarits **vivants** du catalogue, pas une liste figée.
+    #
+    # Cette migration se rejoue dans le schéma de **chaque nouvelle entreprise**. Lue sur une
+    # liste figée, sans filtre, elle recréait comme rôle système un gabarit que le super admin
+    # avait supprimé (la suppression est logique : la ligne reste, `supprime_le` posé). Une
+    # entreprise créée après la suppression héritait donc du rôle supprimé.
+    modeles_vivants = ModeleRole.objects.filter(est_actif=True, supprime_le__isnull=True)
+    roles_systeme = list(modeles_vivants.values_list("code", flat=True))
+    for mr in modeles_vivants:
         Role.objects.update_or_create(
             code=mr.code,
             defaults={
@@ -41,7 +48,7 @@ def migrer_portee_roles(apps, schema_editor):
     # Tous les autres rôles sont fixés à PROJET
     Role.objects.exclude(code__in=roles_entreprise).exclude(id__in=rmps_voir_tous).update(portee="PROJET")
 
-    # Fixer strictement est_systeme=True uniquement sur les 10 rôles souverains
+    # Est système ce qui vient d'un gabarit vivant, et rien d'autre.
     Role.objects.filter(code__in=roles_systeme).update(est_systeme=True)
     Role.objects.exclude(code__in=roles_systeme).update(est_systeme=False)
 

@@ -27,11 +27,13 @@ de cela.
 
 | Dépôt | Branche poussée | Effet |
 |---|---|---|
-| Backend (`API-Gestion-Chantier`) | `develop` | Tests puis **déploiement cPanel de production** (`.github/workflows/deploy-cpanel.yml`) |
+| Backend (`API-Gestion-Chantier`) | `develop` | Vérifications Django puis **déploiement cPanel de production** (`.github/workflows/deploy-cpanel.yml`) |
 | Frontend (`Application-Gestion-Chantier`) | `develop` | Lint, typage, build puis **déploiement cPanel de production** (depuis le 14/10/2026, `b50d20f`) |
 | Frontend | `main` | Aucun déploiement |
 
-Avant un push qui déploie, l'agent le dit et vérifie que les tests passent.
+Avant un push qui déploie, l'agent le dit et vérifie que `manage.py check` et
+`makemigrations --check` passent (les tests automatisés sont supprimés le temps de la refonte
+du découpage, décision du 29/10/2026).
 
 ## 4. Code backend
 

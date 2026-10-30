@@ -1,21 +1,26 @@
-"""Règles d'encadrement calendaire entre Projet, Lot et Activité (D1 à D7).
+"""Les dates dans l'arbre : le parent encadre, l'enfant peut prolonger (décisions v1.2, §11).
 
-Hiérarchie stricte : Activité <= Lot <= Projet.
-Les dates d'un lot doivent s'inscrire dans le calendrier du projet.
-Les dates d'une activité doivent s'inscrire dans le calendrier du lot.
+**Vers le bas, le parent encadre.** Les dates d'une case s'inscrivent dans celles de son parent —
+du projet jusqu'à la feuille. On ne resserre pas un parent en deçà de l'un de ses enfants.
+
+**Vers le haut, l'enfant peut prolonger.** Si les dates d'une case dépassent celles de son
+parent, `prolongations_necessaires` liste les cases (puis le projet) qu'il faudrait élargir, de
+proche en proche. L'écran l'affiche ; si l'on confirme, chacune est prolongée — c'est une
+reprogrammation, tracée avec le motif de l'enfant. Un parent ne rétrécit jamais tout seul.
+
+Une case ou un projet sans dates n'encadre rien : on ne borne que par ce qui est connu.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import date
 
 from rest_framework.exceptions import ValidationError
 
 MSG_EXIGER_DATES_PROJET = (
     "Renseignez d'abord les dates de début et de fin du projet : "
-    "un lot se cadre dans le calendrier du projet."
-)
-MSG_EXIGER_DATES_LOT = (
-    "Renseignez d'abord les dates de début et de fin du lot : "
-    "une activité se cadre dans le calendrier du lot."
+    "les cases de son découpage se cadrent dans son calendrier."
 )
 
 
@@ -31,115 +36,99 @@ def exiger_dates_projet(projet, champ: str = "non_field_errors") -> None:
         raise ValidationError({champ: MSG_EXIGER_DATES_PROJET})
 
 
-def exiger_dates_lot(lot, champ: str = "non_field_errors") -> None:
-    """Règle D3 : le lot doit posséder date_debut_prevue et date_fin_prevue."""
-    if not lot or not lot.date_debut_prevue or not lot.date_fin_prevue:
-        raise ValidationError({champ: MSG_EXIGER_DATES_LOT})
+@dataclass
+class Prolongation:
+    """Une case (ou le projet) à élargir pour qu'un enfant y tienne."""
+
+    cible: object
+    est_projet: bool
+    debut_avant: date | None
+    fin_avant: date | None
+    debut_apres: date | None
+    fin_apres: date | None
+
+    def en_dict(self) -> dict:
+        return {
+            "type": "PROJET" if self.est_projet else "ELEMENT",
+            "id": str(self.cible.pk),
+            "libelle": getattr(self.cible, "nom", None) if self.est_projet else self.cible.libelle,
+            "date_debut_avant": self.debut_avant,
+            "date_fin_avant": self.fin_avant,
+            "date_debut_apres": self.debut_apres,
+            "date_fin_apres": self.fin_apres,
+        }
 
 
-def verifier_lot_dans_projet(
-    projet,
-    debut: date | None,
-    fin: date | None,
-    suffixe: str = "",
-) -> None:
-    """Règle D4 / D6 : le lot doit s'inscrire dans les dates du projet.
-
-    Si renseignées sur le lot.
-    """
-    if not projet:
-        return
-    date_deb_proj = getattr(projet, "date_debut_prevue", None)
-    if debut and date_deb_proj and debut < date_deb_proj:
-        date_str = formater_date(date_deb_proj)
-        msg = f"Le lot ne peut pas commencer avant le début du projet ({date_str}).{suffixe}"
-        raise ValidationError({"date_debut_prevue": msg})
-    date_fin_proj = getattr(projet, "date_fin_prevue", None)
-    if fin and date_fin_proj and fin > date_fin_proj:
-        date_str = formater_date(date_fin_proj)
-        msg = f"Le lot ne peut pas finir après la fin du projet ({date_str}).{suffixe}"
-        raise ValidationError({"date_fin_prevue": msg})
+def chaine_des_parents(element, arbre=None) -> list:
+    """Le parent, le grand-parent… puis le projet, du plus proche au plus lointain."""
+    if arbre is not None:
+        parents = list(reversed(arbre.ancetres(element)))
+    else:
+        parents = []
+        courant = element.parent
+        while courant is not None:
+            parents.append(courant)
+            courant = courant.parent
+    return [*parents, element.projet]
 
 
-def verifier_activite_dans_lot(
-    lot,
-    debut: date | None,
-    fin: date | None,
-    suffixe: str = "",
-) -> None:
-    """Règle D5 / D6 : l'activité doit s'inscrire dans les dates du lot.
+def prolongations_necessaires(element, debut: date | None, fin: date | None, arbre=None) -> list:
+    """Les parents à élargir pour que [debut, fin] tienne, de proche en proche jusqu'au projet."""
+    from apps.projets.models import Projet
 
-    Si renseignées sur l'activité.
-    """
-    if not lot:
-        return
-    date_deb_lot = getattr(lot, "date_debut_prevue", None)
-    if debut and date_deb_lot and debut < date_deb_lot:
-        date_str = formater_date(date_deb_lot)
-        msg = f"L'activité ne peut pas commencer avant le début du lot ({date_str}).{suffixe}"
-        raise ValidationError({"date_debut_prevue": msg})
-    date_fin_lot = getattr(lot, "date_fin_prevue", None)
-    if fin and date_fin_lot and fin > date_fin_lot:
-        date_str = formater_date(date_fin_lot)
-        msg = f"L'activité ne peut pas finir après la fin du lot ({date_str}).{suffixe}"
-        raise ValidationError({"date_fin_prevue": msg})
+    prolongations: list[Prolongation] = []
+    for parent in chaine_des_parents(element, arbre):
+        p_debut, p_fin = parent.date_debut_prevue, parent.date_fin_prevue
+        nouveau_debut = min(p_debut, debut) if (p_debut and debut) else p_debut
+        nouvelle_fin = max(p_fin, fin) if (p_fin and fin) else p_fin
+        if nouveau_debut != p_debut or nouvelle_fin != p_fin:
+            prolongations.append(
+                Prolongation(
+                    cible=parent,
+                    est_projet=isinstance(parent, Projet),
+                    debut_avant=p_debut,
+                    fin_avant=p_fin,
+                    debut_apres=nouveau_debut,
+                    fin_apres=nouvelle_fin,
+                )
+            )
+        # Le parent élargi devient la borne de son propre parent.
+        debut = nouveau_debut or debut
+        fin = nouvelle_fin or fin
+    return prolongations
 
 
-def verifier_enfants_contenus(parent, debut_cible: date, fin_cible: date) -> None:
-    """Règle D7 : la reprogrammation du parent ne doit pas exclure ses enfants."""
-    from apps.projets.models import Lot, Projet
+def verifier_enfants_contenus(parent, debut_cible: date | None, fin_cible: date | None) -> None:
+    """Règle D7 : on ne resserre pas un parent (case ou projet) en deçà de l'un de ses enfants."""
+    from apps.projets.models import Element, Projet
 
     if isinstance(parent, Projet):
-        lot_avant = parent.lots.filter(
-            supprime_le__isnull=True,
-            date_debut_prevue__lt=debut_cible,
-        ).first()
-        if lot_avant:
+        enfants = Element.objects.filter(projet=parent, parent__isnull=True, est_actif=True)
+        nom_parent = "du projet"
+    else:
+        enfants = parent.enfants.filter(est_actif=True)
+        nom_parent = f"de « {parent.libelle} »"
+    if debut_cible:
+        avant = (
+            enfants.filter(date_debut_prevue__lt=debut_cible).order_by("date_debut_prevue").first()
+        )
+        if avant:
             raise ValidationError(
                 {
                     "date_debut_prevue": (
-                        f"Le lot {lot_avant.code} sortirait du calendrier du projet : "
-                        "reprogrammez-le d'abord."
+                        f"« {avant.libelle} » commence le {formater_date(avant.date_debut_prevue)} "
+                        f"et sortirait du calendrier {nom_parent} : reprogrammez-la d'abord."
                     )
                 }
             )
-        lot_apres = parent.lots.filter(
-            supprime_le__isnull=True,
-            date_fin_prevue__gt=fin_cible,
-        ).first()
-        if lot_apres:
+    if fin_cible:
+        apres = enfants.filter(date_fin_prevue__gt=fin_cible).order_by("-date_fin_prevue").first()
+        if apres:
             raise ValidationError(
                 {
                     "date_fin_prevue": (
-                        f"Le lot {lot_apres.code} sortirait du calendrier du projet : "
-                        "reprogrammez-le d'abord."
-                    )
-                }
-            )
-    elif isinstance(parent, Lot):
-        act_avant = parent.activites.filter(
-            supprime_le__isnull=True,
-            date_debut_prevue__lt=debut_cible,
-        ).first()
-        if act_avant:
-            raise ValidationError(
-                {
-                    "date_debut_prevue": (
-                        f"L'activité {act_avant.libelle} sortirait du calendrier du lot : "
-                        "reprogrammez-la d'abord."
-                    )
-                }
-            )
-        act_apres = parent.activites.filter(
-            supprime_le__isnull=True,
-            date_fin_prevue__gt=fin_cible,
-        ).first()
-        if act_apres:
-            raise ValidationError(
-                {
-                    "date_fin_prevue": (
-                        f"L'activité {act_apres.libelle} sortirait du calendrier du lot : "
-                        "reprogrammez-la d'abord."
+                        f"« {apres.libelle} » finit le {formater_date(apres.date_fin_prevue)} "
+                        f"et sortirait du calendrier {nom_parent} : reprogrammez-la d'abord."
                     )
                 }
             )

@@ -53,7 +53,7 @@ class RapportListCreateView(APIView):
 
     @extend_schema(
         summary="Lister les rapports de chantier",
-        description="Retourne la liste paginée des rapports journaliers, filtrable par projet, lot, statut, dates et auteur.",
+        description="Retourne la liste paginée des rapports journaliers, filtrable par projet, statut, dates et auteur.",
         responses={200: RapportJournalierListSerializer(many=True)},
     )
     def get(self, request):
@@ -100,7 +100,7 @@ class RapportDetailView(APIView):
     def get(self, request, pk):
         rapport = get_object_or_404(
             RapportJournalier.objects.select_related(
-                "projet", "lot", "auteur", "valide_par"
+                "projet", "auteur", "valide_par"
             ),
             pk=pk,
         )

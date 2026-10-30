@@ -32,27 +32,21 @@ def notifier_dg_derive_delai(
 ) -> int:
     """Alerte par email la Direction Générale en cas de report supérieur à 30 jours (US-033)."""
     from apps.accounts.models import Utilisateur
-    from apps.projets.models import Activite, Lot, Projet
+    from apps.projets.models import Element, Projet
 
     def _traiter() -> int:
         instance = None
         projet = None
-        lot = None
-        activite = None
+        element = None
 
         if type_objet == "PROJET":
             instance = projet = Projet.objects.filter(id=objet_id).first()
-        elif type_objet == "LOT":
-            lot = instance = Lot.objects.select_related("projet").filter(id=objet_id).first()
-            if lot:
-                projet = lot.projet
-        elif type_objet == "ACTIVITE":
-            activite = instance = (
-                Activite.objects.select_related("lot", "lot__projet").filter(id=objet_id).first()
+        else:
+            element = instance = (
+                Element.objects.select_related("projet", "niveau").filter(id=objet_id).first()
             )
-            if activite:
-                lot = activite.lot
-                projet = lot.projet
+            if element:
+                projet = element.projet
 
         if not instance or not projet:
             logger.warning(
@@ -74,18 +68,13 @@ def notifier_dg_derive_delai(
             logger.info("Aucun destinataire DG trouvé pour l'alerte dérive (schéma: %s).", schema_name)
             return 0
 
-        type_libelles = {
-            "PROJET": "Projet",
-            "LOT": "Lot de travaux",
-            "ACTIVITE": "Activité",
-        }
-
         contexte = {
-            "type_objet_libelle": type_libelles.get(type_objet, type_objet),
+            # Le libellé du niveau de la case (« Lot », « Ouvrage »…), jamais un type figé.
+            "type_objet_libelle": element.niveau.libelle if element else "Projet",
             "objet_nom": str(instance),
             "projet_nom": projet.nom,
-            "lot_nom": lot.libelle if lot else None,
-            "activite_nom": activite.libelle if activite else None,
+            "lot_nom": None,
+            "activite_nom": element.libelle if element else None,
             "date_fin_baseline": getattr(instance, "date_fin_baseline", None),
             "nouvelle_date_fin": getattr(instance, "date_fin_prevue", None),
             "jours_derive": jours_derive,
@@ -123,16 +112,15 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
     3. Évalue ensuite le statut de chaque projet via evaluer_statut_projet.
     """
     from apps.chantier.models import RapportJournalier
-    from apps.core.enums import StatutActivite, StatutEntreprise, StatutLot, StatutRapport
-    from apps.projets.models import Activite, Lot, Projet
+    from apps.core.enums import StatutEntreprise, StatutRapport
+    from apps.projets.models import Projet
     from apps.projets.services.alertes_retard import detecter_alertes_retard
     from apps.projets.services.avancement import synchroniser_rapport_approuve
     from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
     from apps.projets.services.machine_etats import (
         STATUTS_PROJET_MANUELS_FIXES,
-        evaluer_statut_activite,
-        evaluer_statut_lot,
         evaluer_statut_projet,
+        evaluer_statuts_arbre,
     )
     from apps.tenants.models import Entreprise
 
@@ -168,32 +156,14 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                             exc_info=True,
                         )
 
-                # Évaluation préalable des activités et lots (mise à jour calendaire)
-                activites = Activite.objects.filter(supprime_le__isnull=True).exclude(
-                    statut__in=[StatutActivite.CLOTURE, StatutActivite.SUSPENDU]
-                )
-                for act in activites.iterator():
+                # Évaluation préalable des cases de chaque arbre (mise à jour calendaire)
+                for projet_arbre in Projet.objects.filter(supprime_le__isnull=True).iterator():
                     try:
-                        evaluer_statut_activite(act)
+                        evaluer_statuts_arbre(projet_arbre)
                     except Exception as err:
                         logger.error(
-                            "Erreur d'évaluation du statut de l'activité %s (tenant %s) : %s",
-                            act.id,
-                            ent.schema_name,
-                            err,
-                            exc_info=True,
-                        )
-
-                lots = Lot.objects.filter(supprime_le__isnull=True).exclude(
-                    statut__in=[StatutLot.CLOTURE, StatutLot.SUSPENDU]
-                )
-                for lot in lots.iterator():
-                    try:
-                        evaluer_statut_lot(lot)
-                    except Exception as err:
-                        logger.error(
-                            "Erreur lors de l'évaluation du statut du lot %s (tenant %s) : %s",
-                            lot.id,
+                            "Erreur d'évaluation des cases du projet %s (tenant %s) : %s",
+                            projet_arbre.id,
                             ent.schema_name,
                             err,
                             exc_info=True,

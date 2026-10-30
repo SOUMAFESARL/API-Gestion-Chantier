@@ -4,19 +4,19 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Prefetch, Q
+from django.db.models import Q
 
 from apps.chantier.models import JournalChantier, RelanceJournal
 from apps.chantier.services.journal import (
     affectations_actives,
     aujourdhui,
-    lots_disponibles,
+    cases_du_journal,
     premier_jour_rapport,
     statut_journal,
 )
 from apps.core.enums import ModeExecution
 from apps.core.permissions import filtrer_queryset_par_affectations
-from apps.projets.models import Activite, Projet
+from apps.projets.models import Projet
 from apps.projets.services.calendrier_ouvre import calendrier_entreprise
 from apps.projets.services.referentiels import (
     libelle_mode_execution,
@@ -101,28 +101,16 @@ def contexte_projet(projet, jour):
     from apps.projets.services.avancement import quantites_synchronisees
 
     intervenants = dict.fromkeys(("CC", "CT", "CP"), "")
-    # Le chef de chantier d'un lot est celui que l'affectation y rattache ; à défaut de lot sur
-    # son affectation, le premier chef de chantier du projet sans lot reste le repli (données
-    # antérieures).
-    chefs_par_lot: dict = {}
-    chef_sans_lot = ""
+    # Un seul chef de chantier par projet : c'est lui qui tient le journal.
     for affectation in affectations_actives(projet.id).order_by("cree_le"):
         if affectation.role_projet in intervenants and not intervenants[affectation.role_projet]:
             intervenants[affectation.role_projet] = nom(affectation.utilisateur)
-        if affectation.role_projet == "CC":
-            if affectation.lot_id:
-                chefs_par_lot.setdefault(affectation.lot_id, nom(affectation.utilisateur))
-            elif not chef_sans_lot:
-                chef_sans_lot = nom(affectation.utilisateur)
     if projet.chef_projet_id:
         intervenants["CP"] = nom(projet.chef_projet)
-    # Une seule table code → (mode de base, libellé) pour tous les lots du projet.
+    # Une seule table code → (mode de base, libellé) pour toutes les cases du projet.
     table_modes = table_modes_execution()
-    lots = list(
-        lots_disponibles(projet).prefetch_related(
-            Prefetch("activites", queryset=Activite.objects.filter(est_actif=True))
-        )
-    )
+    cases = cases_du_journal(projet)
+    numeros = cases.arbre.numerotation()
     # Les journaux antérieurs constituent le cumul déclaratif du journal.
     # La quantité du planning n'est pas modifiée par une saisie de journal.
     cumuls = defaultdict(float)
@@ -144,27 +132,30 @@ def contexte_projet(projet, jour):
             cumuls[ligne["activite_id"]] += ligne["quantite_jour"] or 0
     synchronisees = quantites_synchronisees(projet)
     charges_lots, charges_activites, sections = [], [], []
-    for lot in lots:
-        base = mode_base(lot.mode_execution, table_modes)
+    for id_groupe, groupe in cases.groupes.items():
+        mode = cases.mode(groupe)
+        base = mode_base(mode, table_modes)
+        code_groupe = groupe.code or numeros.get(groupe.pk) or ""
         charges_lots.append(
             {
-                "id": str(lot.id),
-                "code": lot.code,
-                "nom": lot.libelle,
+                "id": id_groupe,
+                "code": code_groupe,
+                # Le chemin complet distingue deux cases homonymes sous des parents différents.
+                "nom": " / ".join(cases.arbre.chemin_libelles(groupe)),
                 # Le formulaire raisonne sur le mode de base ; le libellé garde le mode choisi.
                 "mode_execution": "REGIE_DIRECTE" if base == ModeExecution.REGIE else base,
-                "mode_execution_libelle": libelle_mode_execution(lot.mode_execution, table_modes),
+                "mode_execution_libelle": libelle_mode_execution(mode, table_modes),
                 "projet_id": str(projet.id),
                 "projet_nom": projet.nom,
                 "projet_reference": projet.reference,
-                # Un lot sans chef rattaché prend le chef sans lot, jamais celui d'un autre lot.
-                "chef_chantier_nom": chefs_par_lot.get(lot.id, chef_sans_lot),
+                "chef_chantier_nom": intervenants["CC"],
             }
         )
-        for section in SECTIONS.get(base, []):
-            if section not in sections:
-                sections.append(section)
-        for rang, activite in enumerate(lot.activites.all(), 1):
+        for activite in cases.feuilles_par_groupe[id_groupe]:
+            base_feuille = mode_base(cases.mode(activite), table_modes)
+            for section in SECTIONS.get(base_feuille, []):
+                if section not in sections:
+                    sections.append(section)
             identifiant = str(activite.id)
             # La base de repli retire les quantités synchronisées pour ne pas imputer à la veille
             # des quantités déjà reportées par des rapports approuvés postérieurs au jour visé.
@@ -174,14 +165,14 @@ def contexte_projet(projet, jour):
             charges_activites.append(
                 {
                     "activite_id": identifiant,
-                    "lot_id": str(lot.id),
+                    "lot_id": id_groupe,
                     "suivi": "PRODUCTION"
-                    if base == ModeExecution.SOUS_TRAITANCE_INFORMELLE
+                    if base_feuille == ModeExecution.SOUS_TRAITANCE_INFORMELLE
                     else "AVANCEMENT",
-                    "code": f"{lot.code}.{rang:02d}",
+                    "code": activite.code or numeros.get(activite.pk) or "",
                     "libelle": activite.libelle,
                     "unite": activite.unite,
-                    "quantite_prevue": float(activite.quantite_prevue),
+                    "quantite_prevue": float(activite.quantite_prevue or 0),
                     "cumul_veille": bases.get(identifiant, base_repli) + cumuls[identifiant],
                     "avancement_theorique": theorique(
                         activite.date_debut_prevue, activite.date_fin_prevue, jour

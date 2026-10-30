@@ -220,8 +220,7 @@ class TypeObjetLie(models.TextChoices):
     """Cibles autorisées d'une liaison de document (RG-15)."""
 
     PROJET = "PROJET", "Projet"
-    LOT = "LOT", "Lot"
-    ACTIVITE = "ACTIVITE", "Activité"
+    ELEMENT = "ELEMENT", "Case du découpage"
     RAPPORT = "RAPPORT", "Rapport journalier"
     BON_PAIEMENT = "BON_PAIEMENT", "Bon de paiement"
     CONTRAT = "CONTRAT", "Contrat"

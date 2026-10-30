@@ -50,6 +50,14 @@ class ReprogrammationRequestSerializer(serializers.Serializer):
         trim_whitespace=True,
         help_text="Explication détaillée du report (au moins 30 caractères, RG-11).",
     )
+    prolonger = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text=(
+            "Confirme la prolongation des cases parentes que la nouvelle date dépasse "
+            "(listées par l'erreur `prolongation_requise`)."
+        ),
+    )
 
     def validate_justification(self, value: str) -> str:
         propre = value.strip()
@@ -104,25 +112,28 @@ class HistoriqueDateSerializer(serializers.ModelSerializer):
         return obj.auteur.email if obj.auteur else None
 
     def get_objet_id(self, obj: HistoriqueDate) -> str | None:
-        cible = obj.activite or obj.lot or obj.projet
+        cible = obj.element or obj.projet
         return str(cible.id) if cible else None
 
     def get_objet_libelle(self, obj: HistoriqueDate) -> str:
-        cible = obj.activite or obj.lot or obj.projet
+        cible = obj.element or obj.projet
         if not cible:
             return ""
         return getattr(cible, "libelle", getattr(cible, "nom", str(cible)))
 
+    def _projet(self, obj):
+        return obj.projet or (obj.element.projet if obj.element else None)
+
     def get_projet_id(self, obj: HistoriqueDate) -> str | None:
-        p = obj.projet or (obj.lot.projet if obj.lot else (obj.activite.lot.projet if obj.activite else None))
+        p = self._projet(obj)
         return str(p.id) if p else None
 
     def get_projet_reference(self, obj: HistoriqueDate) -> str | None:
-        p = obj.projet or (obj.lot.projet if obj.lot else (obj.activite.lot.projet if obj.activite else None))
+        p = self._projet(obj)
         return p.reference if p else None
 
     def get_projet_nom(self, obj: HistoriqueDate) -> str | None:
-        p = obj.projet or (obj.lot.projet if obj.lot else (obj.activite.lot.projet if obj.activite else None))
+        p = self._projet(obj)
         return p.nom if p else None
 
 
@@ -138,3 +149,8 @@ class ReprogrammationResponseSerializer(serializers.Serializer):
     jours_derive_baseline = serializers.IntegerField()
     alerte_dg_declenchee = serializers.BooleanField()
     historiques = HistoriqueDateSerializer(many=True)
+    prolongations = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        help_text="Les cases parentes (et le projet) prolongées pour que les dates y tiennent.",
+    )

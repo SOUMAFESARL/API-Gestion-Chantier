@@ -5,18 +5,17 @@ en base sont concentrées ici.
 """
 
 from datetime import date
-from uuid import UUID
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.models import Utilisateur
 from apps.chantier.models import RapportJournalier
 from apps.chantier.selectors.rapport_journalier import rapport_existe
 from apps.core.enums import Meteo, StatutRapport
 from apps.core.exceptions import ErreurMetier, RapportDejaExistant, RapportNonModifiable
-from apps.projets.models import Lot, Projet
+from apps.projets.models import Projet
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 __all__ = [
@@ -44,7 +43,6 @@ def creer_rapport_journalier(
     projet: Projet,
     auteur: Utilisateur,
     date_rapport: date,
-    lot: Lot | None = None,
     meteo: str = Meteo.ENSOLEILLE,
     effectif_regie: int = 0,
     effectif_tacherons: int = 0,
@@ -56,18 +54,13 @@ def creer_rapport_journalier(
     cree_par: Utilisateur | None = None,
 ) -> RapportJournalier:
     """Crée un rapport journalier en validant l'unicité et les règles métier."""
-    # Vérification de cohérence lot / projet
-    if lot is not None and lot.projet_id != projet.id:
-        raise ValidationError(
-            {"lot": "Le lot sélectionné n'appartient pas au projet spécifié."}
-        )
+    from apps.chantier.services.journal import tient_fonction
 
-    # Règle RG-02 / US-038 : Unicité par lot (ou projet sans lot) et date
-    if rapport_existe(
-        projet_id=projet.id,
-        lot_id=lot.id if lot else None,
-        date_rapport=date_rapport,
-    ):
+    # Seul le chef de chantier du projet écrit le rapport du jour (29/10/2026).
+    if not tient_fonction(projet, auteur, "CC"):
+        raise PermissionDenied("Seul le chef de chantier du projet écrit le journal.")
+    # Règle RG-02 / US-038 : un seul rapport par projet et par jour (un seul chef de chantier)
+    if rapport_existe(projet_id=projet.id, date_rapport=date_rapport):
         raise RapportDejaExistant()
 
     # Calcul d'effectif total si non fourni
@@ -79,7 +72,6 @@ def creer_rapport_journalier(
 
     rapport = RapportJournalier.objects.create(
         projet=projet,
-        lot=lot,
         auteur=auteur,
         date_rapport=date_rapport,
         meteo=meteo,
@@ -93,11 +85,6 @@ def creer_rapport_journalier(
         origine=origine,
         cree_par=cree_par or auteur,
     )
-
-    # Règle RG-03 : Dès qu'un premier rapport est soumis sur un lot, verrouillage
-    if est_soumis and lot is not None and not lot.premier_rapport_soumis:
-        lot.premier_rapport_soumis = True
-        lot.save(update_fields=["premier_rapport_soumis", "modifie_le"])
 
     if est_soumis:
         declencher_recalcul_sante(
@@ -123,29 +110,20 @@ def modifier_rapport_journalier(
         raise RapportNonModifiable()
 
     nouvelle_date = champs.get("date_rapport", rapport.date_rapport)
-    nouveau_lot = champs.get("lot", rapport.lot)
     nouveau_projet = champs.get("projet", rapport.projet)
 
-    # Vérification de cohérence lot / projet si l'un a changé
-    if nouveau_lot is not None and nouveau_lot.projet_id != nouveau_projet.id:
-        raise ValidationError(
-            {"lot": "Le lot sélectionné n'appartient pas au projet spécifié."}
-        )
-
-    # Vérification d'unicité si la date ou le lot a changé
-    if nouvelle_date != rapport.date_rapport or nouveau_lot != rapport.lot:
-        if rapport_existe(
-            projet_id=nouveau_projet.id,
-            lot_id=nouveau_lot.id if nouveau_lot else None,
-            date_rapport=nouvelle_date,
-            exclure_id=rapport.id,
-        ):
-            raise RapportDejaExistant()
+    # Vérification d'unicité si la date ou le projet a changé
+    change = nouvelle_date != rapport.date_rapport or nouveau_projet != rapport.projet
+    if change and rapport_existe(
+        projet_id=nouveau_projet.id,
+        date_rapport=nouvelle_date,
+        exclure_id=rapport.id,
+    ):
+        raise RapportDejaExistant()
 
     # Application des modifications
     champs_modifiables = [
         "projet",
-        "lot",
         "date_rapport",
         "meteo",
         "effectif_regie",
@@ -162,9 +140,7 @@ def modifier_rapport_journalier(
 
     # Re-calcul effectif_present si non spécifié explicitement
     if "effectif_present" not in champs:
-        rapport.effectif_present = (rapport.effectif_regie or 0) + (
-            rapport.effectif_tacherons or 0
-        )
+        rapport.effectif_present = (rapport.effectif_regie or 0) + (rapport.effectif_tacherons or 0)
 
     rapport.save()
     return rapport
@@ -184,11 +160,6 @@ def soumettre_rapport_journalier(
     rapport.statut = StatutRapport.SOUMIS
     rapport.soumis_le = timezone.now()
     rapport.save(update_fields=["statut", "soumis_le", "modifie_le"])
-
-    # Règle RG-03 : verrouillage irréversible du lot au premier rapport soumis
-    if rapport.lot is not None and not rapport.lot.premier_rapport_soumis:
-        rapport.lot.premier_rapport_soumis = True
-        rapport.lot.save(update_fields=["premier_rapport_soumis", "modifie_le"])
 
     declencher_recalcul_sante(
         projet_id=rapport.projet_id,

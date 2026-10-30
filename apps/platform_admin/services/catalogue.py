@@ -24,6 +24,7 @@ from django_tenants.utils import schema_context
 
 from apps.accounts.models import Module, Permission, Role, RoleModulePermission
 from apps.catalogue.models import CatalogueModule, CataloguePermission, EntrepriseModule
+from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
 from apps.tenants.models import Entreprise
 
 __all__ = [
@@ -946,11 +947,8 @@ def propager_roles_systeme(acteur=None) -> dict:
 
     for ea in entreprises:
         with schema_context("public"):
-            em_qs = list(EntrepriseModule.objects.filter(entreprise=ea, supprime_le__isnull=True))
-            inactifs = {m.module.code.lower() for m in em_qs if not m.est_actif and m.module}
-            actifs_souscrits = {m.module.code.lower() for m in em_qs if m.est_actif and m.module}
-            tous_actifs = set(cat_modules_map.keys())
-            modules_actifs_ea = (tous_actifs | actifs_souscrits) - inactifs
+            # Même règle que les droits : le catalogue décide (`apps.core.modules_actifs`).
+            modules_actifs_ea = codes_modules_actifs(ea) - MODULES_SYSTEME
 
         with schema_context(ea.schema_name):
             with transaction.atomic():

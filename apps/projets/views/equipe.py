@@ -1,45 +1,71 @@
+"""Routes des équipes de chantier et du registre de main-d'œuvre.
+
+Gérer les équipes exige `projets.gerer_equipes` (par défaut : chef de projet et conducteur de
+travaux) ; le registre de main-d'œuvre, `projets.main_oeuvre_gerer` (mêmes défauts). Les
+écritures rendent `avertissements` : ce qui mérite l'attention sans rien refuser.
+"""
+
 from django.db import transaction
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework import serializers
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.droits import APermission
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import (
-    Activite,
-    AffectationEquipeActivite,
+    AffectationEquipeElement,
+    Element,
     EquipeChantier,
     MembreEquipeChantier,
+    PersonneMainOeuvre,
     Projet,
 )
 from apps.projets.serializers.equipe import (
-    CandidatEquipeSerializer,
+    AffectationEquipeCreationSerializer,
+    AffectationEquipeSerializer,
     EquipeCreationSerializer,
-    EquipeResponseSerializer,
-    MembreEquipeCreateSerializer,
-    MembreEquipeUpdateSerializer,
+    EquipeModificationSerializer,
+    EquipeSerializer,
+    MembreCreationSerializer,
+    MembreModificationSerializer,
+    MembreSerializer,
+    PersonneCreationSerializer,
+    PersonneModificationSerializer,
+    PersonneSerializer,
 )
-from apps.projets.services.equipes import (
-    ajouter_membre_equipe,
-    candidats_equipes_projet,
-    modifier_role_membre,
-    retirer_membre_equipe,
-)
-from apps.projets.services.statistiques import pourcentage_realise
+from apps.projets.services import equipes as service
+from apps.projets.services import main_oeuvre
 
+__all__ = [
+    "MainOeuvreDetailView",
+    "MainOeuvreListCreateView",
+    "ProjetEquipeAffectationDetailView",
+    "ProjetEquipeAffectationView",
+    "ProjetEquipeDetailView",
+    "ProjetEquipeListCreateView",
+    "ProjetEquipeMembreDetailView",
+    "ProjetEquipeMembreListCreateView",
+    "ProjetEquipeStatistiquesView",
+]
+
+TAGS = ["équipes"]
 ERREURS_EQUIPES = {
     401: OpenApiResponse(description="Authentification requise."),
     403: OpenApiResponse(description="Accès au projet refusé."),
-    404: OpenApiResponse(description="Projet, équipe ou activité absent du projet ou supprimé."),
+    404: OpenApiResponse(description="Projet, équipe ou case absent du projet ou supprimé."),
 }
 
 
 class BaseEquipeView(APIView):
     permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
 
     def projet(self, request, pk, verrou=False):
         qs = Projet.objects.select_for_update() if verrou else Projet.objects.all()
@@ -53,425 +79,398 @@ class BaseEquipeView(APIView):
 
 
 def equipes_projet(projet):
-    return projet.equipes.select_related("chef_utilisateur").prefetch_related(
-        "membres__utilisateur"
+    return projet.equipes.select_related("entreprise_partenaire").prefetch_related(
+        "membres__personne__entreprise_partenaire",
+        "affectations_elements__element__niveau",
+    )
+
+
+def _reponse_equipe(equipe, avertissements=None, statut=200, historique=False):
+    equipe = equipes_projet(equipe.projet).get(pk=equipe.pk)
+    return Response(
+        {
+            **EquipeSerializer(equipe, context={"historique": historique}).data,
+            "avertissements": avertissements or [],
+        },
+        status=statut,
     )
 
 
 class ProjetEquipeListCreateView(BaseEquipeView):
-    def get_permissions(self):
-        if self.request.method == "POST":
-            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
-        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+    """`GET`/`POST /api/v1/projets/{id}/equipes/`."""
 
     @extend_schema(
-        tags=["équipes"],
+        tags=TAGS,
         summary="Lister les équipes du projet",
-        responses={200: EquipeResponseSerializer(many=True), **ERREURS_EQUIPES},
+        parameters=[
+            OpenApiParameter("historique", bool, description="Inclure les membres partis.")
+        ],
+        responses={200: EquipeSerializer(many=True), **ERREURS_EQUIPES},
     )
     def get(self, request, pk):
+        historique = request.query_params.get("historique", "false").lower() == "true"
         return Response(
-            EquipeResponseSerializer(
+            EquipeSerializer(
                 equipes_projet(self.projet(request, pk)),
                 many=True,
+                context={"historique": historique},
             ).data
         )
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Constituer une équipe du chantier",
+        tags=TAGS,
+        summary="Créer une équipe",
         description=(
-            "Chef et membres : utilisateur_id d'un collaborateur actif affecté au projet, "
-            "ou nom libre. Saisir un nom ne crée pas de compte et ne donne aucun accès. "
-            "Tous les utilisateurs authentifiés ayant accès au projet peuvent constituer "
-            "une équipe. Maximum 100 personnes, chef compris."
+            "Rattachée à notre entreprise (`entreprise_partenaire_id` vide) ou à un partenaire "
+            "(sous-traitant, tâcheron, prestataire). Les membres viennent du registre de "
+            "main-d'œuvre ; un seul chef, de la même entreprise que l'équipe."
         ),
         request=EquipeCreationSerializer,
-        responses={
-            201: EquipeResponseSerializer,
-            400: OpenApiResponse(
-                description="Champs invalides, personne dupliquée ou hors projet."
-            ),
-            **ERREURS_EQUIPES,
-        },
-        examples=[
-            OpenApiExample(
-                "Équipe maçonnerie",
-                request_only=True,
-                value={
-                    "nom": "Équipe Maçonnerie B",
-                    "nature": "INTERNE",
-                    "corps_etat": "Maçonnerie",
-                    "chef": {"nom": "Chef chantier"},
-                    "membres": [{"nom": "Ouvrier 1", "fonction": "OUVRIER"}],
-                },
-            )
-        ],
+        responses={201: EquipeSerializer, **ERREURS_EQUIPES},
     )
     @transaction.atomic
     def post(self, request, pk):
         projet = self.projet(request, pk, verrou=True)
-        serializer = EquipeCreationSerializer(
-            data=request.data, context={"projet": projet, "request": request}
+        donnees = EquipeCreationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        v = donnees.validated_data
+        equipe, avertissements = service.creer_equipe(
+            projet,
+            nom=v["nom"],
+            corps_etat=v["corps_etat"],
+            entreprise_partenaire=v["entreprise_partenaire_id"],
+            membres=[dict(m) for m in v["membres"]],
+            createur=request.user,
         )
-        serializer.is_valid(raise_exception=True)
-        return Response(EquipeResponseSerializer(serializer.save()).data, status=201)
-
-
-class ProjetEquipeCandidatsView(BaseEquipeView):
-    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.gerer_equipes")]
-
-    @extend_schema(
-        tags=["équipes"],
-        summary="Lister les collaborateurs que l'on peut ajouter à une équipe",
-        description=(
-            "Les collaborateurs actifs affectés au projet, avec leur rôle sur le projet et les "
-            "équipes du projet dont ils sont déjà membres. Une personne peut appartenir à "
-            "plusieurs équipes : elle reste proposée."
-        ),
-        responses={200: CandidatEquipeSerializer(many=True), **ERREURS_EQUIPES},
-    )
-    def get(self, request, pk):
-        projet = self.projet(request, pk)
-        return Response(CandidatEquipeSerializer(candidats_equipes_projet(projet), many=True).data)
+        return _reponse_equipe(equipe, avertissements, statut=status.HTTP_201_CREATED)
 
 
 class ProjetEquipeDetailView(BaseEquipeView):
-    def get_permissions(self):
-        if self.request.method in ("DELETE", "PUT", "PATCH"):
-            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
-        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+    """`GET`/`PATCH`/`DELETE /api/v1/projets/{id}/equipes/{equipe_id}/`."""
 
-    @extend_schema(
-        tags=["équipes"],
-        summary="Consulter une équipe du projet",
-        responses={200: EquipeResponseSerializer, **ERREURS_EQUIPES},
-    )
+    @extend_schema(tags=TAGS, summary="Consulter une équipe", responses={200: EquipeSerializer})
     def get(self, request, pk, equipe_id):
         projet = self.projet(request, pk)
         equipe = get_object_or_404(equipes_projet(projet), pk=equipe_id)
-        return Response(EquipeResponseSerializer(equipe).data)
+        historique = request.query_params.get("historique", "true").lower() == "true"
+        return Response(EquipeSerializer(equipe, context={"historique": historique}).data)
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Supprimer logiquement une équipe",
-        responses={204: OpenApiResponse(description="Équipe supprimée."), **ERREURS_EQUIPES},
+        tags=TAGS,
+        summary="Modifier une équipe",
+        request=EquipeModificationSerializer,
+        responses={200: EquipeSerializer},
     )
+    def patch(self, request, pk, equipe_id):
+        projet = self.projet(request, pk)
+        equipe = get_object_or_404(EquipeChantier, projet=projet, pk=equipe_id)
+        donnees = EquipeModificationSerializer(data=request.data, partial=True)
+        donnees.is_valid(raise_exception=True)
+        valides = dict(donnees.validated_data)
+        if "entreprise_partenaire_id" in valides:
+            valides["entreprise_partenaire"] = valides.pop("entreprise_partenaire_id")
+        equipe, avertissements = service.modifier_equipe(equipe, donnees=valides)
+        return _reponse_equipe(equipe, avertissements)
+
+    @extend_schema(tags=TAGS, summary="Supprimer une équipe", responses={204: None})
     @transaction.atomic
     def delete(self, request, pk, equipe_id):
         projet = self.projet(request, pk, verrou=True)
         equipe = get_object_or_404(EquipeChantier, projet=projet, pk=equipe_id)
+        for affectation in equipe.affectations_elements.all():
+            affectation.delete(utilisateur=request.user)
         equipe.delete(utilisateur=request.user)
-        return Response(status=204)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjetEquipeMembreListCreateView(BaseEquipeView):
-    def get_permissions(self):
-        return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+    """`POST /api/v1/projets/{id}/equipes/{equipe_id}/membres/` — ajouter un membre du registre."""
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Ajouter un membre à une équipe de chantier",
-        request=MembreEquipeCreateSerializer,
-        responses={
-            201: EquipeResponseSerializer,
-            400: OpenApiResponse(description="Champs invalides, personne non affectée ou doublon."),
-            **ERREURS_EQUIPES,
-        },
+        tags=TAGS,
+        summary="Ajouter un membre",
+        description=(
+            "La personne vient du registre de main-d'œuvre. Une personne déjà dans une autre "
+            "équipe le même jour est acceptée, avec un avertissement."
+        ),
+        request=MembreCreationSerializer,
+        responses={201: MembreSerializer, **ERREURS_EQUIPES},
     )
-    @transaction.atomic
     def post(self, request, pk, equipe_id):
-        projet = self.projet(request, pk, verrou=True)
-        equipe = get_object_or_404(
-            EquipeChantier, pk=equipe_id, projet=projet, supprime_le__isnull=True
+        projet = self.projet(request, pk)
+        equipe = get_object_or_404(EquipeChantier, projet=projet, pk=equipe_id)
+        donnees = MembreCreationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        membre, avertissements = service.ajouter_membre(
+            equipe, createur=request.user, **donnees.validated_data
         )
-        serializer = MembreEquipeCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        ajouter_membre_equipe(
-            equipe,
-            utilisateur=serializer.validated_data.get("utilisateur"),
-            prenom=serializer.validated_data.get("prenom", ""),
-            nom=serializer.validated_data.get("nom", ""),
-            role=serializer.validated_data.get("role", "OUVRIER"),
-            createur=request.user,
+        return Response(
+            {**MembreSerializer(membre).data, "avertissements": avertissements},
+            status=status.HTTP_201_CREATED,
         )
-        equipe.refresh_from_db()
-        return Response(EquipeResponseSerializer(equipe).data, status=201)
 
 
 class ProjetEquipeMembreDetailView(BaseEquipeView):
-    def get_permissions(self):
-        return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
+    """`PATCH`/`DELETE /api/v1/projets/{id}/equipes/{equipe_id}/membres/{membre_id}/`.
+
+    `DELETE` enregistre un départ daté (`?date_depart=AAAA-MM-JJ`, aujourd'hui par défaut) ;
+    `?supprimer=true` efface une erreur de saisie.
+    """
+
+    def _membre(self, request, pk, equipe_id, membre_id):
+        projet = self.projet(request, pk)
+        equipe = get_object_or_404(EquipeChantier, projet=projet, pk=equipe_id)
+        return get_object_or_404(
+            MembreEquipeChantier.objects.select_related("personne", "equipe"),
+            pk=membre_id,
+            equipe=equipe,
+        )
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Modifier le rôle d'un membre d'équipe",
-        request=MembreEquipeUpdateSerializer,
-        responses={
-            200: EquipeResponseSerializer,
-            400: OpenApiResponse(description="Rôle invalide."),
-            **ERREURS_EQUIPES,
-        },
+        tags=TAGS,
+        summary="Modifier un membre (fonction, chef, arrivée, départ)",
+        request=MembreModificationSerializer,
+        responses={200: MembreSerializer},
     )
-    @transaction.atomic
     def patch(self, request, pk, equipe_id, membre_id):
-        projet = self.projet(request, pk, verrou=True)
-        equipe = get_object_or_404(
-            EquipeChantier, pk=equipe_id, projet=projet, supprime_le__isnull=True
+        membre = self._membre(request, pk, equipe_id, membre_id)
+        donnees = MembreModificationSerializer(data=request.data, partial=True)
+        donnees.is_valid(raise_exception=True)
+        membre, avertissements = service.modifier_membre(
+            membre, donnees=dict(donnees.validated_data)
         )
-        membre = get_object_or_404(
-            MembreEquipeChantier, pk=membre_id, equipe=equipe, supprime_le__isnull=True
-        )
-        serializer = MembreEquipeUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        modifier_role_membre(membre, serializer.validated_data["role"])
-        equipe.refresh_from_db()
-        return Response(EquipeResponseSerializer(equipe).data, status=200)
+        return Response({**MembreSerializer(membre).data, "avertissements": avertissements})
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Retirer un membre d'une équipe de chantier",
-        responses={204: OpenApiResponse(description="Membre retiré."), **ERREURS_EQUIPES},
+        tags=TAGS,
+        summary="Enregistrer le départ d'un membre",
+        parameters=[
+            OpenApiParameter(
+                "date_depart", str, description="AAAA-MM-JJ ; aujourd'hui par défaut."
+            ),
+            OpenApiParameter("supprimer", bool, description="Efface une erreur de saisie."),
+        ],
+        responses={204: None},
     )
-    @transaction.atomic
     def delete(self, request, pk, equipe_id, membre_id):
-        projet = self.projet(request, pk, verrou=True)
-        equipe = get_object_or_404(
-            EquipeChantier, pk=equipe_id, projet=projet, supprime_le__isnull=True
+        membre = self._membre(request, pk, equipe_id, membre_id)
+        date_depart = None
+        if request.query_params.get("date_depart"):
+            date_depart = serializers.DateField().run_validation(
+                request.query_params["date_depart"]
+            )
+        service.retirer_membre(
+            membre,
+            date_depart=date_depart,
+            supprimer=request.query_params.get("supprimer", "false").lower() == "true",
+            utilisateur=request.user,
         )
-        membre = get_object_or_404(
-            MembreEquipeChantier, pk=membre_id, equipe=equipe, supprime_le__isnull=True
-        )
-        retirer_membre_equipe(membre)
-        return Response(status=204)
-
-
-class AffectationEquipeSerializer(serializers.Serializer):
-    equipe_id = serializers.UUIDField()
-    activite_id = serializers.UUIDField()
-
-
-class AffectationEquipeResponseSerializer(serializers.ModelSerializer):
-    equipe_id = serializers.UUIDField(read_only=True)
-    activite_id = serializers.UUIDField(read_only=True)
-    equipe_nom = serializers.CharField(source="equipe.nom", read_only=True)
-    activite_libelle = serializers.CharField(source="activite.libelle", read_only=True)
-    lot_id = serializers.UUIDField(source="activite.lot_id", read_only=True)
-    lot_nom = serializers.CharField(source="activite.lot.libelle", read_only=True)
-    date_debut = serializers.DateField(
-        source="activite.date_debut_prevue", read_only=True, allow_null=True
-    )
-    date_fin = serializers.DateField(
-        source="activite.date_fin_prevue", read_only=True, allow_null=True
-    )
-    statut = serializers.CharField(source="activite.statut", read_only=True)
-    effectif = serializers.SerializerMethodField()
-
-    def get_effectif(self, obj) -> int:
-        return obj.equipe.membres.filter(supprime_le__isnull=True).count()
-
-    class Meta:
-        model = AffectationEquipeActivite
-        fields = [
-            "id",
-            "equipe_id",
-            "equipe_nom",
-            "activite_id",
-            "activite_libelle",
-            "lot_id",
-            "lot_nom",
-            "date_debut",
-            "date_fin",
-            "effectif",
-            "statut",
-        ]
-        read_only_fields = fields
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjetEquipeAffectationView(BaseEquipeView):
-    def get_permissions(self):
-        if self.request.method == "POST":
-            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
-        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+    """`GET`/`POST /api/v1/projets/{id}/equipes/affectations/` — poser une équipe sur une case.
+
+    Une équipe posée sur une case vaut pour tout le sous-arbre ; une case reçoit plusieurs
+    équipes ; une affectation plus bas remplace celle d'en haut pour sa branche.
+    """
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Lister les affectations équipe-activité",
-        description="Période et statut repris de l'activité ; effectif de l'équipe, chef compris.",
-        parameters=[
-            OpenApiParameter("lot_id", type=str, description="UUID du lot à filtrer."),
-            OpenApiParameter("equipe_id", type=str, description="UUID de l'équipe à filtrer."),
-            OpenApiParameter(
-                "recherche", type=str, description="Libellé de l'activité ou nom d'équipe."
-            ),
-        ],
-        responses={
-            200: AffectationEquipeResponseSerializer(many=True),
-            400: OpenApiResponse(description="Filtre UUID invalide."),
-            **ERREURS_EQUIPES,
-        },
+        tags=TAGS,
+        summary="Affectations des équipes",
+        responses={200: AffectationEquipeSerializer(many=True)},
     )
     def get(self, request, pk):
         projet = self.projet(request, pk)
-        affectations = (
-            AffectationEquipeActivite.objects.filter(
-                equipe__projet=projet,
-                equipe__supprime_le__isnull=True,
-                equipe__est_actif=True,
-                activite__supprime_le__isnull=True,
-                activite__est_actif=True,
-                activite__lot__supprime_le__isnull=True,
-                activite__lot__est_actif=True,
-            )
-            .select_related("equipe", "activite__lot")
-            .prefetch_related("equipe__membres")
-        )
-        for parametre, champ in (("lot_id", "activite__lot_id"), ("equipe_id", "equipe_id")):
-            if parametre in request.query_params:
-                valeur = serializers.UUIDField().run_validation(request.query_params[parametre])
-                affectations = affectations.filter(**{champ: valeur})
-        recherche = request.query_params.get("recherche", "").strip()
-        if recherche:
-            affectations = affectations.filter(
-                Q(activite__libelle__icontains=recherche) | Q(equipe__nom__icontains=recherche)
-            )
-        return Response(AffectationEquipeResponseSerializer(affectations, many=True).data)
+        affectations = AffectationEquipeElement.objects.filter(
+            equipe__projet=projet
+        ).select_related("element__niveau")
+        return Response(AffectationEquipeSerializer(affectations, many=True).data)
 
     @extend_schema(
-        tags=["équipes"],
-        summary="Affecter une équipe à une activité du projet",
-        description=(
-            "L'équipe choisie tient l'activité sur toute sa période. "
-            "Aucune date ni aucun effectif à saisir. Même projet obligatoire."
-        ),
-        examples=[
-            OpenApiExample(
-                "Affectation",
-                request_only=True,
-                value={
-                    "activite_id": "5cf6c2ca-c43b-4768-822c-8df817fb22b0",
-                    "equipe_id": "11111111-1111-4111-8111-111111111111",
-                },
-            )
-        ],
-        request=AffectationEquipeSerializer,
-        responses={
-            201: AffectationEquipeResponseSerializer,
-            400: OpenApiResponse(description="UUID invalide, doublon ou activité déjà terminée."),
-            **ERREURS_EQUIPES,
-        },
+        tags=TAGS,
+        summary="Affecter une équipe à une case",
+        request=AffectationEquipeCreationSerializer,
+        responses={201: AffectationEquipeSerializer},
     )
-    @transaction.atomic
     def post(self, request, pk):
-        projet = self.projet(request, pk, verrou=True)
-        serializer = AffectationEquipeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        projet = self.projet(request, pk)
+        donnees = AffectationEquipeCreationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
         equipe = get_object_or_404(
-            EquipeChantier, pk=serializer.validated_data["equipe_id"], projet=projet, est_actif=True
+            EquipeChantier, pk=donnees.validated_data["equipe_id"], projet=projet
         )
-        activite = get_object_or_404(
-            Activite.objects.select_related("lot"),
-            pk=serializer.validated_data["activite_id"],
-            lot__projet=projet,
-            est_actif=True,
-            lot__est_actif=True,
-            lot__supprime_le__isnull=True,
-        )
-        if pourcentage_realise(activite) >= 100:
-            raise serializers.ValidationError({"activite_id": "Activité déjà terminée."})
+        element = get_object_or_404(Element, pk=donnees.validated_data["element_id"], projet=projet)
+        from apps.projets.services.perimetres import exiger
 
-        # Décision 4.11 : une seule équipe par activité.
-        # Si une autre équipe était déjà affectée, la remplacer dans la même transaction.
-        affectation_existante = AffectationEquipeActivite.objects.filter(
-            activite=activite, supprime_le__isnull=True
-        ).first()
-        if affectation_existante:
-            if affectation_existante.equipe_id == equipe.id:
-                raise serializers.ValidationError("Équipe déjà affectée à cette activité.")
-            affectation_existante.supprime_le = timezone.now()
-            affectation_existante.save(update_fields=["supprime_le"])
-
-        affectation = AffectationEquipeActivite.objects.create(
-            equipe=equipe,
-            activite=activite,
-            cree_par=request.user,
+        exiger(request.user, "projets.gerer_equipes", projet, element, request=request)
+        affectation, avertissements = service.affecter_equipe(
+            equipe, element, createur=request.user
         )
-        return Response(AffectationEquipeResponseSerializer(affectation).data, status=201)
+        return Response(
+            {**AffectationEquipeSerializer(affectation).data, "avertissements": avertissements},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProjetEquipeAffectationDetailView(BaseEquipeView):
-    def get_permissions(self):
-        if self.request.method in ("DELETE", "PUT", "PATCH"):
-            return [IsAuthenticated(), GardePermissionProjet.pour("projets.gerer_equipes")()]
-        return [IsAuthenticated(), GardePermissionProjet.pour("projets.lire")()]
+    """`DELETE /api/v1/projets/{id}/equipes/affectations/{affectation_id}/`."""
 
-    @extend_schema(
-        tags=["équipes"],
-        summary="Retirer l'affectation d'une équipe",
-        responses={204: OpenApiResponse(description="Affectation retirée."), **ERREURS_EQUIPES},
-    )
-    @transaction.atomic
+    @extend_schema(tags=TAGS, summary="Retirer une équipe d'une case", responses={204: None})
     def delete(self, request, pk, affectation_id):
-        projet = self.projet(request, pk, verrou=True)
+        projet = self.projet(request, pk)
         affectation = get_object_or_404(
-            AffectationEquipeActivite, pk=affectation_id, equipe__projet=projet
+            AffectationEquipeElement, pk=affectation_id, equipe__projet=projet
         )
-        affectation.delete(utilisateur=request.user)
-        return Response(status=204)
+        service.retirer_affectation_equipe(affectation, utilisateur=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class StatistiquesEquipesSerializer(serializers.Serializer):
     equipes_count = serializers.IntegerField()
     effectif_mobilise = serializers.IntegerField()
-    activites_affectees = serializers.IntegerField()
-    activites_a_affecter = serializers.IntegerField()
+    feuilles_couvertes = serializers.IntegerField()
+    feuilles_a_couvrir = serializers.IntegerField()
 
 
 class ProjetEquipeStatistiquesView(BaseEquipeView):
+    """`GET /api/v1/projets/{id}/equipes/statistiques/`."""
+
     @extend_schema(
-        tags=["équipes"],
-        summary="Statistiques des équipes et affectations",
+        tags=TAGS,
+        summary="Statistiques des équipes",
         description=(
-            "Équipes actives, effectif chef compris ; collaborateurs identifiés dédupliqués. "
-            "Les activités terminées sont exclues des compteurs d'affectation."
+            "Équipes actives ; effectif présent (membres sans départ, personnes dédupliquées) ; "
+            "tâches ouvertes couvertes par une équipe, directement ou par héritage."
         ),
         responses={200: StatistiquesEquipesSerializer, **ERREURS_EQUIPES},
     )
     def get(self, request, pk):
+        from apps.projets.selectors.arbre import charger_arbre
+        from apps.projets.services.sante_calculs import calculer_avancement_physique_feuille
+
         projet = self.projet(request, pk)
-        equipes = list(equipes_projet(projet).filter(est_actif=True).prefetch_related("membres"))
-        personnes = set()
-        for equipe in equipes:
-            membres_actifs = [m for m in equipe.membres.all() if m.supprime_le is None]
-            has_chef_in_membres = False
-            for membre in membres_actifs:
-                if membre.fonction == "CHEF_EQUIPE":
-                    has_chef_in_membres = True
-                personnes.add(
-                    ("id", membre.utilisateur_id)
-                    if membre.utilisateur_id
-                    else ("membre_libre", membre.pk)
-                )
-            if not has_chef_in_membres:
-                if equipe.chef_utilisateur_id:
-                    personnes.add(("id", equipe.chef_utilisateur_id))
-                elif equipe.chef_nom and equipe.chef_nom.strip():
-                    personnes.add(("chef_libre", equipe.pk))
-        activites = Activite.objects.filter(
-            lot__projet=projet, est_actif=True, lot__est_actif=True, lot__supprime_le__isnull=True
-        )
-        ouvertes = {a.pk for a in activites if pourcentage_realise(a) < 100}
-        affectees = set(
-            AffectationEquipeActivite.objects.filter(
-                equipe__in=equipes,
-                activite_id__in=ouvertes,
-            ).values_list("activite_id", flat=True)
-        )
+        equipes = list(equipes_projet(projet).filter(est_actif=True))
+        personnes = {
+            m.personne_id
+            for e in equipes
+            for m in e.membres.all()
+            if m.supprime_le is None and m.date_depart is None
+        }
+        arbre = charger_arbre(projet)
+        couvertes_chemins = [
+            a.element.chemin
+            for e in equipes
+            for a in e.affectations_elements.all()
+            if a.supprime_le is None
+        ]
+        ouvertes = [f for f in arbre.feuilles() if calculer_avancement_physique_feuille(f) < 100]
+        couvertes = [f for f in ouvertes if any(f.chemin.startswith(c) for c in couvertes_chemins)]
         return Response(
             {
                 "equipes_count": len(equipes),
                 "effectif_mobilise": len(personnes),
-                "activites_affectees": len(affectees),
-                "activites_a_affecter": len(ouvertes - affectees),
+                "feuilles_couvertes": len(couvertes),
+                "feuilles_a_couvrir": len(ouvertes) - len(couvertes),
             }
         )
+
+
+# --------------------------------------------------------------------------
+# Registre de main-d'œuvre
+# --------------------------------------------------------------------------
+class MainOeuvreListCreateView(APIView):
+    """`GET`/`POST /api/v1/main-oeuvre/` — le registre de l'entreprise."""
+
+    def get_permissions(self):
+        code = "projets.main_oeuvre_gerer" if self.request.method == "POST" else "projets.lire"
+        return [IsAuthenticated(), APermission.pour(code)()]
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Registre de main-d'œuvre",
+        parameters=[
+            OpenApiParameter("recherche", str),
+            OpenApiParameter(
+                "entreprise", str, description="« INTERNE » ou l'identifiant d'un partenaire."
+            ),
+            OpenApiParameter("inactives", bool),
+        ],
+        responses={200: PersonneSerializer(many=True)},
+    )
+    def get(self, request):
+        personnes = main_oeuvre.lister_personnes(
+            recherche=request.query_params.get("recherche", "").strip(),
+            entreprise=request.query_params.get("entreprise", "").strip(),
+            actives=request.query_params.get("inactives", "false").lower() != "true",
+        )
+        return Response(PersonneSerializer(personnes, many=True).data)
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Ajouter une personne au registre",
+        description="Nom et prénom obligatoires, téléphone facultatif.",
+        request=PersonneCreationSerializer,
+        responses={201: PersonneSerializer},
+    )
+    def post(self, request):
+        from apps.accounts.models import Utilisateur
+
+        donnees = PersonneCreationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        v = dict(donnees.validated_data)
+        utilisateur = None
+        if v.pop("utilisateur_id", None):
+            utilisateur = get_object_or_404(
+                Utilisateur, pk=donnees.validated_data["utilisateur_id"], supprime_le__isnull=True
+            )
+        personne = main_oeuvre.creer_personne(
+            entreprise_partenaire=v.pop("entreprise_partenaire_id"),
+            utilisateur=utilisateur,
+            createur=request.user,
+            **v,
+        )
+        return Response(PersonneSerializer(personne).data, status=status.HTTP_201_CREATED)
+
+
+class MainOeuvreDetailView(APIView):
+    """`GET`/`PATCH`/`DELETE /api/v1/main-oeuvre/{id}/`."""
+
+    def get_permissions(self):
+        code = "projets.lire" if self.request.method == "GET" else "projets.main_oeuvre_gerer"
+        return [IsAuthenticated(), APermission.pour(code)()]
+
+    @extend_schema(
+        tags=TAGS, summary="Une personne du registre", responses={200: PersonneSerializer}
+    )
+    def get(self, request, pk):
+        return Response(PersonneSerializer(get_object_or_404(PersonneMainOeuvre, pk=pk)).data)
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Modifier une personne du registre",
+        request=PersonneModificationSerializer,
+        responses={200: PersonneSerializer},
+    )
+    def patch(self, request, pk):
+        personne = get_object_or_404(PersonneMainOeuvre, pk=pk)
+        donnees = PersonneModificationSerializer(data=request.data, partial=True)
+        donnees.is_valid(raise_exception=True)
+        valides = dict(donnees.validated_data)
+        if "entreprise_partenaire_id" in valides:
+            valides["entreprise_partenaire"] = valides.pop("entreprise_partenaire_id")
+        return Response(
+            PersonneSerializer(main_oeuvre.modifier_personne(personne, donnees=valides)).data
+        )
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Retirer une personne du registre",
+        description="Désactivée si elle a déjà fait partie d'une équipe, supprimée sinon.",
+        responses={204: None},
+    )
+    def delete(self, request, pk):
+        main_oeuvre.retirer_personne(
+            get_object_or_404(PersonneMainOeuvre, pk=pk), utilisateur=request.user
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

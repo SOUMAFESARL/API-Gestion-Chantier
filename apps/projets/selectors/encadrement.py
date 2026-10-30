@@ -38,6 +38,7 @@ def _affectations_vivantes():
             utilisateur__statut=StatutUtilisateur.ACTIF,
         )
         .select_related("utilisateur")
+        .prefetch_related("perimetres")
         .order_by("cree_le", "id")
     )
 

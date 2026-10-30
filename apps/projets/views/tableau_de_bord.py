@@ -165,7 +165,7 @@ class TableauDeBordView(APIView):
             .values_list("projet_id", "total")
         )
 
-        projets_liste = list(projets_qs.prefetch_related("lots__activites"))
+        projets_liste = list(projets_qs)
         cal = calendrier_pour_projets(projets_liste)
 
         for p in projets_liste:
@@ -328,7 +328,7 @@ class TableauDeBordView(APIView):
                     "id": str(b.id),
                     "reference": b.numero,
                     "beneficiaire": str(b.beneficiaire),
-                    "corps_etat": b.corps_etat or (b.lot.libelle if b.lot else "Général"),
+                    "corps_etat": b.corps_etat or (b.element.libelle if b.element else "Général"),
                     "montant": b.montant_net,
                     "statut": b.statut,
                 }

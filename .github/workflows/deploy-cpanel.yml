@@ -24,21 +24,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  tests:
-    # Un job par lot, tous en parallèle : chacun a sa propre base PostgreSQL, donc aucun
-    # partage d'état entre lots. Le déploiement attend que **tous** réussissent.
-    name: Tests Django (${{ matrix.lot }})
+  verifications:
+    # Décision du développeur (29/10/2026) : les tests automatisés sont supprimés le temps de
+    # la refonte du découpage. Restent les vérifications qui ne dépendent d'aucun test : la
+    # configuration Django se charge, et aucune migration ne manque au regard des modèles.
+    name: Vérifications Django
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    strategy:
-      fail-fast: false
-      matrix:
-        # Décision du développeur (15/10/2026) : seuls les lots d'acceptation 1 à 4 conditionnent
-        # le déploiement. Les lots 5 à 10 restent dans tests/acceptation et se lancent à la main
-        # (pytest tests/acceptation/lotN) ; une partie a été écrite avant les règles du lot 4
-        # d'alignement (dates obligatoires, somme des budgets, renommage réservé au DG et à l'AD).
-        lot: [lot1, lot2, lot3, lot4]
+    timeout-minutes: 10
 
     services:
       postgres:
@@ -73,10 +65,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-          fetch-depth: 0
-
-      - name: Récupérer les tags git
-        run: git fetch --tags --force
 
       - name: Installer Python
         uses: actions/setup-python@v6
@@ -94,13 +82,13 @@ jobs:
         run: |
           python manage.py check
 
-      - name: Exécuter les tests d'acceptation de ${{ matrix.lot }}
+      - name: Vérifier qu'aucune migration ne manque
         run: |
-          python -m pytest tests/acceptation/${{ matrix.lot }} -q
+          python manage.py makemigrations --check --dry-run
 
   deploy:
     name: Déploiement production sur cPanel
-    needs: tests
+    needs: verifications
 
     if: ${{ github.ref == 'refs/heads/develop' && github.event_name == 'push' }}
 

@@ -1,21 +1,33 @@
 """Application « projets »
 
-Projets, lots, activités, affectations, bordereaux de prix, indice de santé.
+Projets, découpage en arbre (éléments, niveaux, listes et modèles), affectations, équipes et
+registre de main-d'œuvre, historique des dates, indice de santé.
 
 Schéma       : tenant
 Module CDC   : 1
-Entités MCD  : Projet, Lot, Activite, AffectationProjet, BordereauPrix, LigneBordereau,
-               HistoriqueDate, SanteHistorique
 """
 
-from .activite import Activite
 from .alerte_retard import AlerteRetard, NiveauAlerteRetard, StatutAlerteRetard
 from .arret_chantier import ArretChantier
 from .calendrier import ExceptionCalendrier, SemaineType
 from .contrat import ProjetContrat
-from .equipe import AffectationEquipeActivite, EquipeChantier, MembreEquipeChantier
+from .decoupage import (
+    Element,
+    LigneModeleEntreprise,
+    ListeValeursEntreprise,
+    ModeMesure,
+    ModeleDecoupageEntreprise,
+    NiveauModeleEntreprise,
+    NiveauProjet,
+    ValeurListeEntreprise,
+)
+from .equipe import (
+    AffectationEquipeElement,
+    EquipeChantier,
+    MembreEquipeChantier,
+    PersonneMainOeuvre,
+)
 from .historique_date import HistoriqueDate, TypeObjetHistorique
-from .lot import Lot
 from .mise_a_jour_inline import MiseAJourInline
 from .motif_report import MotifReport
 from .parametres_documents import ParametresDocuments
@@ -24,20 +36,26 @@ from .referentiel import ReferentielEntreprise
 from .sante_snapshot import SanteProjetSnapshot
 
 __all__ = [
-    "Activite",
-    "AffectationEquipeActivite",
+    "AffectationEquipeElement",
     "AffectationProjet",
     "AlerteRetard",
     "ArretChantier",
+    "Element",
     "EquipeChantier",
     "ExceptionCalendrier",
     "HistoriqueDate",
-    "Lot",
+    "LigneModeleEntreprise",
+    "ListeValeursEntreprise",
     "MembreEquipeChantier",
     "MiseAJourInline",
+    "ModeMesure",
+    "ModeleDecoupageEntreprise",
     "MotifReport",
     "NiveauAlerteRetard",
+    "NiveauModeleEntreprise",
+    "NiveauProjet",
     "ParametresDocuments",
+    "PersonneMainOeuvre",
     "Projet",
     "ProjetContrat",
     "ReferentielEntreprise",
@@ -45,4 +63,5 @@ __all__ = [
     "SemaineType",
     "StatutAlerteRetard",
     "TypeObjetHistorique",
+    "ValeurListeEntreprise",
 ]

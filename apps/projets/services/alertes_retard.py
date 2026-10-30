@@ -27,13 +27,18 @@ from apps.core.enums import RoleGlobal, RoleProjet, StatutBlocage, StatutRapport
 from apps.projets.models import (
     AffectationProjet,
     AlerteRetard,
-    Lot,
+    Element,
     NiveauAlerteRetard,
     Projet,
     StatutAlerteRetard,
 )
+from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.calendrier_ouvre import calendrier_entreprise
-from apps.projets.services.sante_calculs import calculer_delta_lot
+from apps.projets.services.sante_calculs import (
+    calculer_arbre,
+    calculer_delta_element,
+    calculer_deltas_arbre,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,19 +64,21 @@ TABLE_ACTIONS_RECOMMANDEES: dict[str, str] = {
     "incidents": "Analyser les incidents déclarés",
 }
 
-ACTION_PAR_DEFAUT: str = "Revoir le planning du lot avec le conducteur de travaux"
+ACTION_PAR_DEFAUT: str = "Revoir le planning de cette partie avec le conducteur de travaux"
 
 
 def extraire_causes_alerte(
     projet: Projet,
-    lot: Lot | None,
+    element: Element | None,
     date_reference: date,
 ) -> dict[str, Any]:
     """Extrait les causes du retard depuis les rapports F2 et les blocages ouverts.
 
     Fenêtre des 7 derniers jours calendaires [date_reference - 6 jours, date_reference] comprise.
     Ne retient que les rapports SOUMIS ou APPROUVE non supprimés du projet.
-    Si lot est fourni, ne retient que les rapports de ce lot ou ceux sans lot spécifique.
+    Le journal est tenu par projet et par jour : tous ses rapports comptent, quelle que soit
+    la case. Les blocages, eux, se rattachent à une case : ceux de la case, de ses descendants
+    et ceux sans case.
     Causes :
     - absences : somme des écarts (prevus - presents > 0) des lignes effectifs de saisie
     - blocages_ouverts : liste des titres des blocages OUVERT ou PRIS_EN_CHARGE
@@ -86,8 +93,6 @@ def extraire_causes_alerte(
         date_rapport__lte=date_reference,
     ).select_related("journal")
 
-    if lot is not None:
-        rapports_qs = rapports_qs.filter(Q(lot=lot) | Q(lot__isnull=True))
 
     absences_total = 0
     incidents_total = 0
@@ -127,8 +132,10 @@ def extraire_causes_alerte(
         supprime_le__isnull=True,
         statut__in=[StatutBlocage.OUVERT, StatutBlocage.PRIS_EN_CHARGE],
     )
-    if lot is not None:
-        blocages_qs = blocages_qs.filter(Q(lot=lot) | Q(lot__isnull=True))
+    if element is not None:
+        blocages_qs = blocages_qs.filter(
+            Q(element__chemin__startswith=element.chemin) | Q(element__isnull=True)
+        )
 
     blocages_ouverts = list(
         blocages_qs.order_by("ouvert_le", "cree_le").values_list("titre", flat=True)
@@ -234,7 +241,7 @@ def detecter_alertes_retard(
     """Détecte les alertes de retard d'un projet et applique la déduplication RG-F3-07.
 
     (1) Calendrier d'entreprise construit UNE SEULE FOIS pour la période.
-    Pour chaque lot actif non supprimé, calcule son delta temporel - physique.
+    Pour chaque case suivie (niveau coché « alerter »), calcule son delta temporel - physique.
     Niveaux selon settings.F3_SEUILS_RETARD_PTS :
       - delta > 25 pts -> CRITIQUE
       - delta > 15 pts -> ELEVE
@@ -242,11 +249,11 @@ def detecter_alertes_retard(
       - sinon          -> aucun
     Au niveau du projet :
       - si projet.indice_sante n'est pas null et < settings.F3_SEUIL_INDICE_SANTE_CRITIQUE (40),
-        le niveau est CRITIQUE (avec lot null).
+        le niveau est CRITIQUE (sans case).
 
     (2) Déduplication (RG-F3-07) :
     Une alerte n'est créée que si le niveau atteint est STRICTEMENT supérieur au plus haut
-    niveau des alertes de ce lot (ou du projet) encore OUVERTE ou EN_COURS
+    niveau des alertes de cette case (ou du projet) encore OUVERTE ou EN_COURS
     (ordre MODERE < ELEVE < CRITIQUE).
     Si aucune alerte n'est ouverte/en cours, tout niveau atteint en crée une.
 
@@ -271,13 +278,13 @@ def detecter_alertes_retard(
     seuil_critique = float(settings.F3_SEUILS_RETARD_PTS["CRITIQUE"])
     seuil_indice_sante = settings.F3_SEUIL_INDICE_SANTE_CRITIQUE
 
-    # 2. Récupération des lots actifs non supprimés
-    lots_actifs = list(
-        projet.lots.filter(
-            est_actif=True,
-            supprime_le__isnull=True,
-        ).prefetch_related("activites").order_by("code", "pk")
-    )
+    # 2. Les cases suivies : niveaux cochés « alerter à ce niveau », à défaut les racines.
+    #    Une alerte par problème : les feuilles en retard en dessous en sont les causes.
+    from apps.projets.services.machine_etats import cases_suivies
+
+    arbre = charger_arbre(projet)
+    resultats = calculer_arbre(arbre)
+    suivies = sorted(cases_suivies(arbre), key=lambda c: (c.chemin, c.pk))
 
     # 3. Construction UNIQUE du calendrier de l'entreprise
     dates_pertinentes: list[date] = [
@@ -293,43 +300,42 @@ def detecter_alertes_retard(
         ]
         if d is not None
     ]
-    for lot in lots_actifs:
-        for d in [
-            getattr(lot, "date_debut_prevue", None),
-            getattr(lot, "date_fin_prevue", None),
-            getattr(lot, "date_debut_baseline", None),
-            getattr(lot, "date_fin_baseline", None),
-        ]:
+    for case in arbre.elements:
+        for d in [case.date_debut_prevue, case.date_fin_prevue]:
             if d is not None:
                 dates_pertinentes.append(d)
-
     annee_min = min(d.year for d in dates_pertinentes) if dates_pertinentes else date_ref.year
     annee_max = max(d.year for d in dates_pertinentes) if dates_pertinentes else date_ref.year
     calendrier = calendrier_entreprise(date(annee_min - 1, 1, 1), date(annee_max + 1, 12, 31))
 
-    alertes_creees: list[AlerteRetard] = []
+    def physique(case):
+        r = resultats.get(case.pk)
+        return r.physique if r and r.physique is not None else 0.0
 
-    # 4. Évaluation des alertes par lot
-    for lot in lots_actifs:
-        delta = calculer_delta_lot(lot, date_ref, calendrier)
+    alertes_creees: list[AlerteRetard] = []
+    deltas = calculer_deltas_arbre(arbre, resultats, date_ref, calendrier)
+
+    # 4. Évaluation des alertes par case suivie
+    for case in suivies:
+        delta = deltas.get(case.pk)
         if delta is None:
             continue
 
-        niveau_lot: str | None = None
+        niveau_case: str | None = None
         if delta > seuil_critique:
-            niveau_lot = NiveauAlerteRetard.CRITIQUE
+            niveau_case = NiveauAlerteRetard.CRITIQUE
         elif delta > seuil_eleve:
-            niveau_lot = NiveauAlerteRetard.ELEVE
+            niveau_case = NiveauAlerteRetard.ELEVE
         elif delta > seuil_modere:
-            niveau_lot = NiveauAlerteRetard.MODERE
+            niveau_case = NiveauAlerteRetard.MODERE
 
-        if not niveau_lot:
+        if not niveau_case:
             continue
 
-        # Déduplication RG-F3-07 pour ce lot
+        # Déduplication RG-F3-07 pour cette case
         alertes_ouvertes = AlerteRetard.objects.filter(
             projet=projet,
-            lot=lot,
+            element=case,
             statut__in=[StatutAlerteRetard.OUVERTE, StatutAlerteRetard.EN_COURS],
             supprime_le__isnull=True,
         )
@@ -337,20 +343,28 @@ def detecter_alertes_retard(
             [ORDRE_NIVEAUX.get(a.niveau, 0) for a in alertes_ouvertes],
             default=0,
         )
-
-        rang_atteint = ORDRE_NIVEAUX.get(niveau_lot, 0)
+        rang_atteint = ORDRE_NIVEAUX.get(niveau_case, 0)
         if rang_atteint <= max_rang_ouvert:
-            # Niveau non strictement supérieur à l'alerte encore ouverte
             continue
 
-        causes = extraire_causes_alerte(projet, lot, date_ref)
+        causes = extraire_causes_alerte(projet, case, date_ref)
+        # Les feuilles en retard sous la case, classées par leur poids dans le retard
+        # (montant x écart), plutôt qu'une alerte chacune (§13quater-ter).
+        en_retard = []
+        for feuille in arbre.descendants(case) or [case]:
+            if not feuille.est_actif or not arbre.est_feuille(feuille):
+                continue
+            ecart = calculer_delta_element(feuille, date_ref, calendrier, physique(feuille))
+            if ecart is not None and ecart > seuil_modere:
+                en_retard.append((float(feuille.montant or 0) * ecart, feuille.libelle))
+        causes["taches_en_retard"] = [libelle for _, libelle in sorted(en_retard, reverse=True)]
         actions = determiner_actions_recommandees(causes)
-        destinataires = obtenir_destinataires_alerte(projet, niveau_lot)
+        destinataires = obtenir_destinataires_alerte(projet, niveau_case)
 
         alerte = AlerteRetard.objects.create(
             projet=projet,
-            lot=lot,
-            niveau=niveau_lot,
+            element=case,
+            niveau=niveau_case,
             delta_pts=Decimal(str(round(delta, 2))),
             indice_sante=None,
             date_detection=date_ref,
@@ -360,7 +374,6 @@ def detecter_alertes_retard(
         )
         if destinataires:
             alerte.destinataires.set(destinataires)
-
         alertes_creees.append(alerte)
 
     # 5. Évaluation de l'alerte au niveau du projet (indice de santé critique)
@@ -369,7 +382,7 @@ def detecter_alertes_retard(
 
         alertes_ouvertes_projet = AlerteRetard.objects.filter(
             projet=projet,
-            lot__isnull=True,
+            element__isnull=True,
             statut__in=[StatutAlerteRetard.OUVERTE, StatutAlerteRetard.EN_COURS],
             supprime_le__isnull=True,
         )
@@ -386,7 +399,7 @@ def detecter_alertes_retard(
 
             alerte_proj = AlerteRetard.objects.create(
                 projet=projet,
-                lot=None,
+                element=None,
                 niveau=niveau_projet,
                 delta_pts=None,
                 indice_sante=projet.indice_sante,

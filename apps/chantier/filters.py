@@ -12,7 +12,6 @@ class RapportJournalierFilter(django_filters.FilterSet):
     """Filtres applicables sur la liste des rapports journaliers."""
 
     projet = django_filters.UUIDFilter(field_name="projet_id")
-    lot = django_filters.UUIDFilter(field_name="lot_id")
     auteur = django_filters.UUIDFilter(field_name="auteur_id")
     valide_par = django_filters.UUIDFilter(field_name="valide_par_id")
     statut = django_filters.ChoiceFilter(choices=StatutRapport.choices)
@@ -25,7 +24,6 @@ class RapportJournalierFilter(django_filters.FilterSet):
         model = RapportJournalier
         fields = [
             "projet",
-            "lot",
             "auteur",
             "valide_par",
             "statut",

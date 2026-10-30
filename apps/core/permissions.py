@@ -222,16 +222,9 @@ class GardePermissionProjet(permissions.BasePermission):
             return obj.pk
         if hasattr(obj, "projet") and obj.projet:
             return obj.projet.pk
-        if hasattr(obj, "lot") and hasattr(obj.lot, "projet_id") and obj.lot.projet_id:
-            return obj.lot.projet_id
-        if hasattr(obj, "lot") and hasattr(obj.lot, "projet") and obj.lot.projet:
-            return obj.lot.projet.pk
-        if hasattr(obj, "activite") and hasattr(obj.activite, "lot"):
-            lot = obj.activite.lot
-            if hasattr(lot, "projet_id") and lot.projet_id:
-                return lot.projet_id
-            if hasattr(lot, "projet") and lot.projet:
-                return lot.projet.pk
+        # Un objet rattaché à une case du découpage (équipe affectée, mesure…).
+        if getattr(obj, "element", None) is not None:
+            return obj.element.projet_id
         return None
 
 
@@ -338,8 +331,8 @@ class MembreDuProjet(permissions.BasePermission):
             return obj.projet_id
         if obj.__class__.__name__ == "Projet":
             return obj.pk
-        if hasattr(obj, "lot") and hasattr(obj.lot, "projet_id"):
-            return obj.lot.projet_id
+        if getattr(obj, "element", None) is not None:
+            return obj.element.projet_id
         return None
 
 

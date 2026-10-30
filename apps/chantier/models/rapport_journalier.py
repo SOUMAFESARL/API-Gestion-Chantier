@@ -22,14 +22,6 @@ class RapportJournalier(ModeleBase):
         related_name="rapports_journaliers",
         verbose_name=_("projet / chantier"),
     )
-    lot = models.ForeignKey(
-        "projets.Lot",
-        on_delete=models.RESTRICT,
-        null=True,
-        blank=True,
-        related_name="rapports_journaliers",
-        verbose_name=_("lot spécifique"),
-    )
     date_rapport = models.DateField(
         _("date du rapport"),
         default=timezone.now,
@@ -118,15 +110,11 @@ class RapportJournalier(ModeleBase):
             models.Index(fields=["statut"], name="idx_rapport_statut"),
         ]
         constraints = [
-            models.UniqueConstraint(
-                fields=["lot", "date_rapport"],
-                condition=models.Q(lot__isnull=False, supprime_le__isnull=True),
-                name="uq_rapport_lot_date",
-            ),
+            # Un seul journal par projet et par jour, tenu par le chef de chantier.
             models.UniqueConstraint(
                 fields=["projet", "date_rapport"],
-                condition=models.Q(lot__isnull=True, supprime_le__isnull=True),
-                name="uq_rapport_projet_date",
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_rapport_projet_jour",
             ),
         ]
 

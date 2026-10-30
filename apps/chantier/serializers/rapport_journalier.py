@@ -9,12 +9,10 @@ from apps.chantier.services.rapport_journalier import (
     modifier_rapport_journalier,
 )
 from apps.core.enums import Meteo, StatutRapport
-from apps.projets.models import Lot, Projet
-from apps.projets.serializers.lot import ModeExecutionLibelleMixin
+from apps.projets.models import Projet
 
 __all__ = [
     "AuteurSimpleSerializer",
-    "LotSimpleSerializer",
     "ProjetSimpleSerializer",
     "RapportJournalierCreateSerializer",
     "RapportJournalierDetailSerializer",
@@ -31,14 +29,6 @@ class ProjetSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Projet
         fields = ["id", "reference", "nom"]
-
-
-class LotSimpleSerializer(ModeExecutionLibelleMixin, serializers.ModelSerializer):
-    """Représentation allégée d'un lot pour l'imbrication."""
-
-    class Meta:
-        model = Lot
-        fields = ["id", "code", "libelle", "mode_execution", "mode_execution_libelle"]
 
 
 class AuteurSimpleSerializer(serializers.ModelSerializer):
@@ -58,7 +48,6 @@ class RapportJournalierListSerializer(serializers.ModelSerializer):
     """Serializer pour les listes paginées de rapports."""
 
     projet = ProjetSimpleSerializer(read_only=True)
-    lot = LotSimpleSerializer(read_only=True)
     auteur = AuteurSimpleSerializer(read_only=True)
     valide_par = AuteurSimpleSerializer(read_only=True)
     statut_libelle = serializers.CharField(source="get_statut_display", read_only=True)
@@ -70,7 +59,6 @@ class RapportJournalierListSerializer(serializers.ModelSerializer):
             "id",
             "date_rapport",
             "projet",
-            "lot",
             "auteur",
             "meteo",
             "meteo_libelle",
@@ -92,7 +80,6 @@ class RapportJournalierDetailSerializer(serializers.ModelSerializer):
     """Serializer pour le détail complet d'un rapport de chantier."""
 
     projet = ProjetSimpleSerializer(read_only=True)
-    lot = LotSimpleSerializer(read_only=True)
     auteur = AuteurSimpleSerializer(read_only=True)
     valide_par = AuteurSimpleSerializer(read_only=True)
     statut_libelle = serializers.CharField(source="get_statut_display", read_only=True)
@@ -104,7 +91,6 @@ class RapportJournalierDetailSerializer(serializers.ModelSerializer):
             "id",
             "date_rapport",
             "projet",
-            "lot",
             "auteur",
             "meteo",
             "meteo_libelle",
@@ -129,7 +115,6 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
     """Validation des entrées pour la création d'un rapport journalier."""
 
     projet_id = serializers.UUIDField(required=True)
-    lot_id = serializers.UUIDField(required=False, allow_null=True)
     date_rapport = serializers.DateField(required=True)
     meteo = serializers.ChoiceField(choices=Meteo.choices, default=Meteo.ENSOLEILLE)
     effectif_regie = serializers.IntegerField(min_value=0, default=0)
@@ -151,19 +136,6 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         projet = attrs["projet_id"]
-        lot_id = attrs.get("lot_id")
-        lot = None
-        if lot_id:
-            try:
-                lot = Lot.objects.get(id=lot_id)
-            except Lot.DoesNotExist:
-                raise serializers.ValidationError({"lot_id": "Le lot spécifié n'existe pas."})
-
-            if lot.projet_id != projet.id:
-                raise serializers.ValidationError(
-                    {"lot_id": "Le lot sélectionné n'appartient pas au projet spécifié."}
-                )
-
         # Contrôle du cloisonnement des chantiers (Niveau 2)
         request = self.context.get("request")
         user = request.user if request else None
@@ -184,7 +156,6 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
         verifier_statut_projet_pour_ecriture(projet, action="NOUVEAU_RAPPORT")
 
         attrs["projet"] = projet
-        attrs["lot"] = lot
         return attrs
 
     def create(self, validated_data):
@@ -192,11 +163,9 @@ class RapportJournalierCreateSerializer(serializers.Serializer):
         utilisateur = request.user if request else None
 
         projet = validated_data["projet"]
-        lot = validated_data.get("lot")
 
         return creer_rapport_journalier(
             projet=projet,
-            lot=lot,
             auteur=utilisateur,
             date_rapport=validated_data["date_rapport"],
             meteo=validated_data.get("meteo", Meteo.ENSOLEILLE),
@@ -215,7 +184,6 @@ class RapportJournalierUpdateSerializer(serializers.Serializer):
     """Validation des entrées pour la modification partielle d'un rapport."""
 
     projet_id = serializers.UUIDField(required=False)
-    lot_id = serializers.UUIDField(required=False, allow_null=True)
     date_rapport = serializers.DateField(required=False)
     meteo = serializers.ChoiceField(choices=Meteo.choices, required=False)
     effectif_regie = serializers.IntegerField(min_value=0, required=False)
@@ -250,22 +218,6 @@ class RapportJournalierUpdateSerializer(serializers.Serializer):
                             {"projet_id": "Vous n'êtes pas affecté à ce chantier."}
                         )
 
-        if "lot_id" in attrs:
-            lot_id = attrs["lot_id"]
-            if lot_id is None:
-                attrs["lot"] = None
-            else:
-                try:
-                    lot = Lot.objects.get(id=lot_id)
-                    cible_projet_id = projet.id if projet else (instance.projet_id if instance else None)
-                    if cible_projet_id and lot.projet_id != cible_projet_id:
-                        raise serializers.ValidationError(
-                            {"lot_id": "Le lot sélectionné n'appartient pas au projet spécifié."}
-                        )
-                    attrs["lot"] = lot
-                except Lot.DoesNotExist:
-                    raise serializers.ValidationError({"lot_id": "Le lot spécifié n'existe pas."})
-
         return attrs
 
     def update(self, instance, validated_data):
@@ -274,7 +226,7 @@ class RapportJournalierUpdateSerializer(serializers.Serializer):
 
         champs_modifiables = {}
         for k, v in validated_data.items():
-            if k not in ("projet_id", "lot_id"):
+            if k != "projet_id":
                 champs_modifiables[k] = v
 
         return modifier_rapport_journalier(

@@ -7,15 +7,16 @@ Règles :
    restreinte aux modules actifs de l'entreprise et aux permissions actives du catalogue (A-04, A-06, A-12).
 """
 
-from django.db import connection
 from rest_framework import permissions
 
 from apps.core.enums import RoleGlobal
+from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
 from apps.core.registre_permissions import REGISTRE
 
 __all__ = [
     "DROITS_ADMIN_AD",
     "DROITS_ADMIN_RESERVES_DG",
+    "MODULES_SYSTEME",
     "APermission",
     "a_permission",
     "est_administrateur",
@@ -43,7 +44,6 @@ DROITS_ADMIN_RESERVES_DG = frozenset({
     "administration.abonnement_gerer",
 })
 
-MODULES_SYSTEME = frozenset({"administration"})
 
 
 def est_dg(utilisateur) -> bool:
@@ -90,72 +90,8 @@ def peut_voir_montants(utilisateur, request=None) -> bool:
 
 
 def _obtenir_modules_actifs(tenant=None) -> set[str]:
-    """Retourne l'ensemble des codes de modules actifs pour l'entreprise courante."""
-    from apps.tenants.models import Entreprise
-
-    if tenant is None or not isinstance(tenant, Entreprise):
-        schema = getattr(connection, "schema_name", "public")
-        if schema and schema != "public":
-            try:
-                tenant = Entreprise.objects.filter(schema_name=schema).first()
-            except Exception:
-                tenant = None
-
-    # 1. Vérifier les souscriptions EntrepriseModule dans le schéma public
-    if tenant and getattr(tenant, "schema_name", "public") != "public":
-        try:
-            from apps.catalogue.models import CatalogueModule, EntrepriseModule
-
-            em_qs = EntrepriseModule.objects.filter(entreprise=tenant, supprime_le__isnull=True)
-            if em_qs.exists():
-                inactifs = {
-                    m.lower()
-                    for m in em_qs.filter(est_actif=False).values_list("module__code", flat=True)
-                }
-                actifs_souscrits = {
-                    m.lower()
-                    for m in em_qs.filter(est_actif=True).values_list("module__code", flat=True)
-                }
-                tous_actifs = {
-                    m.lower()
-                    for m in CatalogueModule.objects.filter(
-                        est_actif=True, supprime_le__isnull=True
-                    ).values_list("code", flat=True)
-                }
-                resultats = (tous_actifs | actifs_souscrits) - inactifs
-                resultats.update(MODULES_SYSTEME)
-                return resultats
-        except Exception:
-            pass
-
-        # 2. Repli sur la table Module locale du tenant
-        try:
-            from apps.accounts.models import Module
-
-            m_qs = Module.objects.filter(supprime_le__isnull=True)
-            if m_qs.exists():
-                actifs = set(m_qs.filter(est_actif=True).values_list("code", flat=True))
-                actifs.update(MODULES_SYSTEME)
-                return {m.lower() for m in actifs}
-        except Exception:
-            pass
-
-    # 3. Repli si schéma public ou environnement de test
-    try:
-        from apps.catalogue.models import CatalogueModule
-
-        c_mods = set(
-            CatalogueModule.objects.filter(
-                est_actif=True, supprime_le__isnull=True
-            ).values_list("code", flat=True)
-        )
-        if c_mods:
-            c_mods.update(MODULES_SYSTEME)
-            return {m.lower() for m in c_mods}
-    except Exception:
-        pass
-
-    return {p.module for p in REGISTRE.values()}
+    """Codes des modules ouverts à l'entreprise — voir `apps.core.modules_actifs`."""
+    return codes_modules_actifs(tenant)
 
 
 def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]:

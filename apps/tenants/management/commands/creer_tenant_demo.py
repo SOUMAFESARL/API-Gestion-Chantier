@@ -231,14 +231,13 @@ class Command(BaseCommand):
         from apps.chantier.models import RapportJournalier
         from apps.core.enums import (
             Meteo,
-            ModeExecution,
             RoleProjet,
             RoleTiersChoix,
             StatutProjet,
             StatutRapport,
             TypeTiers,
         )
-        from apps.projets.models import AffectationProjet, Lot, Projet
+        from apps.projets.models import AffectationProjet, Projet
         from apps.tiers.models import RoleTiers, Tiers
 
         self.stdout.write("  Génération / vérification des données métier démo...")
@@ -394,59 +393,7 @@ class Command(BaseCommand):
                     utilisateur=chef_chantier, projet=projet, role_projet=RoleProjet.CHEF_CHANTIER
                 )
 
-        # 3. Lots
-        lot1_p1, _ = Lot.objects.get_or_create(
-            projet=p1,
-            code="LOT-01",
-            defaults={
-                "libelle": "Gros Œuvre & Fondations",
-                "mode_execution": ModeExecution.SOUS_TRAITANCE_STRUCTUREE,
-                "titulaire": t_tacheron1,
-                "avancement": Decimal("68.00"),
-            },
-        )
-        Lot.objects.get_or_create(
-            projet=p1,
-            code="LOT-02",
-            defaults={
-                "libelle": "Électricité & Courants faibles",
-                "mode_execution": ModeExecution.REGIE,
-                "avancement": Decimal("45.00"),
-            },
-        )
-
-        lot1_p2, _ = Lot.objects.get_or_create(
-            projet=p2,
-            code="LOT-01",
-            defaults={
-                "libelle": "Terrassement & Voierie",
-                "mode_execution": ModeExecution.REGIE,
-                "avancement": Decimal("85.00"),
-            },
-        )
-        Lot.objects.get_or_create(
-            projet=p2,
-            code="LOT-02",
-            defaults={
-                "libelle": "Second Œuvre & Carrelage",
-                "mode_execution": ModeExecution.SOUS_TRAITANCE_INFORMELLE,
-                "titulaire": t_tacheron2,
-                "avancement": Decimal("30.00"),
-            },
-        )
-
-        lot1_p3, _ = Lot.objects.get_or_create(
-            projet=p3,
-            code="LOT-01",
-            defaults={
-                "libelle": "Menuiserie & Façade Vitrée",
-                "mode_execution": ModeExecution.SOUS_TRAITANCE_STRUCTUREE,
-                "titulaire": t_tacheron1,
-                "avancement": Decimal("82.00"),
-            },
-        )
-
-        # 4. Rapports Journaliers du jour
+        # 3. Rapports Journaliers du jour
         today = timezone.now().date()
         RapportJournalier.objects.get_or_create(
             projet=p1,

@@ -36,6 +36,7 @@ __all__ = [
     "CollaborateursAffectablesView",
     "ProjetAffectationDetailView",
     "ProjetAffectationListCreateView",
+    "ProjetChefChantierView",
 ]
 
 
@@ -131,8 +132,7 @@ class ProjetAffectationListCreateView(APIView):
                 role_projet=role_projet,
                 date_debut=serializer.validated_data.get("date_debut"),
                 date_fin=serializer.validated_data.get("date_fin"),
-                zone=serializer.validated_data.get("zone", ""),
-                lot_id=serializer.validated_data.get("lot_id"),
+                perimetres_ids=serializer.validated_data.get("perimetres_ids") or [],
                 fonction_membre=serializer.validated_data.get("fonction_membre", ""),
                 modifie_par=request.user,
             )
@@ -184,7 +184,9 @@ class ProjetAffectationDetailView(APIView):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur", "lot"),
+            AffectationProjet.objects.select_related("utilisateur").prefetch_related(
+                "perimetres"
+            ),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
@@ -207,14 +209,16 @@ class ProjetAffectationDetailView(APIView):
         verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur", "lot"),
+            AffectationProjet.objects.select_related("utilisateur").prefetch_related(
+                "perimetres"
+            ),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
         )
 
         # Désactiver, rétrograder, réactiver ou nommer un chef de projet : la direction seule.
-        # Les dates, la zone ou le lot du chef de projet restent modifiables par qui affecte.
+        # Les dates ou le périmètre du chef de projet restent modifiables par qui affecte.
         # Le contrôle lit la requête brute et passe **avant** la validation : sinon une
         # rétrogradation par un non-dirigeant recevrait un 400 de cohérence de rôle, et non le 403.
         brut = request.data if isinstance(request.data, dict) else {}
@@ -287,8 +291,7 @@ class ProjetAffectationDetailView(APIView):
             "utilisateur_id": str(affectation.utilisateur_id),
             "utilisateur_email": getattr(affectation.utilisateur, "email", ""),
             "role_projet": affectation.role_projet,
-            "zone": affectation.zone,
-            "lot_id": str(affectation.lot_id) if affectation.lot_id else None,
+            "perimetres_ids": [str(e.pk) for e in affectation.perimetres.all()],
             "fonction_membre": affectation.fonction_membre,
         }
         identifiant = affectation.pk
@@ -368,3 +371,83 @@ class CollaborateursAffectablesView(APIView):
             )
 
         return Response(resultats, status=status.HTTP_200_OK)
+
+
+class ChangerChefChantierSerializer(serializers.Serializer):
+    utilisateur_id = serializers.UUIDField()
+    perimetres_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+        help_text="Vide : tout le projet (le cas courant d'un chef de chantier unique).",
+    )
+    date_changement = serializers.DateField(required=False, allow_null=True)
+
+
+class ProjetChefChantierView(APIView):
+    """`POST /api/v1/projets/{projet_id}/chef-chantier/` — changer de chef de chantier.
+
+    Un seul chef de chantier par projet (règle du 29/10/2026). Ce geste retire l'ancien (son
+    affectation est close à la date du changement et reste dans l'historique) et affecte le
+    nouveau, en une seule fois. Il exige `projets.affecter_membres`.
+    """
+
+    parser_classes = [JSONParser]
+    permission_classes = [
+        IsAuthenticated,
+        GardePermissionProjet.pour("projets.affecter_membres"),
+    ]
+
+    @extend_schema(
+        summary="Changer le chef de chantier du projet",
+        tags=["affectations"],
+        request=ChangerChefChantierSerializer,
+        responses={200: AffectationProjetResponseSerializer},
+    )
+    def post(self, request, projet_id):
+        from apps.projets.services.affectations import changer_chef_chantier
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
+        verifier_statut_projet_pour_ecriture(projet)
+        serializer = ChangerChefChantierSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        utilisateur = Utilisateur.objects.filter(
+            pk=serializer.validated_data["utilisateur_id"],
+            supprime_le__isnull=True,
+            is_active=True,
+            statut=StatutUtilisateur.ACTIF,
+        ).first()
+        if utilisateur is None:
+            raise RequeteRefusee("Collaborateur introuvable, inactif ou suspendu.")
+        if obtenir_portee_role(utilisateur) == "ENTREPRISE":
+            raise RequeteRefusee(
+                "Un collaborateur à portée ENTREPRISE ne peut pas être affecté à un projet."
+            )
+        try:
+            resultat = changer_chef_chantier(
+                projet=projet,
+                utilisateur=utilisateur,
+                perimetres_ids=serializer.validated_data.get("perimetres_ids") or [],
+                date_changement=serializer.validated_data.get("date_changement"),
+                modifie_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise RequeteRefusee(msg) from exc
+        donnees = AffectationProjetResponseSerializer(
+            resultat["nouveau"], context={"request": request}
+        ).data
+        ancien = resultat["ancien"]
+        return Response(
+            {
+                "chef_chantier": donnees,
+                "ancien_chef_chantier": (
+                    AffectationProjetResponseSerializer(ancien, context={"request": request}).data
+                    if ancien
+                    else None
+                ),
+            },
+            status=status.HTTP_200_OK,
+        )

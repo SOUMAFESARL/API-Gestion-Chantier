@@ -149,7 +149,7 @@ class AlerteRetardListView(APIView):
             elif len(statuts) > 1:
                 qs = qs.filter(statut__in=statuts)
 
-        qs = qs.select_related("projet", "lot", "resolue_par").order_by(
+        qs = qs.select_related("projet", "element", "element__niveau", "resolue_par").order_by(
             "-date_detection", "-cree_le"
         )
 
@@ -194,7 +194,7 @@ class AlerteRetardResoudreView(APIView):
     )
     def patch(self, request, pk):
         alerte = get_object_or_404(
-            AlerteRetard.objects.select_related("projet", "lot", "resolue_par"),
+            AlerteRetard.objects.select_related("projet", "element", "element__niveau", "resolue_par"),
             pk=pk,
             supprime_le__isnull=True,
             projet__supprime_le__isnull=True,

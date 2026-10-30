@@ -1,6 +1,10 @@
-"""Vue des données du planning (Gantt) d'un projet (SFD F3 §5.2, §5.3, §13)."""
+"""Vue des données du planning (Gantt) d'un projet (SFD F3 §5.2, §5.3, §13).
 
-from django.db.models import Prefetch
+Le planning suit l'arbre : chaque case porte ses propres dates (baseline si complète, sinon
+prévues), son physique et son temporel, et ses enfants. Le périmètre de lecture s'applique comme
+pour l'arbre : sans `projets.voir_tout`, on voit ses branches et le chemin qui y mène.
+"""
+
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -10,43 +14,33 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import GardePermissionProjet
-from apps.projets.models import Activite, Lot, Projet
-from apps.projets.services.indicateurs_temporels import (
-    calendrier_pour_lots,
-    indicateurs_temporels_lot,
-)
-from apps.projets.services.sante_calculs import (
-    calculer_avancement_physique_activite,
-    calculer_avancement_physique_lot,
-)
+from apps.projets.models import Projet
+from apps.projets.selectors.arbre import charger_arbre
+from apps.projets.selectors.arbre_api import COMPLET, visibilite
+from apps.projets.services.indicateurs_temporels import calendrier_pour_elements
+from apps.projets.services.sante_calculs import calculer_arbre, calculer_temporels_arbre
 
 __all__ = ["ProjetPlanningView"]
 
 
-class PlanningActiviteSerializer(serializers.Serializer):
+class PlanningCaseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     libelle = serializers.CharField()
+    numero = serializers.CharField(allow_null=True)
+    niveau = serializers.CharField(allow_null=True)
     debut = serializers.DateField(allow_null=True)
     fin = serializers.DateField(allow_null=True)
-    avancement = serializers.FloatField()
-    statut = serializers.CharField()
-
-
-class PlanningLotSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    code = serializers.CharField()
-    libelle = serializers.CharField()
-    debut = serializers.DateField(allow_null=True)
-    fin = serializers.DateField(allow_null=True)
-    avancement = serializers.FloatField()
+    avancement = serializers.FloatField(allow_null=True)
     avancement_temporel = serializers.FloatField(allow_null=True)
     delta_retard = serializers.FloatField(allow_null=True)
-    activites = PlanningActiviteSerializer(many=True)
+    statut = serializers.CharField()
+    acces = serializers.CharField()
+    enfants = serializers.ListField(child=serializers.DictField())
 
 
 class PlanningSerializer(serializers.Serializer):
     aujourdhui = serializers.DateField()
-    lots = PlanningLotSerializer(many=True)
+    cases = PlanningCaseSerializer(many=True)
 
 
 def _dates_contractuelles(element) -> tuple[str | None, str | None]:
@@ -77,9 +71,9 @@ class ProjetPlanningView(APIView):
         summary="Données du planning (Gantt) d'un projet",
         tags=["projets"],
         description=(
-            "Payload minimal pour la 3G : lots et activités actifs triés par ordre, "
-            "dates contractuelles (baseline si complète, sinon prévues) au format ISO, "
-            "pourcentages arrondis à 1 décimale. Mêmes droits que le détail du projet."
+            "Payload minimal pour la 3G : les cases actives de l'arbre, imbriquées, dates "
+            "contractuelles (baseline si complète, sinon prévues) au format ISO, pourcentages "
+            "arrondis à 1 décimale. Le périmètre de lecture s'applique."
         ),
         responses={
             200: PlanningSerializer,
@@ -92,50 +86,42 @@ class ProjetPlanningView(APIView):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
 
-        lots = list(
-            Lot.objects.filter(projet=projet, est_actif=True)
-            .order_by("ordre", "code")
-            .prefetch_related(
-                Prefetch(
-                    "activites",
-                    queryset=Activite.objects.filter(est_actif=True).order_by("ordre", "cree_le"),
-                )
-            )
-        )
-
+        arbre = charger_arbre(projet, actifs_seulement=True)
+        acces = visibilite(arbre, request.user, request)
         aujourdhui = timezone.localdate()
-        calendrier = calendrier_pour_lots(lots, aujourdhui)
+        calendrier = calendrier_pour_elements([projet, *arbre.elements], aujourdhui)
+        resultats = calculer_arbre(arbre)
+        temporels = calculer_temporels_arbre(arbre, resultats, aujourdhui, calendrier)
+        numeros = arbre.numerotation()
 
-        donnees_lots = []
-        for lot in lots:
-            indicateurs = indicateurs_temporels_lot(lot, aujourdhui, calendrier)
-            debut, fin = _dates_contractuelles(lot)
-            activites = []
-            for activite in lot.activites.all():
-                a_debut, a_fin = _dates_contractuelles(activite)
-                activites.append(
-                    {
-                        "id": activite.id,
-                        "libelle": activite.libelle,
-                        "debut": a_debut,
-                        "fin": a_fin,
-                        "avancement": _arrondi(calculer_avancement_physique_activite(activite)),
-                        "statut": activite.statut,
-                    }
-                )
-            donnees_lots.append(
-                {
-                    "id": lot.id,
-                    "code": lot.code,
-                    "libelle": lot.libelle,
-                    "debut": debut,
-                    "fin": fin,
-                    "avancement": _arrondi(calculer_avancement_physique_lot(lot)),
-                    "avancement_temporel": _arrondi(indicateurs["avancement_temporel"]),
-                    "delta_retard": _arrondi(indicateurs["delta_retard"]),
-                    "activites": activites,
-                }
-            )
+        def case(element):
+            debut, fin = _dates_contractuelles(element)
+            resultat = resultats.get(element.pk)
+            physique = resultat.physique if resultat else None
+            temporel = temporels.get(element.pk)
+            complet = acces[element.pk] == COMPLET
+            niveau = arbre.niveau(element)
+            return {
+                "id": element.pk,
+                "libelle": element.libelle,
+                "numero": numeros.get(element.pk),
+                "niveau": niveau.libelle if niveau else None,
+                "debut": debut if complet else None,
+                "fin": fin if complet else None,
+                "avancement": _arrondi(physique) if complet else None,
+                "avancement_temporel": _arrondi(temporel) if complet else None,
+                "delta_retard": (
+                    _arrondi(temporel - physique)
+                    if complet and temporel is not None and physique is not None
+                    else None
+                ),
+                "statut": element.statut,
+                "acces": acces[element.pk],
+                "enfants": [case(e) for e in arbre.enfants_actifs(element) if e.pk in acces],
+            }
 
-        donnees = {"aujourdhui": aujourdhui.isoformat(), "lots": donnees_lots}
+        donnees = {
+            "aujourdhui": aujourdhui.isoformat(),
+            "cases": [case(e) for e in arbre.racines() if e.pk in acces],
+        }
         return Response(PlanningSerializer(donnees).data, status=status.HTTP_200_OK)

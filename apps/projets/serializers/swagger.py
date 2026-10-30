@@ -16,6 +16,7 @@ from apps.projets.selectors.encadrement import (
 from apps.projets.serializers import (
     ChefProjetEnrichiSerializer,
     DureeProjetSerializer,
+    NiveauProjetSimpleSerializer,
     ProjetCreationSerializer,
 )
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
@@ -25,7 +26,7 @@ from apps.projets.services.contrats import (
     nettoyer_contrats,
     valider_fichier_contrat,
 )
-from apps.projets.services.statistiques import statistiques_lots
+from apps.projets.services.statistiques import statistiques_arbre
 
 CHAMPS_FORMULAIRE = (
     "nom",
@@ -57,6 +58,8 @@ CHAMPS_REPONSE = (
     "statistiques",
     "sans_chef_projet",
     "peut_renommer",
+    "niveaux",
+    "decoupage_cree",
     # L'encadrement, en lecture : le frontend en déduit qui voit le chantier.
     "chef_projet",
     "conducteurs_travaux",
@@ -210,6 +213,22 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     chef_projet = serializers.SerializerMethodField(
         help_text="Le chef de projet désigné, en clair ; null si le projet n'en a pas.",
     )
+    niveaux = serializers.SerializerMethodField(
+        help_text="Le gabarit du découpage (Phase, Ouvrage, Lot…), dans l'ordre ; vide avant."
+    )
+    decoupage_cree = serializers.SerializerMethodField(
+        help_text="Faux tant que le tableau de démarrage n'a pas été appliqué."
+    )
+
+    @extend_schema_field(NiveauProjetSimpleSerializer(many=True))
+    def get_niveaux(self, obj):
+        niveaux = [n for n in obj.niveaux.all() if n.supprime_le is None]
+        return NiveauProjetSimpleSerializer(sorted(niveaux, key=lambda n: n.ordre), many=True).data
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_decoupage_cree(self, obj) -> bool:
+        annote = getattr(obj, "a_un_decoupage", None)
+        return bool(annote) if annote is not None else obj.elements.exists()
 
     @extend_schema_field(ChefProjetEnrichiSerializer(allow_null=True))
     def get_chef_projet(self, obj) -> dict | None:
@@ -262,7 +281,8 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
             resultats.append(
                 {
                     "utilisateur": u_data,
-                    "zone": aff.zone or None,
+                    # Le périmètre du chef, en clair ; vide : il a tout le chantier.
+                    "zone": ", ".join(c.libelle for c in aff.perimetres.all()) or None,
                     "affectation_id": str(aff.id),
                 }
             )
@@ -288,18 +308,27 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
         return resultats
 
     statistiques = serializers.SerializerMethodField(
-        help_text="Compteurs et avancement des lots et activités actifs du projet."
+        help_text="Compteurs et avancement des cases actives de l'arbre du projet."
     )
+
+    def _statistiques(self, obj) -> dict:
+        # Un seul chargement de l'arbre par projet et par réponse : deux champs le partagent.
+        if not hasattr(obj, "_statistiques_arbre"):
+            from apps.projets.selectors.arbre import charger_arbre
+
+            obj._statistiques_arbre = statistiques_arbre(charger_arbre(obj))
+        return obj._statistiques_arbre
 
     @extend_schema_field(StatistiquesProjetSerializer)
     def get_statistiques(self, obj) -> dict:
-        return statistiques_lots(obj.lots.all())
+        return self._statistiques(obj)
 
     avancement_reel = serializers.SerializerMethodField(
         help_text=(
-            "Pourcentage réalisé automatique : 0 à la création, jusqu'à 100 selon les activités. "
-            "Lots pondérés par leur budget, lots sans budget exclus (RG-F3-05) ; "
-            "activités pondérées par leur quantité prévue."
+            "Pourcentage réalisé, calculé sur l'arbre : chaque case pèse son montant "
+            "(décisions v1.2, §8). Quand aucun montant n'est connu, l'avancement est "
+            "indisponible : `statistiques.avancement_pondere` vaut null et ce champ garde la "
+            "valeur stockée (0)."
         )
     )
     indice_sante = serializers.SerializerMethodField(
@@ -324,7 +353,8 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     )
 
     def get_avancement_reel(self, obj) -> float:
-        return statistiques_lots(obj.lots.all())["avancement_pondere"]
+        valeur = self._statistiques(obj)["avancement_pondere"]
+        return float(valeur) if valeur is not None else float(obj.avancement_reel or 0)
 
     def _calendrier(self):
         """Le calendrier construit une fois par la vue de liste ; None pour un objet isolé."""

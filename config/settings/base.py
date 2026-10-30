@@ -174,6 +174,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Un module que le super admin a fermé n'a plus de route (catalogue du schéma public).
+    "apps.core.middleware_modules.ModuleFermeMiddleware",
     # Verrou absolu R-128 : refuse toute mutation sous jeton d'assistance Super Admin
     "apps.platform_admin.middleware.LectureSeuleAssistanceMiddleware",
     # En dernier : il a besoin de `request.tenant`, et il ne doit refuser

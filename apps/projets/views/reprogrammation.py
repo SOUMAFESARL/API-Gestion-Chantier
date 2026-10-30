@@ -18,9 +18,8 @@ from apps.core.droits import APermission
 from apps.core.pagination import PaginationStandard
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import (
-    Activite,
+    Element,
     HistoriqueDate,
-    Lot,
     MotifReport,
     Projet,
     TypeObjetHistorique,
@@ -35,11 +34,9 @@ from apps.projets.serializers import (
 from apps.projets.services.reprogrammation import reprogrammer_date_instance
 
 __all__ = [
-    "ActiviteHistoriqueDatesView",
-    "ActiviteReprogrammerView",
+    "ElementHistoriqueDatesView",
+    "ElementReprogrammerView",
     "GlobalJournalReportsView",
-    "LotHistoriqueDatesView",
-    "LotReprogrammerView",
     "MotifReportListCreateView",
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
@@ -93,11 +90,7 @@ class BaseReprogrammerView(APIView):
     def executer_reprogrammation(self, request, instance, type_objet: str):
         self.check_object_permissions(request, instance)
 
-        projet = (
-            instance
-            if type_objet == TypeObjetHistorique.PROJET
-            else getattr(instance, "projet", getattr(getattr(instance, "lot", None), "projet", None))
-        )
+        projet = instance if type_objet == TypeObjetHistorique.PROJET else instance.projet
         if projet:
             from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 
@@ -107,6 +100,14 @@ class BaseReprogrammerView(APIView):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+        from apps.projets.services.perimetres import exiger, peut
+
+        element = instance if type_objet == TypeObjetHistorique.ELEMENT else None
+        exiger(request.user, "projets.planifier", projet, element, request=request)
+        if type_objet == TypeObjetHistorique.PROJET:
+            # Prolonger le projet exige `projets.prolonger` (§11.2) ; l'avancer, `planifier`.
+            if data["date_fin_prevue"] > (projet.date_fin_prevue or data["date_fin_prevue"]):
+                exiger(request.user, "projets.prolonger", projet, request=request)
         resultat = reprogrammer_date_instance(
             instance=instance,
             nouvelle_date_fin=data["date_fin_prevue"],
@@ -114,6 +115,8 @@ class BaseReprogrammerView(APIView):
             motif_id=str(data["motif_id"]),
             justification=data["justification"],
             auteur=request.user,
+            prolonger=data.get("prolonger", False),
+            autorise_a_prolonger=peut(request.user, "projets.prolonger", projet, element, request),
         )
 
         resultat["type_objet"] = type_objet
@@ -140,42 +143,30 @@ class ProjetReprogrammerView(BaseReprogrammerView):
         return self.executer_reprogrammation(request, projet, TypeObjetHistorique.PROJET)
 
 
-class LotReprogrammerView(BaseReprogrammerView):
-    """Reprogrammation de la date prévisionnelle d'un Lot de travaux."""
+class ElementReprogrammerView(BaseReprogrammerView):
+    """Reprogrammation des dates prévisionnelles d'une case de l'arbre (§11).
+
+    Le parent encadre : on ne resserre pas une case en deçà de ses enfants. Des dates qui
+    débordent du parent répondent `prolongation_requise` avec la liste des cases à prolonger ;
+    `prolonger: true` confirme. Prolonger le projet ou une case commencée exige
+    `projets.prolonger`.
+    """
 
     @extend_schema(
-        summary="Reprogrammer les dates prévisionnelles d'un lot",
+        summary="Reprogrammer les dates prévisionnelles d'une case",
         tags=["reprogrammation"],
         request=ReprogrammationRequestSerializer,
         responses={
             200: ReprogrammationResponseSerializer,
-            400: OpenApiResponse(description="Justification < 30 car., motif invalide ou dépassement."),
-            403: OpenApiResponse(description="Accès non autorisé au lot/projet."),
-            404: OpenApiResponse(description="Lot introuvable."),
+            400: OpenApiResponse(description="Justification < 30 car., motif invalide."),
+            403: OpenApiResponse(description="Hors périmètre, ou prolongation non autorisée."),
+            404: OpenApiResponse(description="Case introuvable."),
+            422: OpenApiResponse(description="`prolongation_requise` : confirmer la prolongation."),
         },
     )
     def post(self, request, pk):
-        lot = get_object_or_404(Lot.objects.select_related("projet"), pk=pk)
-        return self.executer_reprogrammation(request, lot, TypeObjetHistorique.LOT)
-
-
-class ActiviteReprogrammerView(BaseReprogrammerView):
-    """Reprogrammation de la date prévisionnelle d'une Activité."""
-
-    @extend_schema(
-        summary="Reprogrammer les dates prévisionnelles d'une activité",
-        tags=["reprogrammation"],
-        request=ReprogrammationRequestSerializer,
-        responses={
-            200: ReprogrammationResponseSerializer,
-            400: OpenApiResponse(description="Justification < 30 car., motif invalide ou dépassement."),
-            403: OpenApiResponse(description="Accès non autorisé à l'activité/projet."),
-            404: OpenApiResponse(description="Activité introuvable."),
-        },
-    )
-    def post(self, request, pk):
-        activite = get_object_or_404(Activite.objects.select_related("lot", "lot__projet"), pk=pk)
-        return self.executer_reprogrammation(request, activite, TypeObjetHistorique.ACTIVITE)
+        element = get_object_or_404(Element.objects.select_related("projet"), pk=pk)
+        return self.executer_reprogrammation(request, element, TypeObjetHistorique.ELEMENT)
 
 
 class BaseHistoriqueDatesView(APIView):
@@ -213,37 +204,20 @@ class ProjetHistoriqueDatesView(BaseHistoriqueDatesView):
         )
 
 
-class LotHistoriqueDatesView(BaseHistoriqueDatesView):
-    """Historique des décalages d'un lot."""
+class ElementHistoriqueDatesView(BaseHistoriqueDatesView):
+    """Historique des décalages d'une case de l'arbre."""
 
     @extend_schema(
-        summary="Consulter l'historique des dates d'un lot",
+        summary="Consulter l'historique des dates d'une case",
         tags=["reprogrammation"],
         responses={200: HistoriqueDateSerializer(many=True)},
     )
     def get(self, request, pk):
-        lot = get_object_or_404(Lot.objects.select_related("projet"), pk=pk)
+        element = get_object_or_404(Element.objects.select_related("projet"), pk=pk)
         return self.lister_historique(
             request,
-            lot,
-            {"lot": lot, "type_objet": TypeObjetHistorique.LOT},
-        )
-
-
-class ActiviteHistoriqueDatesView(BaseHistoriqueDatesView):
-    """Historique des décalages d'une activité."""
-
-    @extend_schema(
-        summary="Consulter l'historique des dates d'une activité",
-        tags=["reprogrammation"],
-        responses={200: HistoriqueDateSerializer(many=True)},
-    )
-    def get(self, request, pk):
-        activite = get_object_or_404(Activite.objects.select_related("lot", "lot__projet"), pk=pk)
-        return self.lister_historique(
-            request,
-            activite,
-            {"activite": activite, "type_objet": TypeObjetHistorique.ACTIVITE},
+            element,
+            {"element": element, "type_objet": TypeObjetHistorique.ELEMENT},
         )
 
 
@@ -293,7 +267,7 @@ class JournalReportsFiltreMixin:
 
 
 class ProjetJournalReportsConsolideView(APIView, JournalReportsFiltreMixin):
-    """Journal consolidé des reports d'un chantier : projet, lots et activités liés."""
+    """Journal consolidé des reports d'un chantier : le projet et les cases de son arbre."""
 
     pagination_class = PaginationStandard
     permission_classes = [
@@ -314,10 +288,9 @@ class ProjetJournalReportsConsolideView(APIView, JournalReportsFiltreMixin):
         qs = (
             HistoriqueDate.objects.filter(
                 models.Q(projet=projet)
-                | models.Q(lot__projet=projet)
-                | models.Q(activite__lot__projet=projet)
+                | models.Q(element__projet=projet)
             )
-            .select_related("motif", "auteur", "projet", "lot", "activite", "lot__projet", "activite__lot__projet")
+            .select_related("motif", "auteur", "projet", "element", "element__projet")
             .order_by("-cree_le")
         )
         qs = self.appliquer_filtres(qs, request.query_params)
@@ -350,7 +323,7 @@ class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
     def get(self, request):
         qs = (
             HistoriqueDate.objects.all()
-            .select_related("motif", "auteur", "projet", "lot", "activite", "lot__projet", "activite__lot__projet")
+            .select_related("motif", "auteur", "projet", "element", "element__projet")
             .order_by("-cree_le")
         )
 
@@ -363,16 +336,14 @@ class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
             projets_ids = obtenir_projets_ids_actifs_utilisateur(user, request=request)
             qs = qs.filter(
                 models.Q(projet_id__in=projets_ids)
-                | models.Q(lot__projet_id__in=projets_ids)
-                | models.Q(activite__lot__projet_id__in=projets_ids)
+                | models.Q(element__projet_id__in=projets_ids)
             )
 
         projet_id = request.query_params.get("projet_id")
         if projet_id:
             qs = qs.filter(
                 models.Q(projet_id=projet_id)
-                | models.Q(lot__projet_id=projet_id)
-                | models.Q(activite__lot__projet_id=projet_id)
+                | models.Q(element__projet_id=projet_id)
             )
 
         qs = self.appliquer_filtres(qs, request.query_params)

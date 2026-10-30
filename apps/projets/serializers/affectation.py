@@ -14,20 +14,21 @@ def code_role_plateforme(user) -> str:
 
 
 def verifier_role_coherent(user, role_projet) -> None:
-    """Règle du 16/10/2026 : on tient sur un projet le rôle qu'on a sur la plateforme.
+    """Le rôle demandé sur le projet existe dans l'entreprise.
 
-    Valable pour **tout** rôle de portée Projet, présent ou à venir : un CT n'est affecté
-    que comme CT, un « Responsable QSE » que comme Responsable QSE.
+    **Le rôle est propre à l'affectation** (décisions v1.2, §13bis) : il prend par défaut le rôle
+    du collaborateur sur la plateforme, mais peut différer d'un projet à l'autre. Cela revient
+    sur l'arbitrage du 16/10/2026, qui imposait le rôle de la plateforme sur chaque projet.
     """
-    if (role_projet or "").upper() != code_role_plateforme(user):
+    from apps.accounts.models import Role
+
+    code = (role_projet or "").upper()
+    if code in RoleProjet.values:
+        return
+    if not Role.objects.filter(code__iexact=code, est_actif=True, supprime_le__isnull=True).exists():
         raise serializers.ValidationError(
-            {
-                "role_projet": (
-                    "Ce collaborateur n'a pas ce rôle sur la plateforme : il ne peut pas le "
-                    "tenir sur un projet."
-                )
-            },
-            code="role_incoherent",
+            {"role_projet": "Ce rôle n'existe pas dans l'entreprise."},
+            code="role_inconnu",
         )
 
 
@@ -43,12 +44,13 @@ class IntervenantAffectationSerializer(serializers.Serializer):
     telephone = serializers.CharField(required=False, allow_blank=True)
 
 
-class LotAffectationSerializer(serializers.Serializer):
-    """Le lot d'un chef de chantier, tel que l'écran l'affiche."""
+class PerimetreAffectationSerializer(serializers.Serializer):
+    """Une case du périmètre d'une affectation, avec le chemin qui y mène."""
 
     id = serializers.UUIDField()
-    code = serializers.CharField()
     libelle = serializers.CharField()
+    niveau = serializers.CharField()
+    chemin = serializers.ListField(child=serializers.CharField())
 
 
 class AffectationProjetResponseSerializer(serializers.ModelSerializer):
@@ -56,7 +58,12 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
 
     utilisateur = serializers.SerializerMethodField()
     role_projet_libelle = serializers.CharField(source="get_role_projet_display", read_only=True)
-    lot = serializers.SerializerMethodField()
+    role_plateforme = serializers.SerializerMethodField(
+        help_text="Le rôle du collaborateur sur la plateforme ; celui du projet peut différer."
+    )
+    perimetres = serializers.SerializerMethodField(
+        help_text="Les cases de l'arbre où s'exercent ses permissions ; vide : tout le projet."
+    )
     modifiable = serializers.SerializerMethodField(
         help_text=(
             "Faux quand l'affectation est celle du chef de projet et que l'utilisateur "
@@ -72,8 +79,8 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
             "utilisateur",
             "role_projet",
             "role_projet_libelle",
-            "zone",
-            "lot",
+            "role_plateforme",
+            "perimetres",
             "fonction_membre",
             "date_debut",
             "date_fin",
@@ -83,12 +90,28 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
             "modifie_le",
         ]
 
-    @extend_schema_field(LotAffectationSerializer(allow_null=True))
-    def get_lot(self, obj):
-        lot = obj.lot if obj.lot_id else None
-        if lot is None or lot.supprime_le is not None:
-            return None
-        return {"id": lot.id, "code": lot.code, "libelle": lot.libelle}
+    @extend_schema_field(serializers.CharField())
+    def get_role_plateforme(self, obj) -> str:
+        return code_role_plateforme(obj.utilisateur) if obj.utilisateur_id else ""
+
+    @extend_schema_field(PerimetreAffectationSerializer(many=True))
+    def get_perimetres(self, obj):
+        cases = [e for e in obj.perimetres.all() if e.supprime_le is None]
+        if not cases:
+            return []
+        from apps.projets.models import Element
+
+        ids = {i for e in cases for i in e.ancetres_ids}
+        libelles = dict(Element.objects.filter(pk__in=ids).values_list("pk", "libelle"))
+        return [
+            {
+                "id": e.pk,
+                "libelle": e.libelle,
+                "niveau": e.niveau.libelle,
+                "chemin": [libelles.get(i, "") for i in _uuids(e.ancetres_ids)] + [e.libelle],
+            }
+            for e in cases
+        ]
 
     @extend_schema_field(serializers.BooleanField())
     def get_modifiable(self, obj) -> bool:
@@ -150,17 +173,25 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
         return data
 
 
+def _uuids(ids):
+    import uuid
+
+    return [uuid.UUID(str(i)) for i in ids]
+
+
 class AffectationProjetCreateSerializer(serializers.Serializer):
     """Données pour affecter un nouveau collaborateur au projet (E-05 / B4)."""
 
     utilisateur_id = serializers.UUIDField(required=True)
-    role_projet = serializers.CharField(max_length=50, required=True)
+    # Facultatif : par défaut, le rôle du collaborateur sur la plateforme.
+    role_projet = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
     date_debut = serializers.DateField(required=False, allow_null=True)
     date_fin = serializers.DateField(required=False, allow_null=True)
-    zone = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
-    # Le lot d'un chef de chantier ; sa cohérence (projet, suppression, rôle) est vérifiée par
-    # le service, qui répond 400 avec un message lisible. S'il est fourni, il fixe la zone.
-    lot_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    # Les cases de l'arbre où s'exercent ses permissions ; vide : tout le projet. Leur cohérence
+    # (projet, suppression) est vérifiée par le service.
+    perimetres_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
     fonction_membre = serializers.CharField(
         required=False, allow_blank=True, max_length=20, default=""
     )
@@ -196,14 +227,11 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
 
         attrs["utilisateur_instance"] = user
 
-        role_projet = attrs.get("role_projet")
-        zone = attrs.get("zone", "")
-        fonction_membre = attrs.get("fonction_membre", "")
+        from apps.projets.services.affectations import role_par_defaut
 
-        if zone and role_projet != RoleProjet.CHEF_CHANTIER:
-            raise serializers.ValidationError(
-                {"zone": "La zone ne concerne qu'un chef de chantier."}
-            )
+        role_projet = (attrs.get("role_projet") or role_par_defaut(user)).upper()
+        attrs["role_projet"] = role_projet
+        fonction_membre = attrs.get("fonction_membre", "")
 
         if (
             fonction_membre
@@ -216,7 +244,6 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
         if role_projet == RoleProjet.VISITEUR and not fonction_membre:
             attrs["fonction_membre"] = "AUTRE"
 
-        # Après les contrôles de forme (zone, fonction) : leur message reste le plus précis.
         verifier_role_coherent(user, role_projet)
 
         date_debut = attrs.get("date_debut")
@@ -230,14 +257,13 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
 
 
 class AffectationProjetUpdateSerializer(serializers.Serializer):
-    """Données pour modifier rôle, dates, zone, fonction ou statut d'une affectation."""
+    """Données pour modifier rôle, dates, périmètre, fonction ou statut d'une affectation."""
 
     role_projet = serializers.CharField(max_length=50, required=False)
     date_debut = serializers.DateField(required=False, allow_null=True)
     date_fin = serializers.DateField(required=False, allow_null=True)
     est_actif = serializers.BooleanField(required=False)
-    zone = serializers.CharField(required=False, allow_blank=True, max_length=120)
-    lot_id = serializers.UUIDField(required=False, allow_null=True)
+    perimetres_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
     fonction_membre = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     def validate(self, attrs):
@@ -245,11 +271,6 @@ class AffectationProjetUpdateSerializer(serializers.Serializer):
         nouveau_role = attrs.get("role_projet", getattr(instance, "role_projet", None))
         if "role_projet" in attrs and instance is not None:
             verifier_role_coherent(instance.utilisateur, attrs["role_projet"])
-
-        if "zone" in attrs and attrs["zone"] and nouveau_role != RoleProjet.CHEF_CHANTIER:
-            raise serializers.ValidationError(
-                {"zone": "La zone ne concerne qu'un chef de chantier."}
-            )
 
         if (
             "fonction_membre" in attrs

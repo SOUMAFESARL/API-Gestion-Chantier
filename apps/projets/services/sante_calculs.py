@@ -1,11 +1,11 @@
 """Moteur de calcul pur pour les avancements et le calendrier d'entreprise.
 
 Fonctions pures, déterministes et testables unitairement :
-- Formule 1 : Avancement physique activité (quantite_realisee / quantite_prevue).
-- Formule 2 : Avancement physique lot (moyenne des activités pondérée par quantite_prevue).
-- Formule 3 : Avancement physique projet (moyenne des lots pondérée par budget_initial_montant).
-- Formule 4 : Avancement temporel lot et projet (jours ouvrés écoulés vs baseline contractuelle v0).
-- Formule 5 : Delta de retard lot et projet (avancement temporel - avancement physique).
+- Formule 1 : physique d'une feuille (quantité, pourcentage déclaré ou jalon).
+- Formules 2 et 3 : physique d'un parent et du projet, moyenne des enfants pondérée par le
+  montant (décisions v1.2 du découpage, §8 et §9).
+- Formule 4 : temporel d'une case et du projet (jours ouvrés écoulés sur la baseline).
+- Formule 5 : écart (temporel - physique), pour chaque case et pour le projet.
 - Calendrier d'entreprise et comptage des jours ouvrés.
 """
 
@@ -15,7 +15,6 @@ from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
-from django.db.models import QuerySet
 from django_tenants.utils import get_public_schema_name, schema_context
 
 from apps.core.enums import BadgeSante, StatutActivite
@@ -31,13 +30,16 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "CALENDRIER_PAR_DEFAUT_SEMAINE",
     "Calendrier",
+    "ResultatCase",
+    "calculer_arbre",
     "calculer_avancement_physique_activite",
-    "calculer_avancement_physique_lot",
+    "calculer_avancement_physique_feuille",
     "calculer_avancement_physique_projet",
-    "calculer_avancement_temporel_lot",
+    "calculer_avancement_temporel_element",
     "calculer_avancement_temporel_projet",
-    "calculer_delta_lot",
+    "calculer_delta_element",
     "calculer_delta_projet",
+    "calculer_temporels_arbre",
     "calendrier_entreprise",
     "compter_jours_ouvres",
     "couverture_budget_projet",
@@ -45,7 +47,7 @@ __all__ = [
     "determiner_badge_brut",
     "est_jour_ouvre",
     "obtenir_jours_feries_ci",
-    "ponderer_lots_par_budget",
+    "resultat_projet",
 ]
 
 
@@ -107,168 +109,162 @@ def compter_jours_ouvres(
 
 
 # --------------------------------------------------------------------------
-# Avancements Physiques & Temporels
+# Avancements physiques et temporels sur l'arbre (F3 généralisée, décisions v1.2 §8 et §9)
 # --------------------------------------------------------------------------
+#
+# **Le principe ne change pas** : on mesure sur les cases du bas (les feuilles) et une moyenne
+# pondérée remonte jusqu'au projet. Deux différences : le poids est partout le **montant**
+# (les quantités ne s'additionnent pas entre unités), et le nombre d'étages est libre.
+#
+# | Situation                                  | Poids         | Physique du parent              |
+# | Feuille avec un montant                    | son montant   | —                               |
+# | Tous les enfants ont un poids              | leur somme    | moyenne pondérée des enfants    |
+# | Enfants partiellement chiffrés + enveloppe | l'enveloppe   | Σ(physique x poids) / enveloppe |
+# | Partiellement chiffrés, sans enveloppe     | aucun         | sur les chiffrés, « partiel »   |
+# | Aucun montant connu                        | aucun         | « indisponible » (None)         |
 
-def calculer_avancement_physique_activite(activite) -> float:
-    """Calcule l'avancement physique d'une activité (0 à 100 %).
 
-    Règle CDC / SFD F3 §4.1 : Activite.quantite_realisee / Activite.quantite_prevue * 100.
-    100 % si clôturée. Plafonné à 100 %, plancher à 0 %.
-    0.0 si quantite_prevue <= 0.
-    Note : quantite_realisee est désormais alimentée par les rapports approuvés
-    (tâche P3) et par les mises à jour manuelles.
+class ResultatCase:
+    """Le calcul d'une case : son poids, son physique, et ce qui le rend partiel."""
+
+    __slots__ = ("exclus", "partiel", "physique", "poids")
+
+    def __init__(self, poids, physique, partiel=False, exclus=0):
+        self.poids = poids
+        self.physique = physique
+        self.partiel = partiel
+        self.exclus = exclus
+
+
+def calculer_avancement_physique_feuille(feuille) -> float:
+    """F3 formule 1 : quantité réalisée / quantité prévue, ou pourcentage déclaré, ou jalon.
+
+    100 % si la feuille est clôturée. Plafonné à 100 % (un dépassement s'affiche ailleurs), 0 %
+    tant qu'une feuille en quantité n'a pas de quantité prévue.
     """
-    if getattr(activite, "statut", None) == StatutActivite.CLOTURE:
+    if getattr(feuille, "cloture", False) or getattr(feuille, "statut", None) == StatutActivite.CLOTURE:
         return 100.0
-    q_prevue = getattr(activite, "quantite_prevue", None) or 0
+    mode = getattr(feuille, "mode_mesure", "QUANTITE")
+    if mode == "POURCENTAGE":
+        return float(round(max(0.0, min(100.0, float(feuille.pourcentage_declare or 0))), 2))
+    if mode == "JALON":
+        return 0.0
+    q_prevue = getattr(feuille, "quantite_prevue", None) or 0
     if q_prevue <= 0:
         return 0.0
-    q_realisee = getattr(activite, "quantite_realisee", None) or 0
+    q_realisee = getattr(feuille, "quantite_realisee", None) or 0
     pourcentage = (float(q_realisee) / float(q_prevue)) * 100.0
     return float(round(max(0.0, min(100.0, pourcentage)), 2))
 
 
-def calculer_avancement_physique_lot(lot) -> float:
-    """Calcule l'avancement physique d'un lot (SFD F3 §4.2).
+# Rétrocompatibilité des appels : une activité d'hier est une feuille d'aujourd'hui.
+calculer_avancement_physique_activite = calculer_avancement_physique_feuille
 
-    Moyenne des activités actives non supprimées, pondérée par leur quantite_prevue.
-    Les activités dont quantite_prevue <= 0 n'entrent pas dans le calcul.
-    Si le lot n'a aucune activité active, garde le comportement actuel
-    (rendre float(lot.avancement or 0)).
-    Si toutes ses activités ont une quantité prévue nulle, rend 0.0.
+
+def _poids_feuille(feuille):
+    montant = getattr(feuille, "montant", None)
+    return Decimal(montant) if montant and montant > 0 else None
+
+
+def _combiner(enfants: list[ResultatCase], enveloppe) -> ResultatCase:
+    """Le poids et le physique d'un parent à partir de ses enfants (§8)."""
+    enveloppe = Decimal(enveloppe) if enveloppe and enveloppe > 0 else None
+    chiffres = [r for r in enfants if r.poids is not None and r.physique is not None]
+    exclus = len(enfants) - len(chiffres) + sum(r.exclus for r in enfants)
+    partiel_enfant = any(r.partiel for r in chiffres)
+    somme_poids = sum((r.poids for r in chiffres), Decimal(0))
+    somme_ponderee = sum((Decimal(str(r.physique)) * r.poids for r in chiffres), Decimal(0))
+
+    if chiffres and len(chiffres) == len(enfants):
+        physique = float(round(somme_ponderee / somme_poids, 2)) if somme_poids else 0.0
+        return ResultatCase(somme_poids, physique, partiel_enfant, exclus)
+    if enveloppe is not None:
+        physique = float(round(min(Decimal(100), somme_ponderee / enveloppe), 2))
+        return ResultatCase(enveloppe, physique, partiel_enfant, exclus)
+    if chiffres:
+        physique = float(round(somme_ponderee / somme_poids, 2)) if somme_poids else 0.0
+        return ResultatCase(None, physique, True, exclus)
+    return ResultatCase(None, None, False, exclus)
+
+
+def calculer_arbre(arbre) -> dict:
+    """Le résultat de chaque case active de l'arbre, des feuilles vers les racines.
+
+    Rend `{element_id: ResultatCase}`. Une case désactivée sort des calculs (§10).
     """
-    activites = [
-        a for a in lot.activites.all()
-        if getattr(a, "est_actif", True) and getattr(a, "supprime_le", None) is None
-    ]
-    if not activites:
-        return float(getattr(lot, "avancement", None) or 0.0)
+    resultats: dict = {}
 
-    activites_valides = [
-        a for a in activites
-        if (getattr(a, "quantite_prevue", None) or 0) > 0
-    ]
-    if not activites_valides:
-        return 0.0
+    def visiter(element) -> ResultatCase:
+        enfants = arbre.enfants_actifs(element)
+        if not enfants:
+            poids = _poids_feuille(element)
+            physique = calculer_avancement_physique_feuille(element)
+            # Sans montant, la feuille a un physique mais ne pèse rien au-dessus d'elle.
+            resultat = ResultatCase(poids, physique)
+        else:
+            resultat = _combiner([visiter(e) for e in enfants], element.enveloppe)
+        resultats[element.pk] = resultat
+        return resultat
 
-    poids = [float(a.quantite_prevue) for a in activites_valides]
-    total_poids = sum(poids)
-    if total_poids <= 0:
-        return 0.0
-
-    avancements = [calculer_avancement_physique_activite(a) for a in activites_valides]
-    somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
-    return float(round(somme / total_poids, 2))
+    for racine in arbre.racines():
+        if racine.est_actif:
+            visiter(racine)
+    return resultats
 
 
-def ponderer_lots_par_budget(lots) -> float:
-    """Calcule l'avancement physique de lots pondéré par budget (SFD F3 §4.3, RG-F3-05).
+def resultat_projet(projet, arbre=None, resultats=None) -> ResultatCase:
+    """La règle de tout parent, appliquée au projet ; son budget tient lieu d'enveloppe."""
+    from apps.projets.selectors.arbre import charger_arbre
 
-    Seuls les lots actifs, non supprimés, et disposant d'un budget initial > 0 sont inclus.
-    Retourne 0.0 si aucun lot n'a de budget.
-    """
-    # Un QuerySet est parcouru tel quel : lui rappeler `.all()` le clone et jette son cache de
-    # préchargement, soit une requête par projet dans les listes. Seul un gestionnaire (`.all`
-    # sans être un QuerySet) doit être résolu.
-    lots_iterable = (
-        lots if isinstance(lots, QuerySet) or not hasattr(lots, "all") else lots.all()
-    )
-    lots_actifs = [
-        lot for lot in lots_iterable
-        if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
-    ]
-    lots_budgetes = [
-        lot for lot in lots_actifs
-        if getattr(lot, "budget_initial_montant", None) is not None
-        and lot.budget_initial_montant > 0
-    ]
-    if not lots_budgetes:
-        return 0.0
-
-    poids = [float(lot.budget_initial_montant) for lot in lots_budgetes]
-    total_poids = sum(poids)
-    if total_poids <= 0:
-        return 0.0
-
-    avancements = [calculer_avancement_physique_lot(lot) for lot in lots_budgetes]
-    somme = sum(av * p for av, p in zip(avancements, poids, strict=True))
-    return float(round(somme / total_poids, 2))
+    arbre = arbre or charger_arbre(projet)
+    resultats = resultats if resultats is not None else calculer_arbre(arbre)
+    racines = [r for r in arbre.racines() if r.est_actif]
+    if not racines:
+        return ResultatCase(None, None)
+    return _combiner([resultats[r.pk] for r in racines], projet.budget_initial_montant)
 
 
 def calculer_avancement_physique_projet(projet) -> tuple[float, str]:
-    """Calcule l'avancement physique du projet (SFD F3 §4.3, RG-F3-05).
-
-    Moyenne des lots actifs non supprimés, pondérée par lot.budget_initial_montant.
-    Les lots sans budget (> 0) sont exclus du calcul.
-    Retourne toujours (avancement, "BUDGET").
-    Retourne (0.0, "BUDGET") si aucun lot n'a de budget.
-    """
-    avancement = ponderer_lots_par_budget(projet.lots.all())
-    return avancement, "BUDGET"
+    """F3 formule 3 : la règle de tout parent. Rend 0.0 quand l'avancement est indisponible —
+    le stockage du projet reste un nombre ; l'arbre, lui, dit « indisponible »."""
+    resultat = resultat_projet(projet)
+    return (resultat.physique if resultat.physique is not None else 0.0), "MONTANT"
 
 
 def couverture_budget_projet(projet) -> dict[str, Any]:
-    """Calcule la couverture budgétaire des lots par rapport au budget du projet (RG-F3-05).
+    """Combien de feuilles n'ont pas de montant, et quelle part du budget les montants couvrent."""
+    from apps.projets.selectors.arbre import charger_arbre
 
-    Retourne :
-    {
-        "lots_sans_budget": int,
-        "part_budget_couverte": float | None,
-    }
-    - lots_sans_budget : nombre de lots actifs non supprimés sans budget > 0.
-    - part_budget_couverte : part (en %, arrondie à 2 décimales) de
-      projet.budget_initial_montant couverte par la somme des budgets des lots inclus (> 0),
-      ou None si le projet n'a pas de budget > 0.
-    """
-    lots_actifs = [
-        lot for lot in projet.lots.all()
-        if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
-    ]
-
-    lots_sans_budget = 0
-    somme_budgets_inclus = Decimal("0")
-    for lot in lots_actifs:
-        b = getattr(lot, "budget_initial_montant", None)
-        if b is not None and b > 0:
-            somme_budgets_inclus += Decimal(str(b))
-        else:
-            lots_sans_budget += 1
-
+    arbre = charger_arbre(projet)
+    feuilles = arbre.feuilles()
+    sans_montant = sum(1 for f in feuilles if not f.montant)
+    somme = sum((Decimal(f.montant) for f in feuilles if f.montant), Decimal(0))
     b_projet = getattr(projet, "budget_initial_montant", None)
-    if b_projet is not None and Decimal(str(b_projet)) > Decimal("0"):
-        ratio = (float(somme_budgets_inclus) / float(b_projet)) * 100.0
-        part_budget_couverte = float(round(ratio, 2))
-    else:
-        part_budget_couverte = None
-
-    return {
-        "lots_sans_budget": lots_sans_budget,
-        "part_budget_couverte": part_budget_couverte,
-    }
+    part = (
+        float(round(float(somme) / float(b_projet) * 100.0, 2))
+        if b_projet and Decimal(str(b_projet)) > 0
+        else None
+    )
+    return {"feuilles_sans_montant": sans_montant, "part_budget_couverte": part}
 
 
-def calculer_avancement_temporel_lot(
-    lot,
+def calculer_avancement_temporel_element(
+    element,
     date_reference: date,
     jours_feries: Calendrier | set[date] | frozenset[date],
 ) -> float | None:
-    """Calcule l'avancement temporel d'un lot : jours ouvrés écoulés / jours ouvrés totaux.
+    """F3 formule 4 sur les dates propres d'une case : jours ouvrés écoulés / jours ouvrés totaux.
 
-    Règle contractuelle (SFD F3 §4.4, Erratum E-1 & Décision 5) :
-    - Paire baseline complète (date_debut_baseline et date_fin_baseline).
-    - À défaut, paire prévisionnelle complète (date_debut_prevue et date_fin_prevue).
-    - Si aucune des deux paires n'est complète, retourne None.
-    - Bornes incluses au numérateur comme au dénominateur.
-    - 0.0 % si date_reference < debut, 100.0 % si date_reference >= fin.
+    Baseline complète d'abord, à défaut dates prévues ; None si aucune paire n'est complète.
+    Bornes incluses ; 0 % avant le début, 100 % à partir de la fin.
     """
-    debut_base = getattr(lot, "date_debut_baseline", None)
-    fin_base = getattr(lot, "date_fin_baseline", None)
+    debut_base = getattr(element, "date_debut_baseline", None)
+    fin_base = getattr(element, "date_fin_baseline", None)
     if debut_base and fin_base:
         debut, fin = debut_base, fin_base
     else:
-        debut_prev = getattr(lot, "date_debut_prevue", None)
-        fin_prev = getattr(lot, "date_fin_prevue", None)
+        debut_prev = getattr(element, "date_debut_prevue", None)
+        fin_prev = getattr(element, "date_fin_prevue", None)
         if debut_prev and fin_prev:
             debut, fin = debut_prev, fin_prev
         else:
@@ -288,68 +284,92 @@ def calculer_avancement_temporel_lot(
     return float(round(max(0.0, min(100.0, ratio)), 2))
 
 
+def calculer_temporels_arbre(arbre, resultats, date_reference, calendrier) -> dict:
+    """Le temporel de chaque case active : sur ses dates pour une feuille ; pour un parent,
+    la moyenne de ses enfants avec les mêmes poids que le physique — ou ses propres dates si ses
+    enfants sont incomplètement chiffrés ou datés (§9, formule 4)."""
+    temporels: dict = {}
+
+    def visiter(element):
+        enfants = arbre.enfants_actifs(element)
+        propre = calculer_avancement_temporel_element(element, date_reference, calendrier)
+        if not enfants:
+            temporels[element.pk] = propre
+            return propre
+        valeurs = [(visiter(e), resultats.get(e.pk)) for e in enfants]
+        complets = all(t is not None and r and r.poids for t, r in valeurs)
+        if complets:
+            total = sum(r.poids for _, r in valeurs)
+            moyenne = sum(Decimal(str(t)) * r.poids for t, r in valeurs) / total if total else 0
+            temporels[element.pk] = float(round(moyenne, 2))
+        else:
+            temporels[element.pk] = propre
+        return temporels[element.pk]
+
+    for racine in arbre.racines():
+        if racine.est_actif:
+            visiter(racine)
+    return temporels
+
+
 def calculer_avancement_temporel_projet(
     projet,
     date_reference: date,
     jours_feries: Calendrier | set[date] | frozenset[date],
 ) -> tuple[float, list[str]]:
-    """Calcule l'avancement temporel consolidé du projet (SFD F3 §4.4, RG-F3-04).
+    """Temporel du projet : moyenne des racines pondérée par leur poids ; à défaut, ses dates.
 
-    Moyenne des lots actifs non supprimés, pondérée par lot.budget_initial_montant (> 0).
-    Seuls les lots disposant d'un budget > 0 et d'un avancement temporel non None sont retenus.
-    Pour chaque lot actif non supprimé dont l'avancement temporel est None, ajoute
-    l'avertissement LOT_SANS_DATES:<code>.
-    Retourne (avancement, avertissements). Retourne (0.0, avertissements) si aucun lot n'est retenu.
+    Rend aussi les avertissements `CASE_SANS_DATES:<intitulé>` des racines sans dates.
     """
-    avertissements: list[str] = []
-    lots_iterable = projet.lots.all() if hasattr(projet.lots, "all") else projet.lots
-    lots_actifs = [
-        lot for lot in lots_iterable
-        if getattr(lot, "est_actif", True) and getattr(lot, "supprime_le", None) is None
-    ]
-    if not lots_actifs:
-        return 0.0, avertissements
+    from apps.projets.selectors.arbre import charger_arbre
 
-    lots_retenus: list[tuple[Any, float]] = []
-    for lot in lots_actifs:
-        temp = calculer_avancement_temporel_lot(lot, date_reference, jours_feries)
-        if temp is None:
-            code = getattr(lot, "code", "")
-            avertissements.append(f"LOT_SANS_DATES:{code}")
+    arbre = charger_arbre(projet)
+    resultats = calculer_arbre(arbre)
+    temporels = calculer_temporels_arbre(arbre, resultats, date_reference, jours_feries)
+    avertissements = []
+    retenues = []
+    for racine in arbre.racines():
+        if not racine.est_actif:
             continue
-
-        budget = getattr(lot, "budget_initial_montant", None)
-        if budget is not None and budget > 0:
-            lots_retenus.append((lot, temp))
-
-    if not lots_retenus:
-        return 0.0, avertissements
-
-    poids = [float(lot.budget_initial_montant) for lot, _ in lots_retenus]
-    total_poids = sum(poids)
-    if total_poids <= 0:
-        return 0.0, avertissements
-
-    somme = sum(temp * p for (_, temp), p in zip(lots_retenus, poids, strict=True))
-    return float(round(somme / total_poids, 2)), avertissements
+        t = temporels.get(racine.pk)
+        if t is None:
+            avertissements.append(f"CASE_SANS_DATES:{racine.libelle}")
+            continue
+        r = resultats.get(racine.pk)
+        if r and r.poids:
+            retenues.append((t, r.poids))
+    if retenues:
+        total = sum(p for _, p in retenues)
+        valeur = sum(Decimal(str(t)) * p for t, p in retenues) / total
+        return float(round(valeur, 2)), avertissements
+    propre = calculer_avancement_temporel_element(projet, date_reference, jours_feries)
+    return (propre if propre is not None else 0.0), avertissements
 
 
-def calculer_delta_lot(
-    lot,
-    date_reference: date,
-    calendrier: Calendrier | set[date] | frozenset[date],
-) -> float | None:
-    """Calcule l'écart d'avancement d'un lot (Formule 5, SFD F3 §4.5).
+def calculer_deltas_arbre(arbre, resultats, date_reference, calendrier) -> dict:
+    """F3 formule 5 pour chaque case : temporel de l'arbre - physique.
 
-    Delta = avancement temporel (Formule 4) - avancement physique (Formule 2).
-    Arrondi à 2 décimales. Un résultat positif signifie un retard.
-    Retourne None si l'avancement temporel est None (absence de dates contractuelles).
+    Le temporel d'un parent vient de ses enfants (`calculer_temporels_arbre`) : le tableau de
+    démarrage ne date souvent que les feuilles, et un lot sans dates propres se juge quand même.
+    None pour une case sans temporel.
     """
-    temp = calculer_avancement_temporel_lot(lot, date_reference, calendrier)
+    temporels = calculer_temporels_arbre(arbre, resultats, date_reference, calendrier)
+    deltas = {}
+    for pk, temporel in temporels.items():
+        resultat = resultats.get(pk)
+        physique = resultat.physique if resultat and resultat.physique is not None else 0.0
+        deltas[pk] = None if temporel is None else float(round(temporel - physique, 2))
+    return deltas
+
+
+def calculer_delta_element(element, date_reference, calendrier, physique=None) -> float | None:
+    """F3 formule 5 : temporel - physique, d'une case. Positif = retard ; None sans dates."""
+    temp = calculer_avancement_temporel_element(element, date_reference, calendrier)
     if temp is None:
         return None
-    phys = calculer_avancement_physique_lot(lot)
-    return float(round(temp - phys, 2))
+    if physique is None:
+        physique = float(getattr(element, "avancement", None) or 0)
+    return float(round(temp - physique, 2))
 
 
 def calculer_delta_projet(
@@ -357,11 +377,7 @@ def calculer_delta_projet(
     date_reference: date,
     calendrier: Calendrier | set[date] | frozenset[date],
 ) -> float:
-    """Calcule l'écart d'avancement consolidé d'un projet (Formule 5, SFD F3 §4.5).
-
-    Delta = avancement temporel (Formule 4) - avancement physique (Formule 3).
-    Arrondi à 2 décimales. Un résultat positif signifie un retard.
-    """
+    """F3 formule 5 du projet : temporel - physique. Positif = retard."""
     temp, _ = calculer_avancement_temporel_projet(projet, date_reference, calendrier)
     phys, _ = calculer_avancement_physique_projet(projet)
     return float(round(temp - phys, 2))

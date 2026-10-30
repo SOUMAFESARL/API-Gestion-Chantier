@@ -12,7 +12,7 @@ class BlocageSerializer(serializers.ModelSerializer):
     ouvert_par_nom = serializers.SerializerMethodField()
     resolu_par_nom = serializers.SerializerMethodField()
     projet_nom = serializers.CharField(source="projet.nom", read_only=True)
-    lot_libelle = serializers.CharField(source="lot.libelle", read_only=True, default=None)
+    element_libelle = serializers.CharField(source="element.libelle", read_only=True, default=None)
 
     class Meta:
         model = Blocage
@@ -20,8 +20,8 @@ class BlocageSerializer(serializers.ModelSerializer):
             "id",
             "projet",
             "projet_nom",
-            "lot",
-            "lot_libelle",
+            "element",
+            "element_libelle",
             "titre",
             "description",
             "severite",
@@ -39,7 +39,7 @@ class BlocageSerializer(serializers.ModelSerializer):
             "id",
             "projet",
             "projet_nom",
-            "lot_libelle",
+            "element_libelle",
             "ouvert_le",
             "resolu_le",
             "ouvert_par",
@@ -75,8 +75,10 @@ class BlocageCreateSerializer(serializers.Serializer):
         default=SeveriteBlocage.MINEUR,
         help_text="Niveau de gravité (MINEUR, MAJEUR, CRITIQUE).",
     )
-    lot_id = serializers.UUIDField(
-        required=False, allow_null=True, help_text="Identifiant du lot concerné (optionnel)."
+    element_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Identifiant de la case du découpage concernée (optionnel).",
     )
 
 
@@ -86,7 +88,6 @@ class BlocageUpdateSerializer(serializers.Serializer):
     titre = serializers.CharField(required=False, max_length=200)
     description = serializers.CharField(required=False, allow_blank=True)
     severite = serializers.ChoiceField(choices=SeveriteBlocage.choices, required=False)
-    lot_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class BlocageResolutionSerializer(serializers.Serializer):

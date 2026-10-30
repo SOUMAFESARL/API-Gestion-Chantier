@@ -1,8 +1,11 @@
 """Service de synchronisation d'avancement physique depuis les rapports de chantier (F3).
 
-Lorsqu'un rapport journalier est approuvé par le Chef de Projet (CP), les quantités
-réalisées saisies (activités et production) sont reportées sur les activités concernées,
-puis l'avancement physique des activités, des lots et du projet est recalculé et stocké.
+Lorsqu'un rapport journalier est approuvé, les quantités réalisées saisies (lignes « activites »
+et « production » du journal) sont reportées sur les **feuilles** de l'arbre concernées, puis
+l'avancement de toutes les cases et du projet est recalculé et stocké (décisions v1.2, §9).
+
+Le contrat JSON du journal garde ses clés (`activite_id`, `lot_id`) : une « activité » y est une
+feuille de l'arbre, un « lot » la case qui la regroupe (`Arbre.groupe`).
 """
 
 import logging
@@ -14,14 +17,11 @@ from django.db import transaction
 
 from apps.chantier.models import JournalChantier, RapportJournalier
 from apps.core.enums import StatutRapport
-from apps.projets.models import Activite, Lot, Projet
+from apps.projets.models import Element, Projet
+from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.alertes_retard import detecter_alertes_retard
 from apps.projets.services.machine_etats import evaluer_statut_projet
-from apps.projets.services.sante_calculs import (
-    calculer_avancement_physique_activite,
-    calculer_avancement_physique_lot,
-    calculer_avancement_physique_projet,
-)
+from apps.projets.services.sante_calculs import calculer_arbre, resultat_projet
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 logger = logging.getLogger(__name__)
@@ -30,8 +30,38 @@ __all__ = [
     "quantites_du_journal",
     "quantites_synchronisees",
     "recalculer_apres_quantites",
+    "recalculer_avancements_projet",
     "synchroniser_rapport_approuve",
 ]
+
+
+def _arrondi(valeur):
+    if valeur is None:
+        return None
+    return Decimal(str(valeur)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def recalculer_avancements_projet(projet) -> None:
+    """Recalcule et stocke le physique de toutes les cases actives, puis celui du projet.
+
+    Un projet compte quelques centaines de cases : tout recalculer coûte moins cher que de
+    remonter la chaîne d'ancêtres de chaque feuille touchée, et ne laisse aucun parent en retard
+    d'un calcul. Une case dont l'avancement est indisponible garde `None`.
+    """
+    arbre = charger_arbre(projet)
+    resultats = calculer_arbre(arbre)
+    a_jour = []
+    for element in arbre.elements:
+        resultat = resultats.get(element.pk)
+        nouveau = _arrondi(resultat.physique) if resultat else None
+        if element.avancement != nouveau:
+            element.avancement = nouveau
+            a_jour.append(element)
+    if a_jour:
+        Element.objects.bulk_update(a_jour, ["avancement"])
+    resultat = resultat_projet(projet, arbre, resultats)
+    projet.avancement_reel = _arrondi(resultat.physique) or Decimal("0.00")
+    projet.save(update_fields=["avancement_reel"])
 
 
 def quantites_du_journal(saisie: dict) -> dict[str, Decimal]:
@@ -100,48 +130,17 @@ def recalculer_apres_quantites(
     """Recalcule et propage l'avancement après mise à jour des quantités réalisées.
 
     Chaîne de recalcul (F3) partagée entre l'approbation de rapport et la mise à jour inline :
-    1. Calcule et enregistre l'avancement de chaque activité touchée.
-    2. Identifie les lots parents, recalcule et enregistre leur avancement.
-    3. Recalcule et enregistre l'avancement réel du projet.
-    4. Réévalue le statut du projet via machine d'états.
-    5. Déclenche le recalcul réactif de l'indice de santé.
-    6. Détecte les alertes de retard du projet.
+    1. Recalcule et enregistre le physique de toutes les cases et du projet.
+    2. Réévalue le statut du projet via machine d'états.
+    3. Déclenche le recalcul réactif de l'indice de santé.
+    4. Détecte les alertes de retard du projet.
 
-    Les étapes 3 à 6 ne s'exécutent que si ``projet`` est fourni : il n'est jamais
-    déduit des activités, pour qu'un rapport sans projet ne recalcule que ses
-    activités et leurs lots, comme avant la factorisation.
+    Rien ne s'exécute sans ``projet`` : il n'est jamais déduit des feuilles.
     """
-    lots_touches_ids: set[uuid.UUID] = set()
-    for activite in activites:
-        av_act = calculer_avancement_physique_activite(activite)
-        activite.avancement = Decimal(str(av_act)).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
-        activite.save(update_fields=["avancement"])
-        if activite.lot_id:
-            lots_touches_ids.add(activite.lot_id)
-
-    if lots_touches_ids:
-        lots = list(
-            Lot.objects.filter(pk__in=lots_touches_ids, supprime_le__isnull=True)
-            .select_for_update()
-            .order_by("pk")
-        )
-        for lot in lots:
-            av_lot = calculer_avancement_physique_lot(lot)
-            lot.avancement = Decimal(str(av_lot)).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            lot.save(update_fields=["avancement"])
-
     if projet:
         projet_pk = getattr(projet, "pk", projet)
         projet = Projet.objects.select_for_update().get(pk=projet_pk)
-        av_projet, _ = calculer_avancement_physique_projet(projet)
-        projet.avancement_reel = Decimal(str(av_projet)).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
-        projet.save(update_fields=["avancement_reel"])
+        recalculer_avancements_projet(projet)
 
         evaluer_statut_projet(projet)
 
@@ -162,8 +161,8 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
     1. Verrouille le rapport (select_for_update). Si non APPROUVE ou f3_sync_done, rend False.
     2. Lit le journal associé (si absent, marque f3_sync_done et rend True).
     3. Cumule les quantite_jour > 0 des lignes d'activités et de production.
-    4. Met à jour quantite_realisee des activités trouvées et non supprimées.
-    5. Recalcule et stocke l'avancement (activités touchées -> leurs lots -> projet).
+    4. Met à jour quantite_realisee des feuilles trouvées (du projet, non supprimées).
+    5. Recalcule et stocke l'avancement de l'arbre et du projet.
     6. Marque f3_sync_done=True sur le rapport par update de queryset (évite post_save).
     7. Déclenche le recalcul réactif de l'indice de santé (RAPPORT_APPROBATION).
     8. Réévalue le statut du projet puis détecte les alertes de retard (F3).
@@ -202,20 +201,22 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
             continue
         cumuls[act_uuid] = q_dec
 
-    activites_touchees = list(
-        Activite.objects.filter(pk__in=cumuls.keys(), supprime_le__isnull=True)
+    feuilles_touchees = list(
+        Element.objects.filter(
+            pk__in=cumuls.keys(), projet_id=rapport.projet_id, supprime_le__isnull=True
+        )
         .select_for_update()
         .order_by("pk")
     )
 
     activites_modifiees = []
-    for activite in activites_touchees:
-        q_ajoute = cumuls.get(activite.pk, Decimal("0"))
+    for feuille in feuilles_touchees:
+        q_ajoute = cumuls.get(feuille.pk, Decimal("0"))
         if q_ajoute > Decimal("0"):
-            q_actuelle = activite.quantite_realisee or Decimal("0.000")
-            activite.quantite_realisee = q_actuelle + q_ajoute
-            activite.save(update_fields=["quantite_realisee"])
-            activites_modifiees.append(activite)
+            q_actuelle = feuille.quantite_realisee or Decimal("0.000")
+            feuille.quantite_realisee = q_actuelle + q_ajoute
+            feuille.save(update_fields=["quantite_realisee", "modifie_le"])
+            activites_modifiees.append(feuille)
 
     projet = None
     if rapport.projet_id:

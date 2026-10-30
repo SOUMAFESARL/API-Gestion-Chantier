@@ -64,24 +64,61 @@ ROLES_SYSTEME_INFOS = {
 CODES_ROLES_SYSTEME = frozenset({"DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"})
 
 
+def modules_locaux_ouverts():
+    """La copie locale des modules, réduite à ceux que le catalogue ouvre à l'entreprise."""
+    from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
+
+    codes = codes_modules_actifs() - MODULES_SYSTEME
+    return Module.objects.filter(supprime_le__isnull=True, code__in=codes).order_by(
+        "ordre", "code"
+    )
+
+
 def initialiser_modules_par_defaut() -> list[Module]:
-    """Initialise ou met à jour le catalogue des 5 modules souverains BTP dans le schéma courant."""
-    modules_crees = []
+    """Aligne la copie locale des modules (schéma courant) sur le catalogue du schéma public.
+
+    La copie locale n'existe que parce que `RoleModulePermission.module` y pointe. Elle ne décide
+    de rien : ce qui est ouvert se lit dans le catalogue (`apps.core.modules_actifs`). Son
+    `est_actif` recopie donc celui du catalogue, au lieu d'être remis à vrai à chaque appel — ce
+    qui rouvrait localement un module que le super admin avait désactivé.
+    """
+    from apps.core.modules_actifs import MODULES_SYSTEME
+
+    # « Administration » n'a pas de ligne dans la matrice d'un rôle (B-05) : pas de copie locale.
+    catalogue = list(
+        CatalogueModule.objects.filter(supprime_le__isnull=True).exclude(
+            code__in=MODULES_SYSTEME
+        )
+    )
+    sources = [
+        (m.code.lower(), m.libelle, m.description, m.ordre, m.icone, m.est_actif) for m in catalogue
+    ] or [
+        (
+            code,
+            dict(ModuleChoix.choices).get(code, code),
+            details.get("description", ""),
+            details.get("ordre", 0),
+            details.get("icone", "box"),
+            True,
+        )
+        for code, details in MODULES_DETAILS.items()
+    ]
+    modules = []
     with transaction.atomic():
-        for code, details in MODULES_DETAILS.items():
-            libelle = dict(ModuleChoix.choices).get(code, code)
+        for code, libelle, description, ordre, icone, est_actif in sources:
             mod, _ = Module.objects.update_or_create(
                 code=code,
+                supprime_le__isnull=True,
                 defaults={
                     "libelle": libelle,
-                    "description": details.get("description", ""),
-                    "ordre": details.get("ordre", 0),
-                    "icone": details.get("icone", "box"),
-                    "est_actif": True,
+                    "description": description,
+                    "ordre": ordre,
+                    "icone": icone or "box",
+                    "est_actif": est_actif,
                 },
             )
-            modules_crees.append(mod)
-    return modules_crees
+            modules.append(mod)
+    return modules
 
 
 def _normaliser_permissions_modules(permissions_input) -> dict[str, list[str]]:
@@ -185,7 +222,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
         "ged": (),
     },
     "DF": {
-        "projets": ("projets.lire", "projets.voir_montants"),
+        "projets": ("projets.lire", "projets.voir_montants", "projets.voir_tout"),
         "chantier": ("chantier.lire",),
         "pilotage": ("pilotage.lire", "pilotage.voir_montants"),
         "tiers": ("tiers.lire", "tiers.ecrire"),
@@ -200,6 +237,14 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.gerer_equipes",
             "projets.voir_montants",
             "projets.referentiels_ajouter",
+            "projets.voir_tout",
+            "projets.decouper",
+            "projets.chiffrer",
+            "projets.planifier",
+            "projets.prolonger",
+            "projets.mesurer",
+            "projets.retirer_membres",
+            "projets.main_oeuvre_gerer",
         ),
         "chantier": ("chantier.lire", "chantier.rediger"),
         "pilotage": ("pilotage.lire",),
@@ -207,7 +252,16 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
         "ged": (),
     },
     "CT": {
-        "projets": ("projets.lire", "projets.ecrire", "projets.gerer_equipes"),
+        "projets": (
+            "projets.lire",
+            "projets.ecrire",
+            "projets.gerer_equipes",
+            "projets.voir_tout",
+            "projets.planifier",
+            "projets.mesurer",
+            "projets.retirer_membres",
+            "projets.main_oeuvre_gerer",
+        ),
         "chantier": ("chantier.lire", "chantier.rediger", "chantier.valider"),
         "pilotage": ("pilotage.lire",),
         "tiers": ("tiers.lire",),
@@ -228,14 +282,14 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
         "ged": (),
     },
     "BAI": {
-        "projets": ("projets.lire",),
+        "projets": ("projets.lire", "projets.voir_tout"),
         "chantier": ("chantier.lire",),
         "pilotage": ("pilotage.lire",),
         "tiers": (),
         "ged": (),
     },
     "VI": {
-        "projets": ("projets.lire",),
+        "projets": ("projets.lire", "projets.voir_tout"),
         "chantier": ("chantier.lire",),
         "pilotage": ("pilotage.lire",),
         "tiers": (),
@@ -244,13 +298,37 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 
-def appliquer_modeles_roles() -> list[Role]:
-    """Applique les gabarits de rôles souverains (ModeleRole) au schéma courant (A-12)."""
-    initialiser_modules_par_defaut()
+def _codes_par_defaut(
+    r_code: str, m_key: str, modules_modele: set[str], codes_catalogue
+) -> set[str]:
+    """Les permissions qu'un rôle système reçoit à sa création, sur un module."""
+    if r_code == "DG":
+        return {c for c in codes_catalogue if c.startswith(f"{m_key}.")}
+    if r_code in PERMISSIONS_DEFAUT_ROLES:
+        return set(PERMISSIONS_DEFAUT_ROLES[r_code].get(m_key, ()))
+    if m_key in modules_modele and f"{m_key}.lire" in codes_catalogue:
+        return {f"{m_key}.lire"}
+    return set()
 
+
+def appliquer_modeles_roles() -> list[Role]:
+    """Crée, dans le schéma courant, les rôles système qui y manquent (A-07, A-12).
+
+    **Les rôles système sont les gabarits vivants du catalogue** (`ModeleRole` actif et non
+    supprimé, schéma public). Un gabarit supprimé par le super admin n'est donc plus créé pour
+    une entreprise qui s'inscrit après ; les entreprises existantes, elles, gardent le rôle,
+    devenu personnalisé (`supprimer_role_systeme`).
+
+    **Rien d'existant n'est réécrit.** Ni le libellé, ni l'activation, ni la matrice : ce sont
+    les réglages souverains du DG. La fonction était appelée à la volée par le moteur de droits
+    dès qu'un rôle manquait, et remettait alors **toutes** les matrices de l'entreprise à leurs
+    valeurs par défaut. Elle ne fait plus que compléter : un rôle absent est créé, une ligne de
+    module absente reçoit les permissions par défaut, une ligne présente n'est pas touchée.
+    """
     from apps.catalogue.models import ModeleRole
 
-    modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
+    initialiser_modules_par_defaut()
+    modules_actifs = list(modules_locaux_ouverts())
     cat_modules_map = {
         m.code.lower(): m
         for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
@@ -260,111 +338,65 @@ def appliquer_modeles_roles() -> list[Role]:
         for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
     }
 
-    modeles_qs = list(
+    modeles = list(
         ModeleRole.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related(
             "modules_plafonds"
         )
     )
+    if modeles:
+        gabarits = [
+            (
+                (m.code or "").upper(),
+                m.libelle,
+                m.description,
+                getattr(m, "portee", "PROJET") or "PROJET",
+                {mrm.module_code.lower() for mrm in m.modules_plafonds.all()},
+            )
+            for m in modeles
+        ]
+    else:
+        # Catalogue sans gabarit : installation pas encore semée. Le gabarit DG ne se supprimant
+        # pas, ce cas ne se produit pas une fois la plateforme initialisée.
+        gabarits = [
+            (
+                code.upper(),
+                libelle,
+                description,
+                "ENTREPRISE" if code.upper() in {"DG", "AD", "DO"} else "PROJET",
+                set(),
+            )
+            for code, (libelle, description) in ROLES_SYSTEME_INFOS.items()
+        ]
 
     roles_traites = []
     with transaction.atomic():
-        if modeles_qs:
-            for modele in modeles_qs:
-                r_code = (modele.code or "").upper()
-                existing_role = Role.objects.filter(code=r_code, supprime_le__isnull=True).first()
-                portee_cible = existing_role.portee if (existing_role and existing_role.portee) else (getattr(modele, "portee", "PROJET") or "PROJET")
-                role, _ = Role.objects.update_or_create(
+        for r_code, libelle, description, portee, modules_modele in gabarits:
+            role = Role.objects.filter(code=r_code, supprime_le__isnull=True).first()
+            if role is None:
+                role = Role.objects.create(
                     code=r_code,
-                    defaults={
-                        "libelle": modele.libelle,
-                        "description": modele.description,
-                        "est_systeme": r_code in CODES_ROLES_SYSTEME,
-                        "portee": portee_cible,
-                        "est_actif": True,
-                    },
+                    libelle=libelle,
+                    description=description,
+                    est_systeme=True,
+                    portee=portee,
+                    est_actif=True,
                 )
-                modules_modele = {
-                    mrm.module_code.lower()
-                    for mrm in modele.modules_plafonds.all()
-                }
 
-                for mod in modules_actifs:
-                    m_key = mod.code.lower()
-                    cat_mod = cat_modules_map.get(m_key)
-
-                    rmp, _ = RoleModulePermission.objects.update_or_create(
-                        role=role,
-                        module=mod,
-                        defaults={
-                            "module_catalogue": cat_mod,
-                        },
-                    )
-
-                    if r_code == "DG":
-                        codes_module = {
-                            c for c in all_cat_perms_map if c.startswith(f"{m_key}.")
-                        }
-                    elif r_code in PERMISSIONS_DEFAUT_ROLES:
-                        codes_module = set(PERMISSIONS_DEFAUT_ROLES[r_code].get(m_key, ()))
-                    elif m_key in modules_modele and f"{m_key}.lire" in all_cat_perms_map:
-                        codes_module = {f"{m_key}.lire"}
-                    else:
-                        codes_module = set()
-
-                    cat_perms_to_set = [
-                        all_cat_perms_map[c]
-                        for c in codes_module
-                        if c in all_cat_perms_map
-                    ]
-                    rmp.permissions_catalogue.set(cat_perms_to_set)
-
-                RoleModulePermission.objects.filter(role=role).filter(module__isnull=False).exclude(
-                    module__in=modules_actifs
-                ).delete()
-                roles_traites.append(role)
-        else:
-            for code, (libelle, description) in ROLES_SYSTEME_INFOS.items():
-                r_code = (code or "").upper()
-                existing_role = Role.objects.filter(code=r_code, supprime_le__isnull=True).first()
-                defaut_portee = "ENTREPRISE" if r_code in {"DG", "AD", "DO"} else "PROJET"
-                portee_cible = existing_role.portee if (existing_role and existing_role.portee) else defaut_portee
-                role, _ = Role.objects.update_or_create(
-                    code=r_code,
-                    defaults={
-                        "libelle": libelle,
-                        "description": description,
-                        "est_systeme": r_code in CODES_ROLES_SYSTEME,
-                        "portee": portee_cible,
-                        "est_actif": True,
-                    },
+            for mod in modules_actifs:
+                m_key = mod.code.lower()
+                rmp, cree = RoleModulePermission.objects.get_or_create(
+                    role=role,
+                    module=mod,
+                    supprime_le__isnull=True,
+                    defaults={"module_catalogue": cat_modules_map.get(m_key)},
                 )
-                for mod in modules_actifs:
-                    m_key = mod.code.lower()
-                    cat_mod = cat_modules_map.get(m_key)
-                    rmp, _ = RoleModulePermission.objects.update_or_create(
-                        role=role,
-                        module=mod,
-                        defaults={
-                            "module_catalogue": cat_mod,
-                        },
-                    )
-                    if r_code == "DG":
-                        codes_module = {
-                            c for c in all_cat_perms_map if c.startswith(f"{m_key}.")
-                        }
-                    elif r_code in PERMISSIONS_DEFAUT_ROLES:
-                        codes_module = set(PERMISSIONS_DEFAUT_ROLES[r_code].get(m_key, ()))
-                    else:
-                        codes_module = {f"{m_key}.lire"} if f"{m_key}.lire" in all_cat_perms_map else set()
-
-                    cat_perms_to_set = [
-                        all_cat_perms_map[c]
-                        for c in codes_module
-                        if c in all_cat_perms_map
-                    ]
-                    rmp.permissions_catalogue.set(cat_perms_to_set)
-
-                roles_traites.append(role)
+                if not cree:
+                    continue
+                codes = _codes_par_defaut(r_code, m_key, modules_modele, all_cat_perms_map)
+                rmp.permissions_catalogue.set(
+                    [all_cat_perms_map[c] for c in codes if c in all_cat_perms_map]
+                )
+            roles_traites.append(role)
 
     return roles_traites
 

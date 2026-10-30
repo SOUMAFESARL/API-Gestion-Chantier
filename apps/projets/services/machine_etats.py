@@ -8,10 +8,10 @@ Invariants garantis :
 1. Transitions automatiques de projet (SFD F3 §7) :
    - EN_ATTENTE -> EN_COURS dès que date_du_jour >= date_debut_prevue (ou réelle)
      ET qu'au moins un rapport F2 a été soumis (SOUMIS ou APPROUVE).
-   - EN_COURS / EN_RETARD -> CRITIQUE dès qu'un lot actif présente un delta de retard
-     > F3_SEUILS_RETARD_PTS["CRITIQUE"] (25 pts)
+   - EN_COURS / EN_RETARD -> CRITIQUE dès qu'une case suivie (niveau coché « alerter ») présente
+     un delta de retard > F3_SEUILS_RETARD_PTS["CRITIQUE"] (25 pts)
      OU que projet.indice_sante < F3_SEUIL_INDICE_SANTE_CRITIQUE (40).
-   - EN_COURS -> EN_RETARD dès qu'un lot actif présente un delta de retard
+   - EN_COURS -> EN_RETARD dès qu'une case suivie présente un delta de retard
      > F3_SEUILS_RETARD_PTS["MODERE"] (5 pts).
    - Règle de retour SFD §7 : un projet CRITIQUE qui ne l'est plus repasse obligatoirement
      par EN_RETARD (jamais directement EN_COURS). Il ne rejoindra EN_COURS qu'à une
@@ -20,8 +20,8 @@ Invariants garantis :
    - EN_RETARD -> EN_COURS dès qu'un décalage justifié (reprogrammation de date)
      repousse la date de fin à une date >= date_du_jour.
 3. Verrou absolu de Réception :
-   - Aucun projet ne peut passer à RECEPTIONNE (ou TERMINE) si 100 % de ses lots actifs
-     ne sont pas au statut CLOTURE (ou avancement = 100 %).
+   - Aucun projet ne peut passer à RECEPTIONNE (ou TERMINE) tant qu'une feuille active de son
+     arbre n'est pas clôturée (ou à 100 %).
 4. Préservation des états manuels et terminaux (puits stables) :
    - Les statuts SUSPENDU, BLOQUE, DESACTIVE, RESILIE, ARCHIVE, RECEPTIONNE et TERMINE
      (STATUTS_PROJET_MANUELS_FIXES) ne sont jamais écrasés automatiquement par la tâche nocturne.
@@ -32,14 +32,19 @@ import logging
 from datetime import date
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.core.enums import StatutActivite, StatutLot, StatutProjet, StatutRapport
-from apps.projets.models import Activite, Lot, Projet
+from apps.core.enums import StatutActivite, StatutProjet, StatutRapport
+from apps.projets.models import Element, Projet
+from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.calendrier_ouvre import calendrier_entreprise
-from apps.projets.services.sante_calculs import calculer_delta_lot
+from apps.projets.services.sante_calculs import (
+    calculer_arbre,
+    calculer_delta_element,
+    calculer_deltas_arbre,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +53,10 @@ __all__ = [
     "STATUTS_FIN_DE_VIE",
     "STATUTS_PROJET_MANUELS_FIXES",
     "ProjetClosError",
+    "cases_suivies",
     "changer_statut_projet",
-    "evaluer_statut_activite",
-    "evaluer_statut_lot",
     "evaluer_statut_projet",
+    "evaluer_statuts_arbre",
     "executer_evaluation_quotidienne_schema",
     "retablir_statut_apres_decalage_si_necessaire",
     "valider_transition_reception",
@@ -135,110 +140,78 @@ def verifier_statut_projet_pour_ecriture(projet, action="ECRITURE"):
         )
 
 
-def evaluer_statut_activite(activite: Activite, date_reference: date | None = None) -> bool:
-    """Évalue et met à jour le statut calendaire et d'avancement d'une activité.
+def cases_suivies(arbre) -> list:
+    """Les cases sur lesquelles le retard se juge : celles des niveaux cochés « alerter à ce
+    niveau » (§13quater-ter) ; à défaut de niveau coché, les racines. Jamais un libellé."""
+    return arbre.niveaux_alerte() or [r for r in arbre.racines() if r.est_actif]
 
-    Retourne True si le statut a été modifié et sauvegardé, False sinon.
+
+def _calendrier_autour(date_ref, *dates):
+    connues = [d for d in (*dates, date_ref) if d is not None]
+    annee_min = min(min(connues).year, date_ref.year - 1)
+    annee_max = max(max(connues).year, date_ref.year + 1)
+    return calendrier_entreprise(date(annee_min, 1, 1), date(annee_max, 12, 31))
+
+
+def evaluer_statuts_arbre(projet: Projet, date_reference: date | None = None) -> int:
+    """Le statut de chaque case, **jugée sur elle-même** (décisions v1.2, §10).
+
+    | Situation                                              | Statut    |
+    | La case ou un de ses ancêtres est suspendu             | Suspendu  |
+    | Feuille clôturée ; parent dont tous les enfants le sont | Clôturé   |
+    | Fin prévue dépassée, ou écart au-delà du seuil         | En retard |
+    | Commencée, ou date de début atteinte                   | En cours  |
+    | Sinon                                                  | Planifié  |
+
+    Un enfant en retard ne met pas son parent en retard. Rend le nombre de cases modifiées.
     """
-    date_ref = date_reference or timezone.now().date()
+    date_ref = date_reference or timezone.localdate()
+    arbre = charger_arbre(projet)
+    if not arbre.elements:
+        return 0
+    resultats = calculer_arbre(arbre)
+    calendrier = _calendrier_autour(
+        date_ref, projet.date_debut_prevue, projet.date_fin_prevue
+    )
+    seuil = settings.F3_SEUILS_RETARD_PTS["MODERE"]
+    statuts: dict = {}
 
-    if activite.statut not in StatutActivite.values:
-        return False
+    def cloture(element) -> bool:
+        if element.pk in statuts:
+            return statuts[element.pk] == StatutActivite.CLOTURE
+        enfants = arbre.enfants_actifs(element)
+        if not enfants:
+            return element.cloture
+        return all(cloture(e) for e in enfants)
 
-    if activite.avancement >= 100 or activite.statut == StatutActivite.CLOTURE:
-        nouveau_statut = StatutActivite.CLOTURE
-    elif activite.statut == StatutActivite.SUSPENDU:
-        # Puits stable : suspension manuelle protégée
-        return False
-    elif activite.date_debut_prevue and date_ref < activite.date_debut_prevue:
-        nouveau_statut = StatutActivite.PLANIFIE
-    elif activite.date_fin_prevue and date_ref > activite.date_fin_prevue:
-        nouveau_statut = StatutActivite.EN_RETARD
-    else:
-        nouveau_statut = StatutActivite.EN_COURS
-
-    if activite.statut != nouveau_statut:
-        ancien = activite.statut
-        activite.statut = nouveau_statut
-        activite.save(update_fields=["statut", "modifie_le"])
-        logger.info(
-            "Activité %s (%s) : statut mis à jour de %s -> %s",
-            activite.id,
-            activite.libelle,
-            ancien,
-            nouveau_statut,
-        )
-        if activite.lot and activite.lot.projet_id:
-            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
-            declencher_recalcul_sante(
-                projet_id=activite.lot.projet_id,
-                declencheur_type="ACTIVITE_STATUT_TRANSITION",
-                declencheur_id=str(activite.id),
-            )
-        return True
-    return False
-
-
-def evaluer_statut_lot(lot: Lot, date_reference: date | None = None) -> bool:
-    """Évalue et met à jour le statut calendaire et d'avancement d'un lot.
-
-    Règle de clôture :
-    - Si le lot possède des activités : clôturé si 100 % de ses activités actives sont CLOTURE.
-    - Si le lot n'a pas d'activités : clôturé si son avancement >= 100 % ou déjà CLOTURE.
-
-    Retourne True si le statut a été modifié et sauvegardé, False sinon.
-    """
-    date_ref = date_reference or timezone.now().date()
-
-    if lot.statut not in StatutLot.values:
-        return False
-
-    if lot.statut == StatutLot.SUSPENDU:
-        return False
-
-    activites_actives = lot.activites.filter(supprime_le__isnull=True)
-    if activites_actives.exists():
-        toutes_cloturees = not activites_actives.exclude(statut=StatutActivite.CLOTURE).exists()
-        if toutes_cloturees:
-            nouveau_statut = StatutLot.CLOTURE
-        elif lot.date_debut_prevue and date_ref < lot.date_debut_prevue:
-            nouveau_statut = StatutLot.PLANIFIE
-        elif lot.date_fin_prevue and date_ref > lot.date_fin_prevue:
-            nouveau_statut = StatutLot.EN_RETARD
+    a_jour = []
+    for element in arbre.elements:
+        if not element.est_actif:
+            continue
+        if arbre.suspendu(element):
+            nouveau = StatutActivite.SUSPENDU
+        elif cloture(element):
+            nouveau = StatutActivite.CLOTURE
         else:
-            nouveau_statut = StatutLot.EN_COURS
-    else:
-        if lot.avancement >= 100 or lot.statut == StatutLot.CLOTURE:
-            nouveau_statut = StatutLot.CLOTURE
-        elif lot.date_debut_prevue and date_ref < lot.date_debut_prevue:
-            nouveau_statut = StatutLot.PLANIFIE
-        elif lot.date_fin_prevue and date_ref > lot.date_fin_prevue:
-            nouveau_statut = StatutLot.EN_RETARD
-        else:
-            nouveau_statut = StatutLot.EN_COURS
-
-    if lot.statut != nouveau_statut:
-        ancien = lot.statut
-        lot.statut = nouveau_statut
-        lot.save(update_fields=["statut", "modifie_le"])
-        logger.info(
-            "Lot %s (%s) : statut mis à jour de %s -> %s",
-            lot.id,
-            lot.libelle,
-            ancien,
-            nouveau_statut,
-        )
-        if lot.projet_id:
-            from apps.projets.services.sante_declencheur import declencher_recalcul_sante
-
-            declencher_recalcul_sante(
-                projet_id=lot.projet_id,
-                declencheur_type="LOT_STATUT_TRANSITION",
-                declencheur_id=str(lot.id),
-            )
-        return True
-    return False
+            resultat = resultats.get(element.pk)
+            physique = resultat.physique if resultat and resultat.physique is not None else 0.0
+            ecart = calculer_delta_element(element, date_ref, calendrier, physique)
+            fin_depassee = bool(element.date_fin_prevue and date_ref > element.date_fin_prevue)
+            if fin_depassee or (ecart is not None and ecart > seuil):
+                nouveau = StatutActivite.EN_RETARD
+            elif arbre.commence(element) or (
+                element.date_debut_prevue and date_ref >= element.date_debut_prevue
+            ):
+                nouveau = StatutActivite.EN_COURS
+            else:
+                nouveau = StatutActivite.PLANIFIE
+        statuts[element.pk] = nouveau
+        if element.statut != nouveau:
+            element.statut = nouveau
+            a_jour.append(element)
+    if a_jour:
+        Element.objects.bulk_update(a_jour, ["statut"])
+    return len(a_jour)
 
 
 def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) -> bool:
@@ -248,11 +221,11 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
     1. Préservation absolue des statuts manuels et terminaux (STATUTS_PROJET_MANUELS_FIXES).
     2. EN_ATTENTE reste EN_ATTENTE tant que la date de début n'est pas atteinte OU
        qu'aucun rapport F2 n'a été soumis (SOUMIS ou APPROUVE), puis passe EN_COURS.
-    3. Pour un projet démarré, calcule le delta de chaque lot (calculer_delta_lot,
+    3. Pour un projet démarré, calcule le delta de chaque case suivie (`cases_suivies`,
        calendrier de l'entreprise construit UNE fois) et l'indice (projet.indice_sante).
-       - CRITIQUE si un lot a un delta > F3_SEUILS_RETARD_PTS["CRITIQUE"] (25 pts)
+       - CRITIQUE si une case a un delta > F3_SEUILS_RETARD_PTS["CRITIQUE"] (25 pts)
          OU si l'indice est < F3_SEUIL_INDICE_SANTE_CRITIQUE (40).
-       - EN_RETARD si un lot a un delta > F3_SEUILS_RETARD_PTS["MODERE"] (5 pts).
+       - EN_RETARD si une case a un delta > F3_SEUILS_RETARD_PTS["MODERE"] (5 pts).
        - EN_COURS sinon.
     4. RÈGLE DE RETOUR : un projet CRITIQUE qui ne l'est plus repasse EN_RETARD,
        jamais directement EN_COURS. Il ne rejoindra EN_COURS qu'à une évaluation suivante.
@@ -276,30 +249,20 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
             return False
         nouveau_statut = StatutProjet.EN_COURS
     else:
-        # Projet démarré : construction unique du calendrier de l'entreprise
-        dates_projet = [
-            d
-            for d in [
-                getattr(projet, "date_debut_prevue", None),
-                getattr(projet, "date_fin_prevue", None),
-                getattr(projet, "date_debut_reelle", None),
-                getattr(projet, "date_fin_reelle", None),
-                date_ref,
-            ]
-            if d is not None
+        # Projet démarré : le retard se juge sur les cases suivies, avec un seul calendrier.
+        calendrier = _calendrier_autour(
+            date_ref,
+            getattr(projet, "date_debut_prevue", None),
+            getattr(projet, "date_fin_prevue", None),
+            getattr(projet, "date_debut_reelle", None),
+            getattr(projet, "date_fin_reelle", None),
+        )
+        arbre = charger_arbre(projet)
+        resultats = calculer_arbre(arbre)
+        par_case = calculer_deltas_arbre(arbre, resultats, date_ref, calendrier)
+        deltas: list[float] = [
+            d for d in (par_case.get(case.pk) for case in cases_suivies(arbre)) if d is not None
         ]
-        d_min = min(dates_projet) if dates_projet else date_ref
-        d_max = max(dates_projet) if dates_projet else date_ref
-        annee_min = min(d_min.year, date_ref.year - 1)
-        annee_max = max(d_max.year, date_ref.year + 1)
-        calendrier = calendrier_entreprise(date(annee_min, 1, 1), date(annee_max, 12, 31))
-
-        lots_actifs = projet.lots.filter(supprime_le__isnull=True)
-        deltas: list[float] = []
-        for lot in lots_actifs:
-            d = calculer_delta_lot(lot, date_ref, calendrier)
-            if d is not None:
-                deltas.append(d)
 
         seuil_critique_pts = settings.F3_SEUILS_RETARD_PTS["CRITIQUE"]
         seuil_modere_pts = settings.F3_SEUILS_RETARD_PTS["MODERE"]
@@ -405,27 +368,26 @@ def changer_statut_projet(
 def valider_transition_reception(projet: Projet) -> None:
     """Garde-fou d'intégrité absolu : valide l'éligibilité à la réception du projet.
 
-    Lève une ValidationError si le projet contient au moins un lot actif non clôturé.
+    Lève une ValidationError tant qu'une feuille active de l'arbre n'est ni clôturée ni à 100 %.
     """
-    lots_actifs = projet.lots.filter(supprime_le__isnull=True)
-    if not lots_actifs.exists():
+    arbre = charger_arbre(projet)
+    feuilles = arbre.feuilles()
+    if not feuilles:
         return
-
-    lots_non_clotures = lots_actifs.exclude(
-        models.Q(statut=StatutLot.CLOTURE) | models.Q(avancement=100)
-    )
-
-    if lots_non_clotures.exists():
-        details = [
-            f"{lot.code} - {lot.libelle} (Statut: {lot.statut}, Avancement: {lot.avancement}%)"
-            for lot in lots_non_clotures
-        ]
+    resultats = calculer_arbre(arbre)
+    non_cloturees = [
+        f
+        for f in feuilles
+        if not f.cloture and (resultats.get(f.pk) is None or resultats[f.pk].physique != 100.0)
+    ]
+    if non_cloturees:
+        details = [" / ".join(arbre.chemin_libelles(f)) for f in non_cloturees[:20]]
         msg = (
-            "Impossible de réceptionner le projet : 100 % des lots doivent être clôturés. "
-            f"Lots non clôturés ({len(details)}) : {', '.join(details)}."
+            "Impossible de réceptionner le projet : toutes les tâches doivent être clôturées. "
+            f"Tâches non clôturées ({len(non_cloturees)}) : {', '.join(details)}."
         )
         logger.warning(
-            "Refus de réception pour le projet %s (%s) : lots incomplets.",
+            "Refus de réception pour le projet %s (%s) : tâches incomplètes.",
             projet.id,
             projet.reference,
         )
@@ -433,7 +395,7 @@ def valider_transition_reception(projet: Projet) -> None:
 
 
 def retablir_statut_apres_decalage_si_necessaire(
-    instance: Projet | Lot | Activite,
+    instance: Projet | Element,
     nouvelle_date_fin: date,
     date_reference: date | None = None,
 ) -> bool:
@@ -451,11 +413,7 @@ def retablir_statut_apres_decalage_si_necessaire(
         if statut_actuel == StatutProjet.EN_RETARD:
             instance.statut = StatutProjet.EN_COURS
             return True
-    elif isinstance(instance, Lot):
-        if statut_actuel == StatutLot.EN_RETARD:
-            instance.statut = StatutLot.EN_COURS
-            return True
-    elif isinstance(instance, Activite):
+    elif isinstance(instance, Element):
         if statut_actuel == StatutActivite.EN_RETARD:
             instance.statut = StatutActivite.EN_COURS
             return True
@@ -465,42 +423,22 @@ def retablir_statut_apres_decalage_si_necessaire(
 
 @transaction.atomic
 def executer_evaluation_quotidienne_schema(date_reference: date | None = None) -> dict:
-    """Exécute l'évaluation quotidienne calendaire sur l'ensemble du schéma tenant courant.
-
-    Traite la cascade ascendante : Activités -> Lots -> Projets.
-    """
+    """Exécute l'évaluation quotidienne calendaire sur l'ensemble du schéma tenant courant :
+    les cases de chaque arbre, puis les projets."""
     date_ref = date_reference or timezone.now().date()
-    nb_activites = 0
-    nb_lots = 0
+    nb_cases = 0
     nb_projets = 0
 
-    # 1. Évaluation des activités
-    activites = Activite.objects.filter(supprime_le__isnull=True).exclude(
-        statut__in=[StatutActivite.CLOTURE, StatutActivite.SUSPENDU]
-    )
-    for act in activites.iterator():
-        if evaluer_statut_activite(act, date_reference=date_ref):
-            nb_activites += 1
-
-    # 2. Évaluation des lots
-    lots = Lot.objects.filter(supprime_le__isnull=True).exclude(
-        statut__in=[StatutLot.CLOTURE, StatutLot.SUSPENDU]
-    )
-    for lot in lots.iterator():
-        if evaluer_statut_lot(lot, date_reference=date_ref):
-            nb_lots += 1
-
-    # 3. Évaluation des projets
-    projets = Projet.objects.filter(supprime_le__isnull=True).exclude(
-        statut__in=STATUTS_PROJET_MANUELS_FIXES
-    )
+    projets = Projet.objects.filter(supprime_le__isnull=True)
     for projet in projets.iterator():
+        nb_cases += evaluer_statuts_arbre(projet, date_reference=date_ref)
+
+    for projet in projets.exclude(statut__in=STATUTS_PROJET_MANUELS_FIXES).iterator():
         if evaluer_statut_projet(projet, date_reference=date_ref):
             nb_projets += 1
 
     return {
         "date_reference": date_ref.isoformat(),
-        "activites_modifiees": nb_activites,
-        "lots_modifies": nb_lots,
+        "cases_modifiees": nb_cases,
         "projets_modifies": nb_projets,
     }

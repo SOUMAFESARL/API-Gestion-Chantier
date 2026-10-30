@@ -1,323 +1,227 @@
-from django.db import transaction
+"""Équipes de chantier et registre de main-d'œuvre — entrées et représentations."""
+
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.accounts.models import Utilisateur
-from apps.core.enums import StatutUtilisateur
-from apps.core.exceptions import RequeteRefusee
-from apps.projets.models import EquipeChantier, MembreEquipeChantier
-from apps.projets.services.equipes import (
-    collaborateurs_autorises_projet,
-    message_collaborateur_non_affecte,
-    synchroniser_chef_equipe,
+from apps.projets.models import (
+    AffectationEquipeElement,
+    EquipeChantier,
+    MembreEquipeChantier,
+    PersonneMainOeuvre,
 )
+from apps.tiers.models import Tiers
+
+__all__ = [
+    "AffectationEquipeCreationSerializer",
+    "AffectationEquipeSerializer",
+    "EquipeCreationSerializer",
+    "EquipeModificationSerializer",
+    "EquipeSerializer",
+    "MembreCreationSerializer",
+    "MembreModificationSerializer",
+    "MembreSerializer",
+    "PersonneCreationSerializer",
+    "PersonneModificationSerializer",
+    "PersonneSerializer",
+]
+
+FONCTIONS = [c[0] for c in MembreEquipeChantier.FONCTION_CHOICES]
 
 
-class PersonneEquipeSerializer(serializers.Serializer):
-    utilisateur_id = serializers.PrimaryKeyRelatedField(
-        source="utilisateur",
-        required=False,
-        allow_null=True,
-        queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF),
+class EntrepriseRattachementSerializer(serializers.Serializer):
+    """L'entreprise de rattachement : la nôtre (`id` nul) ou un partenaire."""
+
+    id = serializers.UUIDField(allow_null=True)
+    nom = serializers.CharField()
+    interne = serializers.BooleanField()
+
+
+def entreprise_de(tiers) -> dict:
+    if tiers is None:
+        return {"id": None, "nom": "", "interne": True}
+    return {"id": tiers.pk, "nom": tiers.raison_sociale, "interne": False}
+
+
+# --------------------------------------------------------------------------
+# Registre de main-d'œuvre
+# --------------------------------------------------------------------------
+class PersonneSerializer(serializers.ModelSerializer):
+    nom_complet = serializers.CharField(read_only=True)
+    entreprise = serializers.SerializerMethodField()
+    a_un_compte = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PersonneMainOeuvre
+        fields = [
+            "id",
+            "nom",
+            "prenom",
+            "nom_complet",
+            "telephone",
+            "metier",
+            "entreprise",
+            "a_un_compte",
+            "utilisateur_id",
+            "est_actif",
+        ]
+
+    @extend_schema_field(EntrepriseRattachementSerializer)
+    def get_entreprise(self, obj):
+        return entreprise_de(obj.entreprise_partenaire)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_a_un_compte(self, obj) -> bool:
+        return obj.utilisateur_id is not None
+
+
+class PersonneCreationSerializer(serializers.Serializer):
+    nom = serializers.CharField(max_length=150)
+    prenom = serializers.CharField(max_length=150)
+    telephone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    metier = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    # Vide : notre entreprise ; sinon un tiers sous-traitant, tâcheron ou prestataire.
+    entreprise_partenaire_id = serializers.PrimaryKeyRelatedField(
+        queryset=Tiers.objects.all(), required=False, allow_null=True, default=None
     )
-    collaborateur_id = serializers.PrimaryKeyRelatedField(
-        source="utilisateur",
-        required=False,
-        allow_null=True,
-        queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF),
+    # Un collaborateur avec un compte sur la plateforme.
+    utilisateur_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+
+class PersonneModificationSerializer(serializers.Serializer):
+    nom = serializers.CharField(max_length=150, required=False)
+    prenom = serializers.CharField(max_length=150, required=False)
+    telephone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    metier = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    entreprise_partenaire_id = serializers.PrimaryKeyRelatedField(
+        queryset=Tiers.objects.all(), required=False, allow_null=True
     )
-    prenom = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
-    nom = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
-
-    def validate(self, attrs):
-        user = attrs.get("utilisateur")
-        nom = attrs.get("nom", "").strip()
-        if bool(user) == bool(nom):
-            raise serializers.ValidationError("Choisir un collaborateur OU saisir un nom.")
-        return attrs
+    est_actif = serializers.BooleanField(required=False)
 
 
-class MembreEquipeSerializer(PersonneEquipeSerializer):
-    role = serializers.ChoiceField(
-        choices=[c[0] for c in MembreEquipeChantier.FONCTION_CHOICES],
-        required=False,
-        default="OUVRIER",
-    )
-    fonction = serializers.CharField(max_length=50, required=False)
-
-    def to_internal_value(self, data):
-        if isinstance(data, dict) and "fonction" in data and "role" not in data:
-            data = data.copy()
-            data["role"] = data["fonction"]
-        return super().to_internal_value(data)
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        if "fonction" in attrs and attrs.get("role") == "OUVRIER":
-            f = attrs["fonction"]
-            if f in [c[0] for c in MembreEquipeChantier.FONCTION_CHOICES]:
-                attrs["role"] = f
-        return attrs
-
-
-class EquipeCreationSerializer(serializers.Serializer):
-    nom = serializers.CharField(max_length=200)
-    nature = serializers.ChoiceField(choices=["INTERNE", "SOUS_TRAITANT", "SOUS_TRAITANTE"])
-    corps_etat = serializers.CharField(max_length=200, required=False)
-    specialite = serializers.CharField(max_length=200, required=False)
-    chef = PersonneEquipeSerializer(required=False, allow_null=True, default=None)
-    membres = MembreEquipeSerializer(many=True, required=False, default=list)
-
-    def validate(self, attrs):
-        projet = self.context["projet"]
-        # Normalisation nature
-        if attrs.get("nature") == "SOUS_TRAITANTE":
-            attrs["nature"] = "SOUS_TRAITANT"
-
-        # Alias specialite / corps_etat
-        if not attrs.get("corps_etat"):
-            if attrs.get("specialite"):
-                attrs["corps_etat"] = attrs["specialite"]
-            else:
-                raise serializers.ValidationError(
-                    {"corps_etat": "Le corps d'état ou la spécialité est requis."}
-                )
-
-        chef = attrs.get("chef")
-        membres = attrs.get("membres", [])
-        personnes = [chef, *membres] if chef else list(membres)
-        if len(personnes) > 100:
-            raise serializers.ValidationError({"membres": "Maximum 100 personnes, chef compris."})
-
-        autorises = collaborateurs_autorises_projet(projet)
-        vus = set()
-        for personne in personnes:
-            utilisateur = personne.get("utilisateur")
-            if utilisateur and utilisateur.pk not in autorises:
-                raise RequeteRefusee(message_collaborateur_non_affecte(utilisateur))
-            cle = (
-                ("id", utilisateur.pk)
-                if utilisateur
-                else (
-                    "nom",
-                    f"{personne.get('prenom', '')} {personne.get('nom', '')}".strip().casefold(),
-                )
-            )
-            if cle in vus:
-                raise serializers.ValidationError("Une personne ne peut apparaître deux fois.")
-            vus.add(cle)
-        return attrs
-
-    @transaction.atomic
-    def create(self, validated_data):
-        chef = validated_data.pop("chef", None)
-        membres = validated_data.pop("membres", [])
-        validated_data.pop("specialite", None)
-        createur = self.context["request"].user
-
-        equipe = EquipeChantier.objects.create(
-            projet=self.context["projet"],
-            chef_utilisateur=chef.get("utilisateur") if chef else None,
-            chef_nom=chef.get("nom", "") if chef else "",
-            cree_par=createur,
-            **validated_data,
-        )
-
-        if chef:
-            MembreEquipeChantier.objects.create(
-                equipe=equipe,
-                utilisateur=chef.get("utilisateur"),
-                prenom=chef.get("prenom", ""),
-                nom=chef.get("nom", ""),
-                fonction="CHEF_EQUIPE",
-                cree_par=createur,
-            )
-
-        for membre_data in membres:
-            role = membre_data.get("role") or membre_data.get("fonction") or "OUVRIER"
-            MembreEquipeChantier.objects.create(
-                equipe=equipe,
-                utilisateur=membre_data.get("utilisateur"),
-                prenom=membre_data.get("prenom", ""),
-                nom=membre_data.get("nom", ""),
-                fonction=role,
-                cree_par=createur,
-            )
-
-        synchroniser_chef_equipe(equipe)
-        return equipe
-
-
-class MembreEquipeCreateSerializer(serializers.Serializer):
-    utilisateur_id = serializers.PrimaryKeyRelatedField(
-        source="utilisateur",
-        required=False,
-        allow_null=True,
-        queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF),
-    )
-    collaborateur_id = serializers.PrimaryKeyRelatedField(
-        source="utilisateur",
-        required=False,
-        allow_null=True,
-        queryset=Utilisateur.objects.filter(is_active=True, statut=StatutUtilisateur.ACTIF),
-    )
-    prenom = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
-    nom = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
-    role = serializers.ChoiceField(
-        choices=[c[0] for c in MembreEquipeChantier.FONCTION_CHOICES],
-        required=False,
-        default="OUVRIER",
-    )
-    fonction = serializers.CharField(max_length=50, required=False)
-
-    def to_internal_value(self, data):
-        if isinstance(data, dict) and "fonction" in data and "role" not in data:
-            data = data.copy()
-            data["role"] = data["fonction"]
-        return super().to_internal_value(data)
-
-    def validate(self, attrs):
-        user = attrs.get("utilisateur")
-        nom = attrs.get("nom", "").strip()
-        if bool(user) == bool(nom):
-            raise serializers.ValidationError("Choisir un collaborateur OU saisir un nom.")
-        if "fonction" in attrs and attrs.get("role") == "OUVRIER":
-            f = attrs["fonction"]
-            if f in [c[0] for c in MembreEquipeChantier.FONCTION_CHOICES]:
-                attrs["role"] = f
-        return attrs
-
-
-class MembreEquipeUpdateSerializer(serializers.Serializer):
-    role = serializers.ChoiceField(
-        choices=[c[0] for c in MembreEquipeChantier.FONCTION_CHOICES],
-        required=True,
-    )
-
-
-class MembreEquipeResponseSerializer(serializers.ModelSerializer):
-    collaborateur_id = serializers.UUIDField(
-        source="utilisateur_id", read_only=True, allow_null=True
-    )
-    utilisateur_id = serializers.UUIDField(read_only=True, allow_null=True)
-    prenom = serializers.SerializerMethodField()
-    nom = serializers.SerializerMethodField()
-    role = serializers.CharField(source="fonction", read_only=True)
-    fonction = serializers.CharField(read_only=True)
-
-    def get_prenom(self, obj) -> str:
-        if obj.utilisateur:
-            return obj.utilisateur.prenom
-        return obj.prenom or ""
-
-    def get_nom(self, obj) -> str:
-        if obj.utilisateur:
-            return obj.utilisateur.nom
-        return obj.nom or ""
+# --------------------------------------------------------------------------
+# Équipes
+# --------------------------------------------------------------------------
+class MembreSerializer(serializers.ModelSerializer):
+    personne = PersonneSerializer(read_only=True)
+    en_cours = serializers.SerializerMethodField()
 
     class Meta:
         model = MembreEquipeChantier
         fields = [
             "id",
-            "collaborateur_id",
-            "utilisateur_id",
-            "prenom",
-            "nom",
-            "role",
+            "personne",
             "fonction",
+            "est_chef",
+            "date_arrivee",
+            "date_depart",
+            "en_cours",
         ]
-        read_only_fields = fields
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_en_cours(self, obj) -> bool:
+        return obj.date_depart is None
 
 
-class EquipeResponseSerializer(serializers.ModelSerializer):
-    projet_id = serializers.UUIDField(source="projet.id", read_only=True)
-    specialite = serializers.CharField(source="corps_etat", read_only=True)
+class AffectationEquipeSerializer(serializers.ModelSerializer):
+    element = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AffectationEquipeElement
+        fields = ["id", "equipe_id", "element", "cree_le"]
+
+    @extend_schema_field(serializers.DictField())
+    def get_element(self, obj):
+        e = obj.element
+        return {"id": e.pk, "libelle": e.libelle, "niveau": e.niveau.libelle}
+
+
+class EquipeSerializer(serializers.ModelSerializer):
+    entreprise = serializers.SerializerMethodField()
+    nature = serializers.CharField(read_only=True)
     chef = serializers.SerializerMethodField()
     membres = serializers.SerializerMethodField()
-    chef_nom = serializers.SerializerMethodField()
     effectif = serializers.SerializerMethodField()
-
-    def get_chef(self, obj) -> dict | None:
-        chef_membre = (
-            obj.membres.filter(
-                fonction="CHEF_EQUIPE",
-                supprime_le__isnull=True,
-            )
-            .select_related("utilisateur")
-            .first()
-        )
-        if chef_membre:
-            return MembreEquipeResponseSerializer(chef_membre).data
-        if obj.chef_utilisateur or (obj.chef_nom and obj.chef_nom.strip()):
-            return {
-                "id": None,
-                "collaborateur_id": str(obj.chef_utilisateur.id) if obj.chef_utilisateur else None,
-                "utilisateur_id": str(obj.chef_utilisateur.id) if obj.chef_utilisateur else None,
-                "prenom": obj.chef_utilisateur.prenom if obj.chef_utilisateur else "",
-                "nom": obj.chef_utilisateur.nom if obj.chef_utilisateur else (obj.chef_nom or ""),
-                "role": "CHEF_EQUIPE",
-                "fonction": "CHEF_EQUIPE",
-            }
-        return None
-
-    def get_membres(self, obj) -> list:
-        membres_qs = (
-            obj.membres.filter(supprime_le__isnull=True)
-            .exclude(fonction="CHEF_EQUIPE")
-            .select_related("utilisateur")
-            .order_by("cree_le", "id")
-        )
-        return MembreEquipeResponseSerializer(membres_qs, many=True).data
-
-    def get_chef_nom(self, obj) -> str:
-        chef_membre = (
-            obj.membres.filter(
-                fonction="CHEF_EQUIPE",
-                supprime_le__isnull=True,
-            )
-            .select_related("utilisateur")
-            .first()
-        )
-        if chef_membre:
-            if chef_membre.utilisateur:
-                return f"{chef_membre.utilisateur.prenom} {chef_membre.utilisateur.nom}".strip()
-            return f"{chef_membre.prenom} {chef_membre.nom}".strip()
-        user = obj.chef_utilisateur
-        return f"{user.prenom} {user.nom}".strip() if user else (obj.chef_nom or "")
-
-    def get_effectif(self, obj) -> int:
-        return obj.membres.filter(supprime_le__isnull=True).count()
+    affectations = serializers.SerializerMethodField()
 
     class Meta:
         model = EquipeChantier
         fields = [
             "id",
-            "projet",
             "projet_id",
             "nom",
-            "nature",
             "corps_etat",
-            "specialite",
-            "chef_utilisateur",
-            "chef_nom",
+            "entreprise",
+            "nature",
             "chef",
-            "membres",
             "effectif",
+            "membres",
+            "affectations",
             "est_actif",
+            "cree_le",
         ]
-        read_only_fields = fields
+
+    def _membres(self, obj):
+        return [m for m in obj.membres.all() if m.supprime_le is None]
+
+    @extend_schema_field(EntrepriseRattachementSerializer)
+    def get_entreprise(self, obj):
+        return entreprise_de(obj.entreprise_partenaire)
+
+    @extend_schema_field(MembreSerializer(allow_null=True))
+    def get_chef(self, obj):
+        chef = next((m for m in self._membres(obj) if m.est_chef and m.date_depart is None), None)
+        return MembreSerializer(chef).data if chef else None
+
+    @extend_schema_field(MembreSerializer(many=True))
+    def get_membres(self, obj):
+        historique = self.context.get("historique", False)
+        membres = [m for m in self._membres(obj) if historique or m.date_depart is None]
+        return MembreSerializer(membres, many=True).data
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_effectif(self, obj) -> int:
+        return sum(1 for m in self._membres(obj) if m.date_depart is None)
+
+    @extend_schema_field(AffectationEquipeSerializer(many=True))
+    def get_affectations(self, obj):
+        affectations = [a for a in obj.affectations_elements.all() if a.supprime_le is None]
+        return AffectationEquipeSerializer(affectations, many=True).data
 
 
-class EquipeCandidatEquipeSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    nom = serializers.CharField()
+class MembreCreationSerializer(serializers.Serializer):
+    personne_id = serializers.UUIDField()
+    fonction = serializers.ChoiceField(choices=FONCTIONS, required=False, default="OUVRIER")
+    est_chef = serializers.BooleanField(required=False, default=False)
+    date_arrivee = serializers.DateField(required=False, allow_null=True, default=None)
+    date_depart = serializers.DateField(required=False, allow_null=True, default=None)
 
 
-class CandidatEquipeSerializer(serializers.Serializer):
-    """Un collaborateur que l'on peut ajouter à une équipe du projet."""
+class MembreModificationSerializer(serializers.Serializer):
+    fonction = serializers.ChoiceField(choices=FONCTIONS, required=False)
+    est_chef = serializers.BooleanField(required=False)
+    date_arrivee = serializers.DateField(required=False)
+    date_depart = serializers.DateField(required=False, allow_null=True)
 
-    id = serializers.UUIDField()
-    nom_complet = serializers.CharField()
-    role_projet = serializers.CharField(help_text="Code du rôle tenu sur le projet (CP, CT, CC…).")
-    equipes = EquipeCandidatEquipeSerializer(
-        many=True, help_text="Les équipes du projet dont il est déjà membre."
+
+class EquipeCreationSerializer(serializers.Serializer):
+    nom = serializers.CharField(max_length=200)
+    corps_etat = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    # Vide : équipe de notre entreprise ; sinon un partenaire (sous-traitant, tâcheron…).
+    entreprise_partenaire_id = serializers.PrimaryKeyRelatedField(
+        queryset=Tiers.objects.all(), required=False, allow_null=True, default=None
     )
+    membres = MembreCreationSerializer(many=True, required=False, default=list)
+
+
+class EquipeModificationSerializer(serializers.Serializer):
+    nom = serializers.CharField(max_length=200, required=False)
+    corps_etat = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    entreprise_partenaire_id = serializers.PrimaryKeyRelatedField(
+        queryset=Tiers.objects.all(), required=False, allow_null=True
+    )
+    est_actif = serializers.BooleanField(required=False)
+
+
+class AffectationEquipeCreationSerializer(serializers.Serializer):
+    equipe_id = serializers.UUIDField()
+    element_id = serializers.UUIDField()

@@ -17,17 +17,11 @@ from apps.projets.views import (
     ReferentielVillesView,
     TableauDeBordView,
 )
-from apps.projets.views.activite import (
-    ActiviteActivationView,
-    ActiviteAvancementHistoriqueView,
-    ActiviteAvancementView,
-    ActiviteDetailView,
-    LotActiviteListCreateView,
-)
 from apps.projets.views.affectation import (
     CollaborateursAffectablesView,
     ProjetAffectationDetailView,
     ProjetAffectationListCreateView,
+    ProjetChefChantierView,
 )
 from apps.projets.views.calendrier import (
     CalendrierEntrepriseView,
@@ -35,22 +29,42 @@ from apps.projets.views.calendrier import (
     ExceptionCalendrierListCreateView,
     SemaineTypeView,
 )
+from apps.projets.views.decoupage import (
+    ElementCloturerView,
+    ElementDeplacerView,
+    ElementDesactiverView,
+    ElementDetailView,
+    ElementDetaillerView,
+    ElementMesureView,
+    ElementPlanifierView,
+    ElementReactiverView,
+    ElementRouvrirView,
+    ElementSuspendreView,
+    ListeDetailView,
+    ListesView,
+    ListeValeursView,
+    ModeleDetailView,
+    ModelePersonnaliserView,
+    ModelesView,
+    ProjetArbreView,
+    ProjetDecoupageView,
+    ProjetElementsView,
+    ProjetNiveauDetailView,
+    ProjetNiveauxInsererView,
+    ProjetNiveauxView,
+    ProjetTableauVerifierView,
+    ValeurListeDetailView,
+)
 from apps.projets.views.equipe import (
+    MainOeuvreDetailView,
+    MainOeuvreListCreateView,
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
-    ProjetEquipeCandidatsView,
     ProjetEquipeDetailView,
     ProjetEquipeListCreateView,
     ProjetEquipeMembreDetailView,
     ProjetEquipeMembreListCreateView,
     ProjetEquipeStatistiquesView,
-)
-from apps.projets.views.lot import (
-    LotActivationView,
-    LotDetailView,
-    ProjetLotImportView,
-    ProjetLotListCreateView,
-    ProjetLotModeleView,
 )
 from apps.projets.views.referentiels import (
     ReferentielDroitsView,
@@ -58,11 +72,9 @@ from apps.projets.views.referentiels import (
     ReferentielListeView,
 )
 from apps.projets.views.reprogrammation import (
-    ActiviteHistoriqueDatesView,
-    ActiviteReprogrammerView,
+    ElementHistoriqueDatesView,
+    ElementReprogrammerView,
     GlobalJournalReportsView,
-    LotHistoriqueDatesView,
-    LotReprogrammerView,
     MotifReportListCreateView,
     ProjetHistoriqueDatesView,
     ProjetJournalReportsConsolideView,
@@ -71,6 +83,9 @@ from apps.projets.views.reprogrammation import (
 from apps.projets.views.statistiques import ProjetStatistiquesView
 
 app_name = "projets"
+
+ORIGINE = r"(?P<origine>PLATEFORME|ENTREPRISE|plateforme|entreprise)"
+UUID = r"[0-9a-fA-F-]{36}"
 
 urlpatterns = [
     # Référentiel des motifs de report
@@ -96,18 +111,97 @@ urlpatterns = [
         ReferentielEntreeView.as_view(),
         name="referentiel-entree",
     ),
+    # Découpage : listes de valeurs et modèles (plateforme + entreprise)
+    path("decoupage/listes/", ListesView.as_view(), name="decoupage-listes"),
+    re_path(
+        rf"^decoupage/listes/{ORIGINE}/(?P<pk>{UUID})/$",
+        ListeDetailView.as_view(),
+        name="decoupage-liste-detail",
+    ),
+    re_path(
+        rf"^decoupage/listes/{ORIGINE}/(?P<pk>{UUID})/valeurs/$",
+        ListeValeursView.as_view(),
+        name="decoupage-liste-valeurs",
+    ),
+    path(
+        "decoupage/valeurs/<uuid:pk>/",
+        ValeurListeDetailView.as_view(),
+        name="decoupage-valeur-detail",
+    ),
+    path("decoupage/modeles/", ModelesView.as_view(), name="decoupage-modeles"),
+    path(
+        "decoupage/modeles/PLATEFORME/<uuid:pk>/personnaliser/",
+        ModelePersonnaliserView.as_view(),
+        name="decoupage-modele-personnaliser",
+    ),
+    re_path(
+        rf"^decoupage/modeles/{ORIGINE}/(?P<pk>{UUID})/$",
+        ModeleDetailView.as_view(),
+        name="decoupage-modele-detail",
+    ),
+    # Registre de main-d'œuvre de l'entreprise
+    path("main-oeuvre/", MainOeuvreListCreateView.as_view(), name="main-oeuvre-liste"),
+    path("main-oeuvre/<uuid:pk>/", MainOeuvreDetailView.as_view(), name="main-oeuvre-detail"),
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),
+    path(
+        "projets/journal-reports/",
+        GlobalJournalReportsView.as_view(),
+        name="projets-journal-reports-global",
+    ),
+    path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
+    path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
+    path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
+    # Découpage d'un projet : tableau de démarrage, arbre, niveaux, cases
+    path("projets/<uuid:pk>/decoupage/", ProjetDecoupageView.as_view(), name="projet-decoupage"),
+    path(
+        "projets/<uuid:pk>/decoupage/verifier/",
+        ProjetTableauVerifierView.as_view(),
+        name="projet-decoupage-verifier",
+    ),
+    path("projets/<uuid:pk>/arbre/", ProjetArbreView.as_view(), name="projet-arbre"),
+    path("projets/<uuid:pk>/niveaux/", ProjetNiveauxView.as_view(), name="projet-niveaux"),
+    path(
+        "projets/<uuid:pk>/niveaux/inserer/",
+        ProjetNiveauxInsererView.as_view(),
+        name="projet-niveaux-inserer",
+    ),
+    path(
+        "projets/<uuid:pk>/niveaux/<uuid:niveau_id>/",
+        ProjetNiveauDetailView.as_view(),
+        name="projet-niveau-detail",
+    ),
+    path("projets/<uuid:pk>/elements/", ProjetElementsView.as_view(), name="projet-elements"),
+    path("elements/<uuid:pk>/", ElementDetailView.as_view(), name="element-detail"),
+    path("elements/<uuid:pk>/planifier/", ElementPlanifierView.as_view(), name="element-planifier"),
+    path(
+        "elements/<uuid:pk>/reprogrammer/",
+        ElementReprogrammerView.as_view(),
+        name="element-reprogrammer",
+    ),
+    path(
+        "elements/<uuid:pk>/historique-dates/",
+        ElementHistoriqueDatesView.as_view(),
+        name="element-historique-dates",
+    ),
+    path("elements/<uuid:pk>/deplacer/", ElementDeplacerView.as_view(), name="element-deplacer"),
+    path("elements/<uuid:pk>/detailler/", ElementDetaillerView.as_view(), name="element-detailler"),
+    path(
+        "elements/<uuid:pk>/desactiver/", ElementDesactiverView.as_view(), name="element-desactiver"
+    ),
+    path("elements/<uuid:pk>/reactiver/", ElementReactiverView.as_view(), name="element-reactiver"),
+    path(
+        "elements/<uuid:pk>/suspension/", ElementSuspendreView.as_view(), name="element-suspension"
+    ),
+    path("elements/<uuid:pk>/mesure/", ElementMesureView.as_view(), name="element-mesure"),
+    path("elements/<uuid:pk>/cloturer/", ElementCloturerView.as_view(), name="element-cloturer"),
+    path("elements/<uuid:pk>/rouvrir/", ElementRouvrirView.as_view(), name="element-rouvrir"),
+    # Équipes
     path("projets/<uuid:pk>/equipes/", ProjetEquipeListCreateView.as_view(), name="projet-equipes"),
     path(
         "projets/<uuid:pk>/equipes/statistiques/",
         ProjetEquipeStatistiquesView.as_view(),
         name="projet-equipes-statistiques",
-    ),
-    path(
-        "projets/<uuid:pk>/equipes/candidats/",
-        ProjetEquipeCandidatsView.as_view(),
-        name="projet-equipes-candidats",
     ),
     path(
         "projets/<uuid:pk>/equipes/affectations/",
@@ -139,21 +233,6 @@ urlpatterns = [
         ProjetStatistiquesView.as_view(),
         name="projet-statistiques",
     ),
-    path("projets/<uuid:pk>/lots/", ProjetLotListCreateView.as_view(), name="projet-lots"),
-    path(
-        "projets/<uuid:pk>/lots/import/", ProjetLotImportView.as_view(), name="projet-lots-import"
-    ),
-    path(
-        "projets/<uuid:pk>/lots/modele/", ProjetLotModeleView.as_view(), name="projet-lots-modele"
-    ),
-    path(
-        "projets/journal-reports/",
-        GlobalJournalReportsView.as_view(),
-        name="projets-journal-reports-global",
-    ),
-    path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
-    path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
-    path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
     path(
         "projets/<uuid:pk>/reprogrammer/",
         ProjetReprogrammerView.as_view(),
@@ -201,6 +280,7 @@ urlpatterns = [
         ArretChantierDetailView.as_view(),
         name="arret-chantier-detail",
     ),
+    # Affectations des collaborateurs (rôle par projet, périmètre)
     path(
         "projets/<uuid:projet_id>/affectations/",
         ProjetAffectationListCreateView.as_view(),
@@ -212,58 +292,14 @@ urlpatterns = [
         name="projet-affectation-detail",
     ),
     path(
+        "projets/<uuid:projet_id>/chef-chantier/",
+        ProjetChefChantierView.as_view(),
+        name="projet-chef-chantier",
+    ),
+    path(
         "projets/<uuid:projet_id>/collaborateurs-affectables/",
         CollaborateursAffectablesView.as_view(),
         name="projet-collaborateurs-affectables",
-    ),
-    # Lots
-    path("lots/<uuid:pk>/", LotDetailView.as_view(), name="lot-detail"),
-    path("lots/<uuid:pk>/activation/", LotActivationView.as_view(), name="lot-activation"),
-    path(
-        "lots/<uuid:pk>/reprogrammer/",
-        LotReprogrammerView.as_view(),
-        name="lot-reprogrammer",
-    ),
-    path(
-        "lots/<uuid:pk>/historique-dates/",
-        LotHistoriqueDatesView.as_view(),
-        name="lot-historique-dates",
-    ),
-    path(
-        "lots/<uuid:lot_id>/activites/",
-        LotActiviteListCreateView.as_view(),
-        name="lot-activites-liste-creer",
-    ),
-    # Activités
-    path(
-        "activites/<uuid:pk>/activation/",
-        ActiviteActivationView.as_view(),
-        name="activite-activation",
-    ),
-    path(
-        "activites/<uuid:pk>/avancement/",
-        ActiviteAvancementView.as_view(),
-        name="activite-avancement",
-    ),
-    path(
-        "activites/<uuid:pk>/avancement/historique/",
-        ActiviteAvancementHistoriqueView.as_view(),
-        name="activite-avancement-historique",
-    ),
-    path(
-        "activites/<uuid:pk>/",
-        ActiviteDetailView.as_view(),
-        name="activite-detail",
-    ),
-    path(
-        "activites/<uuid:pk>/reprogrammer/",
-        ActiviteReprogrammerView.as_view(),
-        name="activite-reprogrammer",
-    ),
-    path(
-        "activites/<uuid:pk>/historique-dates/",
-        ActiviteHistoriqueDatesView.as_view(),
-        name="activite-historique-dates",
     ),
     # Tableau de bord
     path("tableau-de-bord/", TableauDeBordView.as_view(), name="tableau-de-bord"),

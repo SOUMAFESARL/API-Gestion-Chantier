@@ -22,7 +22,6 @@ __all__ = [
 def rapports_liste(
     *,
     projet_id: UUID | str | None = None,
-    lot_id: UUID | str | None = None,
     statut: str | None = None,
     auteur_id: UUID | str | None = None,
     date_debut=None,
@@ -32,15 +31,12 @@ def rapports_liste(
     """Retourne la liste filtrée des rapports journaliers avec relations préchargées."""
     qs = RapportJournalier.objects.select_related(
         "projet",
-        "lot",
         "auteur",
         "valide_par",
     ).all()
 
     if projet_id:
         qs = qs.filter(projet_id=projet_id)
-    if lot_id:
-        qs = qs.filter(lot_id=lot_id)
     if statut:
         qs = qs.filter(statut=statut)
     if auteur_id:
@@ -61,7 +57,6 @@ def rapport_par_id(rapport_id: UUID | str) -> RapportJournalier | None:
         return (
             RapportJournalier.objects.select_related(
                 "projet",
-                "lot",
                 "auteur",
                 "valide_par",
             )
@@ -75,20 +70,16 @@ def rapport_par_id(rapport_id: UUID | str) -> RapportJournalier | None:
 def rapport_existe(
     *,
     projet_id: UUID | str,
-    lot_id: UUID | str | None = None,
     date_rapport,
     exclure_id: UUID | str | None = None,
 ) -> bool:
-    """Vérifie si un rapport existe déjà pour la même date sur le lot ou le projet."""
+    """Vérifie si le projet a déjà son rapport pour cette date (un seul par jour)."""
     qs = RapportJournalier.objects.filter(date_rapport=date_rapport)
 
     if exclure_id:
         qs = qs.exclude(id=exclure_id)
 
-    if lot_id:
-        return qs.filter(lot_id=lot_id).exists()
-
-    return qs.filter(projet_id=projet_id, lot__isnull=True).exists()
+    return qs.filter(projet_id=projet_id).exists()
 
 
 def rapports_en_attente_validation(

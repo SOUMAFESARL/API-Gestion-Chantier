@@ -25,7 +25,7 @@ from apps.chantier.services.blocage import (
     prendre_en_charge_blocage,
     resoudre_blocage,
 )
-from apps.projets.models import Lot, Projet
+from apps.projets.models import Element, Projet
 
 __all__ = [
     "BlocageDetailView",
@@ -58,7 +58,7 @@ class ProjetBlocageListCreateView(APIView):
         qs = Blocage.objects.filter(
             projet=projet,
             supprime_le__isnull=True,
-        ).select_related("projet", "lot", "ouvert_par", "resolu_par")
+        ).select_related("projet", "element", "ouvert_par", "resolu_par")
 
         statut_filtre = request.query_params.get("statut")
         if statut_filtre:
@@ -87,10 +87,10 @@ class ProjetBlocageListCreateView(APIView):
         serializer = BlocageCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        lot = None
-        lot_id = serializer.validated_data.get("lot_id")
-        if lot_id:
-            lot = get_object_or_404(Lot.objects.filter(projet=projet, supprime_le__isnull=True), pk=lot_id)
+        element = None
+        element_id = serializer.validated_data.get("element_id")
+        if element_id:
+            element = get_object_or_404(Element.objects.filter(projet=projet), pk=element_id)
 
         blocage = creer_blocage(
             projet=projet,
@@ -98,7 +98,7 @@ class ProjetBlocageListCreateView(APIView):
             severite=serializer.validated_data["severite"],
             auteur=request.user,
             description=serializer.validated_data.get("description", ""),
-            lot=lot,
+            element=element,
         )
         return Response(BlocageSerializer(blocage).data, status=status.HTTP_201_CREATED)
 
@@ -119,7 +119,7 @@ class BlocageDetailView(APIView):
     def get(self, request, pk):
         blocage = get_object_or_404(
             Blocage.objects.filter(supprime_le__isnull=True).select_related(
-                "projet", "lot", "ouvert_par", "resolu_par"
+                "projet", "element", "ouvert_par", "resolu_par"
             ),
             pk=pk,
         )

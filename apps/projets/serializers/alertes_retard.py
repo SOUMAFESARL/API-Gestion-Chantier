@@ -6,7 +6,7 @@ from rest_framework import serializers
 from apps.projets.models import AlerteRetard
 
 __all__ = [
-    "AlerteLotSerializer",
+    "AlerteElementSerializer",
     "AlerteProjetSerializer",
     "AlerteRetardResolutionSerializer",
     "AlerteRetardSerializer",
@@ -21,12 +21,13 @@ class AlerteProjetSerializer(serializers.Serializer):
     nom = serializers.CharField(help_text="Nom du projet.")
 
 
-class AlerteLotSerializer(serializers.Serializer):
-    """Lot concerné par l'alerte (ou null pour une alerte de niveau projet)."""
+class AlerteElementSerializer(serializers.Serializer):
+    """Case de l'arbre concernée par l'alerte (ou null pour une alerte de niveau projet)."""
 
-    id = serializers.UUIDField(help_text="Identifiant UUID du lot.")
-    code = serializers.CharField(help_text="Code du lot.")
-    libelle = serializers.CharField(help_text="Libellé du lot.")
+    id = serializers.UUIDField(help_text="Identifiant UUID de la case.")
+    code = serializers.CharField(help_text="Code libre de la case (peut être vide).")
+    libelle = serializers.CharField(help_text="Intitulé de la case.")
+    niveau = serializers.CharField(source="niveau.libelle", help_text="Libellé de son niveau.")
 
     def to_representation(self, instance):
         if instance is None:
@@ -38,7 +39,7 @@ class AlerteRetardSerializer(serializers.ModelSerializer):
     """Représentation détaillée d'une alerte de retard."""
 
     projet = AlerteProjetSerializer(read_only=True)
-    lot = AlerteLotSerializer(read_only=True, allow_null=True)
+    element = AlerteElementSerializer(read_only=True, allow_null=True)
     resolue_par = serializers.SerializerMethodField(help_text="Nom complet du résoluteur ou null.")
 
     class Meta:
@@ -46,7 +47,7 @@ class AlerteRetardSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "projet",
-            "lot",
+            "element",
             "niveau",
             "delta_pts",
             "indice_sante",

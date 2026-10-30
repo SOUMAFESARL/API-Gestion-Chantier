@@ -40,15 +40,15 @@ class AlerteRetard(ModeleBase):
         related_name="alertes_retard",
         verbose_name=_("projet"),
     )
-    lot = models.ForeignKey(
-        "projets.Lot",
+    element = models.ForeignKey(
+        "projets.Element",
         on_delete=models.RESTRICT,
         null=True,
         blank=True,
         related_name="alertes_retard",
-        verbose_name=_("lot"),
+        verbose_name=_("élément"),
         help_text=_(
-            "Lot concerné. Nul pour une alerte de niveau projet "
+            "Élément de l'arbre concerné. Nul pour une alerte de niveau projet "
             "(ex. indice de santé critique)."
         ),
     )
@@ -120,9 +120,9 @@ class AlerteRetard(ModeleBase):
         ordering = ["-date_detection", "-cree_le"]
         indexes = [
             models.Index(fields=["projet", "statut"], name="idx_alerte_retard_proj_stat"),
-            models.Index(fields=["lot", "statut"], name="idx_alerte_retard_lot_stat"),
+            models.Index(fields=["element", "statut"], name="idx_alerte_retard_elem_stat"),
         ]
 
     def __str__(self) -> str:
-        cible = f"lot {self.lot.code}" if self.lot else f"projet {self.projet.reference}"
+        cible = f"élément {self.element}" if self.element else f"projet {self.projet.reference}"
         return f"Alerte {self.niveau} — {cible} ({self.statut})"

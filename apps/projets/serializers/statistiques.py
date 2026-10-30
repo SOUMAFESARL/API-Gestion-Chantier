@@ -2,8 +2,14 @@ from rest_framework import serializers
 
 
 class StatistiquesProjetSerializer(serializers.Serializer):
-    lots_count = serializers.IntegerField()
-    activites_count = serializers.IntegerField()
-    avancement_pondere = serializers.FloatField(help_text="Pourcentage réalisé, de 0 à 100.")
-    ponderation = serializers.ChoiceField(choices=["BUDGET", "UNIFORME"])
-    activites_en_retard = serializers.IntegerField()
+    cases_count = serializers.IntegerField(help_text="Cases actives de l'arbre.")
+    feuilles_count = serializers.IntegerField(help_text="Tâches du bas (feuilles) actives.")
+    avancement_pondere = serializers.FloatField(
+        allow_null=True,
+        help_text="Physique du projet, pondéré par les montants ; nul quand il est indisponible.",
+    )
+    avancement_partiel = serializers.BooleanField(
+        help_text="Vrai quand une partie des montants manque (calcul sur les cases chiffrées)."
+    )
+    ponderation = serializers.ChoiceField(choices=["MONTANT"])
+    feuilles_en_retard = serializers.IntegerField()

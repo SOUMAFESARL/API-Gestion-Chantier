@@ -198,9 +198,9 @@ class AffectationProjet(ModeleBase):
         on_delete=models.CASCADE,
         related_name="affectations",
     )
-    # Le code d'un rôle de portée Projet (table `role`) : CP, CT, CC, VI, ou tout rôle
-    # créé depuis — plus de liste figée (décision du 16/10/2026). C'est toujours le rôle
-    # du collaborateur sur la plateforme.
+    # Le code d'un rôle (table `role`). **Propre à l'affectation** (décisions v1.2, §13bis) :
+    # il prend par défaut le rôle du collaborateur sur la plateforme, mais peut différer d'un
+    # projet à l'autre — conducteur de travaux ici, chef de chantier là.
     role_projet = models.CharField(
         _("rôle sur le projet"),
         max_length=50,
@@ -209,18 +209,14 @@ class AffectationProjet(ModeleBase):
     )
     date_debut = models.DateField(_("date de début"), default=timezone.now)
     date_fin = models.DateField(_("date de fin"), null=True, blank=True)
-    # Le périmètre d'un chef de chantier : « Lot 02 — Gros œuvre », « Bâtiment B ».
-    # Vide : tout le chantier.
-    zone = models.CharField(_("zone"), max_length=120, blank=True, default="")
-    # Le lot dont un chef de chantier a la charge. Si renseigné, `zone` en reprend le code et
-    # le libellé ; la zone libre ne sert plus qu'à l'historique.
-    lot = models.ForeignKey(
-        "projets.Lot",
-        verbose_name=_("lot"),
-        on_delete=models.RESTRICT,
-        null=True,
+    # Le périmètre : une ou plusieurs cases de l'arbre, et tout ce qui est en dessous. Aucune
+    # case : tout le projet. Une permission s'exerce dans le périmètre (§13bis).
+    perimetres = models.ManyToManyField(
+        "projets.Element",
         blank=True,
-        related_name="affectations_chef_chantier",
+        related_name="affectations_perimetre",
+        db_table="affectation_projet_perimetre",
+        verbose_name=_("périmètre"),
     )
     # Ce que fait un « autre membre » de l'encadrement, porté par le rôle consultant (VI).
     fonction_membre = models.CharField(
@@ -247,7 +243,14 @@ class AffectationProjet(ModeleBase):
             models.UniqueConstraint(
                 fields=["utilisateur", "projet"],
                 name="uq_affectation_utilisateur_projet",
-            )
+            ),
+            # Règle fixée le 29/10/2026 : un seul chef de chantier par projet — c'est lui, et lui
+            # seul, qui écrit le journal de chantier.
+            models.UniqueConstraint(
+                fields=["projet"],
+                condition=models.Q(role_projet="CC", est_actif=True, supprime_le__isnull=True),
+                name="uq_affectation_un_chef_chantier",
+            ),
         ]
 
     def get_role_projet_display(self) -> str:

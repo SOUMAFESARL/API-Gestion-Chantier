@@ -1,4 +1,4 @@
-"""Référentiels dynamiques du module Projets : types de projet et noms de lot.
+"""Référentiels dynamiques du module Projets : types de projet, noms de lot, modes d'exécution.
 
 Une liste = les entrées de la plateforme (super admin, communes à toutes les
 entreprises, non supprimables ici) + celles de l'entreprise. Arbitrage du 16/10/2026.
@@ -188,11 +188,11 @@ def libelle_mode_execution(code: str, table: dict | None = None) -> str:
 
 
 def code_mode_execution_valide(code: str, table: dict | None = None) -> bool:
-    """Un code actif du référentiel fusionné, ou déjà porté par un lot (entrée retirée depuis)."""
-    from apps.projets.models import Lot
+    """Un code actif du référentiel fusionné, ou déjà porté par une case (entrée retirée depuis)."""
+    from apps.projets.models import Element
 
     if table is None:
         table = table_modes_execution()
     if code in table and table[code][2]:
         return True
-    return Lot.tous_objets.filter(mode_execution=code).exists()
+    return Element.tous_objets.filter(mode_execution=code).exists()

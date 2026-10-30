@@ -31,6 +31,31 @@ REGISTRE: dict[str, DefPermission] = {
             2,
             "Ajouter des types, groupes et listes de l'entreprise",
         ),
+        # Découpage en arbre (décisions v1.2, §13bis) : chaque permission s'exerce dans le
+        # périmètre de l'affectation — une ou plusieurs cases de l'arbre, ou tout le projet.
+        DefPermission("projets.voir_tout", "projets", 1, "Voir tout le projet, hors de son périmètre"),
+        DefPermission(
+            "projets.decouper",
+            "projets",
+            2,
+            "Découper le projet (ajouter, déplacer, détailler, insérer un niveau, désactiver)",
+        ),
+        DefPermission("projets.chiffrer", "projets", 2, "Fixer les montants et les quantités prévues"),
+        DefPermission("projets.planifier", "projets", 2, "Planifier et reprogrammer les dates"),
+        DefPermission(
+            "projets.prolonger", "projets", 3, "Prolonger le projet ou une case déjà commencée"
+        ),
+        DefPermission("projets.mesurer", "projets", 2, "Mesurer l'avancement hors du journal"),
+        DefPermission("projets.retirer_membres", "projets", 2, "Retirer un membre du projet"),
+        DefPermission(
+            "projets.main_oeuvre_gerer", "projets", 2, "Gérer le registre de main-d'œuvre"
+        ),
+        DefPermission(
+            "projets.modeles_gerer",
+            "projets",
+            3,
+            "Gérer les listes et les modèles de découpage de l'entreprise",
+        ),
         DefPermission("chantier.lire", "chantier", 1, "Consulter les rapports"),
         DefPermission("chantier.rediger", "chantier", 2, "Rédiger et soumettre un rapport"),
         DefPermission("chantier.valider", "chantier", 3, "Valider / rejeter un rapport"),

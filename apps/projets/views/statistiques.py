@@ -7,20 +7,20 @@ from rest_framework.views import APIView
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Projet
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
-from apps.projets.services.statistiques import statistiques_lots
+from apps.projets.selectors.arbre import charger_arbre
+from apps.projets.services.statistiques import statistiques_arbre
 
 
 class ProjetStatistiquesView(APIView):
     permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
 
     @extend_schema(
-        tags=["activités"],
-        summary="Statistiques des lots et activités du projet",
+        tags=["découpage"],
+        summary="Statistiques de l'arbre du projet",
         description=(
-            "Statistiques calculées à chaque lecture. Lots et activités actifs non supprimés. "
-            "Lots pondérés par leur budget, lots sans budget exclus (RG-F3-05) ; "
-            "activités pondérées par leur quantité prévue. "
-            "Retard : fin passée et réalisation inférieure à 100 %."
+            "Statistiques calculées à chaque lecture sur les cases actives de l'arbre. "
+            "Physique pondéré par les montants (décisions v1.2, §8) ; nul quand aucun montant "
+            "n'est connu. Retard d'une feuille : fin passée et réalisation inférieure à 100 %."
         ),
         responses={
             200: StatistiquesProjetSerializer,
@@ -30,14 +30,15 @@ class ProjetStatistiquesView(APIView):
         },
         examples=[
             OpenApiExample(
-                "Lots pondérés par budget, activités pondérées par quantité prévue",
+                "Arbre pondéré par les montants",
                 response_only=True,
                 value={
-                    "lots_count": 2,
-                    "activites_count": 2,
-                    "avancement_pondere": 12.5,
-                    "ponderation": "BUDGET",
-                    "activites_en_retard": 1,
+                    "cases_count": 12,
+                    "feuilles_count": 8,
+                    "avancement_pondere": 55.7,
+                    "avancement_partiel": False,
+                    "ponderation": "MONTANT",
+                    "feuilles_en_retard": 1,
                 },
             )
         ],
@@ -45,8 +46,7 @@ class ProjetStatistiquesView(APIView):
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
-        lots = projet.lots.prefetch_related("activites")
-        data = statistiques_lots(lots)
+        data = statistiques_arbre(charger_arbre(projet))
         from apps.core.droits import peut_voir_montants
         from apps.core.purger_montants import purger_montants_recursif
 

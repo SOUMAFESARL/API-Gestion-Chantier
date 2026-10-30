@@ -1,12 +1,14 @@
-"""Services métier pour la gestion des affectations d'équipe au chantier (US-04).
+"""Services métier pour la gestion des affectations des collaborateurs au chantier (US-04).
 
-Rôles supportés :
-- Conducteur de travaux (CT)
-- Chef de Chantier (CC)
-- Consultant lecture (VI / CL)
-- Maître d'Œuvre (MOE)
-- Maître d'Ouvrage (MOA)
-- Chef de Projet (CP)
+Décisions v1.2 du découpage (§13bis) et règles du 29/10/2026 :
+
+- **Le rôle est propre à l'affectation** : par défaut le rôle du collaborateur sur la plateforme,
+  il peut différer d'un projet à l'autre.
+- **Le périmètre est une ou plusieurs cases de l'arbre** ; aucune case : tout le projet. Les
+  anciens champs `lot` et `zone` disparaissent.
+- **Un seul chef de chantier par projet** : c'est lui, et lui seul, qui écrit le journal. En
+  affecter un second est refusé ; pour en changer, `changer_chef_chantier` retire l'ancien
+  (son affectation reste dans l'historique) et affecte le nouveau en un seul geste.
 """
 
 from django.core.exceptions import ValidationError
@@ -17,9 +19,14 @@ from django.utils.translation import gettext_lazy as _
 from apps.accounts.models import Role, Utilisateur
 from apps.core.droits import a_permission, est_dg
 from apps.core.enums import RoleProjet
-from apps.core.exceptions import ChefProjetProtege, DgNonAssignableCommeCp, RequeteRefusee
+from apps.core.exceptions import (
+    ChefProjetProtege,
+    DgNonAssignableCommeCp,
+    ErreurConflit,
+    RequeteRefusee,
+)
 from apps.core.permissions import obtenir_portee_role
-from apps.projets.models import AffectationProjet, Lot, Projet
+from apps.projets.models import AffectationProjet, Element, Projet
 
 
 def verifier_affectable(utilisateur: Utilisateur | None) -> None:
@@ -63,21 +70,59 @@ def est_chef_projet(role_projet) -> bool:
     return (role_projet or "").upper() == RoleProjet.CHEF_PROJET
 
 
-def libelle_zone_lot(lot: Lot) -> str:
-    """La zone d'un chef de chantier rattaché à un lot : le code et le libellé du lot."""
-    return f"{lot.code} — {lot.libelle}"[:120]
+class ChefChantierDejaAffecte(ErreurConflit):
+    code_metier = "chef_chantier_deja_affecte"
+    default_detail = (
+        "Ce projet a déjà un chef de chantier : un seul par projet. Pour en changer, utilisez "
+        "« Changer le chef de chantier »."
+    )
 
 
-def resoudre_lot_affectation(projet: Projet, role_projet: str, lot_id) -> Lot | None:
-    """Le lot d'une affectation, vérifié : réservé au chef de chantier, dans ce projet, vivant."""
-    if lot_id is None:
-        return None
+def verifier_chef_chantier_unique(projet, utilisateur, role_projet, affectation_id=None) -> None:
+    """Un seul chef de chantier actif par projet (règle du 29/10/2026)."""
     if (role_projet or "").upper() != RoleProjet.CHEF_CHANTIER:
-        raise RequeteRefusee("Le lot ne concerne qu'un chef de chantier.")
-    lot = Lot.objects.filter(pk=lot_id, projet=projet, supprime_le__isnull=True).first()
-    if lot is None:
-        raise RequeteRefusee("Ce lot n'appartient pas à ce projet ou a été supprimé.")
-    return lot
+        return
+    autre = (
+        AffectationProjet.objects.filter(
+            projet=projet,
+            role_projet=RoleProjet.CHEF_CHANTIER,
+            est_actif=True,
+            supprime_le__isnull=True,
+        )
+        .exclude(utilisateur=utilisateur)
+        .select_related("utilisateur")
+    )
+    if affectation_id:
+        autre = autre.exclude(pk=affectation_id)
+    existant = autre.first()
+    if existant is not None:
+        raise ChefChantierDejaAffecte(
+            details={
+                "chef_chantier_actuel": {
+                    "affectation_id": str(existant.pk),
+                    "utilisateur_id": str(existant.utilisateur_id),
+                    "nom": f"{existant.utilisateur.prenom} {existant.utilisateur.nom}".strip(),
+                }
+            }
+        )
+
+
+def resoudre_perimetres(projet: Projet, ids) -> list[Element]:
+    """Les cases d'un périmètre, vérifiées : du projet, vivantes. Liste vide : tout le projet."""
+    if not ids:
+        return []
+    cases = list(Element.objects.filter(pk__in=ids, projet=projet))
+    if len(cases) != len(set(map(str, ids))):
+        raise RequeteRefusee("Une case du périmètre n'appartient pas à ce projet ou a été supprimée.")
+    return cases
+
+
+def role_par_defaut(utilisateur) -> str:
+    """Le rôle du collaborateur sur la plateforme : le rôle proposé par défaut sur un projet."""
+    role = getattr(utilisateur, "role", None)
+    if role is not None and getattr(role, "code", ""):
+        return role.code.upper()
+    return (getattr(utilisateur, "role_global", "") or RoleProjet.VISITEUR).upper()
 
 
 def retirer_dg_des_chantiers(*, appliquer: bool = False) -> list[str]:
@@ -143,7 +188,8 @@ def lister_affectations_projet(projet: Projet, actifs_seulement: bool = False):
     """Renvoie les affectations du projet avec chargement optimisé des relations."""
     qs = (
         AffectationProjet.objects.filter(projet=projet, supprime_le__isnull=True)
-        .select_related("utilisateur", "lot")
+        .select_related("utilisateur")
+        .prefetch_related("perimetres")
         .order_by("role_projet", "utilisateur__nom", "utilisateur__prenom")
     )
     if actifs_seulement:
@@ -155,17 +201,17 @@ def affecter_collaborateur_projet(
     *,
     projet: Projet,
     utilisateur: Utilisateur,
-    role_projet: str,
+    role_projet: str | None = None,
     date_debut=None,
     date_fin=None,
-    zone: str = "",
     fonction_membre: str = "",
-    lot_id=None,
+    perimetres_ids=None,
     modifie_par: Utilisateur | None = None,
     **kwargs,
 ) -> AffectationProjet:
-    """Affecte ou réactive un collaborateur sur un chantier avec un rôle spécifique."""
+    """Affecte ou réactive un collaborateur sur un chantier, avec un rôle et un périmètre."""
     verifier_affectable(utilisateur)
+    role_projet = (role_projet or role_par_defaut(utilisateur)).upper()
     # Tout rôle de la table `role` (CP, CT, CC, VI, ou créé depuis) — plus de liste figée.
     if role_projet not in RoleProjet.values and not Role.objects.filter(
         code__iexact=role_projet, est_actif=True
@@ -176,9 +222,8 @@ def affecter_collaborateur_projet(
         raise ValidationError(_("La date de fin ne peut pas être antérieure à la date de début."))
 
     date_debut_effective = date_debut or timezone.now().date()
-    lot = resoudre_lot_affectation(projet, role_projet, lot_id)
-    if lot:
-        zone = libelle_zone_lot(lot)
+    perimetres = resoudre_perimetres(projet, perimetres_ids)
+    verifier_chef_chantier_unique(projet, utilisateur, role_projet)
 
     with transaction.atomic():
         affectation = AffectationProjet.tous_objets.filter(
@@ -191,8 +236,6 @@ def affecter_collaborateur_projet(
             affectation.role_projet = role_projet
             affectation.date_debut = date_debut_effective
             affectation.date_fin = date_fin
-            affectation.zone = zone
-            affectation.lot = lot
             affectation.fonction_membre = fonction_membre
             affectation.est_actif = True
             affectation.supprime_le = None
@@ -202,8 +245,6 @@ def affecter_collaborateur_projet(
                     "role_projet",
                     "date_debut",
                     "date_fin",
-                    "zone",
-                    "lot",
                     "fonction_membre",
                     "est_actif",
                     "supprime_le",
@@ -218,12 +259,12 @@ def affecter_collaborateur_projet(
                 role_projet=role_projet,
                 date_debut=date_debut_effective,
                 date_fin=date_fin,
-                zone=zone,
-                lot=lot,
                 fonction_membre=fonction_membre,
                 est_actif=True,
                 cree_par=modifie_par,
             )
+        if perimetres_ids is not None:
+            affectation.perimetres.set(perimetres)
 
         # Synchronisation automatique du champ conducteur_travaux sur le Projet si CT
         if role_projet == RoleProjet.CONDUCTEUR_TRAVAUX and projet.conducteur_travaux_id != utilisateur.id:
@@ -244,6 +285,59 @@ def affecter_collaborateur_projet(
                 projet.save(update_fields=["chef_projet", "modifie_le"])
 
     return affectation
+
+
+@transaction.atomic
+def changer_chef_chantier(
+    *,
+    projet: Projet,
+    utilisateur: Utilisateur,
+    perimetres_ids=None,
+    date_changement=None,
+    modifie_par: Utilisateur | None = None,
+) -> dict:
+    """Change le chef de chantier en un seul geste (validé le 29/10/2026).
+
+    L'ancien chef perd sa fonction ce jour : son affectation est close (date de fin, inactive)
+    et reste dans l'historique ; le nouveau est affecté comme chef de chantier.
+    """
+    jour = date_changement or timezone.localdate()
+    ancien = (
+        AffectationProjet.objects.select_for_update()
+        .filter(
+            projet=projet,
+            role_projet=RoleProjet.CHEF_CHANTIER,
+            est_actif=True,
+            supprime_le__isnull=True,
+        )
+        .exclude(utilisateur=utilisateur)
+        .select_related("utilisateur")
+        .first()
+    )
+    if ancien is not None:
+        ancien.est_actif = False
+        ancien.date_fin = jour
+        ancien.save(update_fields=["est_actif", "date_fin", "modifie_le"])
+    nouveau = affecter_collaborateur_projet(
+        projet=projet,
+        utilisateur=utilisateur,
+        role_projet=RoleProjet.CHEF_CHANTIER,
+        date_debut=jour,
+        perimetres_ids=perimetres_ids if perimetres_ids is not None else [],
+        modifie_par=modifie_par,
+    )
+    from apps.audit.services import journaliser
+    from apps.core.enums import ActionAudit
+
+    journaliser(
+        action=ActionAudit.MODIFICATION,
+        type_entite="Projet",
+        entite_id=projet.pk,
+        utilisateur_id=getattr(modifie_par, "pk", None),
+        valeur_avant={"chef_chantier": str(ancien.utilisateur_id) if ancien else None},
+        valeur_apres={"evenement": "CHANGEMENT_CHEF_CHANTIER", "chef_chantier": str(utilisateur.pk)},
+    )
+    return {"ancien": ancien, "nouveau": nouveau}
 
 
 def verifier_invariant_chef_projet(projet: Projet, affectation_a_exclure_id=None):
@@ -273,10 +367,15 @@ def modifier_affectation_projet(
     nouveau_role = donnees.get("role_projet")
     role_final = nouveau_role or affectation.role_projet
 
-    # Le lot se vérifie avant toute écriture : un refus ne doit rien avoir modifié.
-    lot = None
-    if "lot_id" in donnees:
-        lot = resoudre_lot_affectation(affectation.projet, role_final, donnees["lot_id"])
+    # Le périmètre et l'unicité du chef de chantier se vérifient avant toute écriture.
+    perimetres = None
+    if "perimetres_ids" in donnees:
+        perimetres = resoudre_perimetres(affectation.projet, donnees["perimetres_ids"])
+    actif_final = donnees.get("est_actif", affectation.est_actif)
+    if actif_final:
+        verifier_chef_chantier_unique(
+            affectation.projet, affectation.utilisateur, role_final, affectation_id=affectation.pk
+        )
 
     # Si on désactive ou change le rôle d'un CP, détacher du projet si c'était lui
     if affectation.role_projet == RoleProjet.CHEF_PROJET:
@@ -296,22 +395,12 @@ def modifier_affectation_projet(
         affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
 
     champs = ["modifie_le"]
-    for c in ["role_projet", "date_debut", "date_fin", "est_actif", "zone", "fonction_membre"]:
+    for c in ["role_projet", "date_debut", "date_fin", "est_actif", "fonction_membre"]:
         if c in donnees:
             setattr(affectation, c, donnees[c])
             champs.append(c)
-
-    if "lot_id" in donnees:
-        affectation.lot = lot
-        champs.append("lot")
-        if lot:
-            affectation.zone = libelle_zone_lot(lot)
-            if "zone" not in champs:
-                champs.append("zone")
-    elif affectation.lot_id and (role_final or "").upper() != RoleProjet.CHEF_CHANTIER:
-        # Le lot ne suit pas la personne quand elle cesse d'être chef de chantier.
-        affectation.lot = None
-        champs.append("lot")
+    if perimetres is not None:
+        affectation.perimetres.set(perimetres)
 
     affectation.save(update_fields=champs)
     verifier_invariant_chef_projet(affectation.projet)

@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -22,7 +23,7 @@ from apps.core.permissions import (
     GardePermissionProjet,
     filtrer_queryset_par_affectations,
 )
-from apps.projets.models import Projet, ProjetContrat
+from apps.projets.models import Element, Projet, ProjetContrat
 from apps.projets.selectors.encadrement import prefetch_encadrement
 from apps.projets.serializers.swagger import (
     ProjetCreationResponseSerializer,
@@ -31,13 +32,6 @@ from apps.projets.serializers.swagger import (
 )
 from apps.projets.services.affectations import verifier_peut_gerer_chef_projet
 from apps.projets.services.indicateurs_temporels import calendrier_pour_projets
-from apps.projets.views.activite import (
-    ActiviteActivationView,
-    ActiviteAvancementHistoriqueView,
-    ActiviteAvancementView,
-    ActiviteDetailView,
-    LotActiviteListCreateView,
-)
 from apps.projets.views.alertes_retard import AlerteRetardListView, AlerteRetardResoudreView
 from apps.projets.views.arret_chantier import (
     ArretChantierDetailView,
@@ -52,11 +46,9 @@ from apps.projets.views.calendrier import (
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
 from apps.projets.views.planning import ProjetPlanningView
 from apps.projets.views.reprogrammation import (
-    ActiviteHistoriqueDatesView,
-    ActiviteReprogrammerView,
+    ElementHistoriqueDatesView,
+    ElementReprogrammerView,
     GlobalJournalReportsView,
-    LotHistoriqueDatesView,
-    LotReprogrammerView,
     MotifReportListCreateView,
     ProjetHistoriqueDatesView,
     ProjetJournalReportsConsolideView,
@@ -70,22 +62,15 @@ from apps.projets.views.sante import (
 from apps.projets.views.tableau_de_bord import TableauDeBordView
 
 __all__ = [
-    "ActiviteActivationView",
-    "ActiviteAvancementHistoriqueView",
-    "ActiviteAvancementView",
-    "ActiviteDetailView",
-    "ActiviteHistoriqueDatesView",
-    "ActiviteReprogrammerView",
     "AlerteRetardListView",
     "AlerteRetardResoudreView",
     "ArretChantierDetailView",
     "CalendrierEntrepriseView",
     "ExceptionCalendrierDetailView",
+    "ElementHistoriqueDatesView",
+    "ElementReprogrammerView",
     "ExceptionCalendrierListCreateView",
     "GlobalJournalReportsView",
-    "LotActiviteListCreateView",
-    "LotHistoriqueDatesView",
-    "LotReprogrammerView",
     "MeteoProjetView",
     "MotifReportListCreateView",
     "ProjetArretChantierListCreateView",
@@ -157,7 +142,8 @@ class ProjetListCreateView(APIView):
         qs = (
             Projet.objects.all()
             .select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
-            .prefetch_related("contrats", "lots__activites", prefetch_encadrement())
+            .prefetch_related("contrats", "niveaux", prefetch_encadrement())
+            .annotate(a_un_decoupage=Exists(Element.objects.filter(projet=OuterRef("pk"))))
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         projets = list(qs)
@@ -289,7 +275,7 @@ class ProjetDetailView(APIView):
         projet = get_object_or_404(
             Projet.objects.select_related(
                 "client", "chef_projet", "conducteur_travaux", "cree_par"
-            ).prefetch_related("contrats", "lots__activites", prefetch_encadrement()),
+            ).prefetch_related("contrats", "niveaux", prefetch_encadrement()),
             pk=pk,
         )
         self.check_object_permissions(request, projet)

@@ -5,7 +5,6 @@ Journal de chantier : rapports journaliers, production, photos, blocages.
 
 from .rapport_journalier import (
     AuteurSimpleSerializer,
-    LotSimpleSerializer,
     ProjetSimpleSerializer,
     RapportJournalierCreateSerializer,
     RapportJournalierDetailSerializer,
@@ -27,7 +26,6 @@ __all__ = [
     "BlocageResolutionSerializer",
     "BlocageSerializer",
     "BlocageUpdateSerializer",
-    "LotSimpleSerializer",
     "ProjetSimpleSerializer",
     "RapportJournalierCreateSerializer",
     "RapportJournalierDetailSerializer",

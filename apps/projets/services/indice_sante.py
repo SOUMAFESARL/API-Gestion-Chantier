@@ -56,7 +56,6 @@ from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import prefetch_related_objects
 from django.utils import timezone
 
 from apps.core.enums import StatutBlocage, StatutProjet, StatutRapport
@@ -224,18 +223,14 @@ def evaluer_indice_sante(
 
     Optimisations garanties :
     - Construit le calendrier de l'entreprise une seule fois.
-    - Précharge les lots et activités via `prefetch_related_objects` pour éviter
-      toute requête N+1 lors du calcul du delta d'avancement.
+    - Le delta d'avancement charge l'arbre du découpage en une requête.
     - Récupère l'ensemble des rapports et incidents sur 14 jours en une seule requête SQL
       avec `select_related("journal")`, sans aucune requête par jour.
     - Analyse les blocages ouverts ou pris en charge en une requête SQL groupée.
     """
     date_ref = date_reference or timezone.localdate()
 
-    # 1. Éviter toute requête par lot/activité lors du calcul de delta
-    prefetch_related_objects([projet], "lots__activites")
-
-    # 2. Construction unique du calendrier d'entreprise
+    # 1. Construction unique du calendrier d'entreprise
     dates_projet = [
         d
         for d in [
@@ -258,16 +253,16 @@ def evaluer_indice_sante(
     if getattr(calendrier, "est_incomplet", False):
         avertissements.append("JOURS_FERIES_INCOMPLETS")
 
-    # 3. Dimension Délais : delta consolidé par calculer_delta_projet
+    # 2. Dimension Délais : delta consolidé par calculer_delta_projet
     delta = float(calculer_delta_projet(projet, date_ref, calendrier))
     s_delais = score_delais(delta)
 
-    # 4. Fenêtres temporelles pour rapports (7 jours) et incidents (14 jours)
+    # 3. Fenêtres temporelles pour rapports (7 jours) et incidents (14 jours)
     date_debut_14j = date_ref - timedelta(days=13)
     date_debut_7j = date_ref - timedelta(days=6)
     date_fin = date_ref
 
-    # 5. Jours attendus pour les rapports (7 jours calendaires jusqu'à date_ref comprise)
+    # 4. Jours attendus pour les rapports (7 jours calendaires jusqu'à date_ref comprise)
     # Import local : au chargement du module, il fermait le cycle
     # chantier.services → projets.services → projets.tasks → indice_sante → chantier.
     from apps.chantier.services.journal import premier_jour_rapport
@@ -282,7 +277,7 @@ def evaluer_indice_sante(
         courante += timedelta(days=1)
     attendus = len(dates_attendues)
 
-    # 6. Requête SQL unique pour les rapports et incidents sur 14 jours (avec jointure journal)
+    # 5. Requête SQL unique pour les rapports et incidents sur 14 jours (avec jointure journal)
     rapports_14j = list(
         projet.rapports_journaliers.filter(
             supprime_le__isnull=True,
@@ -306,7 +301,7 @@ def evaluer_indice_sante(
 
     s_rapports = score_rapports(attendus, couverts)
 
-    # 7. Incidents des 14 derniers jours (saisie["incidents"])
+    # 6. Incidents des 14 derniers jours (saisie["incidents"])
     gravites_incidents: list[str] = []
     for r in rapports_14j:
         try:
@@ -324,7 +319,7 @@ def evaluer_indice_sante(
 
     s_incidents = score_incidents(gravites_incidents)
 
-    # 8. Dimension Blocages : blocages actifs non supprimés
+    # 7. Dimension Blocages : blocages actifs non supprimés
     blocages_actifs = projet.blocages.filter(
         supprime_le__isnull=True,
         statut__in=[StatutBlocage.OUVERT, StatutBlocage.PRIS_EN_CHARGE],
@@ -332,7 +327,7 @@ def evaluer_indice_sante(
     severites_ouvertes = list(blocages_actifs.values_list("severite", flat=True))
     s_blocages = score_blocages(severites_ouvertes)
 
-    # 9. Synthèse Formule 6 & Badge
+    # 8. Synthèse Formule 6 & Badge
     indice_final = indice_sante(s_delais, s_rapports, s_blocages, s_incidents)
     badge = determiner_badge(indice_final)
 

@@ -12,8 +12,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleBase
 
-from .activite import Activite
-from .lot import Lot
+from .decoupage import Element
 from .motif_report import MotifReport
 from .projet import Projet
 
@@ -22,8 +21,7 @@ __all__ = ["HistoriqueDate", "TypeObjetHistorique"]
 
 class TypeObjetHistorique(models.TextChoices):
     PROJET = "PROJET", _("Projet")
-    LOT = "LOT", _("Lot")
-    ACTIVITE = "ACTIVITE", _("Activité")
+    ELEMENT = "ELEMENT", _("Élément de découpage")
 
 
 class HistoriqueDate(ModeleBase):
@@ -42,21 +40,13 @@ class HistoriqueDate(ModeleBase):
         related_name="historique_dates",
         verbose_name=_("projet"),
     )
-    lot = models.ForeignKey(
-        Lot,
+    element = models.ForeignKey(
+        Element,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="historique_dates",
-        verbose_name=_("lot"),
-    )
-    activite = models.ForeignKey(
-        Activite,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="historique_dates",
-        verbose_name=_("activité"),
+        verbose_name=_("élément"),
     )
     champ = models.CharField(
         _("champ modifié"),
@@ -115,8 +105,8 @@ class HistoriqueDate(ModeleBase):
             raise ValidationError(
                 {"justification": _("La justification doit contenir au moins 30 caractères (RG-11).")}
             )
-        if not any([self.projet_id, self.lot_id, self.activite_id]):
-            raise ValidationError(_("Au moins un objet lié (projet, lot ou activité) doit être renseigné."))
+        if not any([self.projet_id, self.element_id]):
+            raise ValidationError(_("Au moins un objet lié (projet ou élément) doit être renseigné."))
 
     def save(self, *args, **kwargs):
         # 1. Calcul automatique et immuable de l'écart en jours
@@ -136,7 +126,7 @@ class HistoriqueDate(ModeleBase):
         raise ValidationError(_("RG-07 : Une entrée du journal d'audit des reports ne peut jamais être supprimée."))
 
     def __str__(self) -> str:
-        cible = self.projet or self.lot or self.activite
+        cible = self.element or self.projet
         signe = "+" if self.ecart_jours > 0 else ""
         return (
             f"[{self.type_objet}] {cible} — {self.champ} : "

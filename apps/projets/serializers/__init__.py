@@ -11,22 +11,13 @@ from apps.accounts.models import Utilisateur
 from apps.accounts.serializers.profil import ProfilEntrepriseSerializer
 from apps.accounts.services.invitations import creer_invitation
 from apps.core.enums import (
-    ModeExecution,
     RoleGlobal,
     RoleProjet,
     StatutProjet,
     StatutUtilisateur,
-    TypeBordereau,
     TypeProjet,
 )
-from apps.projets.models import AffectationProjet, Lot, Projet
-from apps.projets.serializers.activite import (
-    ActiviteAvancementSerializer,
-    ActiviteCreationSerializer,
-    ActiviteModificationSerializer,
-    ActiviteSerializer,
-    MiseAJourInlineSerializer,
-)
+from apps.projets.models import AffectationProjet, Projet
 from apps.projets.serializers.arret_chantier import (
     ArretChantierCreateSerializer,
     ArretChantierSerializer,
@@ -42,7 +33,6 @@ from apps.projets.serializers.calendrier import (
     SemaineTypeUpdateSerializer,
 )
 from apps.projets.serializers.dashboard import TableauDeBordResponseSerializer
-from apps.projets.serializers.lot import ModeExecutionField, ModeExecutionLibelleMixin
 from apps.projets.serializers.meteo import (
     MeteoResponseSerializer,
     ReferentielVillesResponseSerializer,
@@ -65,10 +55,6 @@ from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
 
 __all__ = [
-    "ActiviteAvancementSerializer",
-    "ActiviteCreationSerializer",
-    "ActiviteModificationSerializer",
-    "ActiviteSerializer",
     "ArretChantierCreateSerializer",
     "ArretChantierSerializer",
     "ArretChantierUpdateSerializer",
@@ -82,12 +68,10 @@ __all__ = [
     "ExceptionCalendrierResponseSerializer",
     "HistoriqueDateSerializer",
     "JourFerieResponseSerializer",
-    "LotCreationProjetSerializer",
-    "LotSimpleSerializer",
     "MeteoResponseSerializer",
-    "MiseAJourInlineSerializer",
     "MotifReportCreationSerializer",
     "MotifReportSerializer",
+    "NiveauProjetSimpleSerializer",
     "ProjetCreationSerializer",
     "ProjetSerializer",
     "ReferentielVillesResponseSerializer",
@@ -145,25 +129,14 @@ class DureeProjetSerializer(serializers.Serializer):
     jours_ouvres = serializers.IntegerField(read_only=True)
 
 
-@extend_schema_serializer(component_name="LotProjet")
-class LotSimpleSerializer(ModeExecutionLibelleMixin, serializers.ModelSerializer):
-    class Meta:
-        model = Lot
-        fields = [
-            "id",
-            "code",
-            "libelle",
-            "mode_execution",
-            "mode_execution_libelle",
-            "type_bordereau",
-            "date_debut_prevue",
-            "date_fin_prevue",
-            "date_debut_baseline",
-            "date_fin_baseline",
-            "avancement",
-            "statut",
-            "premier_rapport_soumis",
-        ]
+@extend_schema_serializer(component_name="NiveauProjetSimple")
+class NiveauProjetSimpleSerializer(serializers.Serializer):
+    """Un niveau du gabarit du projet (Phase, Ouvrage, Lot, Activité… ou tout autre)."""
+
+    id = serializers.UUIDField(read_only=True)
+    ordre = serializers.IntegerField(read_only=True)
+    libelle = serializers.CharField(read_only=True)
+    alerter = serializers.BooleanField(read_only=True)
 
 
 class ProjetSerializer(serializers.ModelSerializer):
@@ -173,7 +146,8 @@ class ProjetSerializer(serializers.ModelSerializer):
     client = TiersSerializer(read_only=True)
     chef_projet = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
     conducteur_travaux = ChefProjetEnrichiSerializer(read_only=True, allow_null=True)
-    lots = LotSimpleSerializer(many=True, read_only=True)
+    niveaux = serializers.SerializerMethodField()
+    decoupage_cree = serializers.SerializerMethodField()
     duree_jours_ouvres = serializers.IntegerField(read_only=True)
     duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
     peut_renommer = serializers.SerializerMethodField()
@@ -213,8 +187,20 @@ class ProjetSerializer(serializers.ModelSerializer):
             "avancement_theorique",
             "delta_retard",
             "indice_sante",
-            "lots",
+            "niveaux",
+            "decoupage_cree",
         ]
+
+    @extend_schema_field(NiveauProjetSimpleSerializer(many=True))
+    def get_niveaux(self, obj):
+        niveaux = [n for n in obj.niveaux.all() if n.supprime_le is None]
+        return NiveauProjetSimpleSerializer(sorted(niveaux, key=lambda n: n.ordre), many=True).data
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_decoupage_cree(self, obj) -> bool:
+        """Vrai dès que le tableau de démarrage a été appliqué : l'arbre existe."""
+        annote = getattr(obj, "a_un_decoupage", None)
+        return bool(annote) if annote is not None else obj.elements.exists()
 
     @extend_schema_field(serializers.BooleanField())
     def get_peut_renommer(self, obj) -> bool:
@@ -274,33 +260,6 @@ class ProjetSerializer(serializers.ModelSerializer):
         return data
 
 
-class LotCreationProjetSerializer(serializers.Serializer):
-    code = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
-    libelle = serializers.CharField(max_length=200)
-    mode_execution = ModeExecutionField(default=ModeExecution.REGIE.value)
-    type_bordereau = serializers.ChoiceField(
-        choices=TypeBordereau.choices, default=TypeBordereau.FORFAIT
-    )
-    date_debut_prevue = serializers.DateField(required=False, allow_null=True, default=None)
-    date_fin_prevue = serializers.DateField(required=False, allow_null=True, default=None)
-    budget_initial_montant = serializers.IntegerField(
-        min_value=0, required=False, allow_null=True, default=None
-    )
-
-    def validate(self, attrs):
-        debut = attrs.get("date_debut_prevue")
-        fin = attrs.get("date_fin_prevue")
-        if debut and fin and fin < debut:
-            raise serializers.ValidationError(
-                {
-                    "date_fin_prevue": _(
-                        "La date de fin du lot ne peut pas précéder sa date de début."
-                    )
-                }
-            )
-        return attrs
-
-
 class EquipeCreationSerializer(serializers.Serializer):
     chef_projet_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     chef_projet_invite = ChefProjetInviteSerializer(required=False, allow_null=True, default=None)
@@ -308,8 +267,9 @@ class EquipeCreationSerializer(serializers.Serializer):
     conducteur_travaux_invite = ChefProjetInviteSerializer(
         required=False, allow_null=True, default=None
     )
+    # Un seul chef de chantier par projet (règle du 29/10/2026) : la liste en garde au plus un.
     chefs_chantier_ids = serializers.ListField(
-        child=serializers.UUIDField(), required=False, default=list
+        child=serializers.UUIDField(), required=False, default=list, max_length=1
     )
     visiteurs_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
@@ -341,13 +301,8 @@ class ProjetCreationSerializer(serializers.Serializer):
     )
     description = serializers.CharField(required=False, allow_blank=True, default="")
 
-    # Lots (Étape 2) — 0 à N lots acceptés
-    lots = LotCreationProjetSerializer(many=True, required=False, default=list)
-    lots_supprimer_ids = serializers.ListField(
-        child=serializers.UUIDField(),
-        required=False,
-        help_text="UUID des lots à supprimer logiquement, uniquement en PATCH.",
-    )
+    # Le découpage ne se saisit plus ici : une fois le projet créé, le tableau de démarrage le
+    # propose, pré-rempli par le modèle du type de projet (`POST /projets/{id}/decoupage/`).
 
     # Équipe (Étape 3) — groupée ou à plat
     equipe = EquipeCreationSerializer(required=False, allow_null=True, default=None)
@@ -360,7 +315,7 @@ class ProjetCreationSerializer(serializers.Serializer):
         required=False, allow_null=True, default=None
     )
     chefs_chantier_ids = serializers.ListField(
-        child=serializers.UUIDField(), required=False, default=list
+        child=serializers.UUIDField(), required=False, default=list, max_length=1
     )
     visiteurs_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
@@ -419,96 +374,7 @@ class ProjetCreationSerializer(serializers.Serializer):
             )
         if self.instance is None and not attrs.get("maitre_ouvrage") and not attrs.get("client"):
             raise serializers.ValidationError({"maitre_ouvrage": _("Ce champ est obligatoire.")})
-        if self.instance is None and "lots_supprimer_ids" in attrs:
-            raise serializers.ValidationError(
-                {"lots_supprimer_ids": _("Disponible uniquement en modification.")}
-            )
-        if self.instance is None:
-            budget_projet = attrs.get("budget_initial_montant")
-            lots = attrs.get("lots", [])
-            if lots:
-                debut_p = attrs.get("date_debut_prevue")
-                fin_p = attrs.get("date_fin_prevue")
-                if not debut_p or not fin_p:
-                    from apps.projets.services.calendrier import MSG_EXIGER_DATES_PROJET
-
-                    raise serializers.ValidationError({"lots": MSG_EXIGER_DATES_PROJET})
-                from apps.projets.services.calendrier import formater_date
-
-                for lot in lots:
-                    debut_l = lot.get("date_debut_prevue")
-                    fin_l = lot.get("date_fin_prevue")
-                    if debut_l and debut_p and debut_l < debut_p:
-                        raise serializers.ValidationError(
-                            {"lots": f"Le lot ne peut pas commencer avant le début du projet ({formater_date(debut_p)})."}
-                        )
-                    if fin_l and fin_p and fin_l > fin_p:
-                        raise serializers.ValidationError(
-                            {"lots": f"Le lot ne peut pas finir après la fin du projet ({formater_date(fin_p)})."}
-                        )
-            if budget_projet is not None and lots:
-                somme_lots = sum(
-                    lot.get("budget_initial_montant")
-                    for lot in lots
-                    if lot.get("budget_initial_montant") is not None
-                )
-                if somme_lots > budget_projet:
-                    from apps.core.fields import formater_fcfa
-
-                    disponible = max(0, budget_projet)
-                    raise serializers.ValidationError(
-                        {
-                            "budget_initial_montant": (
-                                f"Le budget des lots dépasserait celui du projet : "
-                                f"il reste {formater_fcfa(disponible)} sur un budget projet de "
-                                f"{formater_fcfa(budget_projet)}."
-                            )
-                        }
-                    )
-        if self.instance is not None and "lots" in attrs:
-            # Le PATCH du parent ne rend pas facultatifs les champs des nouveaux lots.
-            nouveaux = LotCreationProjetSerializer(data=self.initial_data["lots"], many=True)
-            nouveaux.is_valid(raise_exception=True)
-            attrs["lots"] = nouveaux.validated_data
-            if attrs["lots"]:
-                if not self.instance.date_debut_prevue or not self.instance.date_fin_prevue:
-                    from apps.projets.services.calendrier import MSG_EXIGER_DATES_PROJET
-
-                    raise serializers.ValidationError({"lots": MSG_EXIGER_DATES_PROJET})
-                from apps.projets.services.calendrier import formater_date
-
-                for lot in attrs["lots"]:
-                    debut_l = lot.get("date_debut_prevue")
-                    fin_l = lot.get("date_fin_prevue")
-                    if (
-                        debut_l
-                        and self.instance.date_debut_prevue
-                        and debut_l < self.instance.date_debut_prevue
-                    ):
-                        d_proj = formater_date(self.instance.date_debut_prevue)
-                        raise serializers.ValidationError(
-                            {"lots": f"Le lot ne peut pas commencer avant le début du projet ({d_proj})."}
-                        )
-                    if (
-                        fin_l
-                        and self.instance.date_fin_prevue
-                        and fin_l > self.instance.date_fin_prevue
-                    ):
-                        f_proj = formater_date(self.instance.date_fin_prevue)
-                        raise serializers.ValidationError(
-                            {"lots": f"Le lot ne peut pas finir après la fin du projet ({f_proj})."}
-                        )
-            from apps.projets.services.budgets import verifier_budgets_lots_a_creer
-
-            verifier_budgets_lots_a_creer(
-                self.instance,
-                [lot.get("budget_initial_montant") for lot in attrs["lots"]],
-            )
         if self.instance is not None:
-            if "budget_initial_montant" in attrs:
-                from apps.projets.services.budgets import verifier_budget_projet
-
-                verifier_budget_projet(self.instance, attrs.get("budget_initial_montant"))
             if "date_debut_baseline" in self.initial_data or "date_fin_baseline" in self.initial_data:
                 raise serializers.ValidationError(
                     {"date_debut_baseline": _("La Baseline v0 est immuable et ne peut être modifiée.")}
@@ -644,19 +510,6 @@ class ProjetCreationSerializer(serializers.Serializer):
                 if equipe.get(cle) is not None and not attrs.get(cle):
                     attrs[cle] = equipe[cle]
 
-        # Validation de l'unicité des codes de lots si fournis
-        lots = attrs.get("lots", [])
-        codes_vus = set()
-        for lot in lots:
-            c = lot.get("code")
-            if c and str(c).strip():
-                c_clean = str(c).strip().upper()
-                if c_clean in codes_vus:
-                    raise serializers.ValidationError(
-                        {"lots": _(f"Le code de lot '{c_clean}' est présent en doublon.")}
-                    )
-                codes_vus.add(c_clean)
-
         if (
             self.instance is None
             and attrs.get("chef_projet_id")
@@ -740,7 +593,6 @@ class ProjetCreationSerializer(serializers.Serializer):
         user_connecte = getattr(request, "user", None)
 
         validated_data.pop("equipe", None)
-        lots_data = validated_data.pop("lots", [])
         chefs_chantier_ids = validated_data.pop("chefs_chantier_ids", [])
         visiteurs_ids = validated_data.pop("visiteurs_ids", [])
 
@@ -886,34 +738,6 @@ class ProjetCreationSerializer(serializers.Serializer):
                 except Utilisateur.DoesNotExist:
                     pass
 
-            # Création des lots initiaux (0 à N lots)
-            codes_reserves = {
-                str(lot.get("code", "")).strip().upper()
-                for lot in lots_data
-                if lot.get("code", "").strip()
-            }
-            for idx, ldata in enumerate(lots_data, start=1):
-                code = ldata.get("code")
-                if not code or not str(code).strip():
-                    numero = idx
-                    while f"L-{numero:02d}" in codes_reserves:
-                        numero += 1
-                    code = f"L-{numero:02d}"
-                code = str(code).strip().upper()
-                codes_reserves.add(code)
-                Lot.objects.create(
-                    projet=projet,
-                    cree_par=user_connecte,
-                    code=str(code).strip(),
-                    libelle=ldata["libelle"].strip(),
-                    mode_execution=ldata.get("mode_execution", ModeExecution.REGIE),
-                    type_bordereau=ldata.get("type_bordereau", TypeBordereau.FORFAIT),
-                    date_debut_prevue=ldata.get("date_debut_prevue"),
-                    date_fin_prevue=ldata.get("date_fin_prevue"),
-                    budget_initial_montant=ldata.get("budget_initial_montant"),
-                    ordre=idx,
-                )
-
         return projet
 
     @transaction.atomic
@@ -925,44 +749,6 @@ class ProjetCreationSerializer(serializers.Serializer):
         elif "client" in validated_data:
             instance.maitre_ouvrage = ""
         user = getattr(self.context.get("request"), "user", None)
-        nouveaux_lots = validated_data.pop("lots", [])
-        supprimer_ids = set(validated_data.pop("lots_supprimer_ids", []))
-        lots_actifs = list(Lot.objects.filter(projet=instance).select_for_update())
-        if supprimer_ids - {lot.pk for lot in lots_actifs}:
-            raise serializers.ValidationError(
-                {"lots_supprimer_ids": _("Lot introuvable ou extérieur à ce projet.")}
-            )
-        codes = {lot.code.upper() for lot in lots_actifs if lot.pk not in supprimer_ids}
-        # Réserver tous les codes explicites avant de générer les codes automatiques.
-        for lot in nouveaux_lots:
-            code = lot.get("code", "").strip().upper()
-            if code:
-                if code in codes:
-                    raise serializers.ValidationError({"lots": _("Code de lot déjà utilisé.")})
-                codes.add(code)
-        ordre = max((lot.ordre for lot in lots_actifs), default=0)
-        for lot in lots_actifs:
-            if lot.pk in supprimer_ids:
-                lot.est_actif = False
-                lot.save(update_fields=["est_actif"])
-                lot.delete(utilisateur=user)
-        for donnees in nouveaux_lots:
-            donnees = dict(donnees)
-            code = donnees.pop("code", "").strip().upper()
-            if not code:
-                numero = 1
-                while f"L-{numero:02d}" in codes:
-                    numero += 1
-                code = f"L-{numero:02d}"
-                codes.add(code)
-            ordre += 1
-            Lot.objects.create(
-                projet=instance,
-                cree_par=user,
-                code=code,
-                ordre=ordre,
-                **donnees,
-            )
         for champ, role in (
             ("chef_projet_id", RoleProjet.CHEF_PROJET),
             ("conducteur_travaux_id", RoleProjet.CONDUCTEUR_TRAVAUX),

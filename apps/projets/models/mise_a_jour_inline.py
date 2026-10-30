@@ -10,19 +10,20 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleBase
 
-from .activite import Activite
+from .decoupage import Element
 
 __all__ = ["MiseAJourInline"]
 
 
 class MiseAJourInline(ModeleBase):
-    """Mise à jour manuelle de l'avancement d'une activité."""
+    """Mise à jour manuelle de l'avancement d'une feuille de l'arbre."""
 
-    activite = models.ForeignKey(
-        Activite,
+    element = models.ForeignKey(
+        Element,
         on_delete=models.RESTRICT,
         related_name="mises_a_jour_inline",
-        verbose_name=_("activité"),
+        verbose_name=_("élément"),
+        null=True,
     )
     auteur = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -67,6 +68,6 @@ class MiseAJourInline(ModeleBase):
 
     def __str__(self) -> str:
         return (
-            f"Mise à jour {self.activite.libelle} : "
+            f"Mise à jour {self.element} : "
             f"{self.quantite_avant} -> {self.quantite_apres} ({self.auteur})"
         )

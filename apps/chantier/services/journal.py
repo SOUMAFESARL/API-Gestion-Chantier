@@ -19,7 +19,8 @@ from apps.chantier.models import AlerteJournal, JournalChantier, RapportJournali
 from apps.chantier.serializers.journal import SaisieJournalSerializer
 from apps.core.enums import ActionAudit, ModeExecution, StatutRapport
 from apps.core.exceptions import ErreurMetier, RapportDejaExistant, RapportNonModifiable
-from apps.projets.models import Activite, AffectationProjet, Lot, Projet
+from apps.projets.models import AffectationProjet, Element, Projet
+from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 from apps.projets.services.referentiels import mode_base, table_modes_execution
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
@@ -60,8 +61,42 @@ def affectations_actives(projet_id):
     )
 
 
-def lots_disponibles(projet):
-    return Lot.objects.filter(projet=projet, est_actif=True).exclude(statut="CLOTURE")
+class CasesDuJournal:
+    """Ce que le journal saisit, lu dans l'arbre du découpage.
+
+    Les **feuilles** actives et non clôturées tiennent le rôle des anciennes activités ; chacune
+    se range sous son **groupe** (sa case parente, ou elle-même à la racine), qui tient celui de
+    l'ancien lot. Le contrat JSON du journal garde donc `lot_id` (le groupe) et `activite_id`
+    (la feuille). Le mode d'exécution est celui que la case hérite de l'arbre.
+    """
+
+    def __init__(self, projet):
+        self.arbre = charger_arbre(projet, actifs_seulement=True)
+        self.groupes: dict[str, Element] = {}
+        self.feuilles: dict[str, Element] = {}
+        self.feuilles_par_groupe: dict[str, list[Element]] = {}
+        for feuille in self.arbre.feuilles():
+            if feuille.cloture:
+                continue
+            groupe = self.arbre.groupe(feuille)
+            self.groupes.setdefault(str(groupe.pk), groupe)
+            self.feuilles[str(feuille.pk)] = feuille
+            self.feuilles_par_groupe.setdefault(str(groupe.pk), []).append(feuille)
+
+    def groupe_de(self, feuille) -> Element:
+        return self.arbre.groupe(feuille)
+
+    def mode(self, element) -> str:
+        return self.arbre.mode_execution(element)
+
+    def modes(self) -> list[str]:
+        return [self.mode(g) for g in self.groupes.values()] + [
+            self.mode(f) for f in self.feuilles.values()
+        ]
+
+
+def cases_du_journal(projet) -> CasesDuJournal:
+    return CasesDuJournal(projet)
 
 
 def verifier_auteur(rapport, utilisateur):
@@ -240,18 +275,16 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
         nested = getattr(contrats, classe)(data=saisie[cle])
         nested.is_valid(raise_exception=True)
         saisie[cle] = dict(nested.data)
-    lots = {str(ligne.id): ligne for ligne in lots_disponibles(projet)}
+    cases = cases_du_journal(projet)
+    lots = cases.groupes
     table_modes = table_modes_execution()
-    activites = {
-        str(a.id): a
-        for a in Activite.objects.filter(lot_id__in=lots, est_actif=True).select_related("lot")
-    }
+    activites = cases.feuilles
     vus = set()
     for ligne in saisie["lots_travailles"]:
         identifiant = ligne["lot_id"]
         if identifiant not in lots or identifiant in vus:
             raise ValidationError({"lots_travailles": "Lot extérieur, inactif ou dupliqué."})
-        base_lot = mode_base(lots[identifiant].mode_execution, table_modes)
+        base_lot = mode_base(cases.mode(lots[identifiant]), table_modes)
         if base_lot == ModeExecution.SOUS_TRAITANCE_INFORMELLE:
             raise ValidationError(
                 {"lots_travailles": "Ce lot se suit par la production des intervenants."}
@@ -265,12 +298,12 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
             if activite is None or cle in lignes_vues:
                 raise ValidationError({section: "Activité extérieure, inactive ou dupliquée."})
             production = (
-                mode_base(activite.lot.mode_execution, table_modes)
+                mode_base(cases.mode(activite), table_modes)
                 == ModeExecution.SOUS_TRAITANCE_INFORMELLE
             )
             if production != (section == "production"):
                 raise ValidationError({section: "Le mode de suivi ne correspond pas au lot."})
-            if section == "activites" and str(activite.lot_id) not in vus:
+            if section == "activites" and str(cases.groupe_de(activite).pk) not in vus:
                 raise ValidationError({section: "L'activité doit appartenir à un lot travaillé."})
             lignes_vues.add(cle)
     for section in ("incidents", "photos", "pieces_jointes"):
@@ -354,10 +387,8 @@ def valider_soumission(saisie, projet):
             "La note doit comporter au moins 10 caractères.",
         )
         table_modes = table_modes_execution()
-        modes = {
-            mode_base(code, table_modes)
-            for code in lots_disponibles(projet).values_list("mode_execution", flat=True)
-        }
+        cases = cases_du_journal(projet)
+        modes = {mode_base(code, table_modes) for code in cases.modes()}
         if ModeExecution.REGIE in modes:
             exiger(
                 bool(saisie["effectifs"]),
@@ -382,20 +413,17 @@ def valider_soumission(saisie, projet):
                 "Une absence ou un retard exige un motif.",
             )
         points = {p["lot_id"]: p for p in saisie["lots_travailles"]}
-        from apps.projets.models import Activite
-
-        activites = {
-            str(a.id): a
-            for a in Activite.objects.filter(
-                id__in=[ligne["activite_id"] for ligne in saisie["activites"]]
-            ).select_related("lot")
+        groupes = {
+            ligne["activite_id"]: str(cases.groupe_de(cases.feuilles[ligne["activite_id"]]).pk)
+            for ligne in saisie["activites"]
+            if ligne["activite_id"] in cases.feuilles
         }
         for ligne in saisie["activites"]:
             exiger(ligne["quantite_jour"] is not None, "activites", "La quantité est requise.")
         for identifiant, point in points.items():
             avance = any(
                 (ligne["quantite_jour"] or 0) > 0
-                and str(activites[ligne["activite_id"]].lot_id) == identifiant
+                and groupes.get(ligne["activite_id"]) == identifiant
                 for ligne in saisie["activites"]
             )
             exiger(
@@ -509,10 +537,11 @@ def creer_journal(*, projet, utilisateur, jour, data):
             details={"date": "avant_enregistrement_projet"},
         )
     verifier_statut_projet_pour_ecriture(projet, action="NOUVEAU_RAPPORT")
+    # Un seul chef de chantier par projet, et c'est lui qui tient le journal (29/10/2026).
+    if not tient_fonction(projet, utilisateur, "CC"):
+        raise PermissionDenied("Seul le chef de chantier du projet écrit le journal.")
     saisie = normaliser_saisie(data, projet=projet, jour=jour, utilisateur=utilisateur)
-    if RapportJournalier.objects.filter(
-        projet=projet, date_rapport=jour, lot__isnull=True
-    ).exists():
+    if RapportJournalier.objects.filter(projet=projet, date_rapport=jour).exists():
         raise RapportDejaExistant("Un rapport existe déjà pour ce chantier à cette date.") from None
     try:
         with transaction.atomic():
@@ -595,8 +624,13 @@ def soumettre_journal(*, journal, utilisateur, data):
 
     journal = verrouiller(journal)
     avant = {"statut": statut_journal(journal)}
-    # Stabiliser les modes d'exécution pour la validation et la photographie.
-    list(lots_disponibles(journal.rapport.projet).select_for_update().order_by("id"))
+    # Stabiliser l'arbre (modes d'exécution) pour la validation et la photographie.
+    list(
+        Element.objects.filter(projet=journal.rapport.projet)
+        .select_for_update()
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
     journal = enregistrer(journal, utilisateur, data)
     rapport = journal.rapport
     valider_soumission(journal.saisie, rapport.projet)
@@ -611,9 +645,6 @@ def soumettre_journal(*, journal, utilisateur, data):
     rapport.valide_le = None
     rapport.commentaire_validation = ""
     rapport.save()
-    Lot.objects.filter(id__in=[lot["id"] for lot in journal.photographie["lots"]]).update(
-        premier_rapport_soumis=True
-    )
     declencher_recalcul_sante(
         projet_id=rapport.projet_id,
         declencheur_type="RAPPORT_SOUMISSION",

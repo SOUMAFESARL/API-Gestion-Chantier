@@ -24,13 +24,13 @@ class Blocage(ModeleBase):
         related_name="blocages",
         verbose_name=_("projet"),
     )
-    lot = models.ForeignKey(
-        "projets.Lot",
+    element = models.ForeignKey(
+        "projets.Element",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="blocages",
-        verbose_name=_("lot"),
+        verbose_name=_("élément"),
     )
     titre = models.CharField(
         _("titre"),

@@ -15,7 +15,7 @@ from apps.accounts.models import Utilisateur
 from apps.chantier.models import Blocage
 from apps.core.enums import SeveriteBlocage, StatutBlocage
 from apps.core.exceptions import ErreurMetier
-from apps.projets.models import Activite, Lot, Projet
+from apps.projets.models import Element, Projet
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 __all__ = [
@@ -35,17 +35,18 @@ def creer_blocage(
     severite: str,
     auteur: Utilisateur,
     description: str = "",
-    lot: Lot | None = None,
-    activite: Activite | None = None,
+    element: Element | None = None,
     cree_par: Utilisateur | None = None,
 ) -> Blocage:
     """Crée un nouveau blocage de chantier et planifie le recalcul de santé."""
-    if lot is not None and lot.projet_id != projet.id:
-        raise ValidationError({"lot": "Le lot sélectionné n'appartient pas au projet spécifié."})
+    if element is not None and element.projet_id != projet.id:
+        raise ValidationError(
+            {"element": "La case sélectionnée n'appartient pas au projet spécifié."}
+        )
 
     blocage = Blocage.objects.create(
         projet=projet,
-        lot=lot,
+        element=element,
         titre=titre,
         description=description,
         severite=severite,

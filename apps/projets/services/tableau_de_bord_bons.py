@@ -20,7 +20,7 @@ class BonPaiementItem:
     numero: str
     beneficiaire: str
     corps_etat: str
-    lot: Any
+    element: Any
     montant_net: int
     statut: str
     projet_id: Any = None
@@ -33,7 +33,7 @@ def creer_bon_paiement_test(projet, *, montant: int) -> BonPaiementItem:
         numero=f"BP-{len(_BONS_TEST) + 1:04d}",
         beneficiaire="Sous-Traitant SARL",
         corps_etat="Gros Œuvre",
-        lot=None,
+        element=None,
         montant_net=montant,
         statut="EN_ATTENTE",
         projet_id=getattr(projet, "id", projet),

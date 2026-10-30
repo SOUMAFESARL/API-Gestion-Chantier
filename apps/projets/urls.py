@@ -64,6 +64,7 @@ from apps.projets.views.decoupage import (
     ProjetTableauVerifierView,
     ValeurListeDetailView,
 )
+from apps.projets.views.dependances import DependanceDetailView, ElementDependancesView
 from apps.projets.views.equipe import (
     MainOeuvreDetailView,
     MainOeuvreListCreateView,
@@ -216,6 +217,13 @@ urlpatterns = [
     path("elements/<uuid:pk>/deplacer/", ElementDeplacerView.as_view(), name="element-deplacer"),
     path("elements/<uuid:pk>/detailler/", ElementDetaillerView.as_view(), name="element-detailler"),
     path("elements/<uuid:pk>/dupliquer/", ElementDupliquerView.as_view(), name="element-dupliquer"),
+    # Dépendances entre tâches : B commence après la fin de A
+    path(
+        "elements/<uuid:pk>/dependances/",
+        ElementDependancesView.as_view(),
+        name="element-dependances",
+    ),
+    path("dependances/<uuid:pk>/", DependanceDetailView.as_view(), name="dependance-detail"),
     path(
         "elements/<uuid:pk>/historique/", ElementHistoriqueView.as_view(), name="element-historique"
     ),

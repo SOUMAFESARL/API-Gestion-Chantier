@@ -41,14 +41,15 @@ class ReprogrammationRequestSerializer(serializers.Serializer):
         help_text="Nouvelle date de fin prévue (obligatoire).",
     )
     motif_id = serializers.UUIDField(
-        required=True,
-        help_text="Identifiant UUID du motif sélectionné dans la liste dynamique.",
+        required=False,
+        help_text="Identifiant UUID du motif sélectionné dans la liste dynamique "
+        "(obligatoire, sauf pour un aperçu).",
     )
     justification = serializers.CharField(
-        required=True,
-        min_length=30,
+        required=False,
         trim_whitespace=True,
-        help_text="Explication détaillée du report (au moins 30 caractères, RG-11).",
+        help_text="Explication détaillée du report (au moins 30 caractères, RG-11 ; "
+        "facultative pour un aperçu).",
     )
     prolonger = serializers.BooleanField(
         required=False,
@@ -58,14 +59,36 @@ class ReprogrammationRequestSerializer(serializers.Serializer):
             "(listées par l'erreur `prolongation_requise`)."
         ),
     )
+    apercu = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Vrai : rend les effets du report (prolongations, successeurs à décaler, "
+        "refus) sans rien écrire.",
+    )
+    decaler_successeurs = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Les successeurs à décaler aussi (listés par l'aperçu ou par l'erreur "
+        "`successeurs_a_decaler`). Un successeur à décaler qui n'y figure pas refuse le report.",
+    )
 
-    def validate_justification(self, value: str) -> str:
-        propre = value.strip()
-        if len(propre) < 30:
-            raise serializers.ValidationError(
+    def validate(self, attrs):
+        if attrs.get("apercu"):
+            return attrs
+        erreurs = {}
+        if not attrs.get("motif_id"):
+            erreurs["motif_id"] = "Le motif de report est obligatoire."
+        justification = (attrs.get("justification") or "").strip()
+        if len(justification) < 30:
+            erreurs["justification"] = (
                 "La justification doit comporter au moins 30 caractères (RG-11)."
             )
-        return propre
+        if erreurs:
+            raise serializers.ValidationError(erreurs)
+        attrs["justification"] = justification
+        return attrs
 
 
 class HistoriqueDateSerializer(serializers.ModelSerializer):
@@ -157,4 +180,9 @@ class ReprogrammationResponseSerializer(serializers.Serializer):
         child=serializers.DictField(),
         required=False,
         help_text="Les cases parentes (et le projet) prolongées pour que les dates y tiennent.",
+    )
+    decalages = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        help_text="Les tâches qui suivent, décalées pour commencer après la nouvelle fin.",
     )

@@ -4,6 +4,7 @@ Les réponses sont construites par les services (`listes_modeles`, `tableau_dema
 `selectors.arbre_api`) ; ces sérialiseurs valident ce qui entre et documentent le contrat.
 """
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.enums import TypeBordereau, UniteMesure
@@ -13,6 +14,7 @@ from apps.projets.serializers.execution import ModeExecutionField
 __all__ = [
     "AjoutValeursSerializer",
     "CreationListeSerializer",
+    "DependanceCreationSerializer",
     "DeplacementSerializer",
     "DetailSerializer",
     "DqeApplicationSerializer",
@@ -175,6 +177,14 @@ class PlanificationSerializer(serializers.Serializer):
     )
     motif_id = serializers.UUIDField(required=False, allow_null=True)
     justification = serializers.CharField(required=False, allow_blank=True, default="")
+    decaler_successeurs = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Les tâches qui suivent à décaler aussi (listées par l'erreur "
+        "`successeurs_a_decaler`) ; décaler est un report : motif et justification requis.",
+    )
 
 
 class DeplacementSerializer(serializers.Serializer):
@@ -253,6 +263,14 @@ class DuplicationSerializer(serializers.Serializer):
     motif = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+@extend_schema_field(
+    {
+        "oneOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"type": "object", "properties": {"cellules": {"type": "array"}}},
+        ]
+    }
+)
 class LigneDqeField(serializers.Field):
     """Une ligne lue d'un DQE, telle que le bilan l'a rendue. Seule sa forme est vérifiée ici :
     une valeur invalide (unité inconnue, nombre illisible) ne refuse que sa ligne, avec sa raison,
@@ -289,3 +307,19 @@ class DqeApplicationSerializer(serializers.Serializer):
         default="",
         help_text="Obligatoire (10 caractères au moins) quand le bilan dit `motif_requis`.",
     )
+
+
+class DependanceCreationSerializer(serializers.Serializer):
+    """Un lien « B commence après la fin de A » : la case de l'URL est l'une des deux tâches,
+    l'autre est donnée par `predecesseur_id` (elle précède) ou `successeur_id` (elle suit)."""
+
+    predecesseur_id = serializers.UUIDField(required=False)
+    successeur_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs):
+        if bool(attrs.get("predecesseur_id")) == bool(attrs.get("successeur_id")):
+            raise serializers.ValidationError(
+                "Indiquez soit la tâche qui précède (`predecesseur_id`), soit celle qui suit "
+                "(`successeur_id`)."
+            )
+        return attrs

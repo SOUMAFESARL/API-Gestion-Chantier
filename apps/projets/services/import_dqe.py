@@ -187,6 +187,22 @@ def _examiner_mise_a_jour(arbre, feuille, ligne, perimetre) -> dict:
             _exiger(perimetre, "projets.planifier", feuille, "Planifier les dates")
             if debut and fin and fin < debut:
                 raise Refus("valeur_invalide", "La date de fin précède la date de début.")
+            from apps.projets.services.dependances import (
+                DependanceNonRespectee,
+                decalages_necessaires,
+                verifier_predecesseurs,
+            )
+
+            try:
+                verifier_predecesseurs(feuille, debut)
+            except DependanceNonRespectee as erreur:
+                raise Refus(erreur.code_metier, str(erreur.detail)) from None
+            if decalages_necessaires(feuille, fin):
+                raise Refus(
+                    "successeurs_a_decaler",
+                    f"La fin de « {feuille.libelle} » ferait commencer trop tôt des tâches qui la "
+                    "suivent : planifiez-la dans la vue en arbre, qui propose de les décaler.",
+                )
             if prolongations_necessaires(feuille, debut, fin, arbre):
                 raise Refus(
                     "dates_hors_parent",

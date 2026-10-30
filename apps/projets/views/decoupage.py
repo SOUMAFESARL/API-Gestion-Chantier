@@ -120,6 +120,7 @@ def _case(request, element) -> dict:
     """La case telle que l'arbre la rend, après un geste."""
     from apps.core.droits import peut_voir_montants
     from apps.projets.selectors.arbre_api import equipes_par_case
+    from apps.projets.services.dependances import liens_par_case
     from apps.projets.services.sante_calculs import calculer_arbre
 
     arbre = charger_arbre(element.projet)
@@ -133,6 +134,7 @@ def _case(request, element) -> dict:
         peut_voir_montants(request.user, request),
         equipes_par_case(arbre),
         acces.get(element.pk, "COMPLET"),
+        liens_par_case(arbre, acces),
     )
 
 
@@ -766,9 +768,15 @@ class ElementPlanifierView(APIView):
             motif_id=v.get("motif_id"),
             justification=v["justification"],
             auteur=request.user,
+            decaler_successeurs=v["decaler_successeurs"],
+            autorise=lambda code, case: peut(request.user, code, element.projet, case, request),
         )
         return Response(
-            {"case": _case(request, element), "prolongations": resultat["prolongations"]}
+            {
+                "case": _case(request, element),
+                "prolongations": resultat["prolongations"],
+                "decalages": resultat["decalages"],
+            }
         )
 
 

@@ -88,7 +88,10 @@ def a_cloturer(feuille) -> bool:
     return False
 
 
-def representer_case(element, arbre, resultats, numeros, montants_visibles, equipes, acces):
+def representer_case(
+    element, arbre, resultats, numeros, montants_visibles, equipes, acces, liens=None
+):
+    """Une case de l'arbre. `liens` : les dépendances du projet (`dependances.liens_par_case`)."""
     _directes, effectives = equipes
     feuille = arbre.est_feuille(element)
     base = {
@@ -188,6 +191,9 @@ def representer_case(element, arbre, resultats, numeros, montants_visibles, equi
         "equipes_heritees_de": (
             str(porteur.pk) if porteur is not None and porteur.pk != element.pk else None
         ),
+        # Dépendances : B commence après la fin de A (§13quinquies.5)
+        "predecesseurs": (liens or {}).get(element.pk, {}).get("predecesseurs", []),
+        "successeurs": (liens or {}).get(element.pk, {}).get("successeurs", []),
     }
     if not montants_visibles:
         for champ in ("poids", "montant", "montant_initial", "enveloppe", "somme_enfants"):
@@ -204,10 +210,13 @@ def representer_arbre(projet, utilisateur, request=None, *, a_plat: bool = False
     acces = visibilite(arbre, utilisateur, request)
     montants = peut_voir_montants(utilisateur, request)
     equipes = equipes_par_case(arbre)
+    from apps.projets.services.dependances import liens_par_case
+
+    liens = liens_par_case(arbre, acces)
 
     def noeud(element):
         donnees = representer_case(
-            element, arbre, resultats, numeros, montants, equipes, acces[element.pk]
+            element, arbre, resultats, numeros, montants, equipes, acces[element.pk], liens
         )
         if not a_plat:
             donnees["enfants"] = [noeud(e) for e in arbre.enfants(element) if e.pk in acces]

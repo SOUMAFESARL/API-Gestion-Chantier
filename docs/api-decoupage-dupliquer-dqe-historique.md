@@ -209,6 +209,8 @@ routes, il faut `projets.chiffrer` ou `projets.decouper` quelque part sur le pro
 | `quantite_sous_realise` | Quantité prévue sous la quantité réalisée |
 | `dates_deja_fixees` | Dates différentes de celles, déjà fixées, de la feuille |
 | `dates_hors_parent` | Dates qui obligeraient à prolonger une case parente ou le projet |
+| `dependance_non_respectee` | Début avant la fin d'un prédécesseur (lot 10, `docs/api-decoupage-dependances.md`) |
+| `successeurs_a_decaler` | Fin qui ferait commencer trop tôt une tâche qui suit : la planifier dans la vue en arbre |
 | `feuille_commencee` | Nouvelle branche sous une tâche commencée (A-5) : la détailler d'abord |
 | `niveau_incompatible` | Nouvelle branche parmi des sœurs d'un autre niveau (A-2), sous une case en récursion |
 
@@ -319,3 +321,4 @@ de la plus récente à la plus ancienne.
 | `CLOTURE`, `REOUVERTURE` | Clôture, réouverture |
 | `DUPLICATION`, `DUPLIQUEE` | Créée par copie (`apres.source`), copiée (`apres.copie`) |
 | `IMPORT_DQE` | Import du DQE |
+| `LIEN_AJOUT`, `LIEN_RETRAIT`, `LIENS_HERITES_DETAIL`, `LIENS_RETIRES_DESACTIVATION`, `LIENS_RETIRES_SUPPRESSION`, `DECALAGE_SUCCESSEUR` | Dépendances entre tâches (lot 10, `docs/api-decoupage-dependances.md`) |

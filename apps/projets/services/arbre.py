@@ -164,6 +164,19 @@ def _recalculer(projet) -> None:
     recalculer_avancements_projet(projet)
 
 
+def _transferer_liens(ancienne_feuille, auteur) -> None:
+    """Une feuille liée devient un parent : ses nouvelles feuilles reprennent ses liens."""
+    from apps.projets.services.dependances import transferer_liens_aux_feuilles
+
+    transferer_liens_aux_feuilles(ancienne_feuille, auteur=auteur)
+
+
+def _retirer_liens(element, auteur, evenement: str) -> None:
+    from apps.projets.services.dependances import retirer_liens_branche
+
+    retirer_liens_branche(element, auteur=auteur, evenement=evenement)
+
+
 def _reecrire_chemins(element) -> None:
     """Après un déplacement, chaque descendant reprend le chemin de son nouveau parent."""
     element.save()
@@ -214,6 +227,7 @@ def ajouter_element(
     niveau = _niveau_pour_enfant(arbre, niveaux, parent, niveau)
     _verifier_nom_libre(projet, parent, libelle)
     ordre = champs.pop("ordre", None) or (len(arbre.enfants(parent)) + 1)
+    parent_etait_feuille = parent is not None and arbre.est_feuille(parent)
     _devenir_parent(parent)
     try:
         element = Element.objects.create(
@@ -227,6 +241,8 @@ def ajouter_element(
         )
     except IntegrityError:
         raise ErreurConflit("Deux cases sœurs ne portent pas le même intitulé (A-6).") from None
+    if parent_etait_feuille:
+        _transferer_liens(parent, auteur)
     if motif:
         _tracer(element, auteur, "AJOUT_SOUS_CASE_COMMENCEE", motif=motif)
     _recalculer(projet)
@@ -639,6 +655,7 @@ def dupliquer_branche(
     else:
         libelle = intitule_de_copie(element.projet, destination, element.libelle)
 
+    destination_etait_feuille = destination is not None and arbre.est_feuille(destination)
     _devenir_parent(destination)
     compte = 0
 
@@ -661,6 +678,8 @@ def dupliquer_branche(
         racine = copier(element, destination, libelle, len(arbre.enfants(destination)) + 1)
     except IntegrityError:
         raise ErreurConflit("Deux cases sœurs ne portent pas le même intitulé (A-6).") from None
+    if destination_etait_feuille:
+        _transferer_liens(destination, auteur)
     _tracer(
         racine,
         auteur,
@@ -783,6 +802,9 @@ def detailler_feuille(
                 **champs,
             )
         )
+    # Les sous-tâches héritent des prédécesseurs de la feuille ; ses successeurs les attendent
+    # toutes (§13quinquies.5).
+    _transferer_liens(feuille, auteur)
     _tracer(
         feuille,
         auteur,
@@ -961,6 +983,7 @@ def supprimer_element(element: Element, *, auteur=None) -> None:
             details={"geste": "DESACTIVER"},
         )
     parent = arbre.par_id.get(element.parent_id)
+    _retirer_liens(element, auteur, "LIENS_RETIRES_SUPPRESSION")
     for case in sorted(
         [element, *arbre.descendants(element)], key=lambda c: c.profondeur, reverse=True
     ):
@@ -976,6 +999,8 @@ def desactiver_element(element: Element, *, auteur=None, motif: str = "") -> Ele
     element.est_actif = False
     element.motif = motif
     element.save(update_fields=["est_actif", "motif", "modifie_le"])
+    # Une case désactivée sort des calculs : les liens de sa branche sont retirés (tracé).
+    _retirer_liens(element, auteur, "LIENS_RETIRES_DESACTIVATION")
     parent = element.parent
     _redevenir_feuille_si_besoin(parent)
     _tracer(element, auteur, "DESACTIVATION", motif=motif)

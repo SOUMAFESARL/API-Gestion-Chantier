@@ -32,6 +32,12 @@ LIBELLES_GESTES = {
     "DUPLICATION": "Créée par copie",
     "DUPLIQUEE": "Copiée",
     "IMPORT_DQE": "Import du DQE",
+    "LIEN_AJOUT": "Dépendance ajoutée",
+    "LIEN_RETRAIT": "Dépendance retirée",
+    "LIENS_RETIRES_DESACTIVATION": "Dépendances retirées (désactivation)",
+    "LIENS_RETIRES_SUPPRESSION": "Dépendances retirées (suppression)",
+    "LIENS_HERITES_DETAIL": "Dépendances reportées sur les sous-tâches",
+    "DECALAGE_SUCCESSEUR": "Décalée après une tâche qui la précède",
 }
 
 #: Ce qu'une personne sans `projets.voir_montants` ne voit pas dans les valeurs avant et après.

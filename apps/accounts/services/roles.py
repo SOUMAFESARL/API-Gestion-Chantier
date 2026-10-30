@@ -247,6 +247,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.retirer_membres",
             "projets.main_oeuvre_gerer",
             "projets.alertes_moderees",
+            "projets.avenants_gerer",
         ),
         # Le chef de projet approuve ; il n'écrit plus le journal (30/10/2026).
         "chantier": ("chantier.lire", "chantier.approuver", "chantier.synthese_approuver"),

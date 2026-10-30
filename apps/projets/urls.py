@@ -24,6 +24,7 @@ from apps.projets.views.affectation import (
     ProjetChefChantierView,
     ProjetRemplacerView,
 )
+from apps.projets.views.avenants import AvenantDetailView, AvenantDocumentView, ProjetAvenantsView
 from apps.projets.views.calendrier import (
     CalendrierEntrepriseView,
     ExceptionCalendrierDetailView,
@@ -157,6 +158,9 @@ urlpatterns = [
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
     # Découpage d'un projet : tableau de démarrage, arbre, niveaux, cases
     path("projets/<uuid:pk>/decoupage/", ProjetDecoupageView.as_view(), name="projet-decoupage"),
+    path("projets/<uuid:pk>/avenants/", ProjetAvenantsView.as_view(), name="projet-avenants"),
+    path("avenants/<uuid:pk>/", AvenantDetailView.as_view(), name="avenant-detail"),
+    path("avenants/<uuid:pk>/document/", AvenantDocumentView.as_view(), name="avenant-document"),
     path(
         "projets/<uuid:pk>/decoupage/importer/",
         ProjetDecoupageImporterView.as_view(),

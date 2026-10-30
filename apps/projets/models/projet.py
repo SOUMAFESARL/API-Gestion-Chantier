@@ -72,6 +72,11 @@ class Projet(ModeleBase):
     date_debut_reelle = models.DateField(_("date de début réelle"), null=True, blank=True)
     date_fin_reelle = models.DateField(_("date de fin réelle"), null=True, blank=True)
 
+    # Cumuls des avenants qui portent sur le projet entier (30/10/2026), tenus par
+    # `services.avenants` : la date contractuelle est l'origine plus ces jours.
+    jours_accordes = models.IntegerField(_("jours accordés par avenant"), default=0)
+    montant_avenants = models.BigIntegerField(_("montant des avenants"), default=0)
+
     chef_projet = models.ForeignKey(
         "accounts.Utilisateur",
         on_delete=models.SET_NULL,
@@ -170,6 +175,21 @@ class Projet(ModeleBase):
                 name="uq_projet_reference_tenant",
             )
         ]
+
+    @property
+    def date_fin_contractuelle(self):
+        """L'origine (baseline v0) plus les jours accordés par avenant."""
+        from datetime import timedelta
+
+        if not self.date_fin_baseline:
+            return None
+        return self.date_fin_baseline + timedelta(days=self.jours_accordes or 0)
+
+    @property
+    def budget_contractuel(self):
+        if self.budget_initial_montant is None and not self.montant_avenants:
+            return None
+        return (self.budget_initial_montant or 0) + (self.montant_avenants or 0)
 
     def save(self, *args, **kwargs):
         """Initialise la Baseline v0 à la première sauvegarde si non définie."""

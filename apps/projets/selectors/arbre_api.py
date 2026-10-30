@@ -173,6 +173,9 @@ def representer_case(element, arbre, resultats, numeros, montants_visibles, equi
         "date_fin_baseline": element.date_fin_baseline,
         "date_debut_reelle": element.date_debut_reelle,
         "date_fin_reelle": element.date_fin_reelle,
+        # Avenants : l'origine plus les jours accordés (30/10/2026)
+        "jours_accordes": element.jours_accordes,
+        "date_fin_contractuelle": element.date_fin_contractuelle,
         # Exécution : propre à la case, puis effective (héritée du plus proche ancêtre)
         "mode_execution": element.mode_execution,
         "mode_execution_effectif": arbre.mode_execution(element),

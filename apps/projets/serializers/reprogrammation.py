@@ -147,6 +147,10 @@ class ReprogrammationResponseSerializer(serializers.Serializer):
     date_debut_baseline = serializers.DateField(allow_null=True)
     date_fin_baseline = serializers.DateField(allow_null=True)
     jours_derive_baseline = serializers.IntegerField()
+    # « +45 j sur l'origine, dont 30 accordés par avenant » : l'alerte mesure les 15 restants.
+    jours_accordes = serializers.IntegerField()
+    date_fin_contractuelle = serializers.DateField(allow_null=True)
+    jours_derive_contractuelle = serializers.IntegerField()
     alerte_dg_declenchee = serializers.BooleanField()
     historiques = HistoriqueDateSerializer(many=True)
     prolongations = serializers.ListField(

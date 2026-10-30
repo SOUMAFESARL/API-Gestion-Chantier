@@ -56,6 +56,9 @@ REGISTRE: dict[str, DefPermission] = {
             3,
             "Gérer les listes et les modèles de découpage de l'entreprise",
         ),
+        DefPermission(
+            "projets.avenants_gerer", "projets", 3, "Enregistrer et retirer les avenants au contrat"
+        ),
         # Destinataires des alertes de retard, par niveau (30/10/2026).
         DefPermission(
             "projets.alertes_moderees", "projets", 1, "Recevoir les alertes de retard modérées"

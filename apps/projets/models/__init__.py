@@ -9,6 +9,7 @@ Module CDC   : 1
 
 from .alerte_retard import AlerteRetard, NiveauAlerteRetard, StatutAlerteRetard
 from .arret_chantier import ArretChantier
+from .avenant import Avenant
 from .calendrier import ExceptionCalendrier, SemaineType
 from .contrat import ProjetContrat
 from .decoupage import (
@@ -36,6 +37,7 @@ from .referentiel import ReferentielEntreprise
 from .sante_snapshot import SanteProjetSnapshot
 
 __all__ = [
+    "Avenant",
     "AffectationEquipeElement",
     "AffectationProjet",
     "AlerteRetard",

@@ -8,6 +8,7 @@ from apps.projets.views import (
     ArretChantierDetailView,
     MeteoProjetView,
     ProjetArretChantierListCreateView,
+    ProjetCourbeView,
     ProjetDetailView,
     ProjetListCreateView,
     ProjetPlanningView,
@@ -265,6 +266,7 @@ urlpatterns = [
         ProjetJournalReportsConsolideView.as_view(),
         name="projet-journal-reports-consolide",
     ),
+    path("projets/<uuid:pk>/courbe/", ProjetCourbeView.as_view(), name="projet-courbe"),
     path(
         "projets/<uuid:pk>/planning/",
         ProjetPlanningView.as_view(),

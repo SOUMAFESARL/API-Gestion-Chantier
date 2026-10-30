@@ -169,6 +169,23 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                             exc_info=True,
                         )
 
+                # Relevé de la nuit pour la courbe en S (projets en cours d'exécution)
+                from apps.projets.services.courbe import enregistrer_releve
+
+                for projet_releve in Projet.objects.filter(
+                    supprime_le__isnull=True, statut__in=["EN_COURS", "EN_RETARD", "CRITIQUE"]
+                ).iterator():
+                    try:
+                        enregistrer_releve(projet_releve)
+                    except Exception as err:
+                        logger.error(
+                            "Erreur du relevé d'avancement du projet %s (tenant %s) : %s",
+                            projet_releve.id,
+                            ent.schema_name,
+                            err,
+                            exc_info=True,
+                        )
+
                 # 2. Recalcul de l'indice de chaque projet suivi (appel direct synchrone)
                 projets_suivis = list(
                     Projet.objects.filter(

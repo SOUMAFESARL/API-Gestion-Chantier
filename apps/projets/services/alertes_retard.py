@@ -27,6 +27,7 @@ from apps.core.enums import StatutBlocage, StatutRapport
 from apps.projets.models import (
     AlerteRetard,
     Element,
+    ModeMesure,
     NiveauAlerteRetard,
     Projet,
     StatutAlerteRetard,
@@ -354,6 +355,50 @@ def detecter_alertes_retard(
             causes=causes,
             actions_recommandees=actions,
         )
+        if destinataires:
+            alerte.destinataires.set(destinataires)
+        alertes_creees.append(alerte)
+
+    # 4 bis. Un jalon manqué alerte toujours (30/10/2026) : sa date est passée et il n'est pas
+    #        atteint. Niveau élevé, quel que soit l'écart, et sur le jalon lui-même.
+    for feuille in arbre.feuilles():
+        jour_jalon = feuille.date_fin_prevue or feuille.date_debut_prevue
+        if (
+            feuille.mode_mesure != ModeMesure.JALON
+            or feuille.cloture
+            or arbre.suspendu(feuille)
+            or not jour_jalon
+            or jour_jalon >= date_ref
+        ):
+            continue
+        ouvertes = AlerteRetard.objects.filter(
+            projet=projet,
+            element=feuille,
+            statut__in=[StatutAlerteRetard.OUVERTE, StatutAlerteRetard.EN_COURS],
+            supprime_le__isnull=True,
+        )
+        rang_ouvert = max([ORDRE_NIVEAUX.get(x.niveau, 0) for x in ouvertes], default=0)
+        if ORDRE_NIVEAUX.get(NiveauAlerteRetard.ELEVE, 0) <= rang_ouvert:
+            continue
+        causes = {
+            "jalon_manque": feuille.libelle,
+            "date_jalon": jour_jalon.isoformat(),
+            "jours_de_retard": (date_ref - jour_jalon).days,
+        }
+        alerte = AlerteRetard.objects.create(
+            projet=projet,
+            element=feuille,
+            niveau=NiveauAlerteRetard.ELEVE,
+            delta_pts=None,
+            indice_sante=None,
+            date_detection=date_ref,
+            statut=StatutAlerteRetard.OUVERTE,
+            causes=causes,
+            actions_recommandees=[
+                "Vérifier si le jalon est atteint et le déclarer, ou replanifier sa date."
+            ],
+        )
+        destinataires = obtenir_destinataires_alerte(projet, NiveauAlerteRetard.ELEVE, feuille)
         if destinataires:
             alerte.destinataires.set(destinataires)
         alertes_creees.append(alerte)

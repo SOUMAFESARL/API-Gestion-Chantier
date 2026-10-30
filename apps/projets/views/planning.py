@@ -7,8 +7,9 @@ pour l'arbre : sans `projets.voir_tout`, on voit ses branches et le chemin qui y
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import serializers, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,7 +21,7 @@ from apps.projets.selectors.arbre_api import COMPLET, visibilite
 from apps.projets.services.indicateurs_temporels import calendrier_pour_elements
 from apps.projets.services.sante_calculs import calculer_arbre, calculer_temporels_arbre
 
-__all__ = ["ProjetPlanningView"]
+__all__ = ["ProjetCourbeView", "ProjetPlanningView"]
 
 
 class PlanningCaseSerializer(serializers.Serializer):
@@ -125,3 +126,33 @@ class ProjetPlanningView(APIView):
             "cases": [case(e) for e in arbre.racines() if e.pk in acces],
         }
         return Response(PlanningSerializer(donnees).data, status=status.HTTP_200_OK)
+
+
+class ProjetCourbeView(APIView):
+    """`GET /api/v1/projets/{id}/courbe/?element=<id>` — la courbe en S (30/10/2026).
+
+    Le prévu (dates et montants), le réel (relevés de nuit et valeur du jour) et la fin estimée
+    au rythme des 4 dernières semaines, affichée seulement. Sans `element` : le projet entier.
+    """
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @extend_schema(
+        summary="Courbe en S d'un projet ou d'une case",
+        tags=["projets"],
+        parameters=[OpenApiParameter("element", str, description="Une case ; vide : le projet.")],
+        responses=OpenApiTypes.OBJECT,
+    )
+    def get(self, request, pk):
+        from apps.projets.models import Element
+        from apps.projets.services.courbe import courbe
+
+        projet = get_object_or_404(Projet, pk=pk)
+        self.check_object_permissions(request, projet)
+        element = None
+        if request.query_params.get("element"):
+            element = get_object_or_404(Element, pk=request.query_params["element"], projet=projet)
+            acces = visibilite(charger_arbre(projet), request.user, request)
+            if acces.get(element.pk) != COMPLET:
+                raise PermissionDenied("Cette case est en dehors de votre périmètre.")
+        return Response(courbe(projet, element))

@@ -12,6 +12,7 @@ from .arret_chantier import ArretChantier
 from .avenant import Avenant
 from .calendrier import ExceptionCalendrier, SemaineType
 from .contrat import ProjetContrat
+from .courbe import PointAvancement
 from .decoupage import (
     Element,
     LigneModeleEntreprise,
@@ -37,6 +38,7 @@ from .referentiel import ReferentielEntreprise
 from .sante_snapshot import SanteProjetSnapshot
 
 __all__ = [
+    "PointAvancement",
     "Avenant",
     "AffectationEquipeElement",
     "AffectationProjet",

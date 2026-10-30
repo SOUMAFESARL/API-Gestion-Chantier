@@ -10,16 +10,23 @@ sans copie) et les siennes. Une liste ou un modèle se désigne donc par un coup
   liée par identifiant, s'affiche « Nom (personnalisé) » et signale quand l'original a changé.
 - Un modèle porte un **gabarit** (niveaux ordonnés, une liste au plus par niveau) et des **lignes
   types** : `{"niveaux": [{"libelle", "liste", "alerter"}], "lignes": [[...], ...]}`.
+
+**Le back-office s'en sert aussi** (`apps.platform_admin.services.decoupage`) : appelés dans le
+schéma `public`, ces services ne voient que la plateforme — une liste n'y a que ses valeurs
+plateforme, et un modèle plateforme ne puise que dans des listes plateforme (§3.8).
 """
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import connection, transaction
+from django_tenants.utils import get_public_schema_name
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogue.models import (
+    LigneModelePlateforme,
     ListeValeursPlateforme,
     ModeleDecoupagePlateforme,
+    NiveauModelePlateforme,
     ValeurListePlateforme,
 )
 from apps.catalogue.models.referentiel import cle_comparaison
@@ -38,6 +45,7 @@ __all__ = [
     "ajouter_valeurs",
     "creer_liste",
     "enregistrer_modele",
+    "enregistrer_modele_plateforme",
     "gabarit_du_modele",
     "liste_en_dict",
     "listes_disponibles",
@@ -52,6 +60,15 @@ __all__ = [
 
 PLATEFORME = "PLATEFORME"
 ENTREPRISE = "ENTREPRISE"
+
+
+def _schema_public() -> bool:
+    """Le back-office travaille dans `public`, où les tables des entreprises n'existent pas."""
+    return getattr(connection, "schema_name", None) == get_public_schema_name()
+
+
+def nom_propre(texte: str) -> str:
+    return " ".join((texte or "").split())
 
 
 # --------------------------------------------------------------------------
@@ -79,23 +96,35 @@ def reference_liste(liste) -> dict | None:
     return {"origine": origine, "id": str(liste.pk), "libelle": liste.libelle}
 
 
+def _valeur_en_dict(valeur, origine: str) -> dict:
+    return {
+        "id": str(valeur.pk),
+        "libelle": valeur.libelle,
+        "groupe": valeur.groupe,
+        "ordre": valeur.ordre,
+        "origine": origine,
+    }
+
+
 def valeurs_de_liste(liste) -> list[dict]:
-    """Les valeurs d'une liste : celles de la plateforme puis celles ajoutées par l'entreprise."""
+    """Les valeurs d'une liste : celles de la plateforme puis celles ajoutées par l'entreprise.
+
+    Dans le schéma `public` (back-office), seulement celles de la plateforme.
+    """
     if liste is None:
         return []
     valeurs = []
     if isinstance(liste, ListeValeursPlateforme):
         valeurs += [
-            {"id": str(v.pk), "libelle": v.libelle, "groupe": v.groupe, "origine": PLATEFORME}
+            _valeur_en_dict(v, PLATEFORME)
             for v in ValeurListePlateforme.objects.filter(liste=liste).order_by("ordre", "libelle")
         ]
+        if _schema_public():
+            return valeurs
         ajoutees = ValeurListeEntreprise.objects.filter(liste_plateforme=liste)
     else:
         ajoutees = ValeurListeEntreprise.objects.filter(liste_entreprise=liste)
-    valeurs += [
-        {"id": str(v.pk), "libelle": v.libelle, "groupe": v.groupe, "origine": ENTREPRISE}
-        for v in ajoutees.order_by("ordre", "libelle")
-    ]
+    valeurs += [_valeur_en_dict(v, ENTREPRISE) for v in ajoutees.order_by("ordre", "libelle")]
     return valeurs
 
 
@@ -116,20 +145,25 @@ def listes_disponibles(*, avec_valeurs: bool = True) -> list[dict]:
     return [liste_en_dict(liste, avec_valeurs=avec_valeurs) for liste in [*plateforme, *entreprise]]
 
 
-def _cles_existantes(liste) -> set[str]:
-    return {cle_comparaison(v["libelle"]) for v in valeurs_de_liste(liste)}
-
-
 @transaction.atomic
-def ajouter_valeurs(liste, libelles: list[str], groupe: str = "") -> dict:
+def ajouter_valeurs(
+    liste, libelles: list[str], groupe: str = "", *, par_la_plateforme: bool = False, auteur=None
+) -> dict:
     """Ajout en masse, sans doublon (comparaison sans accents, casse ni espaces superflus).
 
     Rend les valeurs ajoutées et celles ignorées parce qu'elles existaient déjà.
+    `par_la_plateforme` (back-office) : les valeurs deviennent celles de la liste plateforme,
+    proposées à toutes les entreprises ; sinon ce sont des ajouts de l'entreprise.
     """
-    existantes = _cles_existantes(liste)
+    if par_la_plateforme and not isinstance(liste, ListeValeursPlateforme):
+        raise ErreurMetier("La plateforme n'ajoute des valeurs qu'à ses propres listes.")
+    deja = valeurs_de_liste(liste)
+    existantes = {cle_comparaison(v["libelle"]) for v in deja}
+    ordre = max((v["ordre"] for v in deja), default=0)
+    groupe = nom_propre(groupe)
     ajoutees, ignorees = [], []
     for libelle in libelles:
-        propre = " ".join((libelle or "").split())
+        propre = nom_propre(libelle)
         if not propre:
             continue
         cle = cle_comparaison(propre)
@@ -137,13 +171,23 @@ def ajouter_valeurs(liste, libelles: list[str], groupe: str = "") -> dict:
             ignorees.append(propre)
             continue
         existantes.add(cle)
-        valeur = ValeurListeEntreprise.objects.create(
-            liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
-            liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
-            libelle=propre,
-            groupe=groupe,
+        ordre += 1
+        if par_la_plateforme:
+            valeur = ValeurListePlateforme.objects.create(
+                liste=liste, libelle=propre, groupe=groupe, ordre=ordre, cree_par=auteur
+            )
+        else:
+            valeur = ValeurListeEntreprise.objects.create(
+                liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
+                liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
+                libelle=propre,
+                groupe=groupe,
+                ordre=ordre,
+                cree_par=auteur,
+            )
+        ajoutees.append(
+            {"id": str(valeur.pk), "libelle": valeur.libelle, "groupe": groupe, "ordre": ordre}
         )
-        ajoutees.append({"id": str(valeur.pk), "libelle": valeur.libelle, "groupe": groupe})
     return {"ajoutees": ajoutees, "ignorees": ignorees}
 
 
@@ -300,29 +344,71 @@ def modele_en_dict(modele, type_projet=None) -> dict:
     return donnees
 
 
+def _exiger_listes_plateforme(niveaux: list[dict]) -> None:
+    """§3.8 : un modèle plateforme ne puise que dans des listes plateforme."""
+    for rang, niveau in enumerate(niveaux, start=1):
+        reference = niveau.get("liste")
+        if reference and (reference.get("origine") or "").upper() != PLATEFORME:
+            raise ErreurMetier(
+                f"Le niveau {rang} puise dans une liste d'entreprise : un modèle de la plateforme "
+                "ne puise que dans des listes de la plateforme.",
+                details={"niveau": rang},
+            )
+
+
 def _ecrire_gabarit(modele, niveaux: list[dict], lignes: list[list[str]]) -> None:
+    """Remplace les niveaux et les lignes types d'un modèle, plateforme ou entreprise.
+
+    C-1 à C-4 bloquent l'enregistrement d'un modèle comme celui d'un projet (§6).
+    """
     from apps.projets.services.tableau_demarrage import verifier_tableau
 
+    plateforme = isinstance(modele, ModeleDecoupagePlateforme)
+    if plateforme:
+        _exiger_listes_plateforme(niveaux)
     verdict = verifier_tableau(niveaux, lignes)
     if verdict["bloquants"]:
         raise ErreurMetier(
             "Le modèle comporte des erreurs à corriger avant de l'enregistrer.",
             details={"bloquants": verdict["bloquants"]},
         )
-    modele.niveaux.all().delete()
-    modele.lignes.all().delete()
+    # Les anciens niveaux et lignes sont retirés par suppression logique (Socle §3.1), avant
+    # les nouveaux : l'unicité de l'ordre ne porte que sur les lignes non supprimées.
+    modele.niveaux.all().supprimer_logiquement()
+    modele.lignes.all().supprimer_logiquement()
     for ordre, niveau in enumerate(niveaux, start=1):
         liste = resoudre_liste(niveau.get("liste"))
-        NiveauModeleEntreprise.objects.create(
-            modele=modele,
-            ordre=ordre,
-            libelle=niveau["libelle"].strip(),
-            liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
-            liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
-            alerter=bool(niveau.get("alerter")),
-        )
+        if plateforme:
+            NiveauModelePlateforme.objects.create(
+                modele=modele,
+                ordre=ordre,
+                libelle=nom_propre(niveau["libelle"]),
+                liste=liste,
+                alerter=bool(niveau.get("alerter")),
+            )
+        else:
+            NiveauModeleEntreprise.objects.create(
+                modele=modele,
+                ordre=ordre,
+                libelle=nom_propre(niveau["libelle"]),
+                liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
+                liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
+                alerter=bool(niveau.get("alerter")),
+            )
+    classe_ligne = LigneModelePlateforme if plateforme else LigneModeleEntreprise
     for ordre, cellules in enumerate(verdict["lignes_retenues"]):
-        LigneModeleEntreprise.objects.create(modele=modele, ordre=ordre, valeurs=cellules)
+        classe_ligne.objects.create(modele=modele, ordre=ordre, valeurs=cellules)
+
+
+def _un_seul_defaut_par_type(classe, modele) -> None:
+    """Un seul modèle par défaut pour un type donné, parmi les modèles de la même origine."""
+    if not modele.par_defaut_pour:
+        return
+    for autre in classe.objects.exclude(pk=modele.pk):
+        restants = [t for t in autre.par_defaut_pour or [] if t not in modele.par_defaut_pour]
+        if restants != list(autre.par_defaut_pour or []):
+            autre.par_defaut_pour = restants
+            autre.save(update_fields=["par_defaut_pour", "modifie_le"])
 
 
 @transaction.atomic
@@ -352,17 +438,80 @@ def enregistrer_modele(
     modele.types_projet = list(types_projet or [])
     modele.par_defaut_pour = list(par_defaut_pour or [])
     modele.save()
-    if modele.par_defaut_pour:
-        # Un seul modèle d'entreprise par défaut pour un type donné.
-        for autre in ModeleDecoupageEntreprise.objects.exclude(pk=modele.pk):
-            restants = [t for t in autre.par_defaut_pour or [] if t not in modele.par_defaut_pour]
-            if restants != list(autre.par_defaut_pour or []):
-                autre.par_defaut_pour = restants
-                autre.save(update_fields=["par_defaut_pour", "modifie_le"])
+    _un_seul_defaut_par_type(ModeleDecoupageEntreprise, modele)
     from apps.projets.services.tableau_demarrage import normaliser_lignes
 
     _ecrire_gabarit(modele, niveaux, [ligne["cellules"] for ligne in normaliser_lignes(lignes)])
     return modele
+
+
+@transaction.atomic
+def enregistrer_modele_plateforme(
+    *,
+    modele: ModeleDecoupagePlateforme | None = None,
+    nom: str,
+    description: str = "",
+    types_projet: list[str] | None = None,
+    par_defaut_pour: list[str] | None = None,
+    niveaux: list[dict],
+    lignes: list,
+    est_actif: bool = True,
+    auteur=None,
+) -> ModeleDecoupagePlateforme:
+    """Créer ou mettre à jour un modèle de la plateforme (back-office, schéma `public`).
+
+    Chaque mise à jour **incrémente la version** : les copies personnalisées des entreprises
+    savent ainsi signaler que leur original a changé, sans rien appliquer (§3.6). Aucun projet
+    déjà créé n'est touché (§3.11).
+    """
+    nom = nom_propre(nom)
+    if not nom:
+        raise ValidationError({"nom": "Le nom du modèle est obligatoire."})
+    cle = cle_comparaison(nom)
+    homonyme = next(
+        (
+            m
+            for m in ModeleDecoupagePlateforme.objects.all()
+            if cle_comparaison(m.nom) == cle and (modele is None or m.pk != modele.pk)
+        ),
+        None,
+    )
+    if homonyme is not None:
+        raise ErreurMetier(f"Un modèle de la plateforme porte déjà le nom « {homonyme.nom} ».")
+    types_projet = list(dict.fromkeys(types_projet or []))
+    par_defaut_pour = list(dict.fromkeys(par_defaut_pour or []))
+    _exiger_types_connus([*types_projet, *par_defaut_pour])
+    if modele is None:
+        modele = ModeleDecoupagePlateforme(nom=nom, cree_par=auteur)
+    else:
+        modele.version += 1
+    modele.nom = nom
+    modele.description = description
+    modele.types_projet = types_projet
+    modele.par_defaut_pour = par_defaut_pour
+    modele.est_actif = est_actif
+    modele.save()
+    _un_seul_defaut_par_type(ModeleDecoupagePlateforme, modele)
+    from apps.projets.services.tableau_demarrage import normaliser_lignes
+
+    _ecrire_gabarit(modele, niveaux, [ligne["cellules"] for ligne in normaliser_lignes(lignes)])
+    return modele
+
+
+def _exiger_types_connus(codes: list[str]) -> None:
+    """Un modèle plateforme ne cite que des types de projet du référentiel plateforme."""
+    from apps.catalogue.models import CategorieReferentiel, ReferentielPlateforme
+
+    connus = set(
+        ReferentielPlateforme.objects.filter(
+            categorie=CategorieReferentiel.TYPE_PROJET
+        ).values_list("code", flat=True)
+    )
+    inconnus = sorted({c for c in codes if c not in connus})
+    if inconnus:
+        raise ValidationError(
+            {"types_projet": f"Types de projet inconnus de la plateforme : {', '.join(inconnus)}."}
+        )
 
 
 @transaction.atomic

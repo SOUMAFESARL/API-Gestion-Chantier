@@ -104,15 +104,16 @@ urlpatterns = [
         MotifReportListCreateView.as_view(),
         name="projets-motifs-report-alias",
     ),
-    # Référentiels dynamiques : types de projet et noms de lot (plateforme + entreprise)
+    # Référentiels dynamiques : types de projet et modes d'exécution (plateforme + entreprise).
+    # Les noms de lot sont la liste « Lots » du découpage (`decoupage/listes/`).
     path("referentiels/droits/", ReferentielDroitsView.as_view(), name="referentiel-droits"),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/$",
+        r"^referentiels/(?P<categorie>types-projet|modes-execution)/$",
         ReferentielListeView.as_view(),
         name="referentiel-liste",
     ),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
+        r"^referentiels/(?P<categorie>types-projet|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
         ReferentielEntreeView.as_view(),
         name="referentiel-entree",
     ),

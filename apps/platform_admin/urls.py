@@ -41,6 +41,14 @@ from apps.platform_admin.views import (
     TendancesIndicateursView,
     VerificationJetonAdminView,
 )
+from apps.platform_admin.views.decoupage import (
+    DecoupageListeDetailView,
+    DecoupageListesView,
+    DecoupageListeValeursView,
+    DecoupageModeleDetailView,
+    DecoupageModelesView,
+    DecoupageValeurDetailView,
+)
 from apps.platform_admin.views.inscriptions import (
     ApprouverInscriptionView,
     DemandeInscriptionDetailView,
@@ -226,16 +234,43 @@ urlpatterns = [
     # Rôles système (gabarits propagés à toutes les entreprises)
     path("admins/roles-systeme/", RolesSystemeListeView.as_view(), name="admins-roles-systeme"),
     path("admins/roles-systeme/<uuid:pk>/", RoleSystemeDetailView.as_view(), name="admins-roles-systeme-detail"),
-    # Référentiels de la plateforme (types de projet, noms de lot)
+    # Référentiels de la plateforme (types de projet, modes d'exécution)
     re_path(
-        r"^admins/referentiels/(?P<categorie>types-projet|lots|modes-execution)/$",
+        r"^admins/referentiels/(?P<categorie>types-projet|modes-execution)/$",
         ReferentielPlateformeListeView.as_view(),
         name="admins-referentiels",
     ),
     re_path(
-        r"^admins/referentiels/(?P<categorie>types-projet|lots|modes-execution)/(?P<pk>[0-9a-f-]{36})/$",
+        r"^admins/referentiels/(?P<categorie>types-projet|modes-execution)/(?P<pk>[0-9a-f-]{36})/$",
         ReferentielPlateformeDetailView.as_view(),
         name="admins-referentiels-detail",
+    ),
+    # Découpage : listes de valeurs et modèles de la plateforme (lus par toutes les entreprises)
+    path("admins/decoupage/listes/", DecoupageListesView.as_view(), name="admins-decoupage-listes"),
+    path(
+        "admins/decoupage/listes/<uuid:pk>/",
+        DecoupageListeDetailView.as_view(),
+        name="admins-decoupage-liste-detail",
+    ),
+    path(
+        "admins/decoupage/listes/<uuid:pk>/valeurs/",
+        DecoupageListeValeursView.as_view(),
+        name="admins-decoupage-liste-valeurs",
+    ),
+    path(
+        "admins/decoupage/valeurs/<uuid:pk>/",
+        DecoupageValeurDetailView.as_view(),
+        name="admins-decoupage-valeur-detail",
+    ),
+    path(
+        "admins/decoupage/modeles/",
+        DecoupageModelesView.as_view(),
+        name="admins-decoupage-modeles",
+    ),
+    path(
+        "admins/decoupage/modeles/<uuid:pk>/",
+        DecoupageModeleDetailView.as_view(),
+        name="admins-decoupage-modele-detail",
     ),
     # Gestion des Comptes Administrateurs (Super Admin)
     path("admins/comptes/", ComptesAdministrateursListCreateView.as_view(), name="admins-comptes-liste-creer"),

@@ -1,7 +1,10 @@
-"""Référentiels propres à une entreprise — types de projet et noms de lot (schéma tenant).
+"""Référentiels propres à une entreprise — types de projet et modes d'exécution (schéma tenant).
 
 Ils complètent ceux de la plateforme (`catalogue.ReferentielPlateforme`) :
 l'entreprise ajoute et retire les siens, jamais ceux de la plateforme.
+
+Les noms de lot qu'elle avait ajoutés (catégorie `LOT`) restent en base, sans route qui les
+expose : ses lots s'ajoutent désormais à la liste « Lots » du découpage (`ValeurListeEntreprise`).
 """
 
 from django.db import models

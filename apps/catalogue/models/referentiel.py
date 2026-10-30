@@ -1,8 +1,12 @@
-"""Référentiels de la plateforme — types de projet et noms de lot (schéma public).
+"""Référentiels de la plateforme — types de projet et modes d'exécution (schéma public).
 
 Posés par le super admin, ils sont proposés à toutes les entreprises, qui y
 ajoutent les leurs (`projets.ReferentielEntreprise`) sans pouvoir retirer
 ceux-ci. Arbitrage du 16/10/2026.
+
+La catégorie `LOT` n'est plus exposée par aucune route : elle est devenue la liste de valeurs
+« Lots » du découpage (décisions v1.2, §4.2 ; `catalogue/migrations/0014_peupler_decoupage.py`).
+Elle reste dans les choix pour que les lignes déjà en base restent valides.
 """
 
 import re
@@ -23,7 +27,7 @@ __all__ = [
 
 class CategorieReferentiel(models.TextChoices):
     TYPE_PROJET = "TYPE_PROJET", _("Type de projet")
-    LOT = "LOT", _("Nom de lot")
+    LOT = "LOT", _("Nom de lot")  # plus exposée : voir la liste « Lots » du découpage
     MODE_EXECUTION = "MODE_EXECUTION", _("Mode d'exécution")
 
 

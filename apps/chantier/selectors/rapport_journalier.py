@@ -71,15 +71,20 @@ def rapport_existe(
     *,
     projet_id: UUID | str,
     date_rapport,
+    auteur_id: UUID | str | None = None,
     exclure_id: UUID | str | None = None,
 ) -> bool:
-    """Vérifie si le projet a déjà son rapport pour cette date (un seul par jour)."""
+    """Le rédacteur a-t-il déjà son rapport sur ce projet à cette date (un par rédacteur et par
+    jour, 30/10/2026) ?"""
     qs = RapportJournalier.objects.filter(date_rapport=date_rapport)
 
     if exclure_id:
         qs = qs.exclude(id=exclure_id)
 
-    return qs.filter(projet_id=projet_id).exists()
+    qs = qs.filter(projet_id=projet_id)
+    if auteur_id:
+        qs = qs.filter(auteur_id=auteur_id)
+    return qs.exists()
 
 
 def rapports_en_attente_validation(

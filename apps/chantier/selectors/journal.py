@@ -6,9 +6,18 @@ from decimal import Decimal
 
 from django.db.models import Q
 
+from apps.accounts.models import Utilisateur
 from apps.chantier.models import JournalChantier, RelanceJournal
+from apps.chantier.services import signatures as circuit_signatures
+from apps.chantier.services.fonctions import (
+    APPROUVER,
+    REDIGER,
+    VALIDER,
+    chemins_des_cases,
+    titulaire_de,
+    titulaires,
+)
 from apps.chantier.services.journal import (
-    affectations_actives,
     aujourdhui,
     cases_du_journal,
     premier_jour_rapport,
@@ -97,19 +106,29 @@ def theorique(debut, fin, jour):
     return round(100 * ((jour - debut).days + 1) / max(1, (fin - debut).days + 1), 2)
 
 
-def contexte_projet(projet, jour):
+def noms_des_titulaires(projet, permission, chemins=()) -> str:
+    """Les personnes qui tiennent la fonction sur la partie du projet, en clair."""
+    return ", ".join(
+        nom(t.utilisateur) for t in titulaires(projet, permission) if t.concerne(chemins)
+    )
+
+
+def contexte_projet(projet, jour, *, chemins=(), auteur=None):
+    """Ce que le rédacteur saisit, sur sa partie du projet (`chemins` ; vide : tout le projet).
+
+    Les intervenants sont ceux qui tiennent les fonctions du journal sur cette partie — par les
+    permissions de leur rôle sur le projet, jamais par son nom (30/10/2026).
+    """
     from apps.projets.services.avancement import quantites_synchronisees
 
-    intervenants = dict.fromkeys(("CC", "CT", "CP"), "")
-    # Un seul chef de chantier par projet : c'est lui qui tient le journal.
-    for affectation in affectations_actives(projet.id).order_by("cree_le"):
-        if affectation.role_projet in intervenants and not intervenants[affectation.role_projet]:
-            intervenants[affectation.role_projet] = nom(affectation.utilisateur)
-    if projet.chef_projet_id:
-        intervenants["CP"] = nom(projet.chef_projet)
+    intervenants = {
+        "CC": nom(auteur) if auteur else noms_des_titulaires(projet, REDIGER, chemins),
+        "CT": noms_des_titulaires(projet, VALIDER, chemins),
+        "CP": noms_des_titulaires(projet, APPROUVER, chemins),
+    }
     # Une seule table code → (mode de base, libellé) pour toutes les cases du projet.
     table_modes = table_modes_execution()
-    cases = cases_du_journal(projet)
+    cases = cases_du_journal(projet, chemins)
     numeros = cases.arbre.numerotation()
     # Les journaux antérieurs constituent le cumul déclaratif du journal.
     # La quantité du planning n'est pas modifiée par une saisie de journal.
@@ -202,17 +221,23 @@ _A_LIRE = object()
 
 
 def relances_du_jour(projet_ids, debut, fin) -> dict:
-    """La relance envoyée aujourd'hui pour chaque ligne (chantier, jour) de la période.
+    """La relance envoyée aujourd'hui pour chaque ligne (chantier, rédacteur, jour) de la période.
 
     Seule celle du jour compte : une ligne relancée hier peut l'être de nouveau
     aujourd'hui (une relance par ligne et par jour), l'écran rend donc le bouton.
+    Le rédacteur est vide sur un chantier sans rédacteur affecté.
     """
     return {
-        (r.projet_id, r.date_rapport): r.cree_le.isoformat()
+        (r.projet_id, r.redacteur_id, r.date_rapport): r.cree_le.isoformat()
         for r in RelanceJournal.objects.filter(
             projet_id__in=projet_ids, date_rapport__range=[debut, fin], jour=aujourdhui()
         )
     }
+
+
+def cle_ligne(journal) -> tuple:
+    r = journal.rapport
+    return (r.projet_id, r.auteur_id, r.date_rapport)
 
 
 def existant(journal):
@@ -228,13 +253,18 @@ def existant(journal):
     }
 
 
-def preparation(projet, jour, *, journal=None, precedent=None):
+def preparation(projet, jour, *, journal=None, precedent=None, utilisateur=None):
+    if journal:
+        chemins = chemins_des_cases(journal.perimetre_ids)
+    else:
+        redacteur = titulaire_de(projet, utilisateur, REDIGER)
+        chemins = redacteur.chemins if redacteur else ()
     contexte = (
         journal.photographie
         if journal
         and journal.photographie
         and statut_journal(journal) not in ("BROUILLON", "REJETE")
-        else contexte_projet(projet, jour)
+        else contexte_projet(projet, jour, chemins=chemins, auteur=utilisateur)
     )
     saisie_precedente = precedent.saisie if precedent else {}
     reprises = {
@@ -264,17 +294,71 @@ def reference(journal):
     return f"RJ-{r.projet.reference}-{r.date_rapport:%Y%m%d}"
 
 
+def _signataires(journal, etape, *, ouverte, rejete) -> list[dict]:
+    """Chaque signataire attendu à l'étape, avec où il en est (30/10/2026 : tous signent)."""
+    faites = {s["utilisateur_id"]: s for s in journal.signatures or [] if s["etape"] == etape}
+    figes = (journal.signataires_attendus or {}).get(etape, [])
+    effectifs = set(circuit_signatures.attendus_effectifs(journal, etape)) if figes else set()
+    noms = {
+        str(u.pk): nom(u)
+        for u in Utilisateur.objects.filter(pk__in=[*figes, *faites]).only("prenom", "nom", "email")
+    }
+    lignes = []
+    for uid in dict.fromkeys([*figes, *faites]):
+        signature = faites.get(uid)
+        if signature:
+            etat = "SIGNE"
+        elif uid not in effectifs:
+            etat = "RETIRE"  # n'a plus la fonction sur le projet : n'est plus attendu
+        elif rejete:
+            etat = "REJETE"
+        else:
+            etat = "EN_ATTENTE" if ouverte else "A_VENIR"
+        lignes.append(
+            {
+                "utilisateur_id": uid,
+                "nom": signature["nom"] if signature else noms.get(uid, ""),
+                "etat": etat,
+                "signe_le": signature["signe_le"] if signature else None,
+                "commentaire": signature["commentaire"] if signature else None,
+            }
+        )
+    return lignes
+
+
+def _etat_etape(lignes, *, close, ouverte, rejete) -> str:
+    if close:
+        return "SIGNE"
+    if rejete:
+        return "REJETE"
+    return "EN_ATTENTE" if ouverte else "A_VENIR"
+
+
 def circuit(journal, contexte):
+    """Le rédacteur, puis tous les validateurs, puis tous les approbateurs (30/10/2026).
+
+    Les clés `role` gardent les codes des étapes (CC, CT, CP) que l'écran connaît ; ceux qui
+    signent sont ceux qui en ont la permission sur le projet, listés dans `signataires`.
+    """
     r = journal.rapport
     statut = statut_journal(journal)
     cc_signe = bool(r.soumis_le)
     ct_signe = bool(journal.valide_ct_le)
     cp_signe = statut == "APPROUVE_CP"
+    rejete = statut == "REJETE"
     echeance_ct = (r.soumis_le + timedelta(hours=24)).isoformat() if r.soumis_le else None
     echeance_cp = (
         (journal.valide_ct_le + timedelta(hours=24)).isoformat() if journal.valide_ct_le else None
     )
-    rejete = statut == "REJETE"
+    validation = _signataires(
+        journal, circuit_signatures.VALIDATION, ouverte=cc_signe and not ct_signe, rejete=rejete
+    )
+    approbation = _signataires(
+        journal,
+        circuit_signatures.APPROBATION,
+        ouverte=ct_signe and not cp_signe,
+        rejete=rejete and ct_signe,
+    )
     return [
         {
             "role": "CC",
@@ -283,36 +367,40 @@ def circuit(journal, contexte):
             "signe_le": r.soumis_le.isoformat() if r.soumis_le else None,
             "echeance": None,
             "commentaire": None,
+            "signataires": [],
         },
         {
             "role": "CT",
-            "signataire_nom": nom(journal.valide_ct_par) or contexte["conducteur_travaux_nom"],
-            "etat": "REJETE"
-            if rejete and not ct_signe
-            else "SIGNE"
-            if ct_signe
-            else "EN_ATTENTE"
-            if cc_signe
-            else "A_VENIR",
+            "signataire_nom": ", ".join(ligne["nom"] for ligne in validation)
+            or contexte["conducteur_travaux_nom"],
+            "etat": _etat_etape(
+                validation,
+                close=ct_signe,
+                ouverte=cc_signe,
+                rejete=rejete and not ct_signe,
+            ),
             "signe_le": journal.valide_ct_le.isoformat() if ct_signe else None,
             "echeance": echeance_ct,
             "commentaire": r.commentaire_validation
             if rejete and not ct_signe
             else journal.commentaire_ct,
+            "signataires": validation,
+            # Validation sautée : personne n'avait la permission sur la partie du rapport.
+            "sans_signataire": cc_signe and not validation,
         },
         {
             "role": "CP",
-            "signataire_nom": nom(r.valide_par) if cp_signe else contexte["chef_projet_nom"],
-            "etat": "REJETE"
-            if rejete and ct_signe
-            else "SIGNE"
-            if cp_signe
-            else "EN_ATTENTE"
-            if ct_signe
-            else "A_VENIR",
+            "signataire_nom": ", ".join(ligne["nom"] for ligne in approbation)
+            or contexte["chef_projet_nom"],
+            "etat": _etat_etape(
+                approbation, close=cp_signe, ouverte=ct_signe, rejete=rejete and ct_signe
+            ),
             "signe_le": r.valide_le.isoformat() if cp_signe else None,
             "echeance": echeance_cp,
             "commentaire": r.commentaire_validation if cp_signe or (rejete and ct_signe) else None,
+            "signataires": approbation,
+            # Aucun approbateur affecté : le rapport attend qu'on en affecte un.
+            "sans_signataire": ct_signe and not cp_signe and not approbation,
         },
     ]
 
@@ -325,7 +413,7 @@ def document(journal, *, contexte=None, relance_le=_A_LIRE):
     r, saisie = journal.rapport, journal.saisie
     if relance_le is _A_LIRE:
         relance_le = relances_du_jour([r.projet_id], r.date_rapport, r.date_rapport).get(
-            (r.projet_id, r.date_rapport)
+            cle_ligne(journal)
         )
     contexte = contexte or journal.photographie or contexte_projet(r.projet, r.date_rapport)
     quantites = defaultdict(float)
@@ -521,9 +609,15 @@ def entree(journal, *, contexte=None, relance_le=_A_LIRE):
     return {cle: charge[cle] for cle in ENTREE_CHAMPS}
 
 
-def entree_manquante(projet, jour, contexte, *, dernier=None, relance_le=None):
+def identifiant_ligne(projet, jour, redacteur=None) -> str:
+    """L'identifiant d'un rapport manquant : `{projet}_{jour}`, suivi du rédacteur s'il y en a un."""
+    base = f"{projet.id}_{jour.isoformat()}"
+    return f"{base}_{redacteur.pk}" if redacteur else base
+
+
+def entree_manquante(projet, jour, contexte, *, dernier=None, relance_le=None, redacteur=None):
     return {
-        "id": f"{projet.id}_{jour.isoformat()}",
+        "id": identifiant_ligne(projet, jour, redacteur),
         "reference": None,
         "date": jour.isoformat(),
         "chantier": {
@@ -565,40 +659,46 @@ def journal_periode(request, debut, fin, *, projet_id=None, brouillons_visibles=
     if projet_id:
         qs = qs.filter(rapport__projet_id=projet_id)
     rapports = list(qs)
-    par_jour = {(j.rapport.projet_id, j.rapport.date_rapport): j for j in rapports}
+    # Une ligne par rédacteur et par jour (30/10/2026) : chacun écrit son rapport.
+    par_ligne = {cle_ligne(j): j for j in rapports}
     relances = relances_du_jour(
         {p.id for p in projets} | {j.rapport.projet_id for j in rapports}, debut, fin
     )
     charges = []
     cal = calendrier_entreprise(debut, fin)
     for projet in projets:
-        contexte = contexte_projet(projet, fin)
+        # Sans rédacteur affecté, le chantier attend quand même son rapport : une ligne anonyme.
+        attendus = [
+            (t.utilisateur, contexte_projet(projet, fin, chemins=t.chemins, auteur=t.utilisateur))
+            for t in titulaires(projet, REDIGER)
+        ] or [(None, contexte_projet(projet, fin))]
         premier = max(debut, premier_jour_rapport(projet))
         dernier = min(fin, aujourdhui(), projet.date_fin_reelle or fin)
         for offset in range(max(0, (dernier - premier).days + 1)):
             jour = premier + timedelta(days=offset)
-            if not cal.est_ouvre(jour) and (projet.id, jour) not in par_jour:
-                continue
-            j = par_jour.pop((projet.id, jour), None)
-            if j and (j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == lecteur):
-                # Une photographie d'une soumission a priorité sur le contexte vivant.
-                charges.append(
-                    entree(
-                        j,
-                        contexte=j.photographie or contexte,
-                        relance_le=relances.get((projet.id, jour)),
+            for redacteur, contexte in attendus:
+                cle = (projet.id, redacteur.pk if redacteur else None, jour)
+                if not cal.est_ouvre(jour) and cle not in par_ligne:
+                    continue
+                j = par_ligne.pop(cle, None)
+                if j and (j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == lecteur):
+                    # Une photographie d'une soumission a priorité sur le contexte vivant.
+                    charges.append(
+                        entree(j, contexte=j.photographie or contexte, relance_le=relances.get(cle))
                     )
-                )
-            else:
-                charges.append(
-                    entree_manquante(
-                        projet, jour, contexte, relance_le=relances.get((projet.id, jour))
+                else:
+                    charges.append(
+                        entree_manquante(
+                            projet,
+                            jour,
+                            contexte,
+                            relance_le=relances.get(cle),
+                            redacteur=redacteur,
+                        )
                     )
-                )
-    for j in par_jour.values():
+    for j in par_ligne.values():
         if j.rapport.statut != "BROUILLON" or j.rapport.auteur_id == lecteur:
-            cle = (j.rapport.projet_id, j.rapport.date_rapport)
-            charges.append(entree(j, relance_le=relances.get(cle)))
+            charges.append(entree(j, relance_le=relances.get(cle_ligne(j))))
     return sorted(
         charges, key=lambda c: (c["date"], c["chantier"]["projet_reference"]), reverse=True
     )

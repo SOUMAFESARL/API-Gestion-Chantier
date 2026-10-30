@@ -23,9 +23,8 @@ from django.utils import timezone
 
 from apps.accounts.models import Utilisateur
 from apps.chantier.models import Blocage
-from apps.core.enums import RoleGlobal, RoleProjet, StatutBlocage, StatutRapport
+from apps.core.enums import StatutBlocage, StatutRapport
 from apps.projets.models import (
-    AffectationProjet,
     AlerteRetard,
     Element,
     NiveauAlerteRetard,
@@ -167,70 +166,53 @@ def determiner_actions_recommandees(causes: dict[str, Any]) -> list[str]:
     return actions
 
 
-def obtenir_destinataires_alerte(projet: Projet, niveau: str) -> list[Utilisateur]:
-    """Détermine les destinataires de l'alerte selon son niveau de criticité.
+#: La permission de chaque niveau, du plus bas au plus haut (30/10/2026).
+PERMISSIONS_ALERTE = (
+    (NiveauAlerteRetard.MODERE, "projets.alertes_moderees"),
+    (NiveauAlerteRetard.ELEVE, "projets.alertes_elevees"),
+    (NiveauAlerteRetard.CRITIQUE, "projets.alertes_critiques"),
+)
 
-    Règles (SFD F3 §5.4 & §3 Matrice des droits) :
-    - MODERE   : CT et CP du projet (affectations actives ou rôles directs sur le projet)
-    - ELEVE    : CT + CP + utilisateurs DO de l'entreprise
-    - CRITIQUE : CT + CP + DO + Directeur Général (DG) de l'entreprise
+
+def permissions_recevant(niveau: str) -> set[str]:
+    """Une permission d'alerte vaut « à partir de ce niveau » : qui reçoit les alertes modérées
+    reçoit aussi les élevées et les critiques — comme le conducteur et le chef de projet avant."""
+    codes = [code for _, code in PERMISSIONS_ALERTE]
+    rang = next(i for i, (n, _) in enumerate(PERMISSIONS_ALERTE) if n == niveau)
+    return set(codes[: rang + 1])
+
+
+def obtenir_destinataires_alerte(projet: Projet, niveau: str, element=None) -> list[Utilisateur]:
+    """Ceux qui ont la permission de recevoir les alertes de ce niveau (30/10/2026).
+
+    - **Sur le projet** : les personnes affectées dont le rôle sur le projet porte la permission,
+      et dont la partie du projet recouvre la case en retard (toute la partie pour une alerte
+      du projet entier).
+    - **Dans l'entreprise** : les rôles de portée Entreprise qui portent la permission, et le DG,
+      qui les a toutes.
+
+    Le nom du rôle ne compte pas : l'entreprise règle ces permissions sur ses rôles.
     """
-    destinataires: set[Utilisateur] = set()
+    from apps.chantier.services.fonctions import titulaires
+    from apps.core.droits import permissions_effectives
+    from apps.projets.services.perimetres import _acces_entreprise
 
-    # 1. CT et CP du projet (inclus à tous les niveaux)
-    if (
-        projet.chef_projet_id
-        and getattr(projet.chef_projet, "is_active", True)
-        and getattr(projet.chef_projet, "supprime_le", None) is None
-    ):
-        destinataires.add(projet.chef_projet)
-
-    if (
-        projet.conducteur_travaux_id
-        and getattr(projet.conducteur_travaux, "is_active", True)
-        and getattr(projet.conducteur_travaux, "supprime_le", None) is None
-    ):
-        destinataires.add(projet.conducteur_travaux)
-
-    affs = AffectationProjet.objects.filter(
-        projet=projet,
-        est_actif=True,
-        supprime_le__isnull=True,
-        role_projet__in=[
-            RoleProjet.CONDUCTEUR_TRAVAUX,
-            RoleProjet.CHEF_PROJET,
-        ],
-        utilisateur__supprime_le__isnull=True,
-        utilisateur__is_active=True,
-    ).select_related("utilisateur")
-    for aff in affs:
-        destinataires.add(aff.utilisateur)
-
-    # 2. Utilisateurs DO de l'entreprise (pour ELEVE et CRITIQUE)
-    if niveau in (NiveauAlerteRetard.ELEVE, NiveauAlerteRetard.CRITIQUE):
-        dos = Utilisateur.objects.filter(
-            supprime_le__isnull=True,
-            is_active=True,
-        ).filter(
-            Q(role__code="DO") | Q(role_global="DO")
-        )
-        for u in dos:
-            destinataires.add(u)
-
-    # 3. Directeur Général (DG) de l'entreprise (pour CRITIQUE)
-    if niveau == NiveauAlerteRetard.CRITIQUE:
-        dgs = Utilisateur.objects.filter(
-            supprime_le__isnull=True,
-            is_active=True,
-        ).filter(
-            Q(is_owner=True)
-            | Q(role__code="DG")
-            | Q(role_global__in=[RoleGlobal.DIRECTEUR_GENERAL, "DG", "DIRECTEUR_GENERAL"])
-        )
-        for u in dgs:
-            destinataires.add(u)
-
-    return list(destinataires)
+    codes = permissions_recevant(niveau)
+    chemins_case = (element.chemin,) if element is not None else ()
+    destinataires: dict = {}
+    for code in codes:
+        for titulaire in titulaires(projet, code):
+            if titulaire.concerne(chemins_case):
+                destinataires[titulaire.utilisateur.pk] = titulaire.utilisateur
+    for utilisateur in Utilisateur.objects.filter(
+        supprime_le__isnull=True, is_active=True
+    ).select_related("role"):
+        # Portée Entreprise ou DG : leurs permissions valent sur tous les projets.
+        if utilisateur.pk in destinataires or not _acces_entreprise(utilisateur):
+            continue
+        if codes & set(permissions_effectives(utilisateur)):
+            destinataires[utilisateur.pk] = utilisateur
+    return list(destinataires.values())
 
 
 @transaction.atomic
@@ -359,7 +341,7 @@ def detecter_alertes_retard(
                 en_retard.append((float(feuille.montant or 0) * ecart, feuille.libelle))
         causes["taches_en_retard"] = [libelle for _, libelle in sorted(en_retard, reverse=True)]
         actions = determiner_actions_recommandees(causes)
-        destinataires = obtenir_destinataires_alerte(projet, niveau_case)
+        destinataires = obtenir_destinataires_alerte(projet, niveau_case, case)
 
         alerte = AlerteRetard.objects.create(
             projet=projet,

@@ -28,7 +28,8 @@ from apps.chantier.selectors.journal import (
     journaux_visibles,
     nom,
 )
-from apps.chantier.services.journal import aujourdhui, tient_fonction
+from apps.chantier.services.fonctions import SYNTHESE_REDIGER, tient_fonction
+from apps.chantier.services.journal import aujourdhui
 
 FUSEAU = ZoneInfo("Africa/Abidjan")
 
@@ -349,7 +350,7 @@ def projection(request, projet, type_, debut, fin) -> dict:
     # Un brouillon reste au CT : les autres lecteurs ne voient qu'une appréciation signée.
     publiee = synthese is not None and etat != SynthesePeriodique.Statut.BROUILLON
     redacteur = etat in ("A_REDIGER", "BROUILLON", "REJETEE") and tient_fonction(
-        projet, request.user, "CT"
+        projet, request.user, SYNTHESE_REDIGER
     )
     return {
         **calcul,

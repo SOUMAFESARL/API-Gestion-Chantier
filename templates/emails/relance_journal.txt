@@ -1,6 +1,6 @@
 Bonjour {{ prenom }},
 
-{% if etape == "CC" %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) pour le {{ date_rapport|date:"d/m/Y" }} n'a pas encore été remis. Merci de le rédiger et de le soumettre.{% elif etape == "CT" %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) du {{ date_rapport|date:"d/m/Y" }} attend votre validation de conducteur de travaux.{% else %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) du {{ date_rapport|date:"d/m/Y" }}, validé par le conducteur de travaux, attend votre approbation de chef de projet.{% endif %}
+{% if etape == "CC" %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) pour le {{ date_rapport|date:"d/m/Y" }} n'a pas encore été remis. Merci de le rédiger et de le soumettre.{% elif etape == "CT" %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) du {{ date_rapport|date:"d/m/Y" }} attend votre validation.{% else %}Le rapport journalier du chantier {{ projet_nom }} ({{ projet_reference }}) du {{ date_rapport|date:"d/m/Y" }}, validé, attend votre approbation.{% endif %}
 
 {{ lien }}
 

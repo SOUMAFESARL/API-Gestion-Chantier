@@ -38,6 +38,13 @@ class Role(ModeleBase):
         default="PROJET",
         help_text=_("Portée d'intervention du rôle : ENTREPRISE (accès global) ou PROJET (accès par affectation)."),
     )
+    # Réglé par l'entreprise (décision du 30/10/2026) : coché, une seule personne tient ce rôle
+    # sur un projet, et on la remplace en un geste. Coché par défaut pour CP et CC.
+    unique_par_projet = models.BooleanField(
+        _("unique par projet"),
+        default=False,
+        help_text=_("Une seule personne à la fois tient ce rôle sur un projet."),
+    )
 
     class Meta:
         db_table = "role"

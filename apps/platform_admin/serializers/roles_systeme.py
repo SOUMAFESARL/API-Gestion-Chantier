@@ -15,7 +15,7 @@ class RoleSystemeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ModeleRole
-        fields = ["id", "code", "libelle", "description", "portee", "modules"]
+        fields = ["id", "code", "libelle", "description", "portee", "unique_par_projet", "modules"]
 
     def get_modules(self, obj: ModeleRole) -> list[str]:
         return sorted(
@@ -32,8 +32,10 @@ class RoleSystemeCreationSerializer(serializers.Serializer):
     )
     libelle = serializers.CharField(max_length=100)
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    unique_par_projet = serializers.BooleanField(required=False, default=False)
 
 
 class RoleSystemeModificationSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=100, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
+    unique_par_projet = serializers.BooleanField(required=False)

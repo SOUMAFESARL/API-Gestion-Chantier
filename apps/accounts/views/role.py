@@ -155,6 +155,7 @@ class RoleListCreateView(APIView):
                 permissions_modules=perms_input,
                 portee=serializer.validated_data.get("portee", "PROJET"),
                 cree_par=request.user,
+                unique_par_projet=serializer.validated_data.get("unique_par_projet", False),
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
@@ -274,6 +275,7 @@ class RoleDetailUpdateView(APIView):
                 permissions_modules=perms_input,
                 portee=nouvelle_portee,
                 modifie_par=request.user,
+                unique_par_projet=serializer.validated_data.get("unique_par_projet"),
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
@@ -414,6 +416,7 @@ class ParametresRoleListCreateView(APIView):
                 permissions_modules=perms_input,
                 portee=serializer.validated_data.get("portee", "PROJET"),
                 cree_par=request.user,
+                unique_par_projet=serializer.validated_data.get("unique_par_projet", False),
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)
@@ -533,6 +536,7 @@ class ParametresRoleDetailUpdateView(APIView):
                 permissions_modules=perms_input,
                 portee=nouvelle_portee,
                 modifie_par=request.user,
+                unique_par_projet=serializer.validated_data.get("unique_par_projet"),
             )
         except DjangoValidationError as exc:
             msg = str(exc.message if hasattr(exc, "message") else exc)

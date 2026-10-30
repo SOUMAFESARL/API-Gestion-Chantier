@@ -9,7 +9,6 @@ from datetime import time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from PIL import Image
@@ -17,9 +16,20 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.chantier.models import AlerteJournal, JournalChantier, RapportJournalier
 from apps.chantier.serializers.journal import SaisieJournalSerializer
+from apps.chantier.services import signatures
+from apps.chantier.services.fonctions import (
+    APPROUVER,
+    REDIGER,
+    VALIDER,
+    affectations_actives,
+    chemins_des_cases,
+    tient_fonction,
+    titulaires,
+    verifier_fonction,
+)
 from apps.core.enums import ActionAudit, ModeExecution, StatutRapport
 from apps.core.exceptions import ErreurMetier, RapportDejaExistant, RapportNonModifiable
-from apps.projets.models import AffectationProjet, Element, Projet
+from apps.projets.models import Element, Projet
 from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 from apps.projets.services.referentiels import mode_base, table_modes_execution
@@ -47,20 +57,6 @@ def verifier_jour(jour):
         )
 
 
-def affectations_actives(projet_id):
-    return (
-        AffectationProjet.objects.filter(
-            projet_id=projet_id,
-            est_actif=True,
-            date_debut__lte=aujourdhui(),
-            utilisateur__supprime_le__isnull=True,
-            utilisateur__statut="ACTIF",
-        )
-        .filter(Q(date_fin__isnull=True) | Q(date_fin__gte=aujourdhui()))
-        .select_related("utilisateur")
-    )
-
-
 class CasesDuJournal:
     """Ce que le journal saisit, lu dans l'arbre du découpage.
 
@@ -68,15 +64,19 @@ class CasesDuJournal:
     se range sous son **groupe** (sa case parente, ou elle-même à la racine), qui tient celui de
     l'ancien lot. Le contrat JSON du journal garde donc `lot_id` (le groupe) et `activite_id`
     (la feuille). Le mode d'exécution est celui que la case hérite de l'arbre.
+
+    `chemins` : la partie du projet du rédacteur (30/10/2026) ; vide, tout le projet.
     """
 
-    def __init__(self, projet):
+    def __init__(self, projet, chemins=()):
         self.arbre = charger_arbre(projet, actifs_seulement=True)
         self.groupes: dict[str, Element] = {}
         self.feuilles: dict[str, Element] = {}
         self.feuilles_par_groupe: dict[str, list[Element]] = {}
         for feuille in self.arbre.feuilles():
             if feuille.cloture:
+                continue
+            if chemins and not any(feuille.chemin.startswith(c) for c in chemins):
                 continue
             groupe = self.arbre.groupe(feuille)
             self.groupes.setdefault(str(groupe.pk), groupe)
@@ -95,8 +95,8 @@ class CasesDuJournal:
         ]
 
 
-def cases_du_journal(projet) -> CasesDuJournal:
-    return CasesDuJournal(projet)
+def cases_du_journal(projet, chemins=()) -> CasesDuJournal:
+    return CasesDuJournal(projet, chemins)
 
 
 def verifier_auteur(rapport, utilisateur):
@@ -104,45 +104,7 @@ def verifier_auteur(rapport, utilisateur):
         raise PermissionDenied("Seul l'auteur peut modifier ou soumettre ce rapport.")
 
 
-def verifier_signataire(journal, utilisateur, role):
-    """Signe celui qui tient la fonction sur le chantier — et lui seul.
-
-    Une signature identifie un intervenant réel du circuit, jamais un simple
-    droit : les permissions RBAC, vérifiées par la vue, ne suffisent pas.
-
-    **Le directeur général ne signe pas** (décisions du 14/10/2026) : il
-    garde ses attributions et ne tient aucune fonction sur un chantier — il
-    consulte et relance. Le super-administrateur de la plateforme, qui
-    n'appartient pas à l'entreprise, ne signe jamais non plus.
-    """
-    if journal.rapport.auteur_id == utilisateur.id:
-        raise PermissionDenied("L'auteur ne peut pas valider son propre rapport.")
-    verifier_fonction(journal.rapport.projet, utilisateur, role)
-
-
-def verifier_fonction(projet, utilisateur, role):
-    """L'utilisateur tient-il la fonction `role` (CT ou CP) sur ce chantier ?
-
-    Le chef de projet désigné la tient sans affectation ; sinon, il faut une
-    affectation en vigueur avec ce rôle. Même règle pour le rapport et la
-    synthèse.
-    """
-    if not tient_fonction(projet, utilisateur, role):
-        raise PermissionDenied(f"Cette signature exige l'affectation {role} sur le chantier.")
-
-
-def tient_fonction(projet, utilisateur, role) -> bool:
-    from apps.core.droits import est_dg
-
-    # Une donnée antérieure à la règle peut encore désigner le DG : elle ne
-    # lui donne pas de fonction pour autant.
-    if est_dg(utilisateur):
-        return False
-    if role == "CP" and projet.chef_projet_id == utilisateur.id:
-        return True
-    return (
-        affectations_actives(projet.id).filter(utilisateur=utilisateur, role_projet=role).exists()
-    )
+__all__ = ["affectations_actives", "tient_fonction", "verifier_fonction"]
 
 
 def statut_journal(journal):
@@ -238,7 +200,7 @@ def valider_media(ligne, *, photo=False):
                 raise ValidationError({"fichier": "Document Office Open XML invalide."}) from None
 
 
-def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
+def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemins=()):
     if not isinstance(data, Mapping):
         raise ValidationError("Un objet JSON est requis.")
     # PATCH conserve les sections absentes ; les objets météo/blocage sont fusionnés.
@@ -275,7 +237,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
         nested = getattr(contrats, classe)(data=saisie[cle])
         nested.is_valid(raise_exception=True)
         saisie[cle] = dict(nested.data)
-    cases = cases_du_journal(projet)
+    cases = cases_du_journal(projet, chemins)
     lots = cases.groupes
     table_modes = table_modes_execution()
     activites = cases.feuilles
@@ -324,7 +286,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None):
     return saisie
 
 
-def valider_soumission(saisie, projet):
+def valider_soumission(saisie, projet, chemins=()):
     erreurs = {}
 
     def exiger(condition, cle, message):
@@ -387,7 +349,7 @@ def valider_soumission(saisie, projet):
             "La note doit comporter au moins 10 caractères.",
         )
         table_modes = table_modes_execution()
-        cases = cases_du_journal(projet)
+        cases = cases_du_journal(projet, chemins)
         modes = {mode_base(code, table_modes) for code in cases.modes()}
         if ModeExecution.REGIE in modes:
             exiger(
@@ -537,12 +499,18 @@ def creer_journal(*, projet, utilisateur, jour, data):
             details={"date": "avant_enregistrement_projet"},
         )
     verifier_statut_projet_pour_ecriture(projet, action="NOUVEAU_RAPPORT")
-    # Un seul chef de chantier par projet, et c'est lui qui tient le journal (29/10/2026).
-    if not tient_fonction(projet, utilisateur, "CC"):
-        raise PermissionDenied("Seul le chef de chantier du projet écrit le journal.")
-    saisie = normaliser_saisie(data, projet=projet, jour=jour, utilisateur=utilisateur)
-    if RapportJournalier.objects.filter(projet=projet, date_rapport=jour).exists():
-        raise RapportDejaExistant("Un rapport existe déjà pour ce chantier à cette date.") from None
+    # Écrit le journal qui en a la permission sur le projet ; un rapport par rédacteur et par
+    # jour, sur sa partie du projet (30/10/2026).
+    redacteur = verifier_fonction(projet, utilisateur, REDIGER)
+    saisie = normaliser_saisie(
+        data, projet=projet, jour=jour, utilisateur=utilisateur, chemins=redacteur.chemins
+    )
+    if RapportJournalier.objects.filter(
+        projet=projet, auteur=utilisateur, date_rapport=jour
+    ).exists():
+        raise RapportDejaExistant(
+            "Vous avez déjà un rapport sur ce chantier à cette date."
+        ) from None
     try:
         with transaction.atomic():
             rapport = RapportJournalier.objects.create(
@@ -557,10 +525,15 @@ def creer_journal(*, projet, utilisateur, jour, data):
                 blocages_critiques=int(saisie["blocage"]["niveau"] == "BLOQUANT"),
             )
             journal = JournalChantier.objects.create(
-                rapport=rapport, saisie=saisie, cree_par=utilisateur
+                rapport=rapport,
+                saisie=saisie,
+                perimetre_ids=list(redacteur.perimetre_ids),
+                cree_par=utilisateur,
             )
     except IntegrityError:
-        raise RapportDejaExistant("Un rapport existe déjà pour ce chantier à cette date.") from None
+        raise RapportDejaExistant(
+            "Vous avez déjà un rapport sur ce chantier à cette date."
+        ) from None
     tracer(journal, utilisateur, ActionAudit.CREATION, evenement="BROUILLON_CREE")
     return journal
 
@@ -589,6 +562,7 @@ def enregistrer(journal, utilisateur, data):
         jour=rapport.date_rapport,
         utilisateur=utilisateur,
         existante=journal.saisie,
+        chemins=chemins_des_cases(journal.perimetre_ids),
     )
     journal.save(update_fields=["saisie", "modifie_le"])
     # La saisie est la source de vérité, y compris pour les anciennes listes.
@@ -633,18 +607,21 @@ def soumettre_journal(*, journal, utilisateur, data):
     )
     journal = enregistrer(journal, utilisateur, data)
     rapport = journal.rapport
-    valider_soumission(journal.saisie, rapport.projet)
-    journal.photographie = contexte_projet(rapport.projet, rapport.date_rapport)
-    journal.valide_ct_par = None
-    journal.valide_ct_le = None
-    journal.commentaire_ct = ""
-    journal.save()
+    chemins = chemins_des_cases(journal.perimetre_ids)
+    valider_soumission(journal.saisie, rapport.projet, chemins)
+    journal.photographie = contexte_projet(
+        rapport.projet, rapport.date_rapport, chemins=chemins, auteur=utilisateur
+    )
     rapport.statut = StatutRapport.SOUMIS
     rapport.soumis_le = timezone.now()
     rapport.valide_par = None
     rapport.valide_le = None
     rapport.commentaire_validation = ""
     rapport.save()
+    # Les signataires attendus sont figés maintenant ; sans validateur, l'étape est sautée.
+    signatures.figer_signataires(journal)
+    signatures.reevaluer(journal)
+    journal.save()
     declencher_recalcul_sante(
         projet_id=rapport.projet_id,
         declencheur_type="RAPPORT_SOUMISSION",
@@ -656,24 +633,21 @@ def soumettre_journal(*, journal, utilisateur, data):
 
 @transaction.atomic
 def signer_journal(*, journal, utilisateur, etape, commentaire=""):
+    """Une signature de l'étape en cours ; l'étape se clôt quand tous les attendus ont signé.
+
+    `etape` : « CT » pour la validation, « CP » pour l'approbation — les noms des routes, pas
+    ceux des rôles : signe qui a la permission sur le projet (30/10/2026).
+    """
     journal = verrouiller(journal)
-    verifier_signataire(journal, utilisateur, "CT" if etape == "CT" else "CP")
     verifier_statut_projet_pour_ecriture(journal.rapport.projet)
-    attendu = "SOUMIS" if etape == "CT" else "VALIDE_CT"
-    if statut_journal(journal) != attendu:
-        raise ErreurMetier(f"La signature exige le statut {attendu}.")
-    if etape == "CT":
-        journal.valide_ct_par = utilisateur
-        journal.valide_ct_le = timezone.now()
-        journal.commentaire_ct = commentaire
-        journal.save()
-    else:
-        rapport = journal.rapport
-        rapport.statut = StatutRapport.APPROUVE
-        rapport.valide_par = utilisateur
-        rapport.valide_le = timezone.now()
-        rapport.commentaire_validation = commentaire
-        rapport.save()
+    attendu = statut_journal(journal)
+    signatures.signer(
+        journal,
+        utilisateur,
+        signatures.VALIDATION if etape == "CT" else signatures.APPROBATION,
+        commentaire,
+    )
+    journal.save()
     tracer(
         journal,
         utilisateur,
@@ -691,7 +665,10 @@ def rejeter_journal(*, journal, utilisateur, motif):
     statut = statut_journal(journal)
     if statut not in ("SOUMIS", "VALIDE_CT"):
         raise ErreurMetier("Seul un rapport soumis ou validé par le CT peut être rejeté.")
-    verifier_signataire(journal, utilisateur, "CP" if statut == "VALIDE_CT" else "CT")
+    # Refuse une personne attendue à l'étape en cours ; le rapport repart chez son auteur et
+    # toutes les signatures sont effacées.
+    if not signatures.peut_refuser(journal, utilisateur):
+        raise PermissionDenied("Vous n'êtes pas attendu pour signer ce rapport.")
     verifier_statut_projet_pour_ecriture(journal.rapport.projet)
     if len(motif.strip()) < 20:
         raise ErreurMetier("Le motif de rejet doit comporter au moins 20 caractères.")
@@ -701,6 +678,10 @@ def rejeter_journal(*, journal, utilisateur, motif):
     rapport.valide_par = utilisateur
     rapport.valide_le = timezone.now()
     rapport.save()
+    journal.signatures = []
+    journal.valide_ct_par = None
+    journal.valide_ct_le = None
+    journal.save()
     tracer(
         journal,
         utilisateur,
@@ -741,14 +722,15 @@ def alerter_journal(*, journal, utilisateur, data):
     if not creee and alerte.type != data["type"]:
         raise ErreurMetier("Cette clé identifie déjà un autre type d'alerte.")
     if creee:
-        destinataires = [
-            a.utilisateur_id
-            for a in affectations_actives(journal.rapport.projet_id).filter(
-                role_projet__in=["CT", "CP"]
-            )
-        ]
-        if journal.rapport.projet.chef_projet_id:
-            destinataires.append(journal.rapport.projet.chef_projet_id)
+        # Ceux qui signeront ce rapport : les validateurs et approbateurs de sa partie du projet.
+        chemins = chemins_des_cases(journal.perimetre_ids)
+        projet = journal.rapport.projet
+        destinataires = {
+            t.utilisateur.pk
+            for permission in (VALIDER, APPROUVER)
+            for t in titulaires(projet, permission)
+            if t.concerne(chemins)
+        }
         alerte.destinataires.set(destinataires)
         tracer(
             journal,

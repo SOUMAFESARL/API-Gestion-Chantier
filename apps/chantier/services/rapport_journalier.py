@@ -8,7 +8,6 @@ from datetime import date
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.models import Utilisateur
 from apps.chantier.models import RapportJournalier
@@ -54,13 +53,12 @@ def creer_rapport_journalier(
     cree_par: Utilisateur | None = None,
 ) -> RapportJournalier:
     """Crée un rapport journalier en validant l'unicité et les règles métier."""
-    from apps.chantier.services.journal import tient_fonction
+    from apps.chantier.services.fonctions import REDIGER, verifier_fonction
 
-    # Seul le chef de chantier du projet écrit le rapport du jour (29/10/2026).
-    if not tient_fonction(projet, auteur, "CC"):
-        raise PermissionDenied("Seul le chef de chantier du projet écrit le journal.")
+    # Écrit le rapport du jour qui en a la permission sur le projet (30/10/2026).
+    verifier_fonction(projet, auteur, REDIGER)
     # Règle RG-02 / US-038 : un seul rapport par projet et par jour (un seul chef de chantier)
-    if rapport_existe(projet_id=projet.id, date_rapport=date_rapport):
+    if rapport_existe(projet_id=projet.id, date_rapport=date_rapport, auteur_id=auteur.id):
         raise RapportDejaExistant()
 
     # Calcul d'effectif total si non fourni
@@ -117,6 +115,7 @@ def modifier_rapport_journalier(
     if change and rapport_existe(
         projet_id=nouveau_projet.id,
         date_rapport=nouvelle_date,
+        auteur_id=rapport.auteur_id,
         exclure_id=rapport.id,
     ):
         raise RapportDejaExistant()

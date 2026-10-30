@@ -8,9 +8,9 @@
 {% if etape == "CC" %}
 <p style="margin:0 0 14px 0;">Le rapport journalier du chantier <strong style="color:#1E1D1B;">{{ projet_nom }}</strong> ({{ projet_reference }}) pour le <strong style="color:#1E1D1B;">{{ date_rapport|date:"d/m/Y" }}</strong> n'a pas encore été remis. Merci de le rédiger et de le soumettre.</p>
 {% elif etape == "CT" %}
-<p style="margin:0 0 14px 0;">Le rapport journalier du chantier <strong style="color:#1E1D1B;">{{ projet_nom }}</strong> ({{ projet_reference }}) du <strong style="color:#1E1D1B;">{{ date_rapport|date:"d/m/Y" }}</strong> attend votre validation de conducteur de travaux.</p>
+<p style="margin:0 0 14px 0;">Le rapport journalier du chantier <strong style="color:#1E1D1B;">{{ projet_nom }}</strong> ({{ projet_reference }}) du <strong style="color:#1E1D1B;">{{ date_rapport|date:"d/m/Y" }}</strong> attend votre validation.</p>
 {% else %}
-<p style="margin:0 0 14px 0;">Le rapport journalier du chantier <strong style="color:#1E1D1B;">{{ projet_nom }}</strong> ({{ projet_reference }}) du <strong style="color:#1E1D1B;">{{ date_rapport|date:"d/m/Y" }}</strong>, validé par le conducteur de travaux, attend votre approbation de chef de projet.</p>
+<p style="margin:0 0 14px 0;">Le rapport journalier du chantier <strong style="color:#1E1D1B;">{{ projet_nom }}</strong> ({{ projet_reference }}) du <strong style="color:#1E1D1B;">{{ date_rapport|date:"d/m/Y" }}</strong>, validé, attend votre approbation.</p>
 {% endif %}
 {% endblock %}
 {% block action %}{% if etape == "CC" %}{% include "emails/_bouton.html" with url=lien libelle="Rédiger le rapport" %}{% else %}{% include "emails/_bouton.html" with url=lien libelle="Ouvrir le rapport" %}{% endif %}{% endblock %}

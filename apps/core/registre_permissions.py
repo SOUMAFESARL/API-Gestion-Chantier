@@ -56,9 +56,27 @@ REGISTRE: dict[str, DefPermission] = {
             3,
             "Gérer les listes et les modèles de découpage de l'entreprise",
         ),
+        # Destinataires des alertes de retard, par niveau (30/10/2026).
+        DefPermission(
+            "projets.alertes_moderees", "projets", 1, "Recevoir les alertes de retard modérées"
+        ),
+        DefPermission(
+            "projets.alertes_elevees", "projets", 1, "Recevoir les alertes de retard élevées"
+        ),
+        DefPermission(
+            "projets.alertes_critiques", "projets", 1, "Recevoir les alertes de retard critiques"
+        ),
         DefPermission("chantier.lire", "chantier", 1, "Consulter les rapports"),
         DefPermission("chantier.rediger", "chantier", 2, "Rédiger et soumettre un rapport"),
         DefPermission("chantier.valider", "chantier", 3, "Valider / rejeter un rapport"),
+        # Le circuit du journal suit les permissions, jamais le nom des rôles (30/10/2026).
+        DefPermission("chantier.approuver", "chantier", 3, "Approuver / rejeter un rapport"),
+        DefPermission(
+            "chantier.synthese_rediger", "chantier", 2, "Rédiger la synthèse de la semaine"
+        ),
+        DefPermission(
+            "chantier.synthese_approuver", "chantier", 3, "Approuver la synthèse de la semaine"
+        ),
         DefPermission("tiers.lire", "tiers", 1, "Consulter les tiers"),
         DefPermission("tiers.ecrire", "tiers", 2, "Créer / modifier les tiers"),
         DefPermission("pilotage.lire", "pilotage", 1, "Tableaux de bord"),

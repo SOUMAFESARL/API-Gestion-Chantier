@@ -1,5 +1,6 @@
 """Serializers pour la gestion dynamique des rôles et des habilitations par module."""
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import Permission, Role, RoleModulePermission
@@ -199,6 +200,7 @@ class RoleSerializer(serializers.ModelSerializer):
             "est_systeme",
             "est_actif",
             "portee",
+            "unique_par_projet",
             "nb_utilisateurs",
             "modules",
             "permissions_modules",
@@ -254,16 +256,36 @@ class RoleSerializer(serializers.ModelSerializer):
         return resultat
 
 
+class ProjetEnDepassementSerializer(serializers.Serializer):
+    projet_id = serializers.UUIDField()
+    projet_nom = serializers.CharField()
+    nombre = serializers.IntegerField()
+
+
 class RoleDetailSerializer(RoleSerializer):
     """Serializer détaillé incluant le comptage utilisateurs et affectations séparé."""
 
     comptage = serializers.SerializerMethodField()
+    projets_en_depassement = serializers.SerializerMethodField(
+        help_text=(
+            "Rôle unique : les projets où plusieurs personnes le tiennent déjà. Ils restent tels "
+            "quels ; la règle vaut pour les prochaines affectations."
+        )
+    )
 
     class Meta(RoleSerializer.Meta):
-        fields = [*RoleSerializer.Meta.fields, "comptage"]
+        fields = [*RoleSerializer.Meta.fields, "comptage", "projets_en_depassement"]
 
     def get_comptage(self, obj: Role) -> dict[str, int]:
         return compter_utilisateurs_et_affectations(obj)
+
+    @extend_schema_field(ProjetEnDepassementSerializer(many=True))
+    def get_projets_en_depassement(self, obj: Role) -> list[dict]:
+        if not obj.unique_par_projet:
+            return []
+        from apps.projets.services.affectations import projets_en_depassement
+
+        return projets_en_depassement(obj.code)
 
 
 class RoleCreationSerializer(serializers.Serializer):
@@ -275,6 +297,7 @@ class RoleCreationSerializer(serializers.Serializer):
         required=False,
         default="PROJET",
     )
+    unique_par_projet = serializers.BooleanField(required=False, default=False)
     permissions_modules = serializers.JSONField(required=False, default=list)
     permissions = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
@@ -312,6 +335,7 @@ class RoleModificationSerializer(serializers.Serializer):
         choices=["ENTREPRISE", "PROJET"],
         required=False,
     )
+    unique_par_projet = serializers.BooleanField(required=False)
     confirmer = serializers.BooleanField(required=False, default=False)
     permissions_modules = serializers.JSONField(required=False)
     permissions = serializers.ListField(

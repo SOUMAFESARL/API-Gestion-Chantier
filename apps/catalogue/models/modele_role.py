@@ -44,6 +44,11 @@ class ModeleRole(ModeleBase):
         default="PROJET",
         help_text=_("Portée par défaut : ENTREPRISE ou PROJET."),
     )
+    unique_par_projet = models.BooleanField(
+        _("unique par projet"),
+        default=False,
+        help_text=_("Valeur de départ du réglage « unique par projet » des entreprises."),
+    )
 
     class Meta:
         db_table = "catalogue_modele_role"

@@ -110,11 +110,11 @@ class RapportJournalier(ModeleBase):
             models.Index(fields=["statut"], name="idx_rapport_statut"),
         ]
         constraints = [
-            # Un seul journal par projet et par jour, tenu par le chef de chantier.
+            # Un rapport par rédacteur et par jour, sur sa partie du projet (30/10/2026).
             models.UniqueConstraint(
-                fields=["projet", "date_rapport"],
+                fields=["projet", "auteur", "date_rapport"],
                 condition=models.Q(supprime_le__isnull=True),
-                name="uq_rapport_projet_jour",
+                name="uq_rapport_projet_auteur_jour",
             ),
         ]
 

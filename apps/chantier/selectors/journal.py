@@ -9,6 +9,7 @@ from django.db.models import Q
 from apps.accounts.models import Utilisateur
 from apps.chantier.models import JournalChantier, RelanceJournal
 from apps.chantier.services import signatures as circuit_signatures
+from apps.chantier.services.equipes_journal import equipes_du_journal, feuilles_sans_equipe
 from apps.chantier.services.fonctions import (
     APPROUVER,
     REDIGER,
@@ -198,6 +199,17 @@ def contexte_projet(projet, jour, *, chemins=(), auteur=None):
                     ),
                 }
             )
+    # Les équipes des tâches, et leurs membres ce jour (30/10/2026). Une tâche couverte par
+    # une équipe garnie fait cocher ses présents au lieu des effectifs par catégorie.
+    equipes = equipes_du_journal(cases, jour)
+    if any(e["presence"] for e in equipes):
+        sections.append("EQUIPES")
+    for section, mode in (
+        ("EFFECTIFS", ModeExecution.REGIE),
+        ("PRESENCE_SOUS_TRAITANT", ModeExecution.SOUS_TRAITANCE_STRUCTUREE),
+    ):
+        if section in sections and not feuilles_sans_equipe(cases, equipes, mode):
+            sections.remove(section)
     return {
         "projet": {
             "id": str(projet.id),
@@ -208,6 +220,7 @@ def contexte_projet(projet, jour, *, chemins=(), auteur=None):
         "lots": charges_lots,
         "sections": sections,
         "activites": charges_activites,
+        "equipes": equipes,
         # Pas de stock inventé : le module stocks n'a pas encore de modèle concret.
         "materiaux": [],
         "localisation": ", ".join(filter(None, [projet.quartier, projet.ville])),
@@ -277,13 +290,23 @@ def preparation(projet, jour, *, journal=None, precedent=None, utilisateur=None)
             for ligne in saisie_precedente.get("equipements", [])
         ],
         "intervenants": [
-            {k: ligne[k] for k in ("intervenant", "activite_id", "prix_unitaire")}
+            {
+                **{k: ligne[k] for k in ("intervenant", "activite_id", "prix_unitaire")},
+                "personne_id": ligne.get("personne_id"),
+            }
             for ligne in saisie_precedente.get("production", [])
+        ],
+        # Les présents de la veille, à recocher.
+        "equipes": [
+            {"equipe_id": ligne["equipe_id"], "presents": ligne["presents"]}
+            for ligne in saisie_precedente.get("equipes", [])
         ],
     }
     return {
         "aujourdhui": aujourdhui().isoformat(),
         **{k: contexte[k] for k in ("projet", "lots", "sections", "activites", "materiaux")},
+        # Une photographie antérieure au 30/10/2026 n'a pas d'équipes.
+        "equipes": contexte.get("equipes", []),
         "reprises": reprises,
         "rapport": existant(journal) if journal else None,
     }
@@ -405,6 +428,38 @@ def circuit(journal, contexte):
     ]
 
 
+def presences_equipes(saisie, contexte) -> list[dict]:
+    """Les présents par équipe, avec les noms figés à la soumission."""
+    equipes = {e["equipe_id"]: e for e in contexte.get("equipes", [])}
+    lignes = []
+    for ligne in saisie.get("equipes", []):
+        equipe = equipes.get(ligne["equipe_id"])
+        if equipe is None:
+            continue
+        noms = {m["personne_id"]: m["nom"] for m in equipe["membres"]}
+        presents = set(ligne["presents"])
+        lignes.append(
+            {
+                "equipe_id": ligne["equipe_id"],
+                "nom": equipe["nom"],
+                "entreprise": equipe["entreprise"],
+                "presence": "PRESENT"
+                if presents and len(presents) >= len(noms)
+                else "PARTIEL"
+                if presents
+                else "ABSENT",
+                "membres": len(noms),
+                "presents": [noms.get(p, "") for p in ligne["presents"]],
+                "absents": [n for p, n in noms.items() if p not in presents],
+                "retards": [noms.get(p, "") for p in ligne["retards"]],
+                "heures": ligne["heures"],
+                "qualite": ligne["qualite"] or None,
+                "observation": ligne["observation"],
+            }
+        )
+    return lignes
+
+
 def document(journal, *, contexte=None, relance_le=_A_LIRE):
     """Projection ChargeRapport, calculée sans requête par ligne de rubrique.
 
@@ -469,10 +524,12 @@ def document(journal, *, contexte=None, relance_le=_A_LIRE):
     effectifs = (
         saisie["effectifs"] if "EFFECTIFS" in contexte["sections"] and not saisie["arret"] else None
     )
+    equipes = presences_equipes(saisie, contexte)
     production = (
         [
             {
                 "intervenant": ligne["intervenant"],
+                "personne_id": ligne.get("personne_id"),
                 "activite": activites[ligne["activite_id"]]["libelle"],
                 "unite": activites[ligne["activite_id"]]["unite"],
                 "prix_unitaire": ligne["prix_unitaire"],
@@ -498,11 +555,13 @@ def document(journal, *, contexte=None, relance_le=_A_LIRE):
         },
         "lots": lots,
         "statut": statut_journal(journal),
-        "effectif_present": sum(ligne["presents"] or 0 for ligne in effectifs)
-        if effectifs is not None
+        "effectif_present": sum(ligne["presents"] or 0 for ligne in effectifs or [])
+        + sum(len(e["presents"]) for e in equipes)
+        if effectifs is not None or equipes
         else None,
-        "effectif_prevu": sum(ligne["prevus"] or 0 for ligne in effectifs)
-        if effectifs is not None
+        "effectif_prevu": sum(ligne["prevus"] or 0 for ligne in effectifs or [])
+        + sum(e["membres"] for e in equipes)
+        if effectifs is not None or equipes
         else None,
         "avancement": round(sum(ligne["avancement"] for ligne in travaux) / len(travaux), 2)
         if travaux
@@ -528,6 +587,7 @@ def document(journal, *, contexte=None, relance_le=_A_LIRE):
         "arret": saisie["arret"],
         "meteo": saisie["meteo"],
         "effectifs": effectifs,
+        "equipes": equipes,
         "production": production,
         "travaux": travaux,
         "materiaux": [

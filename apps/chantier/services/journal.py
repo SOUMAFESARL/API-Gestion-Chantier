@@ -5,7 +5,7 @@ import binascii
 import io
 import json
 from collections.abc import Mapping
-from datetime import time, timedelta
+from datetime import date, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
@@ -17,6 +17,14 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.chantier.models import AlerteJournal, JournalChantier, RapportJournalier
 from apps.chantier.serializers.journal import SaisieJournalSerializer
 from apps.chantier.services import signatures
+from apps.chantier.services.equipes_journal import (
+    cle_production,
+    controler_equipes,
+    effectif_present,
+    equipes_du_journal,
+    exiger_equipes,
+    feuilles_sans_equipe,
+)
 from apps.chantier.services.fonctions import (
     APPROUVER,
     REDIGER,
@@ -217,7 +225,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemin
 
     if "production" in data and not peut_voir_montants(utilisateur):
         anciens_prix = {
-            (ligne["activite_id"], ligne["intervenant"]): ligne["prix_unitaire"]
+            cle_production(ligne): ligne["prix_unitaire"]
             for ligne in (existante or {}).get("production", [])
         }
         for ligne in saisie["production"]:
@@ -227,7 +235,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemin
                 )
             # Une valeur masquée renvoyée par le formulaire ne doit pas effacer
             # le tarif déjà autorisé en base.
-            ligne["prix_unitaire"] = anciens_prix.get((ligne["activite_id"], ligne["intervenant"]))
+            ligne["prix_unitaire"] = anciens_prix.get(cle_production(ligne))
     if saisie["projet_id"] != str(projet.id) or saisie["date"] != jour.isoformat():
         raise ValidationError("Le projet et la date du rapport sont immuables.")
     # Les valeurs par défaut d'un serializer imbriqué sont appliquées explicitement.
@@ -240,6 +248,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemin
     cases = cases_du_journal(projet, chemins)
     lots = cases.groupes
     table_modes = table_modes_execution()
+    controler_equipes(saisie, equipes_du_journal(cases, jour))
     activites = cases.feuilles
     vus = set()
     for ligne in saisie["lots_travailles"]:
@@ -256,7 +265,7 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemin
         lignes_vues = set()
         for ligne in saisie[section]:
             activite = activites.get(ligne["activite_id"])
-            cle = (ligne["activite_id"], ligne.get("intervenant", ""))
+            cle = cle_production(ligne) if section == "production" else ligne["activite_id"]
             if activite is None or cle in lignes_vues:
                 raise ValidationError({section: "Activité extérieure, inactive ou dupliquée."})
             production = (
@@ -322,6 +331,7 @@ def valider_soumission(saisie, projet, chemins=()):
             "activites",
             "production",
             "effectifs",
+            "equipes",
             "equipements",
             "materiaux",
             "livraisons",
@@ -351,7 +361,12 @@ def valider_soumission(saisie, projet, chemins=()):
         table_modes = table_modes_execution()
         cases = cases_du_journal(projet, chemins)
         modes = {mode_base(code, table_modes) for code in cases.modes()}
-        if ModeExecution.REGIE in modes:
+        equipes = equipes_du_journal(cases, date.fromisoformat(saisie["date"]))
+        exiger_equipes(saisie, equipes, exiger)
+        # Les effectifs par catégorie demeurent pour les tâches en régie sans équipe.
+        if ModeExecution.REGIE in modes and feuilles_sans_equipe(
+            cases, equipes, ModeExecution.REGIE
+        ):
             exiger(
                 bool(saisie["effectifs"]),
                 "effectifs",
@@ -406,7 +421,10 @@ def valider_soumission(saisie, projet, chemins=()):
                 "Intervenant et quantité sont requis ; "
                 "le tarif est réservé aux détenteurs des montants.",
             )
-        if ModeExecution.SOUS_TRAITANCE_STRUCTUREE in modes:
+        # La ligne de l'équipe partenaire remplace la présence du sous-traitant.
+        if ModeExecution.SOUS_TRAITANCE_STRUCTUREE in modes and feuilles_sans_equipe(
+            cases, equipes, ModeExecution.SOUS_TRAITANCE_STRUCTUREE
+        ):
             presence = saisie["presence_sous_traitant"] or {}
             exiger(
                 bool(presence.get("presence")) and bool(presence.get("qualite")),
@@ -520,7 +538,7 @@ def creer_journal(*, projet, utilisateur, jour, data):
                 cree_par=utilisateur,
                 statut=StatutRapport.BROUILLON,
                 soumis_le=None,
-                effectif_present=sum(ligne["presents"] or 0 for ligne in saisie["effectifs"]),
+                effectif_present=effectif_present(saisie),
                 observations=saisie["note_cc"],
                 blocages_critiques=int(saisie["blocage"]["niveau"] == "BLOQUANT"),
             )
@@ -566,7 +584,7 @@ def enregistrer(journal, utilisateur, data):
     )
     journal.save(update_fields=["saisie", "modifie_le"])
     # La saisie est la source de vérité, y compris pour les anciennes listes.
-    rapport.effectif_present = sum(ligne["presents"] or 0 for ligne in journal.saisie["effectifs"])
+    rapport.effectif_present = effectif_present(journal.saisie)
     rapport.observations = journal.saisie["note_cc"]
     rapport.blocages_critiques = int(journal.saisie["blocage"]["niveau"] == "BLOQUANT")
     rapport.save(

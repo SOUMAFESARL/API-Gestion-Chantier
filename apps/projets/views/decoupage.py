@@ -47,8 +47,6 @@ from apps.projets.services.tableau_demarrage import (
 )
 
 __all__ = [
-    "ProjetDecoupageExporterView",
-    "ProjetDecoupageImporterView",
     "ElementCloturerView",
     "ElementDeplacerView",
     "ElementDesactiverView",
@@ -66,6 +64,8 @@ __all__ = [
     "ModelePersonnaliserView",
     "ModelesView",
     "ProjetArbreView",
+    "ProjetDecoupageExporterView",
+    "ProjetDecoupageImporterView",
     "ProjetDecoupageView",
     "ProjetElementsView",
     "ProjetNiveauDetailView",
@@ -111,7 +111,7 @@ def _element(request, pk, ecriture=False) -> Element:
 def _case(request, element) -> dict:
     """La case telle que l'arbre la rend, après un geste."""
     from apps.core.droits import peut_voir_montants
-    from apps.projets.selectors.arbre_api import _equipes_par_case
+    from apps.projets.selectors.arbre_api import equipes_par_case
     from apps.projets.services.sante_calculs import calculer_arbre
 
     arbre = charger_arbre(element.projet)
@@ -123,7 +123,7 @@ def _case(request, element) -> dict:
         calculer_arbre(arbre),
         arbre.numerotation(),
         peut_voir_montants(request.user, request),
-        _equipes_par_case(arbre),
+        equipes_par_case(arbre),
         acces.get(element.pk, "COMPLET"),
     )
 

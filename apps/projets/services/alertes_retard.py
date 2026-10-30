@@ -80,7 +80,8 @@ def extraire_causes_alerte(
     la case. Les blocages, eux, se rattachent à une case : ceux de la case, de ses descendants
     et ceux sans case.
     Causes :
-    - absences : somme des écarts (prevus - presents > 0) des lignes effectifs de saisie
+    - absences : somme des écarts (prevus - presents > 0) des lignes effectifs de saisie,
+      plus les membres d'équipe non cochés présents
     - blocages_ouverts : liste des titres des blocages OUVERT ou PRIS_EN_CHARGE
     - incidents : nombre total de lignes de saisie["incidents"]
     """
@@ -120,6 +121,18 @@ def extraire_causes_alerte(
                                     absences_total += ecart
                             except (ValueError, TypeError):
                                 pass
+
+            # Absences par équipe : les membres du jour (figés à la soumission) non cochés.
+            membres = {
+                e["equipe_id"]: len(e.get("membres", []))
+                for e in (journal.photographie or {}).get("equipes", [])
+                if isinstance(e, dict)
+            }
+            for ligne in journal.saisie.get("equipes") or []:
+                if isinstance(ligne, dict) and ligne.get("equipe_id") in membres:
+                    absences_total += max(
+                        0, membres[ligne["equipe_id"]] - len(ligne.get("presents") or [])
+                    )
 
             # Incidents : nombre de lignes saisie["incidents"]
             incidents_list = journal.saisie.get("incidents") or []

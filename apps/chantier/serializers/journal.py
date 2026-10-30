@@ -90,8 +90,34 @@ class PresenceSerializer(StrictSerializer):
     observation = texte()
 
 
+class EquipeJourSerializer(StrictSerializer):
+    """Les présents d'une équipe, cochés parmi ses membres du jour (30/10/2026)."""
+
+    equipe_id = s.UUIDField()
+    presents = s.ListField(child=s.UUIDField(), required=False, default=list, max_length=500)
+    retards = s.ListField(child=s.UUIDField(), required=False, default=list, max_length=500)
+    # Les heures travaillées par l'équipe dans la journée.
+    heures = nombre(24)
+    # Requise pour l'équipe d'une tâche en sous-traitance structurée, quand elle est venue.
+    qualite = s.ChoiceField(
+        choices=["CONFORME", "NON_CONFORME"], allow_blank=True, required=False, default=""
+    )
+    # Le motif d'une absence ou d'un retard.
+    observation = texte()
+
+    def validate(self, attrs):
+        presents, retards = attrs.get("presents", []), attrs.get("retards", [])
+        if len(set(presents)) != len(presents) or len(set(retards)) != len(retards):
+            raise s.ValidationError("Une personne n'est cochée qu'une fois.")
+        if not set(retards) <= set(presents):
+            raise s.ValidationError({"retards": "Une personne en retard est aussi présente."})
+        return attrs
+
+
 class ProductionSerializer(StrictSerializer):
     intervenant = texte(200)
+    # L'ouvrier, choisi parmi les membres de l'équipe de la tâche ; vide sans équipe affectée.
+    personne_id = s.UUIDField(required=False, allow_null=True, default=None)
     activite_id = s.UUIDField()
     quantite_jour = nombre()
     prix_unitaire = s.IntegerField(
@@ -237,6 +263,7 @@ class SaisieJournalSerializer(StrictSerializer):
     arret = ArretSerializer(required=False, allow_null=True, default=None)
     meteo = MeteoSerializer(required=False, default=dict)
     effectifs = EffectifSerializer(many=True, required=False, default=list, max_length=100)
+    equipes = EquipeJourSerializer(many=True, required=False, default=list, max_length=100)
     presence_sous_traitant = PresenceSerializer(required=False, allow_null=True, default=None)
     production = ProductionSerializer(many=True, required=False, default=list, max_length=200)
     lots_travailles = PointLotSerializer(many=True, required=False, default=list, max_length=100)

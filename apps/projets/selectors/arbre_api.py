@@ -15,7 +15,7 @@ from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.perimetres import perimetre_de
 from apps.projets.services.sante_calculs import calculer_arbre
 
-__all__ = ["representer_arbre", "representer_case", "visibilite"]
+__all__ = ["equipes_par_case", "representer_arbre", "representer_case", "visibilite"]
 
 COMPLET = "COMPLET"
 CHEMIN = "CHEMIN"
@@ -37,7 +37,7 @@ def visibilite(arbre, utilisateur, request=None) -> dict:
     return acces
 
 
-def _equipes_par_case(arbre) -> dict:
+def equipes_par_case(arbre) -> dict:
     """Les équipes posées sur chaque case — directement, et par héritage (la plus précise
     l'emporte : une affectation posée plus bas remplace celle d'en haut pour cette branche)."""
     directes: dict = {}
@@ -203,7 +203,7 @@ def representer_arbre(projet, utilisateur, request=None, *, a_plat: bool = False
     numeros = arbre.numerotation()
     acces = visibilite(arbre, utilisateur, request)
     montants = peut_voir_montants(utilisateur, request)
-    equipes = _equipes_par_case(arbre)
+    equipes = equipes_par_case(arbre)
 
     def noeud(element):
         donnees = representer_case(

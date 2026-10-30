@@ -124,34 +124,61 @@ def cle_production(ligne) -> tuple:
     return (ligne["activite_id"], ligne.get("personne_id") or ligne.get("intervenant", ""))
 
 
-def controler_equipes(saisie, equipes) -> None:
-    """La forme des lignes d'équipe et de production ; complète le nom des ouvriers choisis."""
+def controler_equipes(saisie, equipes, refuser=None) -> None:
+    """La forme des lignes d'équipe et de production ; complète le nom des ouvriers choisis.
+
+    `refuser(section, ligne, motif)` : au retour du réseau, la ligne fautive est écartée et
+    signalée au lieu de faire échouer tout l'envoi ; un présent qui a quitté l'équipe est retiré
+    de sa ligne.
+    """
+
+    def ecarter(section, ligne, motif) -> None:
+        if refuser is None:
+            raise ValidationError({section: motif})
+        refuser(section, ligne, motif)
+
     par_id = {e["equipe_id"]: e for e in equipes}
-    vues = set()
-    presents_par_equipe = {}
+    gardees, presents_par_equipe = [], {}
     for ligne in saisie["equipes"]:
         equipe = par_id.get(ligne["equipe_id"])
-        if equipe is None or not equipe["presence"] or ligne["equipe_id"] in vues:
-            raise ValidationError(
-                {"equipes": "Équipe extérieure au journal, sans présence à cocher ou dupliquée."}
+        if equipe is None or not equipe["presence"] or ligne["equipe_id"] in presents_par_equipe:
+            ecarter(
+                "equipes",
+                ligne,
+                "Équipe extérieure au journal, sans présence à cocher ou dupliquée.",
             )
+            continue
         membres = {m["personne_id"] for m in equipe["membres"]}
-        if not set(ligne["presents"]) <= membres:
+        partis = [p for p in ligne["presents"] if p not in membres]
+        if partis and refuser is None:
             raise ValidationError(
                 {"equipes": f"{equipe['nom']} : un présent n'est pas membre de l'équipe ce jour."}
             )
-        vues.add(ligne["equipe_id"])
+        for personne in partis:
+            refuser(
+                "equipes",
+                {"equipe_id": ligne["equipe_id"], "personne_id": personne},
+                f"{equipe['nom']} : cette personne n'est plus membre de l'équipe ce jour.",
+            )
+        ligne["presents"] = [p for p in ligne["presents"] if p in membres]
+        ligne["retards"] = [p for p in ligne["retards"] if p in membres]
+        gardees.append(ligne)
         presents_par_equipe[ligne["equipe_id"]] = set(ligne["presents"])
+    saisie["equipes"] = gardees
+    gardees = []
     for ligne in saisie["production"]:
         garnies = [e for e in equipes if ligne["activite_id"] in e["activites"] and e["membres"]]
         if not garnies:
             if ligne["personne_id"]:
-                raise ValidationError({"production": "Cette tâche n'a pas d'équipe affectée."})
+                ecarter("production", ligne, "Cette tâche n'a pas d'équipe affectée.")
+            else:
+                gardees.append(ligne)
             continue
         if not ligne["personne_id"]:
-            raise ValidationError(
-                {"production": "Choisir l'ouvrier parmi les membres de l'équipe de la tâche."}
+            ecarter(
+                "production", ligne, "Choisir l'ouvrier parmi les membres de l'équipe de la tâche."
             )
+            continue
         equipe, membre = next(
             (
                 (e, m)
@@ -162,13 +189,17 @@ def controler_equipes(saisie, equipes) -> None:
             (None, None),
         )
         if membre is None:
-            raise ValidationError(
-                {"production": "L'ouvrier n'est pas membre de l'équipe de la tâche ce jour."}
+            ecarter(
+                "production", ligne, "L'ouvrier n'est pas membre de l'équipe de la tâche ce jour."
             )
+            continue
         presents = presents_par_equipe.get(equipe["equipe_id"])
         if presents is not None and ligne["personne_id"] not in presents:
-            raise ValidationError({"production": f"{membre['nom']} n'est pas coché présent."})
+            ecarter("production", ligne, f"{membre['nom']} n'est pas coché présent.")
+            continue
         ligne["intervenant"] = membre["nom"]
+        gardees.append(ligne)
+    saisie["production"] = gardees
 
 
 def exiger_equipes(saisie, equipes, exiger) -> None:

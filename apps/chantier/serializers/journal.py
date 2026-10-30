@@ -280,6 +280,13 @@ class SaisieJournalSerializer(StrictSerializer):
     note_cc = texte(10000)
 
 
+class SynchronisationJournalSerializer(StrictSerializer):
+    """L'envoi au retour du réseau : la copie du téléphone, soumise si on le demande."""
+
+    saisie = SaisieJournalSerializer()
+    soumettre = s.BooleanField(required=False, default=False)
+
+
 class FiltresJournalSerializer(StrictSerializer):
     projet = s.UUIDField(required=False)
     date = s.DateField(required=False)

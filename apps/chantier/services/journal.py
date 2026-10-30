@@ -44,6 +44,10 @@ from apps.projets.services.referentiels import mode_base, table_modes_execution
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
 
+class RapportIncomplet(ErreurMetier):
+    """Il manque au rapport de quoi être soumis ; le code d'erreur reste « regle_metier »."""
+
+
 def aujourdhui():
     return timezone.localdate(timezone=ZoneInfo("Africa/Abidjan"))
 
@@ -504,7 +508,7 @@ def valider_soumission(saisie, projet, chemins=()):
                 "L'activité et l'objectif sont requis.",
             )
     if erreurs:
-        raise ErreurMetier("Le rapport est incomplet pour être soumis.", details=erreurs)
+        raise RapportIncomplet("Le rapport est incomplet pour être soumis.", details=erreurs)
 
 
 @transaction.atomic

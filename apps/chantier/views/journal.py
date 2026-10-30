@@ -36,7 +36,9 @@ from apps.chantier.serializers.journal import (
     RejetJournalSerializer,
     SaisieJournalSerializer,
     SignatureJournalSerializer,
+    SynchronisationJournalSerializer,
 )
+from apps.chantier.services.hors_ligne import paquet_hors_ligne, synchroniser
 from apps.chantier.services.journal import (
     alerter_journal,
     aujourdhui,
@@ -158,9 +160,7 @@ class JournalPreparationView(APIView):
         projet = get_object_or_404(projets_visibles(request), pk=params["projet"])
         self.check_object_permissions(request, projet)
         # Chaque rédacteur prépare son propre rapport, sur sa partie du projet (30/10/2026).
-        qs = journaux_visibles(request).filter(
-            rapport__projet=projet, rapport__auteur=request.user
-        )
+        qs = journaux_visibles(request).filter(rapport__projet=projet, rapport__auteur=request.user)
         journal = qs.filter(rapport__date_rapport=params["date"]).first()
         precedent = (
             qs.filter(rapport__date_rapport__lt=params["date"])
@@ -177,6 +177,71 @@ class JournalPreparationView(APIView):
                     precedent=precedent,
                     utilisateur=request.user,
                 ),
+            )
+        )
+
+
+class JournalHorsLigneView(APIView):
+    """Le paquet sans réseau : la journée et le lendemain, les listes et les limites."""
+
+    permission_classes = [IsAuthenticated, PeutRedigerRapports]
+
+    @extend_schema(
+        tags=["Journal de chantier"],
+        parameters=[FiltresJournalSerializer],
+        responses=OpenApiTypes.OBJECT,
+        summary="Télécharger la journée et le lendemain pour saisir sans réseau",
+    )
+    def get(self, request):
+        params = filtres(request)
+        if "projet" not in params:
+            raise ValidationError("projet est requis.")
+        projet = get_object_or_404(projets_visibles(request), pk=params["projet"])
+        self.check_object_permissions(request, projet)
+        journaux = journaux_visibles(request).filter(
+            rapport__projet=projet, rapport__auteur=request.user
+        )
+        paquet = paquet_hors_ligne(
+            projet, params.get("date") or aujourdhui(), request.user, journaux
+        )
+        return Response(charge_autorisee(request, paquet))
+
+
+class JournalSynchroniserView(APIView):
+    """L'envoi au retour du réseau : seules les lignes devenues invalides sont refusées."""
+
+    permission_classes = [IsAuthenticated, PeutRedigerRapports]
+
+    @extend_schema(
+        tags=["Journal de chantier"],
+        request=SynchronisationJournalSerializer,
+        responses=OpenApiTypes.OBJECT,
+        summary="Envoyer la saisie faite sans réseau",
+    )
+    def post(self, request):
+        serializer = SynchronisationJournalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        saisie = serializer.data["saisie"]
+        projet = get_object_or_404(projets_visibles(request), pk=saisie["projet_id"])
+        self.check_object_permissions(request, projet)
+        resultat = synchroniser(
+            projet=projet,
+            utilisateur=request.user,
+            saisie=saisie,
+            soumettre=serializer.validated_data["soumettre"],
+        )
+        journal = resultat["journal"]
+        soumis = statut_journal(journal) not in ("BROUILLON", "REJETE")
+        return Response(
+            charge_autorisee(
+                request,
+                {
+                    "rapport": existant(journal),
+                    "soumis": soumis,
+                    "reference": reference(journal) if soumis else None,
+                    "lignes_refusees": resultat["lignes_refusees"],
+                    "erreurs_soumission": resultat["erreurs_soumission"],
+                },
             )
         )
 

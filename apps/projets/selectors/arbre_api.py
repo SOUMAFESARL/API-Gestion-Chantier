@@ -63,6 +63,31 @@ def _equipes_par_case(arbre) -> dict:
     return directes, effectives
 
 
+def depassement(feuille) -> float | None:
+    """Le dépassement d'une feuille mesurée en quantité, en % du prévu (430 sur 400 : 7,5).
+
+    L'avancement reste plafonné à 100 % ; le dépassement s'affiche à côté, sans rien bloquer.
+    """
+    prevue, realisee = feuille.quantite_prevue, feuille.quantite_realisee
+    if feuille.mode_mesure != "QUANTITE" or not prevue or realisee is None or realisee <= prevue:
+        return None
+    return round(float((realisee - prevue) / prevue * 100), 1)
+
+
+def a_cloturer(feuille) -> bool:
+    """À 100 %, la plateforme propose « Clôturer ? » ; elle ne clôture jamais seule."""
+    if feuille.cloture:
+        return False
+    if feuille.mode_mesure == "QUANTITE":
+        return (
+            bool(feuille.quantite_prevue)
+            and (feuille.quantite_realisee or 0) >= feuille.quantite_prevue
+        )
+    if feuille.mode_mesure == "POURCENTAGE":
+        return (feuille.pourcentage_declare or 0) >= 100
+    return False
+
+
 def representer_case(element, arbre, resultats, numeros, montants_visibles, equipes, acces):
     _directes, effectives = equipes
     feuille = arbre.est_feuille(element)
@@ -114,6 +139,16 @@ def representer_case(element, arbre, resultats, numeros, montants_visibles, equi
             feuille
             and element.mode_mesure == "QUANTITE"
             and (not element.unite or not element.quantite_prevue)
+        ),
+        # Dépassement (+7,5 % sur 430 m² pour 400 prévus) et proposition « Clôturer ? »
+        "depassement": depassement(element) if feuille else None,
+        "a_cloturer": a_cloturer(element) if feuille else False,
+        "taches_en_depassement": None
+        if feuille
+        else sum(
+            1
+            for d in arbre.descendants(element)
+            if d.est_actif and arbre.est_feuille(d) and depassement(d) is not None
         ),
         # Avancement (F3 sur l'arbre)
         "avancement": resultat.physique if resultat else None,

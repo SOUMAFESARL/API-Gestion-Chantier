@@ -34,8 +34,8 @@ from apps.projets.views.decoupage import (
     ElementCloturerView,
     ElementDeplacerView,
     ElementDesactiverView,
-    ElementDetailView,
     ElementDetaillerView,
+    ElementDetailView,
     ElementMesureView,
     ElementPlanifierView,
     ElementReactiverView,
@@ -48,6 +48,8 @@ from apps.projets.views.decoupage import (
     ModelePersonnaliserView,
     ModelesView,
     ProjetArbreView,
+    ProjetDecoupageExporterView,
+    ProjetDecoupageImporterView,
     ProjetDecoupageView,
     ProjetElementsView,
     ProjetNiveauDetailView,
@@ -155,6 +157,16 @@ urlpatterns = [
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
     # Découpage d'un projet : tableau de démarrage, arbre, niveaux, cases
     path("projets/<uuid:pk>/decoupage/", ProjetDecoupageView.as_view(), name="projet-decoupage"),
+    path(
+        "projets/<uuid:pk>/decoupage/importer/",
+        ProjetDecoupageImporterView.as_view(),
+        name="projet-decoupage-importer",
+    ),
+    path(
+        "projets/<uuid:pk>/decoupage/exporter/",
+        ProjetDecoupageExporterView.as_view(),
+        name="projet-decoupage-exporter",
+    ),
     path(
         "projets/<uuid:pk>/decoupage/verifier/",
         ProjetTableauVerifierView.as_view(),

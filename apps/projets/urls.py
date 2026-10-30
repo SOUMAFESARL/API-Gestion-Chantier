@@ -38,6 +38,8 @@ from apps.projets.views.decoupage import (
     ElementDesactiverView,
     ElementDetaillerView,
     ElementDetailView,
+    ElementDupliquerView,
+    ElementHistoriqueView,
     ElementMesureView,
     ElementPlanifierView,
     ElementReactiverView,
@@ -53,6 +55,8 @@ from apps.projets.views.decoupage import (
     ProjetDecoupageExporterView,
     ProjetDecoupageImporterView,
     ProjetDecoupageView,
+    ProjetDqeAppliquerView,
+    ProjetDqeView,
     ProjetElementsView,
     ProjetNiveauDetailView,
     ProjetNiveauxInsererView,
@@ -173,6 +177,12 @@ urlpatterns = [
         ProjetDecoupageExporterView.as_view(),
         name="projet-decoupage-exporter",
     ),
+    path("projets/<uuid:pk>/decoupage/dqe/", ProjetDqeView.as_view(), name="projet-decoupage-dqe"),
+    path(
+        "projets/<uuid:pk>/decoupage/dqe/appliquer/",
+        ProjetDqeAppliquerView.as_view(),
+        name="projet-decoupage-dqe-appliquer",
+    ),
     path(
         "projets/<uuid:pk>/decoupage/verifier/",
         ProjetTableauVerifierView.as_view(),
@@ -205,6 +215,10 @@ urlpatterns = [
     ),
     path("elements/<uuid:pk>/deplacer/", ElementDeplacerView.as_view(), name="element-deplacer"),
     path("elements/<uuid:pk>/detailler/", ElementDetaillerView.as_view(), name="element-detailler"),
+    path("elements/<uuid:pk>/dupliquer/", ElementDupliquerView.as_view(), name="element-dupliquer"),
+    path(
+        "elements/<uuid:pk>/historique/", ElementHistoriqueView.as_view(), name="element-historique"
+    ),
     path(
         "elements/<uuid:pk>/desactiver/", ElementDesactiverView.as_view(), name="element-desactiver"
     ),

@@ -15,6 +15,9 @@ __all__ = [
     "CreationListeSerializer",
     "DeplacementSerializer",
     "DetailSerializer",
+    "DqeApplicationSerializer",
+    "DqeBilanSerializer",
+    "DuplicationSerializer",
     "ElementCreationSerializer",
     "ElementModificationSerializer",
     "InsertionNiveauSerializer",
@@ -239,3 +242,50 @@ class InsertionNiveauSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=60)
     liste = ReferenceSerializer(required=False, allow_null=True, default=None)
     libelle_intermediaire = serializers.CharField(max_length=200, required=False, default="Général")
+
+
+class DuplicationSerializer(serializers.Serializer):
+    """Dupliquer une branche (§13quinquies.1). Sans `parent_id`, la copie se pose à côté de
+    l'original ; `parent_id: null` la pose à la racine."""
+
+    parent_id = serializers.UUIDField(required=False, allow_null=True)
+    libelle = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    motif = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class LigneDqeField(serializers.Field):
+    """Une ligne lue d'un DQE, telle que le bilan l'a rendue. Seule sa forme est vérifiée ici :
+    une valeur invalide (unité inconnue, nombre illisible) ne refuse que sa ligne, avec sa raison,
+    dans le bilan."""
+
+    CHAMPS = ("unite", "quantite", "montant", "date_debut", "date_fin")
+
+    def to_internal_value(self, data):
+        if isinstance(data, list):
+            return [str(c) if c is not None else "" for c in data]
+        if isinstance(data, dict) and isinstance(data.get("cellules"), list):
+            ligne = {"cellules": [str(c) if c is not None else "" for c in data["cellules"]]}
+            ligne.update({k: data[k] for k in self.CHAMPS if data.get(k) not in (None, "")})
+            return ligne
+        raise serializers.ValidationError(
+            "Une ligne est une liste de cellules ou un objet portant `cellules`."
+        )
+
+    def to_representation(self, value):
+        return value
+
+
+class DqeBilanSerializer(serializers.Serializer):
+    """Le bilan d'un import DQE, recalculé sur des lignes déjà lues (sans fichier)."""
+
+    lignes = serializers.ListField(child=LigneDqeField(), allow_empty=False, max_length=5000)
+
+
+class DqeApplicationSerializer(serializers.Serializer):
+    lignes = serializers.ListField(child=LigneDqeField(), allow_empty=False, max_length=5000)
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Obligatoire (10 caractères au moins) quand le bilan dit `motif_requis`.",
+    )

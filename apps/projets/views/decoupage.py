@@ -7,14 +7,15 @@ sur une case vérifie la permission **dans le périmètre** (`services.perimetre
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound, ValidationError
-from rest_framework.parsers import MultiPartParser
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalogue.models import ModeleDecoupagePlateforme
 from apps.core.droits import APermission
+from apps.core.pagination import PaginationStandard
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Element, ModeleDecoupageEntreprise, NiveauProjet, Projet
 from apps.projets.selectors.arbre import charger_arbre
@@ -24,6 +25,9 @@ from apps.projets.serializers.decoupage import (
     CreationListeSerializer,
     DeplacementSerializer,
     DetailSerializer,
+    DqeApplicationSerializer,
+    DqeBilanSerializer,
+    DuplicationSerializer,
     ElementCreationSerializer,
     ElementModificationSerializer,
     InsertionNiveauSerializer,
@@ -52,6 +56,8 @@ __all__ = [
     "ElementDesactiverView",
     "ElementDetailView",
     "ElementDetaillerView",
+    "ElementDupliquerView",
+    "ElementHistoriqueView",
     "ElementMesureView",
     "ElementPlanifierView",
     "ElementReactiverView",
@@ -67,6 +73,8 @@ __all__ = [
     "ProjetDecoupageExporterView",
     "ProjetDecoupageImporterView",
     "ProjetDecoupageView",
+    "ProjetDqeAppliquerView",
+    "ProjetDqeView",
     "ProjetElementsView",
     "ProjetNiveauDetailView",
     "ProjetNiveauxInsererView",
@@ -379,6 +387,98 @@ class ProjetDecoupageImporterView(APIView):
         if fichier is None:
             raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
         return Response(importer_tableau(projet, fichier))
+
+
+def _exiger_import_dqe(request, projet) -> None:
+    """L'import DQE chiffre et ajoute des branches : il faut l'une des deux permissions quelque
+    part sur le projet ; chaque ligne est ensuite vérifiée dans le périmètre de sa case."""
+    from apps.projets.services.perimetres import perimetre_de
+
+    perimetre = perimetre_de(request.user, projet, request)
+    if not (
+        perimetre.peut_quelque_part("projets.chiffrer")
+        or perimetre.peut_quelque_part("projets.decouper")
+    ):
+        exiger(request.user, "projets.chiffrer", projet, request=request)
+
+
+class ProjetDqeView(APIView):
+    """`POST /api/v1/projets/{id}/decoupage/dqe/` — le bilan d'un import DQE, sans rien écrire.
+
+    Un fichier (`multipart`, champ `fichier`) ou des lignes déjà lues (`JSON`, `lignes`). La
+    réponse rend les lignes lues, à renvoyer telles quelles (ou filtrées) à `…/dqe/appliquer/`.
+    """
+
+    parser_classes = [MultiPartParser, JSONParser]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @schema(
+        summary="Bilan d'un import DQE (quantités et montants) sur un projet découpé",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            },
+            "application/json": DqeBilanSerializer,
+        },
+    )
+    def post(self, request, pk):
+        from apps.core.droits import peut_voir_montants
+        from apps.projets.services.import_dqe import bilan_dqe, sans_interne
+        from apps.projets.services.import_export import lire_tableau
+
+        projet = _projet(request, self, pk)
+        _exiger_import_dqe(request, projet)
+        avertissements_fichier = []
+        if request.FILES.get("fichier") is not None:
+            lu = lire_tableau(projet, request.FILES["fichier"])
+            lignes, avertissements_fichier = lu["lignes"], lu["avertissements"]
+        elif "lignes" in request.data:
+            donnees = DqeBilanSerializer(data=request.data)
+            donnees.is_valid(raise_exception=True)
+            lignes = donnees.validated_data["lignes"]
+        else:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        bilan = bilan_dqe(
+            projet,
+            lignes,
+            utilisateur=request.user,
+            request=request,
+            montants_visibles=peut_voir_montants(request.user, request),
+        )
+        bilan["avertissements"] = [*bilan["avertissements"], *avertissements_fichier]
+        return Response({"lignes": lignes, "bilan": sans_interne(bilan)})
+
+
+class ProjetDqeAppliquerView(APIView):
+    """`POST /api/v1/projets/{id}/decoupage/dqe/appliquer/` — applique ce que le bilan accepte.
+
+    Le bilan est refait sur les lignes reçues ; chaque ligne s'applique seule, et une ligne
+    refusée à ce moment est rendue avec sa raison sans empêcher les autres.
+    """
+
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @schema(summary="Appliquer un import DQE", request=DqeApplicationSerializer)
+    def post(self, request, pk):
+        from apps.core.droits import peut_voir_montants
+        from apps.projets.services.import_dqe import appliquer_dqe
+
+        projet = _projet(request, self, pk, ecriture=True)
+        _exiger_import_dqe(request, projet)
+        donnees = DqeApplicationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        resultat = appliquer_dqe(
+            projet,
+            donnees.validated_data["lignes"],
+            utilisateur=request.user,
+            motif=donnees.validated_data["motif"],
+            request=request,
+            montants_visibles=peut_voir_montants(request.user, request),
+        )
+        return Response({**resultat, "arbre": representer_arbre(projet, request.user, request)})
 
 
 class ProjetDecoupageExporterView(APIView):
@@ -705,6 +805,80 @@ class ElementDeplacerView(APIView):
             motif_report_id=v.get("motif_id"),
         )
         return Response(_case(request, element))
+
+
+class ElementDupliquerView(APIView):
+    """`POST /api/v1/elements/{id}/dupliquer/` — copier une branche (§13quinquies.1)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @schema(summary="Dupliquer une case et sa branche", request=DuplicationSerializer)
+    def post(self, request, pk):
+        element = _element(request, pk, ecriture=True)
+        donnees = DuplicationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        v = donnees.validated_data
+        if "parent_id" in v:
+            destination = (
+                get_object_or_404(Element, pk=v["parent_id"], projet=element.projet)
+                if v["parent_id"]
+                else None
+            )
+        else:
+            destination = element.parent
+        exiger(request.user, "projets.decouper", element.projet, element, request=request)
+        exiger(request.user, "projets.decouper", element.projet, destination, request=request)
+        copie, nombre = gestes.dupliquer_branche(
+            element,
+            destination=destination,
+            libelle=v["libelle"],
+            auteur=request.user,
+            motif=v["motif"],
+        )
+        return Response(
+            {"case": _case(request, copie), "cases_copiees": nombre},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ElementHistoriqueView(APIView):
+    """`GET /api/v1/elements/{id}/historique/` — les modifications d'une case, paginées.
+
+    Lues dans le journal d'audit : qui, quand, quel geste, le motif, avant et après.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @schema(
+        summary="Historique des modifications d'une case",
+        parameters=[
+            OpenApiParameter("page", int),
+            OpenApiParameter("taille_page", int, description="20 par défaut, 100 au plus."),
+        ],
+    )
+    def get(self, request, pk):
+        from apps.core.droits import peut_voir_montants
+        from apps.projets.selectors.historique import entrees_de_case, representer_entrees
+
+        element = _element(request, pk)
+        if element.pk not in _cases_completes(request, element):
+            raise PermissionDenied(
+                "Vous ne voyez que l'intitulé de cette case : son historique est hors de votre "
+                "périmètre."
+            )
+        pagination = PaginationStandard()
+        page = pagination.paginate_queryset(entrees_de_case(element), request, view=self)
+        return pagination.get_paginated_response(
+            representer_entrees(page, montants_visibles=peut_voir_montants(request.user, request))
+        )
+
+
+def _cases_completes(request, element) -> set:
+    """Les cases que la personne voit en entier (pas seulement par le chemin qui y mène)."""
+    from apps.projets.selectors.arbre_api import COMPLET
+
+    acces = visibilite(charger_arbre(element.projet), request.user, request)
+    return {pk for pk, niveau in acces.items() if niveau == COMPLET}
 
 
 class ElementDetaillerView(APIView):

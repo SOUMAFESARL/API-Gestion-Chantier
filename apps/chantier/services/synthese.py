@@ -17,11 +17,15 @@ Règles arrêtées le 14/10/2026 :
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied
 
 from apps.audit.services import journaliser
 from apps.chantier.models import SynthesePeriodique
-from apps.chantier.services.journal import aujourdhui, verifier_fonction
+from apps.chantier.services.fonctions import (
+    SYNTHESE_APPROUVER,
+    SYNTHESE_REDIGER,
+    verifier_fonction,
+)
+from apps.chantier.services.journal import aujourdhui
 from apps.core.enums import ActionAudit
 from apps.core.exceptions import ErreurMetier
 from apps.projets.models import Projet
@@ -72,7 +76,8 @@ def _ecrire(*, projet, type_, debut, fin, utilisateur, appreciation, objectifs):
     # Verrou du chantier : deux enregistrements simultanés ne créent pas deux synthèses.
     projet = get_object_or_404(Projet.objects.select_for_update(), pk=projet.pk)
     verifier_statut_projet_pour_ecriture(projet)
-    verifier_fonction(projet, utilisateur, "CT")
+    # Rédige qui en a la permission sur le projet, quel que soit le nom de son rôle (30/10/2026).
+    verifier_fonction(projet, utilisateur, SYNTHESE_REDIGER)
     synthese = (
         SynthesePeriodique.objects.select_for_update()
         .filter(projet=projet, type=type_, date_debut=debut, date_fin=fin)
@@ -134,16 +139,14 @@ def soumettre_synthese(*, request, **redaction):
 
 
 def _decider(synthese, utilisateur):
-    """Le CP du chantier, sur une synthèse signée par le CT — et pas par lui."""
+    """Qui a la permission d'approuver la synthèse sur le projet, sur une synthèse signée."""
     synthese = get_object_or_404(
         SynthesePeriodique.objects.select_for_update().select_related("projet"), pk=synthese.pk
     )
-    verifier_fonction(synthese.projet, utilisateur, "CP")
+    verifier_fonction(synthese.projet, utilisateur, SYNTHESE_APPROUVER)
     verifier_statut_projet_pour_ecriture(synthese.projet)
     if synthese.statut != Statut.SOUMISE:
         raise ErreurMetier("Seule une synthèse signée par le conducteur de travaux se décide.")
-    if synthese.signee_ct_par_id == utilisateur.id:
-        raise PermissionDenied("Le signataire CT ne peut pas approuver sa propre synthèse.")
     return synthese
 
 

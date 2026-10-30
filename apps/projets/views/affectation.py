@@ -37,6 +37,7 @@ __all__ = [
     "ProjetAffectationDetailView",
     "ProjetAffectationListCreateView",
     "ProjetChefChantierView",
+    "ProjetRemplacerView",
 ]
 
 
@@ -373,6 +374,112 @@ class CollaborateursAffectablesView(APIView):
         return Response(resultats, status=status.HTTP_200_OK)
 
 
+class RemplacementSerializer(serializers.Serializer):
+    role_projet = serializers.CharField(max_length=50)
+    utilisateur_id = serializers.UUIDField(help_text="Le nouveau titulaire du rôle.")
+    affectation_remplacee_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Qui est remplacé. Inutile pour un rôle unique : c'est son titulaire.",
+    )
+    perimetres_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+        help_text="Vide : tout le projet.",
+    )
+    date_changement = serializers.DateField(required=False, allow_null=True)
+
+
+def _nouveau_titulaire(utilisateur_id) -> Utilisateur:
+    utilisateur = Utilisateur.objects.filter(
+        pk=utilisateur_id,
+        supprime_le__isnull=True,
+        is_active=True,
+        statut=StatutUtilisateur.ACTIF,
+    ).first()
+    if utilisateur is None:
+        raise RequeteRefusee("Collaborateur introuvable, inactif ou suspendu.")
+    if obtenir_portee_role(utilisateur) == "ENTREPRISE":
+        raise RequeteRefusee(
+            "Un collaborateur à portée ENTREPRISE ne peut pas être affecté à un projet."
+        )
+    return utilisateur
+
+
+def _reponse_remplacement(request, resultat) -> dict:
+    ancien = resultat["ancien"]
+    return {
+        "titulaire": AffectationProjetResponseSerializer(
+            resultat["nouveau"], context={"request": request}
+        ).data,
+        "remplace": (
+            AffectationProjetResponseSerializer(ancien, context={"request": request}).data
+            if ancien
+            else None
+        ),
+    }
+
+
+class RemplacementReponseSerializer(serializers.Serializer):
+    titulaire = AffectationProjetResponseSerializer()
+    remplace = AffectationProjetResponseSerializer(allow_null=True)
+
+
+class ProjetRemplacerView(APIView):
+    """`POST /api/v1/projets/{projet_id}/affectations/remplacer/` — remplacer un titulaire.
+
+    L'ancien perd sa fonction ce jour (son affectation est close et reste dans l'historique), le
+    nouveau est affecté avec le même rôle, en une seule fois (30/10/2026). C'est le seul moyen
+    de changer de titulaire d'un rôle « unique par projet ». Exige `projets.affecter_membres` ;
+    le chef de projet reste protégé (DG et rôles de portée Entreprise).
+    """
+
+    parser_classes = [JSONParser]
+    permission_classes = [
+        IsAuthenticated,
+        GardePermissionProjet.pour("projets.affecter_membres"),
+    ]
+
+    @extend_schema(
+        summary="Remplacer la personne qui tient un rôle sur le projet",
+        tags=["affectations"],
+        request=RemplacementSerializer,
+        responses={200: RemplacementReponseSerializer},
+    )
+    def post(self, request, projet_id):
+        from apps.projets.services.affectations import (
+            est_chef_projet,
+            remplacer_titulaire,
+            verifier_peut_gerer_chef_projet,
+        )
+        from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
+
+        projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
+        self.check_object_permissions(request, projet)
+        verifier_statut_projet_pour_ecriture(projet)
+        serializer = RemplacementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        v = serializer.validated_data
+        if est_chef_projet(v["role_projet"]):
+            verifier_peut_gerer_chef_projet(request.user, request=request)
+        try:
+            resultat = remplacer_titulaire(
+                projet=projet,
+                role_projet=v["role_projet"],
+                utilisateur=_nouveau_titulaire(v["utilisateur_id"]),
+                affectation_remplacee_id=v["affectation_remplacee_id"],
+                perimetres_ids=v.get("perimetres_ids") or [],
+                date_changement=v.get("date_changement"),
+                modifie_par=request.user,
+            )
+        except DjangoValidationError as exc:
+            msg = str(exc.message if hasattr(exc, "message") else exc)
+            raise RequeteRefusee(msg) from exc
+        return Response(_reponse_remplacement(request, resultat), status=status.HTTP_200_OK)
+
+
 class ChangerChefChantierSerializer(serializers.Serializer):
     utilisateur_id = serializers.UUIDField()
     perimetres_ids = serializers.ListField(
@@ -387,9 +494,8 @@ class ChangerChefChantierSerializer(serializers.Serializer):
 class ProjetChefChantierView(APIView):
     """`POST /api/v1/projets/{projet_id}/chef-chantier/` — changer de chef de chantier.
 
-    Un seul chef de chantier par projet (règle du 29/10/2026). Ce geste retire l'ancien (son
-    affectation est close à la date du changement et reste dans l'historique) et affecte le
-    nouveau, en une seule fois. Il exige `projets.affecter_membres`.
+    Le remplacement (`affectations/remplacer/`) appliqué au rôle CC, gardé pour les écrans qui
+    l'appellent déjà. Il exige `projets.affecter_membres`.
     """
 
     parser_classes = [JSONParser]
@@ -413,22 +519,10 @@ class ProjetChefChantierView(APIView):
         verifier_statut_projet_pour_ecriture(projet)
         serializer = ChangerChefChantierSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        utilisateur = Utilisateur.objects.filter(
-            pk=serializer.validated_data["utilisateur_id"],
-            supprime_le__isnull=True,
-            is_active=True,
-            statut=StatutUtilisateur.ACTIF,
-        ).first()
-        if utilisateur is None:
-            raise RequeteRefusee("Collaborateur introuvable, inactif ou suspendu.")
-        if obtenir_portee_role(utilisateur) == "ENTREPRISE":
-            raise RequeteRefusee(
-                "Un collaborateur à portée ENTREPRISE ne peut pas être affecté à un projet."
-            )
         try:
             resultat = changer_chef_chantier(
                 projet=projet,
-                utilisateur=utilisateur,
+                utilisateur=_nouveau_titulaire(serializer.validated_data["utilisateur_id"]),
                 perimetres_ids=serializer.validated_data.get("perimetres_ids") or [],
                 date_changement=serializer.validated_data.get("date_changement"),
                 modifie_par=request.user,

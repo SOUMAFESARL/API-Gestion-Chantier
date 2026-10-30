@@ -22,6 +22,7 @@ from apps.projets.views.affectation import (
     ProjetAffectationDetailView,
     ProjetAffectationListCreateView,
     ProjetChefChantierView,
+    ProjetRemplacerView,
 )
 from apps.projets.views.calendrier import (
     CalendrierEntrepriseView,
@@ -290,6 +291,11 @@ urlpatterns = [
         "projets/<uuid:projet_id>/affectations/<uuid:pk>/",
         ProjetAffectationDetailView.as_view(),
         name="projet-affectation-detail",
+    ),
+    path(
+        "projets/<uuid:projet_id>/affectations/remplacer/",
+        ProjetRemplacerView.as_view(),
+        name="projet-affectations-remplacer",
     ),
     path(
         "projets/<uuid:projet_id>/chef-chantier/",

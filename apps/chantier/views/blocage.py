@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.chantier.models import Blocage
 from apps.chantier.permissions import (
+    PeutApprouverRapports,
     PeutConsulterRapports,
     PeutRedigerRapports,
     PeutValiderRapports,
@@ -40,7 +41,10 @@ class ProjetBlocageListCreateView(APIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsAuthenticated(), PeutRedigerRapports()]
+            return [
+                IsAuthenticated(),
+                (PeutRedigerRapports | PeutValiderRapports | PeutApprouverRapports)(),
+            ]
         return [IsAuthenticated(), PeutConsulterRapports()]
 
     @extend_schema(
@@ -108,7 +112,10 @@ class BlocageDetailView(APIView):
 
     def get_permissions(self):
         if self.request.method == "PATCH":
-            return [IsAuthenticated(), PeutRedigerRapports()]
+            return [
+                IsAuthenticated(),
+                (PeutRedigerRapports | PeutValiderRapports | PeutApprouverRapports)(),
+            ]
         return [IsAuthenticated(), PeutConsulterRapports()]
 
     @extend_schema(
@@ -153,7 +160,11 @@ class BlocageDetailView(APIView):
 class BlocagePrendreEnChargeView(APIView):
     """`POST /api/v1/blocages/{pk}/prendre-en-charge/`."""
 
-    permission_classes = [IsAuthenticated, PeutRedigerRapports]
+    # Tout acteur du circuit peut prendre en charge un blocage (30/10/2026).
+    permission_classes = [
+        IsAuthenticated,
+        PeutRedigerRapports | PeutValiderRapports | PeutApprouverRapports,
+    ]
 
     @extend_schema(
         summary="Prendre en charge un blocage",
@@ -178,7 +189,7 @@ class BlocagePrendreEnChargeView(APIView):
 class BlocageResoudreView(APIView):
     """`POST /api/v1/blocages/{pk}/resoudre/`."""
 
-    permission_classes = [IsAuthenticated, PeutValiderRapports]
+    permission_classes = [IsAuthenticated, PeutValiderRapports | PeutApprouverRapports]
 
     @extend_schema(
         summary="Résoudre un blocage",

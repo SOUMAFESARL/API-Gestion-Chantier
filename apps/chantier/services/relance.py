@@ -1,11 +1,14 @@
 """Relancer une ligne du journal : réclamer un rapport, ou une signature.
 
-Une ligne, c'est un chantier un jour. Selon où elle en est, la relance va :
+Une ligne, c'est un chantier, un rédacteur, un jour : chacun écrit son propre rapport, sur sa
+partie du projet (30/10/2026). Selon où elle en est, la relance va :
 
-- au **chef de chantier** si le rapport manque, reste en brouillon ou a été
-  rejeté — c'est lui qui doit écrire ;
-- au **conducteur de travaux** si le rapport est soumis ;
-- au **chef de projet** s'il est validé par le conducteur de travaux.
+- au **rédacteur** si son rapport manque, reste en brouillon ou a été rejeté — à lui seul ;
+- aux **validateurs encore attendus** si le rapport est soumis ;
+- aux **approbateurs encore attendus** s'il est validé.
+
+Rédacteurs, validateurs et approbateurs sont ceux qui en ont la permission sur le projet
+(`fonctions`), jamais un nom de rôle.
 
 Un rapport approuvé n'attend plus personne : il ne se relance pas.
 
@@ -22,8 +25,9 @@ from django.db import transaction
 
 from apps.audit.services import journaliser
 from apps.chantier.models import JournalChantier, RelanceJournal
+from apps.chantier.services import signatures
+from apps.chantier.services.fonctions import REDIGER, titulaires
 from apps.chantier.services.journal import (
-    affectations_actives,
     aujourdhui,
     premier_jour_rapport,
     statut_journal,
@@ -52,36 +56,35 @@ class RelanceNonEnvoyee(ErreurMetier):
     default_detail = "La relance n'a pas pu partir par e-mail. Réessayez dans un instant."
 
 
-def journal_de_la_ligne(projet, date_rapport: date) -> JournalChantier | None:
-    return (
-        JournalChantier.objects.select_related("rapport", "rapport__auteur")
-        .filter(
-            rapport__projet=projet,
-            rapport__date_rapport=date_rapport,
-            rapport__supprime_le__isnull=True,
-        )
-        .first()
+def journal_de_la_ligne(projet, date_rapport: date, redacteur=None) -> JournalChantier | None:
+    qs = JournalChantier.objects.select_related("rapport", "rapport__auteur").filter(
+        rapport__projet=projet,
+        rapport__date_rapport=date_rapport,
+        rapport__supprime_le__isnull=True,
     )
+    if redacteur is not None:
+        qs = qs.filter(rapport__auteur=redacteur)
+    return qs.first()
 
 
-def cible(projet, journal: JournalChantier | None) -> tuple[str, list]:
-    """L'étape attendue sur la ligne, et les personnes qui la tiennent."""
+def cible(projet, journal: JournalChantier | None, redacteur=None) -> tuple[str, list]:
+    """L'étape attendue sur la ligne, et les personnes qui la tiennent encore."""
+    from apps.accounts.models import Utilisateur
+
     statut = statut_journal(journal) if journal else None
     if statut == "APPROUVE_CP":
         raise ErreurMetier("Ce rapport est approuvé : il n'y a personne à relancer.")
     if statut in ("SOUMIS", "VALIDE_CT"):
-        role = "CT" if statut == "SOUMIS" else "CP"
-        personnes = [
-            a.utilisateur for a in affectations_actives(projet.id).filter(role_projet=role)
-        ]
-        if role == "CP" and projet.chef_projet_id and projet.chef_projet:
-            personnes.insert(0, projet.chef_projet)
-        return role, _sans_doublon(personnes)
-    # Rapport absent, en brouillon ou rejeté : c'est au chef de chantier d'écrire.
+        # Seuls les signataires attendus qui n'ont pas encore signé.
+        restants = signatures.attendus_restants(journal)
+        personnes = list(Utilisateur.objects.filter(pk__in=restants))
+        return ("CT" if statut == "SOUMIS" else "CP"), _sans_doublon(personnes)
+    # Rapport absent, en brouillon ou rejeté : c'est à son rédacteur d'écrire.
     if journal and journal.rapport.auteur_id:
         return "CC", [journal.rapport.auteur]
-    personnes = [a.utilisateur for a in affectations_actives(projet.id).filter(role_projet="CC")]
-    return "CC", _sans_doublon(personnes)
+    if redacteur is not None:
+        return "CC", _sans_doublon([redacteur])
+    return "CC", _sans_doublon([t.utilisateur for t in titulaires(projet, REDIGER)])
 
 
 def _sans_doublon(personnes: list) -> list:
@@ -93,9 +96,9 @@ def _sans_doublon(personnes: list) -> list:
     return uniques
 
 
-def relance_du_jour(projet, date_rapport: date) -> RelanceJournal | None:
+def relance_du_jour(projet, date_rapport: date, redacteur=None) -> RelanceJournal | None:
     return RelanceJournal.objects.filter(
-        projet=projet, date_rapport=date_rapport, jour=aujourdhui()
+        projet=projet, date_rapport=date_rapport, redacteur=redacteur, jour=aujourdhui()
     ).first()
 
 
@@ -124,24 +127,26 @@ def relancer(
     *,
     projet,
     date_rapport: date,
+    redacteur=None,
     utilisateur=None,
     automatique: bool = False,
     calendrier: Calendrier | None = None,
 ):
     """Relance la ligne ; rend la relance du jour, existante ou nouvelle."""
-    existante = relance_du_jour(projet, date_rapport)
+    existante = relance_du_jour(projet, date_rapport, redacteur)
     if existante:
         return existante
 
-    journal = journal_de_la_ligne(projet, date_rapport)
+    journal = journal_de_la_ligne(projet, date_rapport, redacteur)
     verifier_ligne(projet, date_rapport, journal, calendrier=calendrier)
-    etape, destinataires = cible(projet, journal)
+    etape, destinataires = cible(projet, journal, redacteur)
     if not destinataires:
         raise RelanceSansDestinataire()
 
     relance = RelanceJournal.objects.create(
         projet=projet,
         date_rapport=date_rapport,
+        redacteur=redacteur,
         jour=aujourdhui(),
         journal=journal,
         etape=etape,
@@ -166,6 +171,7 @@ def relancer(
         valeur_apres={
             "projet": str(projet.id),
             "date_rapport": date_rapport.isoformat(),
+            "redacteur": str(redacteur.pk) if redacteur else None,
             "etape": etape,
             "automatique": automatique,
             "destinataires": [str(personne.id) for personne in destinataires],
@@ -208,11 +214,11 @@ def _envoyer(relance: RelanceJournal, personne) -> bool:
 
 
 def relancer_rapports_manquants(jour: date | None = None) -> dict:
-    """La relance automatique de 17 h 30 : chaque chantier suivi sans rapport remis ce jour.
+    """La relance automatique de 17 h 30 : chaque rédacteur sans rapport remis ce jour.
 
-    À appeler dans le schéma de l'entreprise (`schema_context`). Un chantier dont
-    le rapport est soumis, validé ou approuvé n'est pas relancé ; un brouillon,
-    si — il n'est pas remis.
+    À appeler dans le schéma de l'entreprise (`schema_context`). Un rédacteur dont le rapport
+    est soumis, validé ou approuvé n'est pas relancé ; un brouillon, si — il n'est pas remis.
+    Chacun l'est pour son propre rapport : celui qui a remis le sien n'est pas dérangé.
     """
     from apps.projets.models import Projet
 
@@ -224,18 +230,26 @@ def relancer_rapports_manquants(jour: date | None = None) -> dict:
     for projet in Projet.objects.filter(statut__in=STATUTS_SUIVIS).select_related("chef_projet"):
         if jour < premier_jour_rapport(projet):
             continue  # rien à rattraper avant l'enregistrement du chantier
-        journal = journal_de_la_ligne(projet, jour)
-        if journal and journal.rapport.statut != "BROUILLON":
-            continue
-        if relance_du_jour(projet, jour):
-            bilan["deja_relances"] += 1
-            continue
-        try:
-            relancer(projet=projet, date_rapport=jour, automatique=True, calendrier=cal)
-            bilan["relances"] += 1
-        except RelanceSansDestinataire:
-            bilan["sans_destinataire"] += 1
-        except ErreurMetier as erreur:
-            logger.warning("Relance automatique impossible pour %s : %s", projet.id, erreur)
-            bilan["echecs"] += 1
+        redacteurs = [t.utilisateur for t in titulaires(projet, REDIGER)] or [None]
+        for redacteur in redacteurs:
+            journal = journal_de_la_ligne(projet, jour, redacteur)
+            if journal and journal.rapport.statut != "BROUILLON":
+                continue
+            if relance_du_jour(projet, jour, redacteur):
+                bilan["deja_relances"] += 1
+                continue
+            try:
+                relancer(
+                    projet=projet,
+                    date_rapport=jour,
+                    redacteur=redacteur,
+                    automatique=True,
+                    calendrier=cal,
+                )
+                bilan["relances"] += 1
+            except RelanceSansDestinataire:
+                bilan["sans_destinataire"] += 1
+            except ErreurMetier as erreur:
+                logger.warning("Relance automatique impossible pour %s : %s", projet.id, erreur)
+                bilan["echecs"] += 1
     return bilan

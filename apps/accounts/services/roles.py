@@ -21,7 +21,7 @@ from apps.core.enums import (
     RoleGlobal,
     StatutUtilisateur,
 )
-from apps.core.exceptions import ActionReserveeDg
+from apps.core.exceptions import ActionReserveeDg, ErreurConflit
 from apps.core.registre_permissions import REGISTRE
 
 ROLES_SYSTEME_INFOS = {
@@ -215,6 +215,7 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.resilier_archiver",
             "projets.voir_montants",
             "projets.referentiels_ajouter",
+            "projets.alertes_elevees",
         ),
         "chantier": ("chantier.lire", "chantier.rediger", "chantier.valider"),
         "pilotage": ("pilotage.lire",),
@@ -245,8 +246,10 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.mesurer",
             "projets.retirer_membres",
             "projets.main_oeuvre_gerer",
+            "projets.alertes_moderees",
         ),
-        "chantier": ("chantier.lire", "chantier.rediger"),
+        # Le chef de projet approuve ; il n'écrit plus le journal (30/10/2026).
+        "chantier": ("chantier.lire", "chantier.approuver", "chantier.synthese_approuver"),
         "pilotage": ("pilotage.lire",),
         "tiers": ("tiers.lire",),
         "ged": (),
@@ -261,8 +264,10 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "projets.mesurer",
             "projets.retirer_membres",
             "projets.main_oeuvre_gerer",
+            "projets.alertes_moderees",
         ),
-        "chantier": ("chantier.lire", "chantier.rediger", "chantier.valider"),
+        # Le conducteur valide et rédige la synthèse ; il n'écrit plus le journal (30/10/2026).
+        "chantier": ("chantier.lire", "chantier.valider", "chantier.synthese_rediger"),
         "pilotage": ("pilotage.lire",),
         "tiers": ("tiers.lire",),
         "ged": (),
@@ -351,6 +356,7 @@ def appliquer_modeles_roles() -> list[Role]:
                 m.description,
                 getattr(m, "portee", "PROJET") or "PROJET",
                 {mrm.module_code.lower() for mrm in m.modules_plafonds.all()},
+                bool(getattr(m, "unique_par_projet", False)),
             )
             for m in modeles
         ]
@@ -364,13 +370,14 @@ def appliquer_modeles_roles() -> list[Role]:
                 description,
                 "ENTREPRISE" if code.upper() in {"DG", "AD", "DO"} else "PROJET",
                 set(),
+                code.upper() in {"CP", "CC"},
             )
             for code, (libelle, description) in ROLES_SYSTEME_INFOS.items()
         ]
 
     roles_traites = []
     with transaction.atomic():
-        for r_code, libelle, description, portee, modules_modele in gabarits:
+        for r_code, libelle, description, portee, modules_modele, unique in gabarits:
             role = Role.objects.filter(code=r_code, supprime_le__isnull=True).first()
             if role is None:
                 role = Role.objects.create(
@@ -379,6 +386,7 @@ def appliquer_modeles_roles() -> list[Role]:
                     description=description,
                     est_systeme=True,
                     portee=portee,
+                    unique_par_projet=unique,
                     est_actif=True,
                 )
 
@@ -413,6 +421,7 @@ def creer_role(
     permissions_modules=None,
     portee: str = "PROJET",
     cree_par=None,
+    unique_par_projet: bool = False,
 ) -> Role:
     """Crée un nouveau rôle personnalisé obligatoirement lié à TOUS les modules actifs."""
     code = code.strip().upper()
@@ -435,6 +444,7 @@ def creer_role(
             libelle=libelle.strip(),
             description=description.strip(),
             portee=portee,
+            unique_par_projet=unique_par_projet,
             est_systeme=False,
             est_actif=True,
             cree_par=cree_par,
@@ -488,6 +498,7 @@ def modifier_role(
     permissions_modules=None,
     portee: str | None = None,
     modifie_par=None,
+    unique_par_projet: bool | None = None,
 ) -> Role:
     """Modifie un rôle existant et met à jour sa matrice de permissions."""
     with transaction.atomic():
@@ -497,6 +508,8 @@ def modifier_role(
             role.description = description.strip()
         if portee is not None:
             role.portee = portee
+        if unique_par_projet is not None:
+            role.unique_par_projet = unique_par_projet
         role.save()
 
         modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
@@ -597,6 +610,11 @@ def compter_utilisateurs_et_affectations(role: Role) -> dict[str, int]:
     }
 
 
+class RoleTenuSurDesProjets(ErreurConflit):
+    code_metier = "role_tenu_sur_des_projets"
+    default_detail = "Ce rôle est encore tenu sur des projets."
+
+
 def supprimer_role(
     role: Role,
     reassigner_vers_role: Role | None = None,
@@ -637,10 +655,26 @@ def supprimer_role(
                 _("Seul le Directeur Général a autorité pour supprimer le rôle Administrateur.")
             )
 
+    # 3. Un rôle encore tenu sur des projets ne se supprime pas (30/10/2026) : la plateforme dit
+    #    où, pour qu'on change d'abord le rôle de ces personnes.
+    from apps.projets.services.affectations import affectations_en_cours_du_role
+
+    en_cours = affectations_en_cours_du_role(role.code)
+    if en_cours:
+        lieux = ", ".join(
+            f"{ligne['projet_nom']} ({ligne['nombre']} personne{'s' if ligne['nombre'] > 1 else ''})"
+            for ligne in en_cours
+        )
+        raise RoleTenuSurDesProjets(
+            f"Ce rôle est encore tenu sur : {lieux}. Changez d'abord le rôle de ces personnes "
+            "sur ces projets.",
+            details={"projets": [{**ligne, "projet_id": str(ligne["projet_id"])} for ligne in en_cours]},
+        )
+
     counts = compter_utilisateurs_et_affectations(role)
     total_impacte = counts["total"]
 
-    # 3. Validation des options
+    # 4. Validation des options
     if total_impacte > 0 and not reassigner_vers_role and not supprimer_collaborateurs:
         raise ValidationError(
             _(

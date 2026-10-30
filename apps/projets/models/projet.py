@@ -244,13 +244,8 @@ class AffectationProjet(ModeleBase):
                 fields=["utilisateur", "projet"],
                 name="uq_affectation_utilisateur_projet",
             ),
-            # Règle fixée le 29/10/2026 : un seul chef de chantier par projet — c'est lui, et lui
-            # seul, qui écrit le journal de chantier.
-            models.UniqueConstraint(
-                fields=["projet"],
-                condition=models.Q(role_projet="CC", est_actif=True, supprime_le__isnull=True),
-                name="uq_affectation_un_chef_chantier",
-            ),
+            # L'unicité d'un rôle sur le projet est un réglage du rôle (`Role.unique_par_projet`,
+            # 30/10/2026), vérifiée par le service des affectations.
         ]
 
     def get_role_projet_display(self) -> str:

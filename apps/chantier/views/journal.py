@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 
 from apps.chantier.models import AlerteJournal
 from apps.chantier.permissions import (
+    PeutApprouverRapports,
     PeutConsulterRapports,
     PeutRedigerRapports,
     PeutValiderRapports,
@@ -47,7 +48,6 @@ from apps.chantier.services.journal import (
     statut_journal,
     supprimer_brouillon,
 )
-from apps.core.exceptions import ErreurConflit
 
 
 def filtres(request):
@@ -157,25 +157,26 @@ class JournalPreparationView(APIView):
             raise ValidationError("projet et date sont requis.")
         projet = get_object_or_404(projets_visibles(request), pk=params["projet"])
         self.check_object_permissions(request, projet)
-        qs = journaux_visibles(request).filter(rapport__projet=projet)
+        # Chaque rédacteur prépare son propre rapport, sur sa partie du projet (30/10/2026).
+        qs = journaux_visibles(request).filter(
+            rapport__projet=projet, rapport__auteur=request.user
+        )
         journal = qs.filter(rapport__date_rapport=params["date"]).first()
-        if (
-            journal
-            and journal.rapport.statut == "BROUILLON"
-            and journal.rapport.auteur_id != request.user.id
-        ):
-            raise ErreurConflit(
-                "Un autre auteur a déjà commencé le rapport de ce chantier pour ce jour."
-            )
         precedent = (
-            pour_auteur(qs, request.user)
-            .filter(rapport__date_rapport__lt=params["date"])
+            qs.filter(rapport__date_rapport__lt=params["date"])
             .order_by("-rapport__date_rapport")
             .first()
         )
         return Response(
             charge_autorisee(
-                request, preparation(projet, params["date"], journal=journal, precedent=precedent)
+                request,
+                preparation(
+                    projet,
+                    params["date"],
+                    journal=journal,
+                    precedent=precedent,
+                    utilisateur=request.user,
+                ),
             )
         )
 
@@ -282,11 +283,9 @@ class JournalValiderView(APIView):
 
 class JournalApprouverView(JournalValiderView):
     etape = "CP"
-    # Le gabarit CP dispose de chantier.rediger (niveau 2), pas de
-    # chantier.valider (niveau CT). Le service exige en plus le vrai CP du
-    # projet et une signature CT existante ; le droit de rédaction seul
-    # n'autorise donc jamais l'approbation.
-    permission_classes = [IsAuthenticated, PeutRedigerRapports]
+    # Approuver est une permission à part (30/10/2026) ; le service exige en plus d'être
+    # attendu parmi les approbateurs du rapport, après la validation.
+    permission_classes = [IsAuthenticated, PeutApprouverRapports]
 
     @extend_schema(
         tags=["Journal de chantier"],
@@ -299,7 +298,7 @@ class JournalApprouverView(JournalValiderView):
 
 
 class JournalRejeterView(APIView):
-    permission_classes = [IsAuthenticated, PeutValiderRapports | PeutRedigerRapports]
+    permission_classes = [IsAuthenticated, PeutValiderRapports | PeutApprouverRapports]
 
     @extend_schema(
         tags=["Journal de chantier"],
@@ -407,11 +406,11 @@ class JournalRelancerView(APIView):
     """`POST /chantier/journal/{id}/relancer/` — relance une ligne du journal.
 
     `id` est celui de la ligne : l'identifiant du rapport s'il existe, sinon
-    `{projet}_{AAAA-MM-JJ}` pour un rapport manquant — c'est la forme que
-    `GET /chantier/journal/` renvoie.
+    `{projet}_{AAAA-MM-JJ}_{rédacteur}` pour un rapport manquant (sans le rédacteur sur un
+    chantier qui n'en a pas) — c'est la forme que `GET /chantier/journal/` renvoie.
     """
 
-    permission_classes = [IsAuthenticated, PeutValiderRapports]
+    permission_classes = [IsAuthenticated, PeutValiderRapports | PeutApprouverRapports]
 
     @extend_schema(
         tags=["Journal de chantier"],
@@ -426,11 +425,17 @@ class JournalRelancerView(APIView):
 
         from apps.chantier.services.relance import relancer
 
-        projet_id, _, jour = identifiant.partition("_")
-        if jour:
+        from apps.accounts.models import Utilisateur
+
+        redacteur = None
+        projet_id, _, reste = identifiant.partition("_")
+        if reste:
+            jour, _, redacteur_id = reste.partition("_")
             try:
                 projet = get_object_or_404(projets_visibles(request), pk=UUID(projet_id))
                 date_rapport = date.fromisoformat(jour)
+                if redacteur_id:
+                    redacteur = get_object_or_404(Utilisateur, pk=UUID(redacteur_id))
             except ValueError:
                 raise ValidationError({"identifiant": "Ligne de journal inconnue."}) from None
         else:
@@ -440,8 +445,11 @@ class JournalRelancerView(APIView):
                 raise ValidationError({"identifiant": "Ligne de journal inconnue."}) from None
             journal = charger_journal(request, identifiant)
             projet, date_rapport = journal.rapport.projet, journal.rapport.date_rapport
+            redacteur = journal.rapport.auteur
         self.check_object_permissions(request, projet)
-        relance = relancer(projet=projet, date_rapport=date_rapport, utilisateur=request.user)
+        relance = relancer(
+            projet=projet, date_rapport=date_rapport, redacteur=redacteur, utilisateur=request.user
+        )
         return Response(
             {
                 "relance_le": relance.cree_le.isoformat(),

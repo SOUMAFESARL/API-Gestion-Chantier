@@ -6,9 +6,10 @@ Décisions v1.2 du découpage (§13bis) et règles du 29/10/2026 :
   il peut différer d'un projet à l'autre.
 - **Le périmètre est une ou plusieurs cases de l'arbre** ; aucune case : tout le projet. Les
   anciens champs `lot` et `zone` disparaissent.
-- **Un seul chef de chantier par projet** : c'est lui, et lui seul, qui écrit le journal. En
-  affecter un second est refusé ; pour en changer, `changer_chef_chantier` retire l'ancien
-  (son affectation reste dans l'historique) et affecte le nouveau en un seul geste.
+- **Un rôle peut être unique sur un projet** (réglage du rôle, 30/10/2026 ; coché par défaut pour
+  le chef de projet et le chef de chantier). En affecter un second est refusé ; pour en changer,
+  `remplacer_titulaire` retire l'ancien (son affectation reste dans l'historique) et affecte le
+  nouveau en un seul geste. Un rôle non unique se tient à autant qu'on veut.
 """
 
 from django.core.exceptions import ValidationError
@@ -70,41 +71,102 @@ def est_chef_projet(role_projet) -> bool:
     return (role_projet or "").upper() == RoleProjet.CHEF_PROJET
 
 
-class ChefChantierDejaAffecte(ErreurConflit):
-    code_metier = "chef_chantier_deja_affecte"
+class RoleUniqueDejaTenu(ErreurConflit):
+    code_metier = "role_unique_deja_tenu"
     default_detail = (
-        "Ce projet a déjà un chef de chantier : un seul par projet. Pour en changer, utilisez "
-        "« Changer le chef de chantier »."
+        "Ce rôle est unique sur le projet et quelqu'un le tient déjà. Pour en changer, utilisez "
+        "« Remplacer »."
     )
 
 
-def verifier_chef_chantier_unique(projet, utilisateur, role_projet, affectation_id=None) -> None:
-    """Un seul chef de chantier actif par projet (règle du 29/10/2026)."""
-    if (role_projet or "").upper() != RoleProjet.CHEF_CHANTIER:
-        return
-    autre = (
+def _nom(utilisateur) -> str:
+    return f"{utilisateur.prenom} {utilisateur.nom}".strip() or utilisateur.email
+
+
+def role_de(code_role) -> Role | None:
+    return Role.objects.filter(code__iexact=code_role or "", supprime_le__isnull=True).first()
+
+
+def titulaires_en_cours(projet, code_role):
+    """Les affectations actives et en cours qui tiennent ce rôle sur le projet."""
+    from django.db.models import Q
+
+    return (
         AffectationProjet.objects.filter(
             projet=projet,
-            role_projet=RoleProjet.CHEF_CHANTIER,
+            role_projet__iexact=code_role,
             est_actif=True,
             supprime_le__isnull=True,
         )
-        .exclude(utilisateur=utilisateur)
+        .filter(Q(date_fin__isnull=True) | Q(date_fin__gte=timezone.localdate()))
         .select_related("utilisateur")
     )
+
+
+def verifier_role_unique(projet, utilisateur, role_projet, affectation_id=None) -> None:
+    """Un rôle réglé « unique par projet » n'a qu'un titulaire à la fois (30/10/2026)."""
+    role = role_de(role_projet)
+    if role is None or not role.unique_par_projet:
+        return
+    autres = titulaires_en_cours(projet, role.code).exclude(utilisateur=utilisateur)
     if affectation_id:
-        autre = autre.exclude(pk=affectation_id)
-    existant = autre.first()
+        autres = autres.exclude(pk=affectation_id)
+    existant = autres.first()
     if existant is not None:
-        raise ChefChantierDejaAffecte(
+        raise RoleUniqueDejaTenu(
+            f"« {role.libelle} » est unique sur ce projet et {_nom(existant.utilisateur)} le "
+            "tient déjà. Pour en changer, utilisez « Remplacer ».",
             details={
-                "chef_chantier_actuel": {
+                "role": role.code,
+                "titulaire_actuel": {
                     "affectation_id": str(existant.pk),
                     "utilisateur_id": str(existant.utilisateur_id),
-                    "nom": f"{existant.utilisateur.prenom} {existant.utilisateur.nom}".strip(),
-                }
-            }
+                    "nom": _nom(existant.utilisateur),
+                },
+            },
         )
+
+
+def projets_en_depassement(code_role) -> list[dict]:
+    """Les projets où plusieurs personnes tiennent déjà ce rôle (au moment de le rendre unique)."""
+    from django.db.models import Count, Q
+
+    jour = timezone.localdate()
+    lignes = (
+        AffectationProjet.objects.filter(
+            role_projet__iexact=code_role, est_actif=True, supprime_le__isnull=True
+        )
+        .filter(Q(date_fin__isnull=True) | Q(date_fin__gte=jour))
+        .values("projet_id", "projet__nom")
+        .annotate(nombre=Count("id"))
+        .filter(nombre__gt=1)
+        .order_by("projet__nom")
+    )
+    return [
+        {"projet_id": ligne["projet_id"], "projet_nom": ligne["projet__nom"], "nombre": ligne["nombre"]}
+        for ligne in lignes
+    ]
+
+
+def affectations_en_cours_du_role(code_role) -> list[dict]:
+    """Où un rôle est encore tenu : les projets et le nombre de personnes, pour refuser de le
+    supprimer tant que ces affectations ne sont pas réglées."""
+    from django.db.models import Count, Q
+
+    jour = timezone.localdate()
+    lignes = (
+        AffectationProjet.objects.filter(
+            role_projet__iexact=code_role, est_actif=True, supprime_le__isnull=True
+        )
+        .filter(Q(date_fin__isnull=True) | Q(date_fin__gte=jour))
+        .values("projet_id", "projet__nom")
+        .annotate(nombre=Count("id"))
+        .order_by("projet__nom")
+    )
+    return [
+        {"projet_id": ligne["projet_id"], "projet_nom": ligne["projet__nom"], "nombre": ligne["nombre"]}
+        for ligne in lignes
+    ]
 
 
 def resoudre_perimetres(projet: Projet, ids) -> list[Element]:
@@ -223,7 +285,7 @@ def affecter_collaborateur_projet(
 
     date_debut_effective = date_debut or timezone.now().date()
     perimetres = resoudre_perimetres(projet, perimetres_ids)
-    verifier_chef_chantier_unique(projet, utilisateur, role_projet)
+    verifier_role_unique(projet, utilisateur, role_projet)
 
     with transaction.atomic():
         affectation = AffectationProjet.tous_objets.filter(
@@ -266,66 +328,79 @@ def affecter_collaborateur_projet(
         if perimetres_ids is not None:
             affectation.perimetres.set(perimetres)
 
-        # Synchronisation automatique du champ conducteur_travaux sur le Projet si CT
-        if role_projet == RoleProjet.CONDUCTEUR_TRAVAUX and projet.conducteur_travaux_id != utilisateur.id:
+        # La fiche du projet garde un chef de projet et un conducteur « principaux » (demande du
+        # product owner) : le premier affecté le devient ; les suivants s'ajoutent à côté.
+        if role_projet == RoleProjet.CONDUCTEUR_TRAVAUX and not projet.conducteur_travaux_id:
             projet.conducteur_travaux = utilisateur
             projet.save(update_fields=["conducteur_travaux", "modifie_le"])
-
-        # Synchronisation automatique du champ chef_projet si CHEF_PROJET
-        if role_projet == RoleProjet.CHEF_PROJET:
-            # Désactiver tout autre CP actif éventuel pour préserver l'unicité
-            AffectationProjet.objects.filter(
-                projet=projet,
-                role_projet=RoleProjet.CHEF_PROJET,
-                est_actif=True,
-                supprime_le__isnull=True,
-            ).exclude(utilisateur=utilisateur).update(est_actif=False)
-            if projet.chef_projet_id != utilisateur.id:
-                projet.chef_projet = utilisateur
-                projet.save(update_fields=["chef_projet", "modifie_le"])
+        if role_projet == RoleProjet.CHEF_PROJET and not projet.chef_projet_id:
+            projet.chef_projet = utilisateur
+            projet.save(update_fields=["chef_projet", "modifie_le"])
 
     return affectation
 
 
+def _principal(projet, champ, code_role, ancien, nouveau) -> None:
+    """La fiche suit le remplacement : si l'ancien était le principal, le nouveau le devient."""
+    if getattr(projet, f"{champ}_id") == ancien.utilisateur_id:
+        setattr(projet, champ, nouveau)
+        projet.save(update_fields=[champ, "modifie_le"])
+
+
 @transaction.atomic
-def changer_chef_chantier(
+def remplacer_titulaire(
     *,
     projet: Projet,
+    role_projet: str,
     utilisateur: Utilisateur,
+    affectation_remplacee_id=None,
     perimetres_ids=None,
     date_changement=None,
     modifie_par: Utilisateur | None = None,
 ) -> dict:
-    """Change le chef de chantier en un seul geste (validé le 29/10/2026).
+    """Remplace la personne qui tient un rôle sur le projet, en un seul geste (30/10/2026).
 
-    L'ancien chef perd sa fonction ce jour : son affectation est close (date de fin, inactive)
-    et reste dans l'historique ; le nouveau est affecté comme chef de chantier.
+    L'ancien perd sa fonction ce jour : son affectation est close (date de fin, inactive) et reste
+    dans l'historique ; le nouveau est affecté avec le même rôle. Pour un rôle unique, l'ancien
+    est son titulaire ; sinon il faut dire qui est remplacé (`affectation_remplacee_id`).
     """
+    role = role_de(role_projet)
+    if role is None:
+        raise RequeteRefusee("Le rôle de projet spécifié n'est pas valide.")
     jour = date_changement or timezone.localdate()
-    ancien = (
-        AffectationProjet.objects.select_for_update()
-        .filter(
-            projet=projet,
-            role_projet=RoleProjet.CHEF_CHANTIER,
-            est_actif=True,
-            supprime_le__isnull=True,
+    titulaires = titulaires_en_cours(projet, role.code).select_for_update(of=("self",))
+    if affectation_remplacee_id:
+        ancien = titulaires.filter(pk=affectation_remplacee_id).first()
+        if ancien is None:
+            raise RequeteRefusee("Cette personne ne tient pas ce rôle sur le projet.")
+    elif role.unique_par_projet:
+        ancien = titulaires.exclude(utilisateur=utilisateur).first()
+    else:
+        raise RequeteRefusee(
+            f"« {role.libelle} » n'est pas unique sur le projet : précisez qui est remplacé."
         )
-        .exclude(utilisateur=utilisateur)
-        .select_related("utilisateur")
-        .first()
-    )
     if ancien is not None:
+        if ancien.utilisateur_id == utilisateur.pk:
+            raise RequeteRefusee("Cette personne tient déjà ce rôle sur le projet.")
         ancien.est_actif = False
         ancien.date_fin = jour
         ancien.save(update_fields=["est_actif", "date_fin", "modifie_le"])
     nouveau = affecter_collaborateur_projet(
         projet=projet,
         utilisateur=utilisateur,
-        role_projet=RoleProjet.CHEF_CHANTIER,
+        role_projet=role.code,
         date_debut=jour,
         perimetres_ids=perimetres_ids if perimetres_ids is not None else [],
         modifie_par=modifie_par,
     )
+    if ancien is not None:
+        if role.code.upper() == RoleProjet.CHEF_PROJET:
+            _principal(projet, "chef_projet", role.code, ancien, utilisateur)
+        if role.code.upper() == RoleProjet.CONDUCTEUR_TRAVAUX:
+            _principal(projet, "conducteur_travaux", role.code, ancien, utilisateur)
+        from apps.chantier.services.signatures import reevaluer_journaux_du_projet
+
+        reevaluer_journaux_du_projet(projet)
     from apps.audit.services import journaliser
     from apps.core.enums import ActionAudit
 
@@ -334,26 +409,17 @@ def changer_chef_chantier(
         type_entite="Projet",
         entite_id=projet.pk,
         utilisateur_id=getattr(modifie_par, "pk", None),
-        valeur_avant={"chef_chantier": str(ancien.utilisateur_id) if ancien else None},
-        valeur_apres={"evenement": "CHANGEMENT_CHEF_CHANTIER", "chef_chantier": str(utilisateur.pk)},
+        valeur_avant={"role": role.code, "titulaire": str(ancien.utilisateur_id) if ancien else None},
+        valeur_apres={"evenement": "REMPLACEMENT", "role": role.code, "titulaire": str(utilisateur.pk)},
     )
     return {"ancien": ancien, "nouveau": nouveau}
 
 
-def verifier_invariant_chef_projet(projet: Projet, affectation_a_exclure_id=None):
-    """Vérifie la cohérence du Chef de Projet : au maximum un seul CP actif simultanément (0 CP autorisé)."""
-    qs = AffectationProjet.objects.filter(
-        projet=projet,
-        role_projet=RoleProjet.CHEF_PROJET,
-        est_actif=True,
-        supprime_le__isnull=True,
+def changer_chef_chantier(*, projet: Projet, utilisateur: Utilisateur, **options) -> dict:
+    """« Changer le chef de chantier » : le remplacement appliqué au rôle CC."""
+    return remplacer_titulaire(
+        projet=projet, role_projet=RoleProjet.CHEF_CHANTIER, utilisateur=utilisateur, **options
     )
-    if affectation_a_exclure_id:
-        qs = qs.exclude(id=affectation_a_exclure_id)
-    if qs.count() > 1:
-        raise ValidationError(
-            _("Un chantier ne peut pas comporter plus d'un Chef de Projet actif simultanément.")
-        )
 
 
 def modifier_affectation_projet(
@@ -367,32 +433,19 @@ def modifier_affectation_projet(
     nouveau_role = donnees.get("role_projet")
     role_final = nouveau_role or affectation.role_projet
 
-    # Le périmètre et l'unicité du chef de chantier se vérifient avant toute écriture.
+    # Le périmètre et l'unicité du rôle se vérifient avant toute écriture.
     perimetres = None
     if "perimetres_ids" in donnees:
         perimetres = resoudre_perimetres(affectation.projet, donnees["perimetres_ids"])
     actif_final = donnees.get("est_actif", affectation.est_actif)
     if actif_final:
-        verifier_chef_chantier_unique(
+        verifier_role_unique(
             affectation.projet, affectation.utilisateur, role_final, affectation_id=affectation.pk
         )
 
-    # Si on désactive ou change le rôle d'un CP, détacher du projet si c'était lui
-    if affectation.role_projet == RoleProjet.CHEF_PROJET:
-        if nouveau_actif is False or (nouveau_role and nouveau_role != RoleProjet.CHEF_PROJET):
-            if affectation.projet.chef_projet_id == affectation.utilisateur_id:
-                affectation.projet.chef_projet = None
-                affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
-    elif nouveau_role == RoleProjet.CHEF_PROJET and (nouveau_actif is True or (nouveau_actif is None and affectation.est_actif)):
-        # Promotion en Chef de Projet : désactiver l'ancien CP actif
-        AffectationProjet.objects.filter(
-            projet=affectation.projet,
-            role_projet=RoleProjet.CHEF_PROJET,
-            est_actif=True,
-            supprime_le__isnull=True,
-        ).exclude(id=affectation.id).update(est_actif=False)
-        affectation.projet.chef_projet = affectation.utilisateur
-        affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
+    quitte_role = nouveau_actif is False or (
+        nouveau_role and nouveau_role.upper() != (affectation.role_projet or "").upper()
+    )
 
     champs = ["modifie_le"]
     for c in ["role_projet", "date_debut", "date_fin", "est_actif", "fonction_membre"]:
@@ -403,8 +456,32 @@ def modifier_affectation_projet(
         affectation.perimetres.set(perimetres)
 
     affectation.save(update_fields=champs)
-    verifier_invariant_chef_projet(affectation.projet)
+    projet = affectation.projet
+    if quitte_role:
+        _recaler_principaux(projet)
+        from apps.chantier.services.signatures import reevaluer_journaux_du_projet
+
+        reevaluer_journaux_du_projet(projet)
+    elif (role_final or "").upper() == RoleProjet.CHEF_PROJET and not projet.chef_projet_id:
+        projet.chef_projet = affectation.utilisateur
+        projet.save(update_fields=["chef_projet", "modifie_le"])
     return affectation
+
+
+def _recaler_principaux(projet) -> None:
+    """Le principal d'une fiche qui a quitté son rôle laisse la place au titulaire suivant."""
+    for champ, code in (
+        ("chef_projet", RoleProjet.CHEF_PROJET),
+        ("conducteur_travaux", RoleProjet.CONDUCTEUR_TRAVAUX),
+    ):
+        actuel = getattr(projet, f"{champ}_id")
+        titulaires = list(titulaires_en_cours(projet, code).order_by("cree_le"))
+        if actuel and any(a.utilisateur_id == actuel for a in titulaires):
+            continue
+        suivant = titulaires[0].utilisateur if titulaires else None
+        if (suivant.pk if suivant else None) != actuel:
+            setattr(projet, champ, suivant)
+            projet.save(update_fields=[champ, "modifie_le"])
 
 
 def revoquer_affectation_projet(
@@ -414,10 +491,7 @@ def revoquer_affectation_projet(
     modifie_par: Utilisateur | None = None,
 ):
     """Révoque (soft-delete est_actif=False) ou supprime une affectation."""
-    if affectation.role_projet == RoleProjet.CHEF_PROJET:
-        if affectation.projet.chef_projet_id == affectation.utilisateur_id:
-            affectation.projet.chef_projet = None
-            affectation.projet.save(update_fields=["chef_projet", "modifie_le"])
+    projet = affectation.projet
 
     if suppression_physique:
         affectation.supprimer_definitivement()
@@ -425,3 +499,7 @@ def revoquer_affectation_projet(
         affectation.est_actif = False
         affectation.save(update_fields=["est_actif", "modifie_le"])
         affectation.delete(utilisateur=modifie_par)
+    _recaler_principaux(projet)
+    from apps.chantier.services.signatures import reevaluer_journaux_du_projet
+
+    reevaluer_journaux_du_projet(projet)

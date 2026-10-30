@@ -23,9 +23,9 @@ from rest_framework.views import APIView
 
 from apps.chantier.models import SynthesePeriodique
 from apps.chantier.permissions import (
+    PeutApprouverSynthese,
     PeutConsulterRapports,
-    PeutRedigerRapports,
-    PeutValiderRapports,
+    PeutRedigerSynthese,
 )
 from apps.chantier.selectors.journal import projets_visibles
 from apps.chantier.selectors.synthese import projection, suivi
@@ -106,9 +106,9 @@ class SyntheseSuiviView(APIView):
 
 
 class SyntheseRedactionView(APIView):
-    """Le CT tient l'accès « validation » du journal : c'est lui qui rédige la synthèse."""
+    """Rédige la synthèse qui en a la permission sur le projet (30/10/2026)."""
 
-    permission_classes = [IsAuthenticated, PeutValiderRapports]
+    permission_classes = [IsAuthenticated, PeutRedigerSynthese]
     soumettre = False
 
     def _rediger(self, request):
@@ -166,9 +166,8 @@ def _synthese(view, request, pk):
 
 
 class SyntheseApprouverView(APIView):
-    # Comme pour le rapport : le gabarit CP tient `chantier.rediger`, et le
-    # service exige en plus la fonction de chef de projet sur le chantier.
-    permission_classes = [IsAuthenticated, PeutRedigerRapports]
+    # Le service exige en plus la permission sur le projet, par le rôle de l'affectation.
+    permission_classes = [IsAuthenticated, PeutApprouverSynthese]
 
     @extend_schema(
         tags=ETIQUETTE,
@@ -190,7 +189,7 @@ class SyntheseApprouverView(APIView):
 
 
 class SyntheseRejeterView(APIView):
-    permission_classes = [IsAuthenticated, PeutValiderRapports | PeutRedigerRapports]
+    permission_classes = [IsAuthenticated, PeutApprouverSynthese]
 
     @extend_schema(
         tags=ETIQUETTE,

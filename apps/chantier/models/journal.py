@@ -22,6 +22,14 @@ class JournalChantier(ModeleBase):
     valide_ct_le = models.DateTimeField(null=True, blank=True)
     commentaire_ct = models.TextField(blank=True)
     relance_le = models.DateTimeField(null=True, blank=True)
+    # La partie du projet dont parle le rapport : le périmètre de son rédacteur (ids des cases).
+    # Vide : tout le projet.
+    perimetre_ids = models.JSONField(default=list, blank=True)
+    # Figés à la soumission (30/10/2026) : {"VALIDATION": [ids], "APPROBATION": [ids]}. Tous
+    # doivent signer, une étape après l'autre.
+    signataires_attendus = models.JSONField(default=dict, blank=True)
+    # [{"etape", "utilisateur_id", "nom", "signe_le", "commentaire"}] de la soumission en cours.
+    signatures = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "journal_chantier"

@@ -1047,6 +1047,7 @@ def propager_roles_systeme(acteur=None) -> dict:
                         libelle=modele.libelle,
                         description=modele.description,
                         portee=portee_role,
+                        unique_par_projet=bool(getattr(modele, "unique_par_projet", False)),
                         est_systeme=True,
                         est_actif=True,
                     )

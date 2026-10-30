@@ -50,6 +50,7 @@ def creer_role_systeme(
     code: str,
     libelle: str,
     description: str = "",
+    unique_par_projet: bool = False,
     acteur=None,
 ) -> ModeleRole:
     code = code.strip().upper()
@@ -62,6 +63,7 @@ def creer_role_systeme(
                 libelle=libelle.strip(),
                 description=description.strip(),
                 portee="PROJET",
+                unique_par_projet=unique_par_projet,
                 est_actif=True,
             )
 
@@ -82,9 +84,13 @@ def modifier_role_systeme(
 ) -> ModeleRole:
     avant = {"libelle": modele.libelle, "description": modele.description}
     with schema_context("public"), transaction.atomic():
+        # `unique_par_projet` n'est qu'une valeur de départ : les entreprises existantes gardent
+        # le réglage qu'elles ont choisi.
         for champ in ("libelle", "description"):
             if champ in donnees:
                 setattr(modele, champ, str(donnees[champ]).strip())
+        if "unique_par_projet" in donnees:
+            modele.unique_par_projet = bool(donnees["unique_par_projet"])
         modele.save()
 
     apres = {"libelle": modele.libelle, "description": modele.description}

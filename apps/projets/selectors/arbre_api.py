@@ -15,7 +15,7 @@ from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.perimetres import perimetre_de
 from apps.projets.services.sante_calculs import calculer_arbre
 
-__all__ = ["representer_arbre", "representer_case", "visibilite"]
+__all__ = ["equipes_par_case", "representer_arbre", "representer_case", "visibilite"]
 
 COMPLET = "COMPLET"
 CHEMIN = "CHEMIN"
@@ -37,7 +37,7 @@ def visibilite(arbre, utilisateur, request=None) -> dict:
     return acces
 
 
-def _equipes_par_case(arbre) -> dict:
+def equipes_par_case(arbre) -> dict:
     """Les équipes posées sur chaque case — directement, et par héritage (la plus précise
     l'emporte : une affectation posée plus bas remplace celle d'en haut pour cette branche)."""
     directes: dict = {}
@@ -61,6 +61,31 @@ def _equipes_par_case(arbre) -> dict:
         if porteur is not None:
             effectives[element.pk] = (porteur, directes[porteur.pk])
     return directes, effectives
+
+
+def depassement(feuille) -> float | None:
+    """Le dépassement d'une feuille mesurée en quantité, en % du prévu (430 sur 400 : 7,5).
+
+    L'avancement reste plafonné à 100 % ; le dépassement s'affiche à côté, sans rien bloquer.
+    """
+    prevue, realisee = feuille.quantite_prevue, feuille.quantite_realisee
+    if feuille.mode_mesure != "QUANTITE" or not prevue or realisee is None or realisee <= prevue:
+        return None
+    return round(float((realisee - prevue) / prevue * 100), 1)
+
+
+def a_cloturer(feuille) -> bool:
+    """À 100 %, la plateforme propose « Clôturer ? » ; elle ne clôture jamais seule."""
+    if feuille.cloture:
+        return False
+    if feuille.mode_mesure == "QUANTITE":
+        return (
+            bool(feuille.quantite_prevue)
+            and (feuille.quantite_realisee or 0) >= feuille.quantite_prevue
+        )
+    if feuille.mode_mesure == "POURCENTAGE":
+        return (feuille.pourcentage_declare or 0) >= 100
+    return False
 
 
 def representer_case(element, arbre, resultats, numeros, montants_visibles, equipes, acces):
@@ -115,6 +140,16 @@ def representer_case(element, arbre, resultats, numeros, montants_visibles, equi
             and element.mode_mesure == "QUANTITE"
             and (not element.unite or not element.quantite_prevue)
         ),
+        # Dépassement (+7,5 % sur 430 m² pour 400 prévus) et proposition « Clôturer ? »
+        "depassement": depassement(element) if feuille else None,
+        "a_cloturer": a_cloturer(element) if feuille else False,
+        "taches_en_depassement": None
+        if feuille
+        else sum(
+            1
+            for d in arbre.descendants(element)
+            if d.est_actif and arbre.est_feuille(d) and depassement(d) is not None
+        ),
         # Avancement (F3 sur l'arbre)
         "avancement": resultat.physique if resultat else None,
         "avancement_partiel": bool(resultat and resultat.partiel),
@@ -138,6 +173,9 @@ def representer_case(element, arbre, resultats, numeros, montants_visibles, equi
         "date_fin_baseline": element.date_fin_baseline,
         "date_debut_reelle": element.date_debut_reelle,
         "date_fin_reelle": element.date_fin_reelle,
+        # Avenants : l'origine plus les jours accordés (30/10/2026)
+        "jours_accordes": element.jours_accordes,
+        "date_fin_contractuelle": element.date_fin_contractuelle,
         # Exécution : propre à la case, puis effective (héritée du plus proche ancêtre)
         "mode_execution": element.mode_execution,
         "mode_execution_effectif": arbre.mode_execution(element),
@@ -165,7 +203,7 @@ def representer_arbre(projet, utilisateur, request=None, *, a_plat: bool = False
     numeros = arbre.numerotation()
     acces = visibilite(arbre, utilisateur, request)
     montants = peut_voir_montants(utilisateur, request)
-    equipes = _equipes_par_case(arbre)
+    equipes = equipes_par_case(arbre)
 
     def noeud(element):
         donnees = representer_case(

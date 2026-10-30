@@ -189,7 +189,7 @@ def reprogrammer_date_instance(
        déborde de son parent le prolonge, sur confirmation (`prolonger`), jusqu'au projet (§11).
     4. Traçabilité complète dans HistoriqueDate (avant / après / auteur / justification).
     5. Préservation immuable de la Baseline v0.
-    6. Déclenchement d'une alerte Celery au DG si le cumul de dérive > 30 jours par rapport à la Baseline v0.
+    6. Alerte Celery au DG si la dérive sur la date contractuelle (origine + avenants) > 30 jours.
     """
     motif, justif_propre = _motif_valide(motif_id, justification)
 
@@ -283,18 +283,21 @@ def reprogrammer_date_instance(
 
     instance.save(update_fields=champs_maj)
 
-    # Mesure de la dérive par rapport à la Baseline v0 & Alerte Celery
+    # La dérive se lit sur l'origine (baseline v0) ; l'alerte au DG, elle, se mesure sur la date
+    # contractuelle : un délai accordé par avenant n'est pas un retard (30/10/2026).
     baseline_fin = instance.date_fin_baseline or ancienne_fin or fin_cible
     jours_derive = (fin_cible - baseline_fin).days
+    jours_accordes = getattr(instance, "jours_accordes", 0) or 0
+    jours_derive_contractuelle = jours_derive - jours_accordes
     alerte_declenchee = False
 
-    if jours_derive > 30:
+    if jours_derive_contractuelle > 30:
         schema = getattr(connection, "schema_name", None)
         notifier_dg_derive_delai.delay(
             schema_name=schema,
             type_objet=type_objet,
             objet_id=str(instance.id),
-            jours_derive=jours_derive,
+            jours_derive=jours_derive_contractuelle,
             motif_libelle=motif.libelle,
             justification=justif_propre,
         )
@@ -318,6 +321,9 @@ def reprogrammer_date_instance(
         "date_debut_baseline": instance.date_debut_baseline,
         "date_fin_baseline": instance.date_fin_baseline,
         "jours_derive_baseline": jours_derive,
+        "jours_accordes": jours_accordes,
+        "date_fin_contractuelle": getattr(instance, "date_fin_contractuelle", None),
+        "jours_derive_contractuelle": jours_derive_contractuelle,
         "alerte_dg_declenchee": alerte_declenchee,
         "statut_retabli": statut_retabli,
         "statut": getattr(instance, "statut", None),

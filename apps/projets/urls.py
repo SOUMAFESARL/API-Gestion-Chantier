@@ -8,6 +8,7 @@ from apps.projets.views import (
     ArretChantierDetailView,
     MeteoProjetView,
     ProjetArretChantierListCreateView,
+    ProjetCourbeView,
     ProjetDetailView,
     ProjetListCreateView,
     ProjetPlanningView,
@@ -24,6 +25,7 @@ from apps.projets.views.affectation import (
     ProjetChefChantierView,
     ProjetRemplacerView,
 )
+from apps.projets.views.avenants import AvenantDetailView, AvenantDocumentView, ProjetAvenantsView
 from apps.projets.views.calendrier import (
     CalendrierEntrepriseView,
     ExceptionCalendrierDetailView,
@@ -34,8 +36,8 @@ from apps.projets.views.decoupage import (
     ElementCloturerView,
     ElementDeplacerView,
     ElementDesactiverView,
-    ElementDetailView,
     ElementDetaillerView,
+    ElementDetailView,
     ElementMesureView,
     ElementPlanifierView,
     ElementReactiverView,
@@ -48,6 +50,8 @@ from apps.projets.views.decoupage import (
     ModelePersonnaliserView,
     ModelesView,
     ProjetArbreView,
+    ProjetDecoupageExporterView,
+    ProjetDecoupageImporterView,
     ProjetDecoupageView,
     ProjetElementsView,
     ProjetNiveauDetailView,
@@ -155,6 +159,19 @@ urlpatterns = [
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
     # Découpage d'un projet : tableau de démarrage, arbre, niveaux, cases
     path("projets/<uuid:pk>/decoupage/", ProjetDecoupageView.as_view(), name="projet-decoupage"),
+    path("projets/<uuid:pk>/avenants/", ProjetAvenantsView.as_view(), name="projet-avenants"),
+    path("avenants/<uuid:pk>/", AvenantDetailView.as_view(), name="avenant-detail"),
+    path("avenants/<uuid:pk>/document/", AvenantDocumentView.as_view(), name="avenant-document"),
+    path(
+        "projets/<uuid:pk>/decoupage/importer/",
+        ProjetDecoupageImporterView.as_view(),
+        name="projet-decoupage-importer",
+    ),
+    path(
+        "projets/<uuid:pk>/decoupage/exporter/",
+        ProjetDecoupageExporterView.as_view(),
+        name="projet-decoupage-exporter",
+    ),
     path(
         "projets/<uuid:pk>/decoupage/verifier/",
         ProjetTableauVerifierView.as_view(),
@@ -249,6 +266,7 @@ urlpatterns = [
         ProjetJournalReportsConsolideView.as_view(),
         name="projet-journal-reports-consolide",
     ),
+    path("projets/<uuid:pk>/courbe/", ProjetCourbeView.as_view(), name="projet-courbe"),
     path(
         "projets/<uuid:pk>/planning/",
         ProjetPlanningView.as_view(),

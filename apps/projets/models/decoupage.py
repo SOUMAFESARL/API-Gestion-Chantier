@@ -269,6 +269,8 @@ class Element(ModeleBase):
     date_fin_baseline = models.DateField(_("fin baseline v0"), null=True, blank=True)
     date_debut_reelle = models.DateField(_("début réel"), null=True, blank=True)
     date_fin_reelle = models.DateField(_("fin réelle"), null=True, blank=True)
+    # Jours accordés par les avenants qui citent cette case (30/10/2026).
+    jours_accordes = models.IntegerField(_("jours accordés par avenant"), default=0)
 
     # --- Exécution : définie sur n'importe quel élément, héritée par ses descendants --------
     mode_execution = models.CharField(_("mode d'exécution"), max_length=60, blank=True, default="")
@@ -331,6 +333,15 @@ class Element(ModeleBase):
         self.chemin = f"{prefixe}{self.pk}/"
         self.profondeur = prefixe.count("/")
         super().save(*args, **kwargs)
+
+    @property
+    def date_fin_contractuelle(self):
+        """L'origine (baseline v0) plus les jours accordés par avenant."""
+        from datetime import timedelta
+
+        if not self.date_fin_baseline:
+            return None
+        return self.date_fin_baseline + timedelta(days=self.jours_accordes or 0)
 
     @property
     def ancetres_ids(self) -> list[str]:

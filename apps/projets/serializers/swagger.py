@@ -60,6 +60,10 @@ CHAMPS_REPONSE = (
     "peut_renommer",
     "niveaux",
     "decoupage_cree",
+    # Avenants : date et budget contractuels (30/10/2026)
+    "jours_accordes",
+    "date_fin_contractuelle",
+    "budget_contractuel",
     # L'encadrement, en lecture : le frontend en déduit qui voit le chantier.
     "chef_projet",
     "conducteurs_travaux",
@@ -218,6 +222,16 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     )
     decoupage_cree = serializers.SerializerMethodField(
         help_text="Faux tant que le tableau de démarrage n'a pas été appliqué."
+    )
+
+    jours_accordes = serializers.IntegerField(
+        read_only=True, help_text="Jours accordés par les avenants sur le projet entier."
+    )
+    date_fin_contractuelle = serializers.DateField(
+        read_only=True, help_text="L'origine (baseline v0) plus les jours accordés par avenant."
+    )
+    budget_contractuel = serializers.IntegerField(
+        read_only=True, allow_null=True, help_text="Budget initial plus les montants des avenants."
     )
 
     @extend_schema_field(NiveauProjetSimpleSerializer(many=True))

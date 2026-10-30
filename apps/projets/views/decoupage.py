@@ -7,7 +7,8 @@ sur une case vérifie la permission **dans le périmètre** (`services.perimetre
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -63,6 +64,8 @@ __all__ = [
     "ModelePersonnaliserView",
     "ModelesView",
     "ProjetArbreView",
+    "ProjetDecoupageExporterView",
+    "ProjetDecoupageImporterView",
     "ProjetDecoupageView",
     "ProjetElementsView",
     "ProjetNiveauDetailView",
@@ -108,7 +111,7 @@ def _element(request, pk, ecriture=False) -> Element:
 def _case(request, element) -> dict:
     """La case telle que l'arbre la rend, après un geste."""
     from apps.core.droits import peut_voir_montants
-    from apps.projets.selectors.arbre_api import _equipes_par_case
+    from apps.projets.selectors.arbre_api import equipes_par_case
     from apps.projets.services.sante_calculs import calculer_arbre
 
     arbre = charger_arbre(element.projet)
@@ -120,7 +123,7 @@ def _case(request, element) -> dict:
         calculer_arbre(arbre),
         arbre.numerotation(),
         peut_voir_montants(request.user, request),
-        _equipes_par_case(arbre),
+        equipes_par_case(arbre),
         acces.get(element.pk, "COMPLET"),
     )
 
@@ -345,6 +348,65 @@ def _niveaux_saisis(niveaux):
         }
         for n in niveaux
     ]
+
+
+class ProjetDecoupageImporterView(APIView):
+    """`POST /api/v1/projets/{id}/decoupage/importer/` — un fichier Excel ou CSV devient un tableau.
+
+    Rien n'est écrit : la réponse est le tableau (niveaux et lignes) et sa vérification ; on
+    l'applique ensuite par `POST /projets/{id}/decoupage/`, à la création comme pour ajouter des
+    branches à un arbre existant.
+    """
+
+    parser_classes = [MultiPartParser]
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @schema(
+        summary="Importer un fichier Excel ou CSV dans le tableau de démarrage",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            }
+        },
+    )
+    def post(self, request, pk):
+        from apps.projets.services.import_export import importer_tableau
+
+        projet = _projet(request, self, pk)
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        return Response(importer_tableau(projet, fichier))
+
+
+class ProjetDecoupageExporterView(APIView):
+    """`GET /api/v1/projets/{id}/decoupage/exporter/?type=xlsx|csv` — l'arbre au format du
+    tableau, une ligne par tâche ; le fichier se réimporte tel quel."""
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @schema(
+        summary="Exporter l'arbre en Excel ou CSV",
+        parameters=[OpenApiParameter("type", str, enum=["xlsx", "csv"])],
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.core.droits import peut_voir_montants
+        from apps.projets.services.import_export import exporter_arbre
+
+        projet = _projet(request, self, pk)
+        format_fichier = "csv" if request.query_params.get("type") == "csv" else "xlsx"
+        contenu, type_mime = exporter_arbre(
+            projet, format_fichier, montants_visibles=peut_voir_montants(request.user, request)
+        )
+        reponse = HttpResponse(contenu, content_type=type_mime)
+        nom = f"decoupage-{projet.reference or projet.pk}.{format_fichier}"
+        reponse["Content-Disposition"] = f'attachment; filename="{nom}"'
+        return reponse
 
 
 class ProjetTableauVerifierView(APIView):

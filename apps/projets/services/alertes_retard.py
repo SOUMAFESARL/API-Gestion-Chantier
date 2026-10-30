@@ -27,6 +27,7 @@ from apps.core.enums import StatutBlocage, StatutRapport
 from apps.projets.models import (
     AlerteRetard,
     Element,
+    ModeMesure,
     NiveauAlerteRetard,
     Projet,
     StatutAlerteRetard,
@@ -79,7 +80,8 @@ def extraire_causes_alerte(
     la case. Les blocages, eux, se rattachent à une case : ceux de la case, de ses descendants
     et ceux sans case.
     Causes :
-    - absences : somme des écarts (prevus - presents > 0) des lignes effectifs de saisie
+    - absences : somme des écarts (prevus - presents > 0) des lignes effectifs de saisie,
+      plus les membres d'équipe non cochés présents
     - blocages_ouverts : liste des titres des blocages OUVERT ou PRIS_EN_CHARGE
     - incidents : nombre total de lignes de saisie["incidents"]
     """
@@ -119,6 +121,18 @@ def extraire_causes_alerte(
                                     absences_total += ecart
                             except (ValueError, TypeError):
                                 pass
+
+            # Absences par équipe : les membres du jour (figés à la soumission) non cochés.
+            membres = {
+                e["equipe_id"]: len(e.get("membres", []))
+                for e in (journal.photographie or {}).get("equipes", [])
+                if isinstance(e, dict)
+            }
+            for ligne in journal.saisie.get("equipes") or []:
+                if isinstance(ligne, dict) and ligne.get("equipe_id") in membres:
+                    absences_total += max(
+                        0, membres[ligne["equipe_id"]] - len(ligne.get("presents") or [])
+                    )
 
             # Incidents : nombre de lignes saisie["incidents"]
             incidents_list = journal.saisie.get("incidents") or []
@@ -354,6 +368,50 @@ def detecter_alertes_retard(
             causes=causes,
             actions_recommandees=actions,
         )
+        if destinataires:
+            alerte.destinataires.set(destinataires)
+        alertes_creees.append(alerte)
+
+    # 4 bis. Un jalon manqué alerte toujours (30/10/2026) : sa date est passée et il n'est pas
+    #        atteint. Niveau élevé, quel que soit l'écart, et sur le jalon lui-même.
+    for feuille in arbre.feuilles():
+        jour_jalon = feuille.date_fin_prevue or feuille.date_debut_prevue
+        if (
+            feuille.mode_mesure != ModeMesure.JALON
+            or feuille.cloture
+            or arbre.suspendu(feuille)
+            or not jour_jalon
+            or jour_jalon >= date_ref
+        ):
+            continue
+        ouvertes = AlerteRetard.objects.filter(
+            projet=projet,
+            element=feuille,
+            statut__in=[StatutAlerteRetard.OUVERTE, StatutAlerteRetard.EN_COURS],
+            supprime_le__isnull=True,
+        )
+        rang_ouvert = max([ORDRE_NIVEAUX.get(x.niveau, 0) for x in ouvertes], default=0)
+        if ORDRE_NIVEAUX.get(NiveauAlerteRetard.ELEVE, 0) <= rang_ouvert:
+            continue
+        causes = {
+            "jalon_manque": feuille.libelle,
+            "date_jalon": jour_jalon.isoformat(),
+            "jours_de_retard": (date_ref - jour_jalon).days,
+        }
+        alerte = AlerteRetard.objects.create(
+            projet=projet,
+            element=feuille,
+            niveau=NiveauAlerteRetard.ELEVE,
+            delta_pts=None,
+            indice_sante=None,
+            date_detection=date_ref,
+            statut=StatutAlerteRetard.OUVERTE,
+            causes=causes,
+            actions_recommandees=[
+                "Vérifier si le jalon est atteint et le déclarer, ou replanifier sa date."
+            ],
+        )
+        destinataires = obtenir_destinataires_alerte(projet, NiveauAlerteRetard.ELEVE, feuille)
         if destinataires:
             alerte.destinataires.set(destinataires)
         alertes_creees.append(alerte)

@@ -411,6 +411,7 @@ def appliquer_tableau(
     ordres: dict = {}
     crees = 0
     ignorees = []
+    devenues_parents: dict = {}
     for ligne in verdict["_lignes"]:
         cellules = ligne["cellules"]
         dernier = max(i for i, c in enumerate(cellules) if c)
@@ -431,6 +432,8 @@ def appliquer_tableau(
                     ordres[cle_parent] = len(arbre.enfants(parent))
                 ordres[cle_parent] += 1
                 champs = _champs_feuille(ligne) if est_feuille else {}
+                if parent is not None and arbre.est_feuille(parent):
+                    devenues_parents[parent.pk] = parent
                 if parent is not None and arbre.est_feuille(parent) and parent.montant:
                     # Une feuille qui reçoit des enfants : son montant devient son enveloppe (§8).
                     parent.enveloppe, parent.montant = parent.montant, None
@@ -453,6 +456,13 @@ def appliquer_tableau(
                 ignorees.append(ligne["numero"])
             parent = element
             prefixe = chemin
+
+    if devenues_parents:
+        # Une feuille liée qui reçoit des sous-tâches leur passe ses dépendances (§13quinquies.5).
+        from apps.projets.services.dependances import transferer_liens_aux_feuilles
+
+        for ancienne_feuille in devenues_parents.values():
+            transferer_liens_aux_feuilles(ancienne_feuille, auteur=auteur)
 
     from apps.projets.services.avancement import recalculer_avancements_projet
 

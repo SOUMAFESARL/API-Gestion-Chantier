@@ -38,6 +38,8 @@ from apps.projets.views.decoupage import (
     ElementDesactiverView,
     ElementDetaillerView,
     ElementDetailView,
+    ElementDupliquerView,
+    ElementHistoriqueView,
     ElementMesureView,
     ElementPlanifierView,
     ElementReactiverView,
@@ -53,6 +55,8 @@ from apps.projets.views.decoupage import (
     ProjetDecoupageExporterView,
     ProjetDecoupageImporterView,
     ProjetDecoupageView,
+    ProjetDqeAppliquerView,
+    ProjetDqeView,
     ProjetElementsView,
     ProjetNiveauDetailView,
     ProjetNiveauxInsererView,
@@ -60,6 +64,7 @@ from apps.projets.views.decoupage import (
     ProjetTableauVerifierView,
     ValeurListeDetailView,
 )
+from apps.projets.views.dependances import DependanceDetailView, ElementDependancesView
 from apps.projets.views.equipe import (
     MainOeuvreDetailView,
     MainOeuvreListCreateView,
@@ -104,15 +109,16 @@ urlpatterns = [
         MotifReportListCreateView.as_view(),
         name="projets-motifs-report-alias",
     ),
-    # Référentiels dynamiques : types de projet et noms de lot (plateforme + entreprise)
+    # Référentiels dynamiques : types de projet et modes d'exécution (plateforme + entreprise).
+    # Les noms de lot sont la liste « Lots » du découpage (`decoupage/listes/`).
     path("referentiels/droits/", ReferentielDroitsView.as_view(), name="referentiel-droits"),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/$",
+        r"^referentiels/(?P<categorie>types-projet|modes-execution)/$",
         ReferentielListeView.as_view(),
         name="referentiel-liste",
     ),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|lots|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
+        r"^referentiels/(?P<categorie>types-projet|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
         ReferentielEntreeView.as_view(),
         name="referentiel-entree",
     ),
@@ -172,6 +178,12 @@ urlpatterns = [
         ProjetDecoupageExporterView.as_view(),
         name="projet-decoupage-exporter",
     ),
+    path("projets/<uuid:pk>/decoupage/dqe/", ProjetDqeView.as_view(), name="projet-decoupage-dqe"),
+    path(
+        "projets/<uuid:pk>/decoupage/dqe/appliquer/",
+        ProjetDqeAppliquerView.as_view(),
+        name="projet-decoupage-dqe-appliquer",
+    ),
     path(
         "projets/<uuid:pk>/decoupage/verifier/",
         ProjetTableauVerifierView.as_view(),
@@ -204,6 +216,17 @@ urlpatterns = [
     ),
     path("elements/<uuid:pk>/deplacer/", ElementDeplacerView.as_view(), name="element-deplacer"),
     path("elements/<uuid:pk>/detailler/", ElementDetaillerView.as_view(), name="element-detailler"),
+    path("elements/<uuid:pk>/dupliquer/", ElementDupliquerView.as_view(), name="element-dupliquer"),
+    # Dépendances entre tâches : B commence après la fin de A
+    path(
+        "elements/<uuid:pk>/dependances/",
+        ElementDependancesView.as_view(),
+        name="element-dependances",
+    ),
+    path("dependances/<uuid:pk>/", DependanceDetailView.as_view(), name="dependance-detail"),
+    path(
+        "elements/<uuid:pk>/historique/", ElementHistoriqueView.as_view(), name="element-historique"
+    ),
     path(
         "elements/<uuid:pk>/desactiver/", ElementDesactiverView.as_view(), name="element-desactiver"
     ),

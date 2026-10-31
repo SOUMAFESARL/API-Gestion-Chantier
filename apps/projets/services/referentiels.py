@@ -1,7 +1,11 @@
-"""Référentiels dynamiques du module Projets : types de projet, noms de lot, modes d'exécution.
+"""Référentiels dynamiques du module Projets : types de projet et modes d'exécution.
 
 Une liste = les entrées de la plateforme (super admin, communes à toutes les
 entreprises, non supprimables ici) + celles de l'entreprise. Arbitrage du 16/10/2026.
+
+Les noms de lot n'en font plus partie : la catégorie `LOT` est devenue la liste de valeurs
+« Lots » du découpage (décisions v1.2, §4.2), seule source désormais
+(`services.listes_modeles`). Les entrées `LOT` déjà en base restent, sans route qui les expose.
 """
 
 from rest_framework.exceptions import ValidationError
@@ -31,10 +35,9 @@ __all__ = [
     "table_modes_execution",
 ]
 
-# Le segment d'URL → la catégorie stockée.
+# Le segment d'URL → la catégorie stockée. Pas de « lots » : c'est une liste du découpage.
 CATEGORIES_URL = {
     "types-projet": CategorieReferentiel.TYPE_PROJET,
-    "lots": CategorieReferentiel.LOT,
     "modes-execution": CategorieReferentiel.MODE_EXECUTION,
 }
 

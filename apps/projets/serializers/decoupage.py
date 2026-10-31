@@ -4,6 +4,7 @@ Les réponses sont construites par les services (`listes_modeles`, `tableau_dema
 `selectors.arbre_api`) ; ces sérialiseurs valident ce qui entre et documentent le contrat.
 """
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.enums import TypeBordereau, UniteMesure
@@ -13,8 +14,12 @@ from apps.projets.serializers.execution import ModeExecutionField
 __all__ = [
     "AjoutValeursSerializer",
     "CreationListeSerializer",
+    "DependanceCreationSerializer",
     "DeplacementSerializer",
     "DetailSerializer",
+    "DqeApplicationSerializer",
+    "DqeBilanSerializer",
+    "DuplicationSerializer",
     "ElementCreationSerializer",
     "ElementModificationSerializer",
     "InsertionNiveauSerializer",
@@ -172,6 +177,14 @@ class PlanificationSerializer(serializers.Serializer):
     )
     motif_id = serializers.UUIDField(required=False, allow_null=True)
     justification = serializers.CharField(required=False, allow_blank=True, default="")
+    decaler_successeurs = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Les tâches qui suivent à décaler aussi (listées par l'erreur "
+        "`successeurs_a_decaler`) ; décaler est un report : motif et justification requis.",
+    )
 
 
 class DeplacementSerializer(serializers.Serializer):
@@ -239,3 +252,74 @@ class InsertionNiveauSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=60)
     liste = ReferenceSerializer(required=False, allow_null=True, default=None)
     libelle_intermediaire = serializers.CharField(max_length=200, required=False, default="Général")
+
+
+class DuplicationSerializer(serializers.Serializer):
+    """Dupliquer une branche (§13quinquies.1). Sans `parent_id`, la copie se pose à côté de
+    l'original ; `parent_id: null` la pose à la racine."""
+
+    parent_id = serializers.UUIDField(required=False, allow_null=True)
+    libelle = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    motif = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+@extend_schema_field(
+    {
+        "oneOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"type": "object", "properties": {"cellules": {"type": "array"}}},
+        ]
+    }
+)
+class LigneDqeField(serializers.Field):
+    """Une ligne lue d'un DQE, telle que le bilan l'a rendue. Seule sa forme est vérifiée ici :
+    une valeur invalide (unité inconnue, nombre illisible) ne refuse que sa ligne, avec sa raison,
+    dans le bilan."""
+
+    CHAMPS = ("unite", "quantite", "montant", "date_debut", "date_fin")
+
+    def to_internal_value(self, data):
+        if isinstance(data, list):
+            return [str(c) if c is not None else "" for c in data]
+        if isinstance(data, dict) and isinstance(data.get("cellules"), list):
+            ligne = {"cellules": [str(c) if c is not None else "" for c in data["cellules"]]}
+            ligne.update({k: data[k] for k in self.CHAMPS if data.get(k) not in (None, "")})
+            return ligne
+        raise serializers.ValidationError(
+            "Une ligne est une liste de cellules ou un objet portant `cellules`."
+        )
+
+    def to_representation(self, value):
+        return value
+
+
+class DqeBilanSerializer(serializers.Serializer):
+    """Le bilan d'un import DQE, recalculé sur des lignes déjà lues (sans fichier)."""
+
+    lignes = serializers.ListField(child=LigneDqeField(), allow_empty=False, max_length=5000)
+
+
+class DqeApplicationSerializer(serializers.Serializer):
+    lignes = serializers.ListField(child=LigneDqeField(), allow_empty=False, max_length=5000)
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Obligatoire (10 caractères au moins) quand le bilan dit `motif_requis`.",
+    )
+
+
+class DependanceCreationSerializer(serializers.Serializer):
+    """Un lien « B commence après la fin de A » : la case de l'URL est l'une des deux tâches,
+    l'autre est donnée par `predecesseur_id` (elle précède) ou `successeur_id` (elle suit)."""
+
+    predecesseur_id = serializers.UUIDField(required=False)
+    successeur_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs):
+        if bool(attrs.get("predecesseur_id")) == bool(attrs.get("successeur_id")):
+            raise serializers.ValidationError(
+                "Indiquez soit la tâche qui précède (`predecesseur_id`), soit celle qui suit "
+                "(`successeur_id`)."
+            )
+        return attrs

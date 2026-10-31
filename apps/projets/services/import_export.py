@@ -4,6 +4,12 @@
 puis, facultatives et dans n'importe quel ordre, Unité, Quantité, Montant, Début, Fin. La première
 ligne donne le nom des colonnes ; chaque ligne suivante est une tâche, comme dans le tableau.
 
+- **Les montants du fichier sont en FCFA** (comme dans un DQE) ; l'API et la base les tiennent en
+  centimes : la conversion se fait ici, à l'entrée comme à la sortie.
+- **Une colonne « Prix unitaire »**, facultative, sert seulement à calculer le montant d'une
+  ligne qui n'en porte pas : Montant = Quantité x Prix unitaire. Elle n'est pas conservée
+  (décisions v1.2, §13quinquies.1) ; un montant présent l'emporte, et un écart est signalé.
+
 - **Importer ne crée rien** : le fichier devient un tableau, vérifié comme celui qu'on saisit
   (C-1 à C-7). L'écran le montre ; on l'applique ensuite par la même route que le tableau, à la
   création comme plus tard pour ajouter des branches.
@@ -18,7 +24,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from rest_framework.exceptions import ValidationError
 
@@ -29,7 +35,7 @@ from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services import listes_modeles as lm
 from apps.projets.services.tableau_demarrage import proposer_tableau, verifier_tableau
 
-__all__ = ["exporter_arbre", "importer_tableau", "lire_fichier"]
+__all__ = ["exporter_arbre", "importer_tableau", "lire_fichier", "lire_tableau"]
 
 TAILLE_MAX = 5 * 1024 * 1024
 LIGNES_MAX = 5000
@@ -38,7 +44,18 @@ LIGNES_MAX = 5000
 COLONNES_DONNEES = {
     "unite": {"unite", "unites", "u"},
     "quantite": {"quantite", "quantite prevue", "qte", "quantites"},
-    "montant": {"montant", "montant (fcfa)", "montant fcfa", "montants", "valeur"},
+    "montant": {"montant", "montant (fcfa)", "montant fcfa", "montants", "valeur", "montant ht"},
+    "prix_unitaire": {
+        "prix unitaire",
+        "prix unitaire (fcfa)",
+        "prix unitaire fcfa",
+        "prix unitaire ht",
+        "pu",
+        "p.u",
+        "p.u.",
+        "p. u.",
+        "prix u",
+    },
     "date_debut": {"debut", "date de debut", "date debut", "debut prevu"},
     "date_fin": {"fin", "date de fin", "date fin", "fin prevue"},
 }
@@ -132,6 +149,17 @@ def _nombre(valeur: str):
         return valeur  # la vérification dira que la valeur est invalide
 
 
+def _centimes(fcfa: Decimal) -> int:
+    """1 234 567,50 FCFA → 123 456 750 centimes (arrondi au centime le plus proche)."""
+    return int((fcfa * 100).quantize(Decimal("1"), ROUND_HALF_UP))
+
+
+def _fcfa(centimes: int):
+    """L'inverse, pour l'export : un entier quand le montant tombe juste."""
+    valeur = Decimal(centimes) / 100
+    return int(valeur) if valeur == valeur.to_integral_value() else float(valeur)
+
+
 def _date(valeur: str):
     if not valeur:
         return None
@@ -178,8 +206,14 @@ def _niveaux_pour(projet, libelles: list[str]) -> list[dict]:
     return niveaux
 
 
-def importer_tableau(projet, fichier) -> dict:
-    """Le fichier devient un tableau de démarrage, vérifié ; rien n'est écrit."""
+def lire_tableau(projet, fichier) -> dict:
+    """Le fichier, lu au format du tableau : `{niveaux, lignes, avertissements}`.
+
+    Chaque ligne est un objet `{"cellules": [...], "unite", "quantite", "montant", "date_debut",
+    "date_fin"}` (les champs absents du fichier sont omis), le montant en centimes. Les
+    avertissements propres au fichier (montant différent de Quantité x Prix unitaire) ont la
+    règle `PU`. Rien n'est écrit.
+    """
     lignes = lire_fichier(fichier)
     if len(lignes) < 2:
         raise ValidationError(
@@ -196,8 +230,8 @@ def importer_tableau(projet, fichier) -> dict:
     if not colonnes_niveaux:
         raise ValidationError({"fichier": "Aucune colonne de niveau (Phase, Lot, Activité…)."})
     niveaux = _niveaux_pour(projet, [entetes[i] for i in colonnes_niveaux])
-    tableau = []
-    for ligne in lignes[1:]:
+    tableau, avertissements = [], []
+    for numero, ligne in enumerate(lignes[1:], start=1):
 
         def valeur(i, ligne=ligne):
             return ligne[i] if i is not None and i < len(ligne) else ""
@@ -206,19 +240,45 @@ def importer_tableau(projet, fichier) -> dict:
         unite = valeur(colonnes_donnees.get("unite"))
         if unite:
             objet["unite"] = UNITES.get(cle_comparaison(unite), unite)
-        for champ in ("quantite", "montant"):
-            nombre = _nombre(valeur(colonnes_donnees.get(champ)))
-            if nombre is not None:
-                objet[champ] = str(nombre) if isinstance(nombre, Decimal) else nombre
+        quantite = _nombre(valeur(colonnes_donnees.get("quantite")))
+        if quantite is not None:
+            objet["quantite"] = str(quantite) if isinstance(quantite, Decimal) else quantite
+        montant = _nombre(valeur(colonnes_donnees.get("montant")))
+        prix = _nombre(valeur(colonnes_donnees.get("prix_unitaire")))
+        calcule = (
+            quantite * prix if isinstance(quantite, Decimal) and isinstance(prix, Decimal) else None
+        )
+        if isinstance(montant, Decimal):
+            objet["montant"] = _centimes(montant)
+            if calcule is not None and abs(calcule - montant) >= 1:
+                avertissements.append(
+                    {
+                        "regle": "PU",
+                        "ligne": numero,
+                        "message": f"Ligne {numero} : le montant ({montant} FCFA) diffère de "
+                        f"quantité x prix unitaire ({calcule} FCFA) ; le montant est retenu.",
+                    }
+                )
+        elif montant is not None:
+            objet["montant"] = montant  # la vérification dira que la valeur est invalide
+        elif calcule is not None:
+            objet["montant"] = _centimes(calcule)
         for champ in ("date_debut", "date_fin"):
             jour = _date(valeur(colonnes_donnees.get(champ)))
             if jour:
                 objet[champ] = jour
         tableau.append(objet)
-    verdict = verifier_tableau(niveaux, tableau)
+    return {"niveaux": niveaux, "lignes": tableau, "avertissements": avertissements}
+
+
+def importer_tableau(projet, fichier) -> dict:
+    """Le fichier devient un tableau de démarrage, vérifié ; rien n'est écrit."""
+    lu = lire_tableau(projet, fichier)
+    verdict = verifier_tableau(lu["niveaux"], lu["lignes"])
     verdict.pop("_lignes", None)
     verdict.pop("lignes_retenues", None)
-    return {"niveaux": niveaux, "lignes": tableau, "verification": verdict}
+    verdict["avertissements"] = [*verdict["avertissements"], *lu["avertissements"]]
+    return {"niveaux": lu["niveaux"], "lignes": lu["lignes"], "verification": verdict}
 
 
 def _lignes_export(projet, montants_visibles: bool) -> tuple[list[str], list[list]]:
@@ -247,7 +307,7 @@ def _lignes_export(projet, montants_visibles: bool) -> tuple[list[str], list[lis
             "quantite": float(feuille.quantite_prevue)
             if feuille.quantite_prevue is not None
             else "",
-            "montant": feuille.montant if feuille.montant is not None else "",
+            "montant": _fcfa(feuille.montant) if feuille.montant is not None else "",
             "date_debut": feuille.date_debut_prevue or "",
             "date_fin": feuille.date_fin_prevue or "",
         }

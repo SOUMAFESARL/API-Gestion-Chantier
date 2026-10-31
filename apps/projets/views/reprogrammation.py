@@ -104,6 +104,15 @@ class BaseReprogrammerView(APIView):
 
         element = instance if type_objet == TypeObjetHistorique.ELEMENT else None
         exiger(request.user, "projets.planifier", projet, element, request=request)
+        if data["apercu"]:
+            from apps.projets.services.reprogrammation import apercu_reprogrammation
+
+            return Response(
+                apercu_reprogrammation(
+                    instance, data.get("date_debut_prevue"), data["date_fin_prevue"]
+                ),
+                status=status.HTTP_200_OK,
+            )
         if type_objet == TypeObjetHistorique.PROJET:
             # Prolonger le projet exige `projets.prolonger` (§11.2) ; l'avancer, `planifier`.
             if data["date_fin_prevue"] > (projet.date_fin_prevue or data["date_fin_prevue"]):
@@ -117,6 +126,8 @@ class BaseReprogrammerView(APIView):
             auteur=request.user,
             prolonger=data.get("prolonger", False),
             autorise_a_prolonger=peut(request.user, "projets.prolonger", projet, element, request),
+            decaler_successeurs=data.get("decaler_successeurs"),
+            autorise=lambda code, case: peut(request.user, code, projet, case, request),
         )
 
         resultat["type_objet"] = type_objet
@@ -144,12 +155,16 @@ class ProjetReprogrammerView(BaseReprogrammerView):
 
 
 class ElementReprogrammerView(BaseReprogrammerView):
-    """Reprogrammation des dates prévisionnelles d'une case de l'arbre (§11).
+    """Reprogrammation des dates prévisionnelles d'une case de l'arbre (§11, §13quinquies.5).
 
     Le parent encadre : on ne resserre pas une case en deçà de ses enfants. Des dates qui
     débordent du parent répondent `prolongation_requise` avec la liste des cases à prolonger ;
     `prolonger: true` confirme. Prolonger le projet ou une case commencée exige
     `projets.prolonger`.
+
+    Dépendances : `apercu: true` rend les effets sans rien écrire, dont les successeurs qui
+    commenceraient trop tôt (« décaler aussi » coché par défaut) ; `decaler_successeurs` confirme
+    ceux à décaler. Un début avant la fin d'un prédécesseur répond `dependance_non_respectee`.
     """
 
     @extend_schema(
@@ -161,7 +176,11 @@ class ElementReprogrammerView(BaseReprogrammerView):
             400: OpenApiResponse(description="Justification < 30 car., motif invalide."),
             403: OpenApiResponse(description="Hors périmètre, ou prolongation non autorisée."),
             404: OpenApiResponse(description="Case introuvable."),
-            422: OpenApiResponse(description="`prolongation_requise` : confirmer la prolongation."),
+            422: OpenApiResponse(
+                description="`prolongation_requise` : confirmer la prolongation ; "
+                "`successeurs_a_decaler` : confirmer le décalage des tâches qui suivent ; "
+                "`dependance_non_respectee` : un prédécesseur finit après le nouveau début."
+            ),
         },
     )
     def post(self, request, pk):

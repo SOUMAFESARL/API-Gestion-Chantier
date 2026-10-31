@@ -1,4 +1,8 @@
-"""`/api/v1/referentiels/{types-projet|lots}/` — listes dynamiques du module Projets."""
+"""`/api/v1/referentiels/{types-projet|modes-execution}/` — listes dynamiques du module Projets.
+
+Les noms de lot ne passent plus par ici : ce sont les valeurs de la liste « Lots » du découpage
+(`/api/v1/decoupage/listes/`).
+"""
 
 from django.http import Http404
 from drf_spectacular.utils import extend_schema, inline_serializer

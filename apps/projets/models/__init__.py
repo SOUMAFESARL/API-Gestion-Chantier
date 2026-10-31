@@ -23,6 +23,7 @@ from .decoupage import (
     NiveauProjet,
     ValeurListeEntreprise,
 )
+from .dependance import Dependance
 from .equipe import (
     AffectationEquipeElement,
     EquipeChantier,
@@ -44,6 +45,7 @@ __all__ = [
     "AffectationProjet",
     "AlerteRetard",
     "ArretChantier",
+    "Dependance",
     "Element",
     "EquipeChantier",
     "ExceptionCalendrier",

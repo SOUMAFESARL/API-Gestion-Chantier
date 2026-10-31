@@ -23,6 +23,7 @@ from apps.projets.tasks import notifier_dg_derive_delai
 
 __all__ = [
     "ProlongationRequise",
+    "apercu_reprogrammation",
     "planifier_element",
     "reprogrammer_date_instance",
 ]
@@ -123,6 +124,15 @@ def _appliquer_prolongations(
     return [p.en_dict() for p in prolongations]
 
 
+def _autorise_par_defaut(autorise_a_prolonger: bool):
+    """Sans règle de périmètre fournie : on ne décale aucun successeur (la vue la fournit)."""
+
+    def autorise(code, _case):
+        return code == "projets.prolonger" and autorise_a_prolonger
+
+    return autorise
+
+
 @transaction.atomic
 def planifier_element(
     element: Element,
@@ -134,9 +144,15 @@ def planifier_element(
     motif_id=None,
     justification: str = "",
     auteur=None,
+    decaler_successeurs=None,
+    autorise=None,
 ) -> dict:
     """Première saisie des dates d'une case (planification) — sans motif, sauf s'il faut
-    prolonger un parent déjà daté : c'est alors une reprogrammation du parent (§11.1)."""
+    prolonger un parent déjà daté, ou décaler une tâche qui la suit : c'est alors une
+    reprogrammation de cette case-là (§11.1, §13quinquies.5).
+
+    Une tâche ne commence pas avant la fin de ses prédécesseurs (`dependance_non_respectee`).
+    """
     if date_debut and date_fin and date_fin < date_debut:
         raise serializers.ValidationError(
             {"date_fin_prevue": "La date de fin ne peut pas précéder la date de début."}
@@ -146,13 +162,23 @@ def planifier_element(
         prolongations_necessaires,
         verifier_enfants_contenus,
     )
+    from apps.projets.services.dependances import (
+        appliquer_decalages,
+        decalages_necessaires,
+        verifier_predecesseurs,
+    )
 
     verifier_enfants_contenus(element, date_debut, date_fin)
+    verifier_predecesseurs(element, date_debut)
+    a_prolonger = prolongations_necessaires(
+        element, date_debut, date_fin, charger_arbre(element.projet)
+    )
+    a_decaler = decalages_necessaires(element, date_fin)
+    motif, justif = (None, "")
+    if (a_prolonger and prolonger) or (a_decaler and decaler_successeurs is not None):
+        motif, justif = _motif_valide(motif_id, justification)
     prolongations = []
-    if prolongations_necessaires(element, date_debut, date_fin, charger_arbre(element.projet)):
-        motif, justif = (None, "")
-        if prolonger:
-            motif, justif = _motif_valide(motif_id, justification)
+    if a_prolonger:
         prolongations = _appliquer_prolongations(
             element,
             date_debut,
@@ -166,7 +192,86 @@ def planifier_element(
     element.date_debut_prevue = date_debut
     element.date_fin_prevue = date_fin
     element.save()
-    return {"instance": element, "prolongations": prolongations}
+    decalages = appliquer_decalages(
+        element,
+        date_fin,
+        decaler_successeurs=decaler_successeurs,
+        autorise=autorise or _autorise_par_defaut(autorise_a_prolonger),
+        motif=motif,
+        justification=justif,
+        prolonger=prolonger,
+        auteur=auteur,
+    )
+    return {"instance": element, "prolongations": prolongations, "decalages": decalages}
+
+
+def apercu_reprogrammation(instance, date_debut: date | None, date_fin: date | None) -> dict:
+    """Ce que changerait un report, sans rien écrire (§11, §13quinquies.5).
+
+    Les cases parentes à prolonger ; les successeurs qui commenceraient trop tôt, avec leurs
+    nouvelles dates et « décaler aussi » coché par défaut ; et ce qui refuserait le report
+    (un prédécesseur qui finit après le nouveau début, un enfant qui sortirait du cadre).
+    """
+    from django.core.exceptions import ValidationError as ValidationDjango
+    from rest_framework.exceptions import ValidationError
+
+    from apps.projets.selectors.arbre import charger_arbre
+    from apps.projets.services.calendrier import (
+        prolongations_necessaires,
+        verifier_enfants_contenus,
+    )
+    from apps.projets.services.dependances import (
+        DependanceNonRespectee,
+        decalages_necessaires,
+        verifier_predecesseurs,
+    )
+
+    debut = date_debut or instance.date_debut_prevue
+    fin = date_fin
+    refus = []
+    try:
+        verifier_enfants_contenus(instance, debut, fin)
+    except (ValidationError, ValidationDjango) as erreur:
+        detail = getattr(erreur, "detail", {}) or {}
+        message = next(iter(detail.values()), "") if isinstance(detail, dict) else detail
+        refus.append({"code": "enfants_hors_cadre", "message": str(message)})
+    prolongations, successeurs = [], []
+    if isinstance(instance, Element):
+        try:
+            verifier_predecesseurs(instance, debut)
+        except DependanceNonRespectee as erreur:
+            refus.append(
+                {
+                    "code": erreur.code_metier,
+                    "message": str(erreur.detail),
+                    "details": erreur.details,
+                }
+            )
+        arbre = charger_arbre(instance.projet)
+        prolongations = [
+            p.en_dict() for p in prolongations_necessaires(instance, debut, fin, arbre)
+        ]
+        for decalage in decalages_necessaires(instance, fin):
+            successeurs.append(
+                {
+                    **decalage.en_dict(),
+                    "prolongations": [
+                        p.en_dict()
+                        for p in prolongations_necessaires(
+                            decalage.cible, decalage.debut_apres, decalage.fin_apres, arbre
+                        )
+                    ],
+                }
+            )
+    return {
+        "date_debut_prevue": debut,
+        "date_fin_prevue": fin,
+        "date_debut_avant": instance.date_debut_prevue,
+        "date_fin_avant": instance.date_fin_prevue,
+        "prolongations": prolongations,
+        "successeurs_a_decaler": successeurs,
+        "refus": refus,
+    }
 
 
 @transaction.atomic
@@ -179,6 +284,8 @@ def reprogrammer_date_instance(
     auteur=None,
     prolonger: bool = False,
     autorise_a_prolonger: bool = False,
+    decaler_successeurs=None,
+    autorise=None,
 ) -> dict:
     """Reprogramme les dates prévisionnelles d'un projet ou d'une case de son découpage.
 
@@ -190,6 +297,9 @@ def reprogrammer_date_instance(
     4. Traçabilité complète dans HistoriqueDate (avant / après / auteur / justification).
     5. Préservation immuable de la Baseline v0.
     6. Alerte Celery au DG si la dérive sur la date contractuelle (origine + avenants) > 30 jours.
+    7. Dépendances (§13quinquies.5) : une tâche ne commence pas avant la fin de ses
+       prédécesseurs ; les successeurs qui commenceraient trop tôt ne sont décalés que s'ils
+       sont confirmés (`decaler_successeurs`), sinon le report est refusé en les listant.
     """
     motif, justif_propre = _motif_valide(motif_id, justification)
 
@@ -230,6 +340,9 @@ def reprogrammer_date_instance(
 
     prolongations = []
     if type_objet == TypeObjetHistorique.ELEMENT:
+        from apps.projets.services.dependances import verifier_predecesseurs
+
+        verifier_predecesseurs(instance, debut_cible)
         prolongations = _appliquer_prolongations(
             instance,
             debut_cible,
@@ -283,6 +396,21 @@ def reprogrammer_date_instance(
 
     instance.save(update_fields=champs_maj)
 
+    decalages = []
+    if type_objet == TypeObjetHistorique.ELEMENT:
+        from apps.projets.services.dependances import appliquer_decalages
+
+        decalages = appliquer_decalages(
+            instance,
+            fin_cible,
+            decaler_successeurs=decaler_successeurs,
+            autorise=autorise or _autorise_par_defaut(autorise_a_prolonger),
+            motif=motif,
+            justification=justif_propre,
+            prolonger=prolonger,
+            auteur=auteur,
+        )
+
     # La dérive se lit sur l'origine (baseline v0) ; l'alerte au DG, elle, se mesure sur la date
     # contractuelle : un délai accordé par avenant n'est pas un retard (30/10/2026).
     baseline_fin = instance.date_fin_baseline or ancienne_fin or fin_cible
@@ -329,4 +457,5 @@ def reprogrammer_date_instance(
         "statut": getattr(instance, "statut", None),
         "historiques": historiques_crees,
         "prolongations": prolongations,
+        "decalages": decalages,
     }

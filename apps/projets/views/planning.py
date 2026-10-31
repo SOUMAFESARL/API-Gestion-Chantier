@@ -15,9 +15,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import GardePermissionProjet
-from apps.projets.models import Projet
+from apps.projets.models import Dependance, Projet
 from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.selectors.arbre_api import COMPLET, visibilite
+from apps.projets.services.dependances import respectee
 from apps.projets.services.indicateurs_temporels import calendrier_pour_elements
 from apps.projets.services.sante_calculs import calculer_arbre, calculer_temporels_arbre
 
@@ -39,9 +40,22 @@ class PlanningCaseSerializer(serializers.Serializer):
     enfants = serializers.ListField(child=serializers.DictField())
 
 
+class PlanningDependanceSerializer(serializers.Serializer):
+    """Une flèche du Gantt : B commence après la fin de A."""
+
+    id = serializers.UUIDField()
+    predecesseur_id = serializers.UUIDField()
+    successeur_id = serializers.UUIDField()
+    respectee = serializers.BooleanField(
+        allow_null=True,
+        help_text="Faux : B commence avant la fin de A ; nul : une des deux dates manque.",
+    )
+
+
 class PlanningSerializer(serializers.Serializer):
     aujourdhui = serializers.DateField()
     cases = PlanningCaseSerializer(many=True)
+    dependances = PlanningDependanceSerializer(many=True)
 
 
 def _dates_contractuelles(element) -> tuple[str | None, str | None]:
@@ -74,7 +88,8 @@ class ProjetPlanningView(APIView):
         description=(
             "Payload minimal pour la 3G : les cases actives de l'arbre, imbriquées, dates "
             "contractuelles (baseline si complète, sinon prévues) au format ISO, pourcentages "
-            "arrondis à 1 décimale. Le périmètre de lecture s'applique."
+            "arrondis à 1 décimale, et les dépendances entre tâches (flèches). Le périmètre de "
+            "lecture s'applique."
         ),
         responses={
             200: PlanningSerializer,
@@ -124,6 +139,20 @@ class ProjetPlanningView(APIView):
         donnees = {
             "aujourdhui": aujourdhui.isoformat(),
             "cases": [case(e) for e in arbre.racines() if e.pk in acces],
+            # Les flèches entre tâches que la personne voit toutes deux en entier.
+            "dependances": [
+                {
+                    "id": lien.pk,
+                    "predecesseur_id": lien.predecesseur_id,
+                    "successeur_id": lien.successeur_id,
+                    "respectee": respectee(
+                        arbre.par_id[lien.predecesseur_id], arbre.par_id[lien.successeur_id]
+                    ),
+                }
+                for lien in Dependance.objects.filter(projet=projet)
+                if acces.get(lien.predecesseur_id) == COMPLET
+                and acces.get(lien.successeur_id) == COMPLET
+            ],
         }
         return Response(PlanningSerializer(donnees).data, status=status.HTTP_200_OK)
 

@@ -41,6 +41,7 @@ __all__ = [
     "deplacer_element",
     "desactiver_element",
     "detailler_feuille",
+    "dupliquer_branche",
     "inserer_niveau",
     "mesurer_feuille",
     "modifier_element",
@@ -163,6 +164,19 @@ def _recalculer(projet) -> None:
     recalculer_avancements_projet(projet)
 
 
+def _transferer_liens(ancienne_feuille, auteur) -> None:
+    """Une feuille liée devient un parent : ses nouvelles feuilles reprennent ses liens."""
+    from apps.projets.services.dependances import transferer_liens_aux_feuilles
+
+    transferer_liens_aux_feuilles(ancienne_feuille, auteur=auteur)
+
+
+def _retirer_liens(element, auteur, evenement: str) -> None:
+    from apps.projets.services.dependances import retirer_liens_branche
+
+    retirer_liens_branche(element, auteur=auteur, evenement=evenement)
+
+
 def _reecrire_chemins(element) -> None:
     """Après un déplacement, chaque descendant reprend le chemin de son nouveau parent."""
     element.save()
@@ -213,6 +227,7 @@ def ajouter_element(
     niveau = _niveau_pour_enfant(arbre, niveaux, parent, niveau)
     _verifier_nom_libre(projet, parent, libelle)
     ordre = champs.pop("ordre", None) or (len(arbre.enfants(parent)) + 1)
+    parent_etait_feuille = parent is not None and arbre.est_feuille(parent)
     _devenir_parent(parent)
     try:
         element = Element.objects.create(
@@ -226,6 +241,8 @@ def ajouter_element(
         )
     except IntegrityError:
         raise ErreurConflit("Deux cases sœurs ne portent pas le même intitulé (A-6).") from None
+    if parent_etait_feuille:
+        _transferer_liens(parent, auteur)
     if motif:
         _tracer(element, auteur, "AJOUT_SOUS_CASE_COMMENCEE", motif=motif)
     _recalculer(projet)
@@ -233,7 +250,16 @@ def ajouter_element(
 
 
 @transaction.atomic
-def modifier_element(element: Element, *, donnees: dict, auteur=None, motif: str = "") -> Element:
+def modifier_element(
+    element: Element,
+    *,
+    donnees: dict,
+    auteur=None,
+    motif: str = "",
+    evenement: str = "MODIFICATION",
+    tracer_toujours: bool = False,
+    recalculer: bool = True,
+) -> Element:
     """Renommer, recoder, chiffrer, métrer, régler l'exécution d'une case.
 
     - Une **feuille** porte mode de mesure, unité, quantité prévue et montant ; un **parent**,
@@ -242,6 +268,9 @@ def modifier_element(element: Element, *, donnees: dict, auteur=None, motif: str
       change plus, et changer la quantité ou le montant est une modification tracée (§11bis).
     - Les dates se planifient par `planifier_element` et se reprogramment par
       `reprogrammer_date_instance` : elles ne passent pas ici.
+
+    Un geste en masse (l'import du DQE) nomme son `evenement`, trace chaque case touchée
+    (`tracer_toujours`) et ne recalcule l'avancement qu'une fois, à la fin (`recalculer`).
     """
     arbre = charger_arbre(element.projet)
     element = arbre.par_id[element.pk]
@@ -312,16 +341,17 @@ def modifier_element(element: Element, *, donnees: dict, auteur=None, motif: str
     if len(champs) == 1:
         return element
     element.save(update_fields=list(dict.fromkeys(champs)))
-    if motif or commence:
+    if motif or commence or tracer_toujours:
         _tracer(
             element,
             auteur,
-            "MODIFICATION",
+            evenement,
             avant=avant,
             apres={k: _serialisable(getattr(element, k)) for k in avant},
             motif=motif,
         )
-    _recalculer(element.projet)
+    if recalculer:
+        _recalculer(element.projet)
     return element
 
 
@@ -334,9 +364,15 @@ def _serialisable(valeur):
 # --------------------------------------------------------------------------
 # Déplacer (§12.4)
 # --------------------------------------------------------------------------
-def _verifier_deplacement(arbre, element, nouveau_parent) -> None:
+def _verifier_destination(arbre, element, nouveau_parent, geste: str = "déplace") -> None:
+    """Où une case (et sa branche) peut se poser : déplacement (§12.4) ou copie (§13quinquies.1).
+
+    Sous un parent du niveau juste au-dessus ou du même niveau (récursion), jamais dans sa
+    propre branche, ni sous une tâche commencée (A-5), ni parmi des frères d'un autre niveau
+    (A-2). L'intitulé (A-6) se vérifie à part : une copie en reçoit un nouveau.
+    """
     if nouveau_parent is not None and nouveau_parent.chemin.startswith(element.chemin):
-        raise ErreurMetier("Une case ne se déplace pas sous elle-même ni sous ses descendants.")
+        raise ErreurMetier(f"Une case ne se {geste} pas sous elle-même ni sous ses descendants.")
     if nouveau_parent is None:
         if element.niveau.ordre != 1:
             raise ErreurMetier("Seule une case du premier niveau se place à la racine (A-1).")
@@ -344,8 +380,8 @@ def _verifier_deplacement(arbre, element, nouveau_parent) -> None:
         ordre_parent, ordre_case = nouveau_parent.niveau.ordre, element.niveau.ordre
         if ordre_case not in (ordre_parent, ordre_parent + 1):
             raise ErreurMetier(
-                "On déplace une case sous un parent du niveau juste au-dessus, ou du même niveau "
-                "(récursion) : on ne saute pas de niveau (A-1)."
+                f"On {geste} une case sous un parent du niveau juste au-dessus, ou du même "
+                "niveau (récursion) : on ne saute pas de niveau (A-1)."
             )
         if arbre.est_feuille(nouveau_parent) and arbre.commence(nouveau_parent):
             raise ErreurMetier(
@@ -358,6 +394,10 @@ def _verifier_deplacement(arbre, element, nouveau_parent) -> None:
             f"Les enfants de la destination sont du niveau « {freres[0].niveau.libelle} » : une "
             "case d'un autre niveau ne s'y mêle pas (A-2)."
         )
+
+
+def _verifier_deplacement(arbre, element, nouveau_parent) -> None:
+    _verifier_destination(arbre, element, nouveau_parent)
     _verifier_nom_libre(arbre.projet, nouveau_parent, element.libelle, exclure=element)
 
 
@@ -550,6 +590,115 @@ def deplacer_element(
 
 
 # --------------------------------------------------------------------------
+# Dupliquer une branche (§13quinquies.1)
+# --------------------------------------------------------------------------
+#: Ce que la copie reprend : la structure, les unités, les quantités, les montants, le mode et
+#: le titulaire. Ni mesures, ni dates, ni baselines, ni affectations, ni équipes.
+CHAMPS_COPIES = (
+    "niveau_id",
+    "mode_mesure",
+    "unite",
+    "quantite_prevue",
+    "montant",
+    "enveloppe",
+    "mode_execution",
+    "type_bordereau",
+    "titulaire_id",
+)
+SUFFIXE_COPIE = "copie"
+
+
+def intitule_de_copie(projet, parent, libelle: str) -> str:
+    """« Murs RDC (copie) », puis « Murs RDC (copie 2) »… : le premier intitulé libre (A-6)."""
+    pris = set(
+        Element.objects.filter(projet=projet, parent=parent).values_list(
+            "cle_comparaison", flat=True
+        )
+    )
+    rang = 1
+    while True:
+        suffixe = f" ({SUFFIXE_COPIE})" if rang == 1 else f" ({SUFFIXE_COPIE} {rang})"
+        candidat = libelle[: 200 - len(suffixe)] + suffixe
+        if cle_comparaison(candidat) not in pris:
+            return candidat
+        rang += 1
+
+
+@transaction.atomic
+def dupliquer_branche(
+    element: Element,
+    *,
+    destination: Element | None,
+    libelle: str = "",
+    auteur=None,
+    motif: str = "",
+) -> tuple[Element, int]:
+    """Copie une case et sa branche active sous `destination` ; rend la copie et le nombre de
+    cases créées.
+
+    La copie se pose sous un parent autorisé, comme un déplacement (§12.4), et reçoit un
+    intitulé unique parmi ses frères (A-6) : celui demandé, sinon « … (copie) ». Le code libre
+    n'est pas repris (il numérote une ligne du bordereau du client) ; les cases désactivées ne
+    sont pas copiées. Poser la copie sous une case commencée est une modification tracée.
+    """
+    arbre = charger_arbre(element.projet)
+    element = arbre.par_id[element.pk]
+    if not element.est_actif:
+        raise ErreurMetier("Une case désactivée ne se duplique pas : réactivez-la d'abord.")
+    destination = arbre.par_id[destination.pk] if destination is not None else None
+    _verifier_destination(arbre, element, destination, geste="copie")
+    if destination is not None and arbre.commence(destination):
+        motif = _exiger_motif(motif, "Ajouter sous une case commencée")
+    libelle = " ".join((libelle or "").split())
+    if libelle:
+        _verifier_nom_libre(element.projet, destination, libelle)
+    else:
+        libelle = intitule_de_copie(element.projet, destination, element.libelle)
+
+    destination_etait_feuille = destination is not None and arbre.est_feuille(destination)
+    _devenir_parent(destination)
+    compte = 0
+
+    def copier(source, parent, intitule, ordre):
+        nonlocal compte
+        copie = Element.objects.create(
+            projet=source.projet,
+            parent=parent,
+            libelle=intitule,
+            ordre=ordre,
+            cree_par=auteur,
+            **{champ: getattr(source, champ) for champ in CHAMPS_COPIES},
+        )
+        compte += 1
+        for rang, enfant in enumerate(arbre.enfants_actifs(source), start=1):
+            copier(enfant, copie, enfant.libelle, rang)
+        return copie
+
+    try:
+        racine = copier(element, destination, libelle, len(arbre.enfants(destination)) + 1)
+    except IntegrityError:
+        raise ErreurConflit("Deux cases sœurs ne portent pas le même intitulé (A-6).") from None
+    if destination_etait_feuille:
+        _transferer_liens(destination, auteur)
+    _tracer(
+        racine,
+        auteur,
+        "DUPLICATION",
+        apres={"source": str(element.pk), "cases_copiees": compte},
+        motif=motif,
+    )
+    _tracer(
+        element,
+        auteur,
+        "DUPLIQUEE",
+        apres={"copie": str(racine.pk), "cases_copiees": compte},
+        motif=motif,
+    )
+    _recalculer(element.projet)
+    return racine, compte
+
+
+# --------------------------------------------------------------------------
 # Détailler une feuille (§12.5)
 # --------------------------------------------------------------------------
 @transaction.atomic
@@ -653,6 +802,9 @@ def detailler_feuille(
                 **champs,
             )
         )
+    # Les sous-tâches héritent des prédécesseurs de la feuille ; ses successeurs les attendent
+    # toutes (§13quinquies.5).
+    _transferer_liens(feuille, auteur)
     _tracer(
         feuille,
         auteur,
@@ -831,6 +983,7 @@ def supprimer_element(element: Element, *, auteur=None) -> None:
             details={"geste": "DESACTIVER"},
         )
     parent = arbre.par_id.get(element.parent_id)
+    _retirer_liens(element, auteur, "LIENS_RETIRES_SUPPRESSION")
     for case in sorted(
         [element, *arbre.descendants(element)], key=lambda c: c.profondeur, reverse=True
     ):
@@ -846,6 +999,8 @@ def desactiver_element(element: Element, *, auteur=None, motif: str = "") -> Ele
     element.est_actif = False
     element.motif = motif
     element.save(update_fields=["est_actif", "motif", "modifie_le"])
+    # Une case désactivée sort des calculs : les liens de sa branche sont retirés (tracé).
+    _retirer_liens(element, auteur, "LIENS_RETIRES_DESACTIVATION")
     parent = element.parent
     _redevenir_feuille_si_besoin(parent)
     _tracer(element, auteur, "DESACTIVATION", motif=motif)

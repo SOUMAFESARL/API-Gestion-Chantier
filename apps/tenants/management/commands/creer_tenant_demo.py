@@ -44,18 +44,24 @@ class Command(BaseCommand):
     # casse —, la transaction est déjà avortée : le rattrapage lève
     # `InFailedSqlTransaction`, et c'est cette exception-là qui remonte.
     # L'erreur d'origine, la seule qui dise ce qui n'a pas marché, est perdue.
+    #
+    # **Ni `get_or_create`**, pour la même raison : il enveloppe sa création dans
+    # un `transaction.atomic`. Toutes les migrations du schéma y tournaient d'un
+    # bloc, et la 0033 d'`accounts` butait sur les déclencheurs différés laissés
+    # par les rôles de la 0028 (31/10/2026). `provisionner` fait de même.
     def handle(self, *args, **options):
-        entreprise, cree = Entreprise.objects.get_or_create(
-            schema_name=CODE_SCHEMA,
-            defaults={
-                "raison_sociale": "Entreprise de démonstration",
-                "nom_commercial": "Démo BTP",
-                "pays": "CI",
-                "ville": "Abidjan",
-                "email_contact": options["email"],
-                "statut": StatutEntreprise.ESSAI,
-            },
-        )
+        entreprise = Entreprise.objects.filter(schema_name=CODE_SCHEMA).first()
+        cree = entreprise is None
+        if cree:
+            entreprise = Entreprise.objects.create(
+                schema_name=CODE_SCHEMA,
+                raison_sociale="Entreprise de démonstration",
+                nom_commercial="Démo BTP",
+                pays="CI",
+                ville="Abidjan",
+                email_contact=options["email"],
+                statut=StatutEntreprise.ESSAI,
+            )
         self.stdout.write(
             self.style.SUCCESS(f"Entreprise {'créée' if cree else 'déjà présente'} : {entreprise}")
         )

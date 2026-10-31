@@ -67,6 +67,9 @@ from apps.projets.views.decoupage import (
 from apps.projets.views.dependances import DependanceDetailView, ElementDependancesView
 from apps.projets.views.equipe import (
     MainOeuvreDetailView,
+    MainOeuvreImportAppliquerView,
+    MainOeuvreImportModeleView,
+    MainOeuvreImportVerifierView,
     MainOeuvreListCreateView,
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
@@ -152,6 +155,21 @@ urlpatterns = [
     ),
     # Registre de main-d'œuvre de l'entreprise
     path("main-oeuvre/", MainOeuvreListCreateView.as_view(), name="main-oeuvre-liste"),
+    path(
+        "main-oeuvre/import/",
+        MainOeuvreImportVerifierView.as_view(),
+        name="main-oeuvre-import-verifier",
+    ),
+    path(
+        "main-oeuvre/import/appliquer/",
+        MainOeuvreImportAppliquerView.as_view(),
+        name="main-oeuvre-import-appliquer",
+    ),
+    path(
+        "main-oeuvre/import/modele/",
+        MainOeuvreImportModeleView.as_view(),
+        name="main-oeuvre-import-modele",
+    ),
     path("main-oeuvre/<uuid:pk>/", MainOeuvreDetailView.as_view(), name="main-oeuvre-detail"),
     # Projets
     path("projets/", ProjetListCreateView.as_view(), name="projet-liste-creer"),

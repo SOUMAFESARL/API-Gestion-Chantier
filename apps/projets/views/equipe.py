@@ -1,14 +1,19 @@
 """Routes des équipes de chantier et du registre de main-d'œuvre.
 
 Gérer les équipes exige `projets.gerer_equipes` (par défaut : chef de projet et conducteur de
-travaux) ; le registre de main-d'œuvre, `projets.main_oeuvre_gerer` (mêmes défauts). Les
-écritures rendent `avertissements` : ce qui mérite l'attention sans rien refuser.
+travaux) ; le registre de main-d'œuvre, `projets.main_oeuvre_gerer` (mêmes défauts), import
+Excel compris. Les écritures rendent `avertissements` : ce qui mérite l'attention sans rien
+refuser.
 """
 
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
+from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,6 +34,9 @@ from apps.projets.serializers.equipe import (
     EquipeCreationSerializer,
     EquipeModificationSerializer,
     EquipeSerializer,
+    ImportPersonnesResultatSerializer,
+    ImportPersonnesSerializer,
+    ImportPersonnesVerifieSerializer,
     MembreCreationSerializer,
     MembreModificationSerializer,
     MembreSerializer,
@@ -41,6 +49,9 @@ from apps.projets.services import main_oeuvre
 
 __all__ = [
     "MainOeuvreDetailView",
+    "MainOeuvreImportAppliquerView",
+    "MainOeuvreImportModeleView",
+    "MainOeuvreImportVerifierView",
     "MainOeuvreListCreateView",
     "ProjetEquipeAffectationDetailView",
     "ProjetEquipeAffectationView",
@@ -474,3 +485,102 @@ class MainOeuvreDetailView(APIView):
             get_object_or_404(PersonneMainOeuvre, pk=pk), utilisateur=request.user
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------
+# Import du registre depuis Excel
+# --------------------------------------------------------------------------
+class BaseImportMainOeuvreView(APIView):
+    def get_permissions(self):
+        return [IsAuthenticated(), APermission.pour("projets.main_oeuvre_gerer")()]
+
+
+class MainOeuvreImportModeleView(BaseImportMainOeuvreView):
+    """`GET /api/v1/main-oeuvre/import/modele/` — le fichier Excel à remplir."""
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Modèle Excel d'import du registre",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        from apps.projets.services.import_main_oeuvre import modele_import
+
+        reponse = HttpResponse(
+            modele_import(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        reponse["Content-Disposition"] = 'attachment; filename="modele-main-oeuvre.xlsx"'
+        return reponse
+
+
+class MainOeuvreImportVerifierView(BaseImportMainOeuvreView):
+    """`POST /api/v1/main-oeuvre/import/` — lire et vérifier, sans rien écrire.
+
+    Un fichier (`multipart`, champ `fichier`) à la première lecture, ou les lignes corrigées à
+    l'écran (`JSON`, `lignes`) pour refaire la vérification. La réponse rend chaque ligne avec son
+    statut et la liste des entreprises partenaires proposées.
+    """
+
+    parser_classes = [MultiPartParser, JSONParser]
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Vérifier un import du registre (fichier ou lignes corrigées)",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            },
+            "application/json": ImportPersonnesSerializer,
+        },
+        responses={200: ImportPersonnesVerifieSerializer},
+    )
+    def post(self, request):
+        from apps.projets.services import import_main_oeuvre
+
+        if request.FILES.get("fichier") is not None:
+            return Response(import_main_oeuvre.lire_import(request.FILES["fichier"]))
+        if "lignes" not in request.data:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        donnees = ImportPersonnesSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        partenaires = list(import_main_oeuvre.partenaires_eligibles())
+        return Response(
+            {
+                "lignes": import_main_oeuvre.verifier_lignes(
+                    [dict(ligne) for ligne in donnees.validated_data["lignes"]],
+                    partenaires=partenaires,
+                ),
+                "partenaires": [{"id": str(t.pk), "nom": t.raison_sociale} for t in partenaires],
+            }
+        )
+
+
+class MainOeuvreImportAppliquerView(BaseImportMainOeuvreView):
+    """`POST /api/v1/main-oeuvre/import/appliquer/` — enregistrer les lignes valides.
+
+    La vérification est refaite ; les doublons sont sautés, les erreurs rendues avec leur raison,
+    et une ligne refusée n'empêche pas les autres.
+    """
+
+    parser_classes = [JSONParser]
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Enregistrer un import du registre",
+        request=ImportPersonnesSerializer,
+        responses={200: ImportPersonnesResultatSerializer},
+    )
+    def post(self, request):
+        from apps.projets.services.import_main_oeuvre import appliquer_import
+
+        donnees = ImportPersonnesSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        return Response(
+            appliquer_import(
+                [dict(ligne) for ligne in donnees.validated_data["lignes"]],
+                createur=request.user,
+            )
+        )

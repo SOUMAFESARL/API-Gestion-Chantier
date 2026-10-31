@@ -3,6 +3,19 @@
 C'est un réglage de l'entreprise : coché, une seule personne tient le rôle sur un projet. Les
 rôles système chef de projet (CP) et chef de chantier (CC) le sont par défaut ; l'entreprise peut
 décocher.
+
+**Le `SET CONSTRAINTS ALL IMMEDIATE` en tête est ajouté après coup (31/10/2026).** Quand les
+migrations d'un schéma neuf tournent dans une transaction englobante (`get_or_create` d'une
+entreprise, `TenantTestCase`), la 0028 a inséré les rôles système quelques migrations plus tôt :
+`cree_par` et `supprime_par` sont des clés étrangères à vérification différée, chaque insertion
+laisse un déclencheur en attente jusqu'au commit, et PostgreSQL refuse l'`ALTER TABLE role` —
+« pending trigger events ». Passer les contraintes en immédiat exécute ces vérifications tout de
+suite ; on revient ensuite au différé, comme le fait `check_constraints()` de Django.
+
+Modifier cette migration déjà appliquée est sans risque : Django ne la rejoue pas, l'opération
+ajoutée ne change pas l'état des modèles, et seuls les schémas neufs l'exécutent. Une migration
+distincte placée avant elle aurait changé ses dépendances — `InconsistentMigrationHistory` sur
+chaque tenant existant.
 """
 
 from django.db import migrations, models
@@ -25,6 +38,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunSQL(
+            "SET CONSTRAINTS ALL IMMEDIATE; SET CONSTRAINTS ALL DEFERRED;",
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.AddField(
             model_name="role",
             name="unique_par_projet",

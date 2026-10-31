@@ -17,6 +17,9 @@ __all__ = [
     "EquipeCreationSerializer",
     "EquipeModificationSerializer",
     "EquipeSerializer",
+    "ImportPersonnesResultatSerializer",
+    "ImportPersonnesSerializer",
+    "ImportPersonnesVerifieSerializer",
     "MembreCreationSerializer",
     "MembreModificationSerializer",
     "MembreSerializer",
@@ -225,3 +228,46 @@ class EquipeModificationSerializer(serializers.Serializer):
 class AffectationEquipeCreationSerializer(serializers.Serializer):
     equipe_id = serializers.UUIDField()
     element_id = serializers.UUIDField()
+
+
+# --------------------------------------------------------------------------
+# Import du registre depuis Excel
+# --------------------------------------------------------------------------
+class LigneImportPersonneSerializer(serializers.Serializer):
+    """Une ligne d'import, telle que l'écran la renvoie après correction. Les champs sont permissifs
+    à dessein : la vérification dit ce qui ne va pas, ligne par ligne, sans tout refuser."""
+
+    numero = serializers.IntegerField(required=False, allow_null=True, default=None)
+    nom = serializers.CharField(required=False, allow_blank=True, default="")
+    prenom = serializers.CharField(required=False, allow_blank=True, default="")
+    telephone = serializers.CharField(required=False, allow_blank=True, default="")
+    metier = serializers.CharField(required=False, allow_blank=True, default="")
+    entreprise_partenaire_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    entreprise_saisie = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ImportPersonnesSerializer(serializers.Serializer):
+    lignes = LigneImportPersonneSerializer(many=True, allow_empty=False, max_length=5000)
+
+
+class LigneImportVerifieeSerializer(LigneImportPersonneSerializer):
+    statut = serializers.ChoiceField(choices=["VALIDE", "DOUBLON", "ERREUR", "CREEE"])
+    erreurs = serializers.DictField(child=serializers.CharField())
+    message = serializers.CharField(allow_blank=True)
+
+
+class PartenaireImportSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    nom = serializers.CharField()
+
+
+class ImportPersonnesVerifieSerializer(serializers.Serializer):
+    lignes = LigneImportVerifieeSerializer(many=True)
+    partenaires = PartenaireImportSerializer(many=True)
+
+
+class ImportPersonnesResultatSerializer(serializers.Serializer):
+    creees = serializers.IntegerField()
+    doublons = serializers.IntegerField()
+    erreurs = serializers.IntegerField()
+    lignes = LigneImportVerifieeSerializer(many=True)

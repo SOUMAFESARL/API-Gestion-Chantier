@@ -28,7 +28,11 @@ from apps.chantier.selectors.journal import (
     journaux_visibles,
     nom,
 )
-from apps.chantier.services.fonctions import SYNTHESE_REDIGER, tient_fonction
+from apps.chantier.services.fonctions import (
+    SYNTHESE_APPROUVER,
+    SYNTHESE_REDIGER,
+    tient_fonction,
+)
 from apps.chantier.services.journal import aujourdhui
 
 FUSEAU = ZoneInfo("Africa/Abidjan")
@@ -341,6 +345,22 @@ def circuit(synthese, etat, calcul) -> list:
     return [ct, cp]
 
 
+def etape_a_signer(utilisateur, projet, etat) -> str | None:
+    """L'étape que cet utilisateur peut signer maintenant, ou `None` : le serveur décide.
+
+    « CT » : rédiger puis signer, tant que la synthèse n'est pas soumise (`synthese_rediger`) ;
+    « CP » : approuver ou rejeter une synthèse soumise (`synthese_approuver`). C'est la
+    vérification que les services refont à l'action (`verifier_fonction`) : l'écran n'a plus
+    à recopier la règle, et un rôle personnalisé y trouve son bouton.
+    """
+    statuts = SynthesePeriodique.Statut
+    if etat in ("A_REDIGER", statuts.BROUILLON, statuts.REJETEE):
+        return "CT" if tient_fonction(projet, utilisateur, SYNTHESE_REDIGER) else None
+    if etat == statuts.SOUMISE:
+        return "CP" if tient_fonction(projet, utilisateur, SYNTHESE_APPROUVER) else None
+    return None
+
+
 def projection(request, projet, type_, debut, fin) -> dict:
     """La charge complète de `GET /chantier/syntheses/` : `ChargeSynthese`."""
     synthese = synthese_enregistree(projet, type_, debut, fin)
@@ -373,6 +393,7 @@ def projection(request, projet, type_, debut, fin) -> dict:
         if redacteur
         else None,
         "circuit": circuit(synthese, etat, calcul),
+        "etape_a_signer": etape_a_signer(request.user, projet, etat),
     }
 
 

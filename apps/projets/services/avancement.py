@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.utils import timezone
 
 from apps.chantier.models import JournalChantier, RapportJournalier
 from apps.core.enums import StatutRapport
@@ -152,6 +153,11 @@ def recalculer_apres_quantites(
 
         detecter_alertes_retard(projet)
 
+        # Enregistrement immédiat du relevé dans PointAvancement (supprime la dépendance exclusive à 00h01)
+        from apps.projets.services.courbe import enregistrer_releve
+
+        enregistrer_releve(projet, jour=timezone.localdate())
+
 
 @transaction.atomic
 def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
@@ -228,6 +234,11 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
         declencheur_type="RAPPORT_APPROBATION",
         declencheur_id=rapport.pk,
     )
+
+    if projet and rapport.date_rapport and rapport.date_rapport != timezone.localdate():
+        from apps.projets.services.courbe import enregistrer_releve
+
+        enregistrer_releve(projet, jour=rapport.date_rapport)
 
     RapportJournalier.objects.filter(pk=rapport.pk).update(f3_sync_done=True)
 

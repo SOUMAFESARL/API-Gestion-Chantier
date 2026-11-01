@@ -130,8 +130,30 @@ def courbe(projet, element: Element | None = None, aujourdhui: date | None = Non
             )
             prevu.append({"date": jour, "valeur": None if valeur is None else round(valeur, 1)})
 
-    # Le réel : les relevés de nuit, puis la valeur du jour.
+    # Le réel : les relevés passés (enregistrés en direct ou consolidés la nuit), puis la valeur du jour.
     releves = PointAvancement.objects.filter(projet=projet, element=element).order_by("jour")
+    if not releves.exists():
+        # Auto-rattrapage : si aucun relevé n'existe encore en base pour ce projet (ex. cron 00h01
+        # non exécuté), enregistre le relevé du jour et des dates de rapports approuvés passés.
+        enregistrer_releve(projet, jour=aujourdhui)
+        from apps.chantier.models import RapportJournalier
+        from apps.core.enums import StatutRapport
+
+        dates_rapports = (
+            RapportJournalier.objects.filter(
+                projet=projet,
+                statut=StatutRapport.APPROUVE,
+                supprime_le__isnull=True,
+                date_rapport__lt=aujourdhui,
+            )
+            .values_list("date_rapport", flat=True)
+            .distinct()
+            .order_by("date_rapport")
+        )
+        for d in dates_rapports:
+            enregistrer_releve(projet, jour=d)
+        releves = PointAvancement.objects.filter(projet=projet, element=element).order_by("jour")
+
     reel = [
         {"date": p.jour, "valeur": float(p.physique)}
         for p in releves

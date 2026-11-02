@@ -21,7 +21,7 @@ from apps.core.enums import StatutRapport
 from apps.projets.models import Element, Projet
 from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.alertes_retard import detecter_alertes_retard
-from apps.projets.services.machine_etats import evaluer_statut_projet
+from apps.projets.services.machine_etats import evaluer_statut_projet, evaluer_statuts_arbre
 from apps.projets.services.sante_calculs import calculer_arbre, resultat_projet
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 
@@ -63,6 +63,10 @@ def recalculer_avancements_projet(projet) -> None:
     resultat = resultat_projet(projet, arbre, resultats)
     projet.avancement_reel = _arrondi(resultat.physique) or Decimal("0.00")
     projet.save(update_fields=["avancement_reel"])
+
+    from apps.projets.services.courbe import enregistrer_releve
+
+    enregistrer_releve(projet, jour=timezone.localdate())
 
 
 def quantites_du_journal(saisie: dict) -> dict[str, Decimal]:
@@ -142,6 +146,7 @@ def recalculer_apres_quantites(
         projet_pk = getattr(projet, "pk", projet)
         projet = Projet.objects.select_for_update().get(pk=projet_pk)
         recalculer_avancements_projet(projet)
+        evaluer_statuts_arbre(projet)
 
         evaluer_statut_projet(projet)
 
@@ -152,11 +157,6 @@ def recalculer_apres_quantites(
         )
 
         detecter_alertes_retard(projet)
-
-        # Enregistrement immédiat du relevé dans PointAvancement (supprime la dépendance exclusive à 00h01)
-        from apps.projets.services.courbe import enregistrer_releve
-
-        enregistrer_releve(projet, jour=timezone.localdate())
 
 
 @transaction.atomic

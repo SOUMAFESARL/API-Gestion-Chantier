@@ -56,7 +56,7 @@ def _cases_suivies(arbre):
 
 
 def enregistrer_releve(projet, jour: date | None = None) -> int:
-    """Le relevé de la nuit : le projet et ses cases suivies. Rend le nombre de points écrits."""
+    """Enregistre le relevé d'avancement du projet et de toutes ses cases non-feuilles."""
     jour = jour or timezone.localdate()
     arbre = charger_arbre(projet, actifs_seulement=True)
     if not arbre.elements:
@@ -71,7 +71,16 @@ def enregistrer_releve(projet, jour: date | None = None) -> int:
             _temporel_projet(projet, arbre, resultats, temporels, jour, calendrier),
         )
     ]
-    for case in _cases_suivies(arbre):
+    cases_parentes = [
+        e for e in arbre.elements if e.est_actif and not arbre.est_feuille(e)
+    ]
+    vus = {c.pk for c in cases_parentes}
+    for c in _cases_suivies(arbre):
+        if c.pk not in vus:
+            cases_parentes.append(c)
+            vus.add(c.pk)
+
+    for case in cases_parentes:
         resultat = resultats.get(case.pk)
         points.append((case, resultat.physique if resultat else None, temporels.get(case.pk)))
     for element, physique, temporel in points:
@@ -132,14 +141,11 @@ def courbe(projet, element: Element | None = None, aujourdhui: date | None = Non
 
     # Le réel : les relevés passés (enregistrés en direct ou consolidés la nuit), puis la valeur du jour.
     releves = PointAvancement.objects.filter(projet=projet, element=element).order_by("jour")
-    if not releves.exists():
-        # Auto-rattrapage : si aucun relevé n'existe encore en base pour ce projet (ex. cron 00h01
-        # non exécuté), enregistre le relevé du jour et des dates de rapports approuvés passés.
-        enregistrer_releve(projet, jour=aujourdhui)
+    if not releves.filter(jour__lt=aujourdhui).exists():
         from apps.chantier.models import RapportJournalier
         from apps.core.enums import StatutRapport
 
-        dates_rapports = (
+        dates_rapports = list(
             RapportJournalier.objects.filter(
                 projet=projet,
                 statut=StatutRapport.APPROUVE,
@@ -152,6 +158,8 @@ def courbe(projet, element: Element | None = None, aujourdhui: date | None = Non
         )
         for d in dates_rapports:
             enregistrer_releve(projet, jour=d)
+        if not releves.filter(jour=aujourdhui).exists():
+            enregistrer_releve(projet, jour=aujourdhui)
         releves = PointAvancement.objects.filter(projet=projet, element=element).order_by("jour")
 
     reel = [
@@ -161,12 +169,17 @@ def courbe(projet, element: Element | None = None, aujourdhui: date | None = Non
     ]
     actuel = physique_actuel()
     if actuel is not None:
+        # Point d'ancrage initial à 0 % au début du projet/case pour tracer la droite dès le 1er relevé
+        if debut and debut < aujourdhui and (not reel or reel[0]["date"] > debut):
+            reel.insert(0, {"date": debut, "valeur": 0.0})
         reel.append({"date": aujourdhui, "valeur": round(actuel, 1)})
 
-    # La fin estimée : le rythme des 4 dernières semaines, prolongé jusqu'à 100 %.
+    # La fin estimée : le rythme des 4 dernières semaines (ou depuis le dernier point connu), prolongé jusqu'à 100 %.
     fin_estimee, rythme = None, None
     depart = aujourdhui - timedelta(days=FENETRE_RYTHME)
     anciens = [p for p in reel if p["date"] >= depart]
+    if len(anciens) < 2 and len(reel) >= 2:
+        anciens = [reel[-2], reel[-1]]
     if actuel is not None and len(anciens) >= 2:
         premier = anciens[0]
         ecart_jours = (aujourdhui - premier["date"]).days

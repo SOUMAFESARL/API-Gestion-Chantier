@@ -30,6 +30,7 @@ Invariants garantis :
 
 import logging
 from datetime import date
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
@@ -245,7 +246,14 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
             supprime_le__isnull=True,
             statut__in=[StatutRapport.SOUMIS, StatutRapport.APPROUVE],
         ).exists()
-        if not (debut_atteint and rapport_soumis):
+        rapport_approuve = projet.rapports_journaliers.filter(
+            supprime_le__isnull=True,
+            statut=StatutRapport.APPROUVE,
+        ).exists()
+        avancement_positif = bool(
+            projet.avancement_reel is not None and projet.avancement_reel > Decimal("0")
+        )
+        if not ((debut_atteint and rapport_soumis) or rapport_approuve or avancement_positif):
             return False
         nouveau_statut = StatutProjet.EN_COURS
     else:

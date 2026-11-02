@@ -319,7 +319,8 @@ def recalculer_sante_projet_task(
                 return None
 
             if projet.statut == StatutProjet.EN_ATTENTE:
-                projet.avancement_reel = Decimal("0")
+                av_physique_attente, _ = calculer_avancement_physique_projet(projet)
+                projet.avancement_reel = Decimal(str(av_physique_attente))
                 projet.indice_sante = None
                 projet.badge_sante = None
                 projet.save(

@@ -28,8 +28,8 @@ from apps.core.exceptions import ErreurMetier
 __all__ = [
     "APPROBATION",
     "VALIDATION",
-    "attendus_restants",
     "attendus_effectifs",
+    "attendus_restants",
     "figer_signataires",
     "reevaluer",
     "reevaluer_journaux_du_projet",
@@ -132,7 +132,7 @@ def signer(journal, utilisateur, etape, commentaire="") -> None:
     """La signature d'une personne attendue à l'étape en cours."""
     en_cours = etape_en_cours(journal)
     if en_cours != etape:
-        attendu = "SOUMIS" if etape == VALIDATION else "VALIDE_CT"
+        attendu = "SOUMIS" if etape == VALIDATION else "VALIDE"
         raise ErreurMetier(f"La signature exige le statut {attendu}.")
     moi = str(utilisateur.pk)
     if moi in signes(journal, etape):

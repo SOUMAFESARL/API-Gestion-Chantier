@@ -31,7 +31,7 @@ from apps.projets.referentiels.villes import normaliser_chaine, resoudre_coordon
 
 logger = logging.getLogger(__name__)
 
-DUREE_CACHE_SECONDES = 1800  # 30 minutes
+DUREE_CACHE_SECONDES = 3600  # 1 heure
 
 # Un **échec** se garde aussi, mais moins longtemps. Sans cela, un Open-Meteo injoignable
 # était rappelé à chaque chargement du tableau de bord, qui attendait jusqu'au délai de
@@ -227,3 +227,43 @@ def obtenir_meteo(ville: str, pays: str = "CI", portee: str = PORTEE_CHANTIER) -
         )
         cache.set(cle_echec, True, timeout=DUREE_CACHE_ECHEC_SECONDES)
         return meteo_indisponible(RAISON_SERVICE_INDISPONIBLE, nom_canonique, portee)
+
+
+def ciel_journal_depuis_condition(condition: str | None) -> str:
+    """Convertit un code de condition Open-Meteo vers l'énumération météo du journal."""
+    if condition in (CONDITION_DEGAGE, CONDITION_ECLAIRCIES):
+        return "ENSOLEILLE"
+    if condition == CONDITION_BROUILLARD:
+        return "BRUMEUX"
+    if condition in (CONDITION_BRUINE, CONDITION_PLUIE, CONDITION_AVERSES):
+        return "PLUVIEUX"
+    if condition == CONDITION_ORAGE:
+        return "ORAGEUX"
+    return "NUAGEUX"
+
+
+def meteo_suggeree_journal(ville: str, pays: str = "CI") -> dict[str, Any]:
+    """Pré-remplit la météo simplifiée (matin, après-midi, conditions) d'un journal du jour."""
+    releve = obtenir_meteo(ville=ville, pays=pays, portee=PORTEE_CHANTIER)
+    if not releve.get("disponible"):
+        return {
+            "matin": "ENSOLEILLE",
+            "apres_midi": "ENSOLEILLE",
+            "conditions": "FAVORABLES",
+            "source_auto": False,
+        }
+    ciel = ciel_journal_depuis_condition(releve.get("condition"))
+    conditions = (
+        "DIFFICILES"
+        if (
+            not releve.get("praticable", True)
+            or releve.get("alerte") in (ALERTE_INTEMPERIES, ALERTE_ORAGE)
+        )
+        else "FAVORABLES"
+    )
+    return {
+        "matin": ciel,
+        "apres_midi": ciel,
+        "conditions": conditions,
+        "source_auto": True,
+    }

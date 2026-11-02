@@ -1,17 +1,14 @@
-"""Le circuit de la synthèse périodique : le CT rédige et signe, le CP approuve ou rejette.
+"""Le circuit de la synthèse périodique : validation/rédaction puis approbation par permission.
 
-Règles arrêtées le 14/10/2026 :
-
-- **seules les semaines et les mois clos se signent** ; une période
-  personnalisée se consulte et s'exporte, et une période en cours n'a pas
-  encore de synthèse à signer ;
-- **signe celui qui tient la fonction sur le chantier** (option 3, comme le
-  rapport journalier) : le conducteur de travaux rédige et signe, le chef de
-  projet approuve ou rejette ;
-- **le CT ne s'approuve pas lui-même** : qui tient les deux fonctions signe
-  la première, et laisse la seconde à un autre ;
-- **à la signature du CT, le calcul est figé** ; un rejet le libère, et la
-  signature suivante figera les rapports tels qu'ils seront alors.
+Règles :
+- **seules les semaines et les mois clos se signent** ; une période personnalisée se consulte
+  et s'exporte, et une période en cours n'a pas encore de synthèse à signer ;
+- **signe celui qui tient la fonction sur le chantier** (`synthese_rediger` puis
+  `synthese_approuver`), quel que soit le nom de son rôle ;
+- **le signataire de la synthèse ne s'approuve pas lui-même** : qui tient les deux permissions
+  signe la première étape et laisse l'approbation à un autre ;
+- **à la signature de rédaction, le calcul est figé** ; un rejet le libère, et la signature
+  suivante figera les rapports validés/approuvés tels qu'ils seront alors.
 """
 
 from django.db import transaction
@@ -71,12 +68,10 @@ def _tracer(synthese, utilisateur, action, evenement, *, avant=None, commentaire
 
 
 def _ecrire(*, projet, type_, debut, fin, utilisateur, appreciation, objectifs):
-    """Crée ou met à jour la rédaction du CT. À appeler dans une transaction."""
+    """Crée ou met à jour la rédaction de la synthèse. À appeler dans une transaction."""
     verifier_signable(type_, fin)
-    # Verrou du chantier : deux enregistrements simultanés ne créent pas deux synthèses.
     projet = get_object_or_404(Projet.objects.select_for_update(), pk=projet.pk)
     verifier_statut_projet_pour_ecriture(projet)
-    # Rédige qui en a la permission sur le projet, quel que soit le nom de son rôle (30/10/2026).
     verifier_fonction(projet, utilisateur, SYNTHESE_REDIGER)
     synthese = (
         SynthesePeriodique.objects.select_for_update()
@@ -105,14 +100,14 @@ def enregistrer_synthese(**redaction):
         synthese,
         redaction["utilisateur"],
         ActionAudit.CREATION if creee else ActionAudit.MODIFICATION,
-        "REDACTION_CT",
+        "REDACTION_SYNTHESE",
     )
     return synthese
 
 
 @transaction.atomic
 def soumettre_synthese(*, request, **redaction):
-    """Enregistre la rédaction et la signe au nom du CT, en figeant le calcul."""
+    """Enregistre la rédaction et la signe en figeant le calcul."""
     from apps.chantier.selectors.synthese import calculer
 
     if len(redaction["appreciation"].strip()) < LONGUEUR_MIN_APPRECIATION:
@@ -134,19 +129,29 @@ def soumettre_synthese(*, request, **redaction):
     synthese.decidee_cp_le = None
     synthese.commentaire_cp = ""
     synthese.save()
-    _tracer(synthese, redaction["utilisateur"], ActionAudit.SIGNATURE, "SIGNATURE_CT", avant=avant)
+    _tracer(
+        synthese,
+        redaction["utilisateur"],
+        ActionAudit.SIGNATURE,
+        "SIGNATURE_VALIDATION",
+        avant=avant,
+    )
     return synthese
 
 
 def _decider(synthese, utilisateur):
-    """Qui a la permission d'approuver la synthèse sur le projet, sur une synthèse signée."""
+    """Qui a la permission d'approuver la synthèse sur le projet, sur une synthèse soumise."""
     synthese = get_object_or_404(
         SynthesePeriodique.objects.select_for_update().select_related("projet"), pk=synthese.pk
     )
     verifier_fonction(synthese.projet, utilisateur, SYNTHESE_APPROUVER)
     verifier_statut_projet_pour_ecriture(synthese.projet)
     if synthese.statut != Statut.SOUMISE:
-        raise ErreurMetier("Seule une synthèse signée par le conducteur de travaux se décide.")
+        raise ErreurMetier("Seule une synthèse soumise à approbation se décide.")
+    if synthese.signee_ct_par_id and synthese.signee_ct_par_id == utilisateur.id:
+        raise ErreurMetier(
+            "Vous ne pouvez pas approuver ou rejeter une synthèse que vous avez vous-même signée."
+        )
     return synthese
 
 
@@ -162,7 +167,7 @@ def approuver_synthese(*, synthese, utilisateur, commentaire=""):
         synthese,
         utilisateur,
         ActionAudit.SIGNATURE,
-        "SIGNATURE_CP",
+        "SIGNATURE_APPROBATION",
         avant={"statut": Statut.SOUMISE},
         commentaire=synthese.commentaire_cp,
     )
@@ -180,14 +185,13 @@ def rejeter_synthese(*, synthese, utilisateur, motif):
     synthese.decidee_cp_par = utilisateur
     synthese.decidee_cp_le = timezone.now()
     synthese.commentaire_cp = motif.strip()
-    # Rendue au CT : elle se recalcule, et sa prochaine signature la figera de nouveau.
     synthese.photographie = {}
     synthese.save()
     _tracer(
         synthese,
         utilisateur,
         ActionAudit.VALIDATION,
-        "REJET_CP",
+        "REJET_APPROBATION",
         avant={"statut": Statut.SOUMISE},
         commentaire=synthese.commentaire_cp,
     )

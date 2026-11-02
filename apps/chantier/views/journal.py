@@ -43,6 +43,8 @@ from apps.chantier.services.journal import (
     alerter_journal,
     aujourdhui,
     creer_journal,
+    est_jour_ouvre_entreprise,
+    jours_saisissables_ouvres,
     modifier_journal,
     rejeter_journal,
     signer_journal,
@@ -50,6 +52,7 @@ from apps.chantier.services.journal import (
     statut_journal,
     supprimer_brouillon,
 )
+from apps.chantier.services.relance import ETAPE_EXTERNE
 
 
 def filtres(request):
@@ -63,7 +66,7 @@ def charger_journal(request, pk):
 
 
 def charge_autorisee(request, charge):
-    """Masque les tarifs dans le document, la saisie et les reprises (E-11)."""
+    """Masque tout tarif résiduel dans les rapports historiques (E-11)."""
     from apps.core.droits import peut_voir_montants
 
     if peut_voir_montants(request.user, request):
@@ -100,16 +103,21 @@ class JournalRapportsView(APIView):
         operation_id="journal_rapports_liste",
     )
     def get(self, request):
+        params = filtres(request)
         qs = filtre_journaux(
-            pour_auteur(journaux_visibles(request), request.user), filtres(request), request.user
+            pour_auteur(journaux_visibles(request), request.user), params, request.user
         )
         qs = qs.defer("saisie", "photographie").prefetch_related(None)
+        jour_cible = params.get("date") or aujourdhui()
         return Response(
             {
                 "aujourdhui": aujourdhui().isoformat(),
+                "est_jour_ouvre": est_jour_ouvre_entreprise(jour_cible),
+                "jours_saisissables": [d.isoformat() for d in jours_saisissables_ouvres()],
                 "resultats": [
                     {
                         "id": str(j.rapport_id),
+                        "projet_id": str(j.rapport.projet_id),
                         "date": j.rapport.date_rapport.isoformat(),
                         "statut": statut_journal(j),
                         "enregistre_le": j.modifie_le.isoformat(),
@@ -126,7 +134,6 @@ class JournalRapportsView(APIView):
         summary="Créer le brouillon complet d'un chantier",
     )
     def post(self, request):
-        # Valider UUID et date avant toute requête ORM pour éviter une erreur 500.
         serializer = SaisieJournalSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         projet = get_object_or_404(
@@ -151,7 +158,7 @@ class JournalPreparationView(APIView):
         tags=["Journal de chantier"],
         parameters=[FiltresJournalSerializer],
         responses=OpenApiTypes.OBJECT,
-        summary="Préparer la saisie : lots, activités, reprises et brouillon",
+        summary="Préparer la saisie : feuilles, équipes, météo, prévisions et brouillon",
     )
     def get(self, request):
         params = filtres(request)
@@ -159,7 +166,6 @@ class JournalPreparationView(APIView):
             raise ValidationError("projet et date sont requis.")
         projet = get_object_or_404(projets_visibles(request), pk=params["projet"])
         self.check_object_permissions(request, projet)
-        # Chaque rédacteur prépare son propre rapport, sur sa partie du projet (30/10/2026).
         qs = journaux_visibles(request).filter(rapport__projet=projet, rapport__auteur=request.user)
         journal = qs.filter(rapport__date_rapport=params["date"]).first()
         precedent = (
@@ -324,13 +330,13 @@ class JournalSoumettreView(APIView):
 
 class JournalValiderView(APIView):
     permission_classes = [IsAuthenticated, PeutValiderRapports]
-    etape = "CT"
+    etape = "VALIDATION"
 
     @extend_schema(
         tags=["Journal de chantier"],
         request=SignatureJournalSerializer,
         responses=OpenApiTypes.OBJECT,
-        summary="Signer le rapport au niveau CT",
+        summary="Signer le rapport à l'étape de validation",
     )
     def post(self, request, pk):
         journal = charger_journal(request, pk)
@@ -347,16 +353,14 @@ class JournalValiderView(APIView):
 
 
 class JournalApprouverView(JournalValiderView):
-    etape = "CP"
-    # Approuver est une permission à part (30/10/2026) ; le service exige en plus d'être
-    # attendu parmi les approbateurs du rapport, après la validation.
+    etape = "APPROBATION"
     permission_classes = [IsAuthenticated, PeutApprouverRapports]
 
     @extend_schema(
         tags=["Journal de chantier"],
         request=SignatureJournalSerializer,
         responses=OpenApiTypes.OBJECT,
-        summary="Approuver le rapport au niveau CP après signature CT",
+        summary="Approuver le rapport après validation",
     )
     def post(self, request, pk):
         return super().post(request, pk)
@@ -369,7 +373,7 @@ class JournalRejeterView(APIView):
         tags=["Journal de chantier"],
         request=RejetJournalSerializer,
         responses=OpenApiTypes.OBJECT,
-        summary="Rejeter au niveau attendu du circuit avec motif",
+        summary="Rejeter à l'étape attendue du circuit avec motif",
     )
     def post(self, request, pk):
         journal = charger_journal(request, pk)
@@ -389,7 +393,7 @@ class JournalAlertesView(APIView):
         tags=["Journal de chantier"],
         request=AlerteJournalSerializer,
         responses=OpenApiTypes.OBJECT,
-        summary="Enregistrer une alerte interne dédupliquée pour CT et CP",
+        summary="Enregistrer une alerte interne dédupliquée pour les signataires",
     )
     def post(self, request, pk):
         journal = charger_journal(request, pk)
@@ -445,7 +449,7 @@ class JournalView(APIView):
         tags=["Journal de chantier"],
         parameters=[FiltresJournalSerializer],
         responses=OpenApiTypes.OBJECT,
-        summary="Lire le journal, historique et rapports manquants",
+        summary="Lire le journal, historique et rapports manquants sur jours ouvrés",
     )
     def get(self, request):
         params = filtres(request)
@@ -458,9 +462,14 @@ class JournalView(APIView):
             self.check_object_permissions(request, projet)
         from django.utils import timezone
 
+        jour_courant = aujourdhui()
         return Response(
             {
-                "aujourdhui": aujourdhui().isoformat(),
+                "aujourdhui": jour_courant.isoformat(),
+                "est_jour_ouvre": est_jour_ouvre_entreprise(jour_courant),
+                "jours_saisissables": [
+                    d.isoformat() for d in jours_saisissables_ouvres(jour_courant)
+                ],
                 "lu_le": timezone.now().isoformat(),
                 "resultats": journal_periode(request, debut, fin, projet_id=params.get("projet")),
             }
@@ -468,12 +477,7 @@ class JournalView(APIView):
 
 
 class JournalRelancerView(APIView):
-    """`POST /chantier/journal/{id}/relancer/` — relance une ligne du journal.
-
-    `id` est celui de la ligne : l'identifiant du rapport s'il existe, sinon
-    `{projet}_{AAAA-MM-JJ}_{rédacteur}` pour un rapport manquant (sans le rédacteur sur un
-    chantier qui n'en a pas) — c'est la forme que `GET /chantier/journal/` renvoie.
-    """
+    """`POST /chantier/journal/{id}/relancer/` — relance une ligne du journal."""
 
     permission_classes = [IsAuthenticated, PeutValiderRapports | PeutApprouverRapports]
 
@@ -488,9 +492,8 @@ class JournalRelancerView(APIView):
         from datetime import date
         from uuid import UUID
 
-        from apps.chantier.services.relance import relancer
-
         from apps.accounts.models import Utilisateur
+        from apps.chantier.services.relance import relancer
 
         redacteur = None
         projet_id, _, reste = identifiant.partition("_")
@@ -518,7 +521,7 @@ class JournalRelancerView(APIView):
         return Response(
             {
                 "relance_le": relance.cree_le.isoformat(),
-                "etape": relance.etape,
+                "etape": ETAPE_EXTERNE.get(relance.etape, relance.etape),
                 "destinataires": [
                     f"{p.prenom} {p.nom}".strip() for p in relance.destinataires.all()
                 ],

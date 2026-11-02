@@ -1,11 +1,13 @@
-"""Écritures atomiques du journal : brouillon, soumission et signatures."""
+"""Écritures atomiques du journal : brouillon, soumission, blocages et signatures."""
 
 import base64
 import binascii
 import io
 import json
+import re
 from collections.abc import Mapping
 from datetime import date, time, timedelta
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from django.db import IntegrityError, transaction
@@ -14,16 +16,22 @@ from django.utils import timezone
 from PIL import Image
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.chantier.models import AlerteJournal, JournalChantier, RapportJournalier
-from apps.chantier.serializers.journal import SaisieJournalSerializer
+from apps.chantier.models import AlerteJournal, Blocage, JournalChantier, RapportJournalier
+from apps.chantier.serializers.journal import (
+    MOTIFS_ARRET,
+    NATURES_INCIDENT,
+    TAILLE_MAX_PHOTO_OCTETS,
+    TAILLE_MAX_PIECE_OCTETS,
+    TAILLE_MAX_RAPPORT_OCTETS,
+    SaisieJournalSerializer,
+)
 from apps.chantier.services import signatures
+from apps.chantier.services.blocage import creer_blocage, modifier_blocage
 from apps.chantier.services.equipes_journal import (
-    cle_production,
     controler_equipes,
     effectif_present,
     equipes_du_journal,
     exiger_equipes,
-    feuilles_sans_equipe,
 )
 from apps.chantier.services.fonctions import (
     APPROUVER,
@@ -35,49 +43,102 @@ from apps.chantier.services.fonctions import (
     titulaires,
     verifier_fonction,
 )
-from apps.core.enums import ActionAudit, ModeExecution, StatutRapport
+from apps.core.enums import ActionAudit, SeveriteBlocage, StatutRapport
 from apps.core.exceptions import ErreurMetier, RapportDejaExistant, RapportNonModifiable
-from apps.projets.models import Element, Projet
+from apps.projets.models import Element, ModeMesure, Projet
 from apps.projets.selectors.arbre import charger_arbre
+from apps.projets.services.calendrier_ouvre import calendrier_entreprise
 from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
-from apps.projets.services.referentiels import mode_base, table_modes_execution
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+FUSEAU_CHANTIER = ZoneInfo("Africa/Abidjan")
+FENETRE_JOURS_OUVRES = 3
+HORIZON_RECHERCHE_CALENDRIER = 45
+
+SEVERITE_BLOCAGE_PAR_NIVEAU = {
+    "MINEUR": SeveriteBlocage.MINEUR,
+    "SIGNIFICATIF": SeveriteBlocage.MAJEUR,
+    "BLOQUANT": SeveriteBlocage.CRITIQUE,
+}
+
+DECIDEUR_ANCIEN_VERS_NOUVEAU = {
+    "CC": "REDACTION",
+    "CT": "VALIDATION",
+    "CP": "APPROBATION",
+}
 
 
 class RapportIncomplet(ErreurMetier):
     """Il manque au rapport de quoi être soumis ; le code d'erreur reste « regle_metier »."""
 
 
-def aujourdhui():
-    return timezone.localdate(timezone=ZoneInfo("Africa/Abidjan"))
+def aujourdhui() -> date:
+    return timezone.localdate(timezone=FUSEAU_CHANTIER)
 
 
-def premier_jour_rapport(projet):
-    """Le premier jour qui attend un rapport : début du chantier, mais **jamais avant son
-    enregistrement sur la plateforme** (décision du 16/10/2026). Un chantier saisi avec une
-    date de début passée n'a pas de rapports à rattraper sur ce passé.
+def premier_jour_rapport(projet) -> date:
+    """Le premier jour qui attend un rapport : début du chantier, mais jamais avant son
+    enregistrement sur la plateforme (décision du 16/10/2026).
     """
     debut = projet.date_debut_reelle or projet.date_debut_prevue
-    enregistre = timezone.localdate(projet.cree_le, timezone=ZoneInfo("Africa/Abidjan"))
+    enregistre = timezone.localdate(projet.cree_le, timezone=FUSEAU_CHANTIER)
     return max(debut, enregistre) if debut else enregistre
 
 
-def verifier_jour(jour):
-    if not aujourdhui() - timedelta(days=2) <= jour <= aujourdhui():
+def jours_saisissables_ouvres(
+    reference: date | None = None, nb: int = FENETRE_JOURS_OUVRES
+) -> list[date]:
+    """Les `nb` derniers jours ouvrés du calendrier de l'entreprise jusqu'à `reference` inclus."""
+    ref = reference or aujourdhui()
+    debut_recherche = ref - timedelta(days=HORIZON_RECHERCHE_CALENDRIER)
+    cal = calendrier_entreprise(debut_recherche, ref)
+    retenus: list[date] = []
+    for offset in range(HORIZON_RECHERCHE_CALENDRIER + 1):
+        candidat = ref - timedelta(days=offset)
+        if cal.est_ouvre(candidat):
+            retenus.append(candidat)
+            if len(retenus) >= nb:
+                break
+    retenus.reverse()
+    return retenus
+
+
+def est_jour_ouvre_entreprise(jour: date) -> bool:
+    cal = calendrier_entreprise(jour, jour)
+    return cal.est_ouvre(jour)
+
+
+def verifier_jour(jour: date, *, statut_actuel: str | None = None) -> None:
+    """Vérifie que `jour` est un jour ouvré dans la fenêtre des 3 derniers jours ouvrés.
+
+    Un rapport rejeté (`REJETE`) demeure modifiable et re-soumissible même au-delà de J-2 ouvré.
+    """
+    if statut_actuel == StatutRapport.REJETE:
+        return
+    ref = aujourdhui()
+    if jour > ref:
         raise ErreurMetier(
-            "Le rapport doit dater de J-2, J-1 ou J.", details={"date": "hors_fenetre_saisie"}
+            "Un rapport futur ne peut pas être saisi.",
+            details={"date": "hors_fenetre_saisie"},
+        )
+    cal = calendrier_entreprise(ref - timedelta(days=HORIZON_RECHERCHE_CALENDRIER), ref)
+    if not cal.est_ouvre(jour):
+        raise ErreurMetier(
+            "Aucun rapport n'est attendu un jour non ouvré du calendrier de l'entreprise.",
+            details={"date": "jour_non_ouvre"},
+        )
+    if jour not in jours_saisissables_ouvres(ref):
+        raise ErreurMetier(
+            "Le rapport doit porter sur l'un des 3 derniers jours ouvrés.",
+            details={"date": "hors_fenetre_saisie"},
         )
 
 
 class CasesDuJournal:
     """Ce que le journal saisit, lu dans l'arbre du découpage.
 
-    Les **feuilles** actives et non clôturées tiennent le rôle des anciennes activités ; chacune
-    se range sous son **groupe** (sa case parente, ou elle-même à la racine), qui tient celui de
-    l'ancien lot. Le contrat JSON du journal garde donc `lot_id` (le groupe) et `activite_id`
-    (la feuille). Le mode d'exécution est celui que la case hérite de l'arbre.
-
-    `chemins` : la partie du projet du rédacteur (30/10/2026) ; vide, tout le projet.
+    Seules les **feuilles** actives, non clôturées et non suspendues sont ouvertes à la saisie.
+    Chacune se range sous son **groupe** (`Arbre.groupe`).
     """
 
     def __init__(self, projet, chemins=()):
@@ -86,7 +147,7 @@ class CasesDuJournal:
         self.feuilles: dict[str, Element] = {}
         self.feuilles_par_groupe: dict[str, list[Element]] = {}
         for feuille in self.arbre.feuilles():
-            if feuille.cloture:
+            if feuille.cloture or self.arbre.suspendu(feuille):
                 continue
             if chemins and not any(feuille.chemin.startswith(c) for c in chemins):
                 continue
@@ -116,20 +177,26 @@ def verifier_auteur(rapport, utilisateur):
         raise PermissionDenied("Seul l'auteur peut modifier ou soumettre ce rapport.")
 
 
-__all__ = ["affectations_actives", "tient_fonction", "verifier_fonction"]
+__all__ = [
+    "affectations_actives",
+    "est_jour_ouvre_entreprise",
+    "jours_saisissables_ouvres",
+    "migrer_saisie_ancienne",
+    "tient_fonction",
+    "verifier_fonction",
+]
 
 
-def statut_journal(journal):
+def statut_journal(journal) -> str:
     rapport = journal.rapport
     if rapport.statut == StatutRapport.APPROUVE:
-        return "APPROUVE_CP"
+        return "APPROUVE"
     if rapport.statut == StatutRapport.SOUMIS and journal.valide_ct_le:
-        return "VALIDE_CT"
+        return "VALIDE"
     return rapport.statut
 
 
 def tracer(journal, utilisateur, action, *, avant=None, evenement="", commentaire=""):
-    """Conserve les signatures précédentes lorsqu'un rejet est corrigé."""
     from apps.audit.services import journaliser
 
     journaliser(
@@ -146,6 +213,224 @@ def tracer(journal, utilisateur, action, *, avant=None, evenement="", commentair
     )
 
 
+def _extraire_nombre_et_unite(valeur_brute) -> tuple[float | None, str]:
+    if isinstance(valeur_brute, int | float) and not isinstance(valeur_brute, bool):
+        return float(valeur_brute), ""
+    if isinstance(valeur_brute, str):
+        texte = valeur_brute.strip().replace(",", ".")
+        correspondance = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*(.*)$", texte)
+        if correspondance:
+            try:
+                return float(correspondance.group(1)), correspondance.group(2).strip()[:30]
+            except ValueError:
+                return None, ""
+    return None, ""
+
+
+def migrer_saisie_ancienne(existante: Mapping | None) -> dict:
+    """Convertit un brouillon ou rapport historique stocké en base vers le nouveau contrat."""
+    if not existante or not isinstance(existante, Mapping):
+        return {}
+    d = dict(existante)
+    if "note_cc" in d:
+        note_ancienne = d.pop("note_cc") or ""
+        if not d.get("note_redacteur"):
+            d["note_redacteur"] = note_ancienne
+
+    if isinstance(d.get("meteo"), Mapping):
+        meteo = d["meteo"]
+        d["meteo"] = {
+            "matin": meteo.get("matin") or "",
+            "apres_midi": meteo.get("apres_midi") or "",
+            "conditions": meteo.get("conditions") or "",
+        }
+
+    if isinstance(d.get("arret"), Mapping):
+        arret = dict(d["arret"])
+        if arret.get("motif") not in MOTIFS_ARRET:
+            ancienne_precision = arret.get("precision") or ""
+            arret["motif"] = "AUTRE"
+            arret["precision"] = ancienne_precision or "Arrêt de chantier"
+        d["arret"] = arret
+
+    # Fusionner d'éventuelles lignes historiques de `production` dans `activites`
+    production_ancienne = d.pop("production", None) or []
+    activites_actuelles = [dict(a) for a in (d.get("activites") or []) if isinstance(a, Mapping)]
+    par_activite = {
+        str(a.get("activite_id")): a for a in activites_actuelles if a.get("activite_id")
+    }
+    for prod in production_ancienne:
+        if not isinstance(prod, Mapping) or not prod.get("activite_id"):
+            continue
+        aid = str(prod["activite_id"])
+        q = prod.get("quantite_jour") or 0
+        if aid in par_activite:
+            par_activite[aid]["quantite_jour"] = (par_activite[aid].get("quantite_jour") or 0) + q
+        else:
+            nouvelle = {
+                "activite_id": aid,
+                "equipe_ids": [],
+                "quantite_jour": q,
+                "pourcentage_jour": None,
+                "jalon_atteint": False,
+                "localisation": "",
+                "observation": "",
+            }
+            activites_actuelles.append(nouvelle)
+            par_activite[aid] = nouvelle
+    for a in activites_actuelles:
+        a.pop("avancement_estime", None)
+        a.setdefault("equipe_ids", [])
+        a.setdefault("pourcentage_jour", None)
+        a.setdefault("jalon_atteint", False)
+        a.setdefault("localisation", "")
+        a.setdefault("observation", "")
+    d["activites"] = activites_actuelles
+
+    d.pop("effectifs", None)
+    d.pop("presence_sous_traitant", None)
+
+    # Ancien blocage unique -> liste `blocages`
+    ancien_blocage = d.pop("blocage", None)
+    if "blocages" not in d:
+        if isinstance(ancien_blocage, Mapping) and ancien_blocage.get("niveau") in (
+            "MINEUR",
+            "SIGNIFICATIF",
+            "BLOQUANT",
+        ):
+            d["blocages"] = [
+                {
+                    "cle": "blc-historique-1",
+                    "blocage_id": None,
+                    "element_id": None,
+                    "titre": "",
+                    "niveau": ancien_blocage["niveau"],
+                    "nature": ancien_blocage.get("nature") or "",
+                    "description": ancien_blocage.get("description") or "",
+                    "impact": ancien_blocage.get("impact") or "",
+                }
+            ]
+        else:
+            d["blocages"] = []
+
+    livraisons = []
+    for liv in d.get("livraisons") or []:
+        if not isinstance(liv, Mapping):
+            continue
+        copie = dict(liv)
+        q_val, u_val = _extraire_nombre_et_unite(copie.get("quantite"))
+        copie["quantite"] = q_val
+        if not copie.get("unite"):
+            copie["unite"] = u_val
+        copie.setdefault("fournisseur", "")
+        copie.setdefault("designation", "")
+        copie.setdefault("bon_livraison", "")
+        copie.setdefault("heure", "")
+        copie.setdefault("conformite", "CONFORME")
+        copie.setdefault("observation", "")
+        livraisons.append(copie)
+    d["livraisons"] = livraisons
+
+    besoins = []
+    for bes in d.get("besoins") or []:
+        if not isinstance(bes, Mapping):
+            continue
+        copie = dict(bes)
+        q_val, u_val = _extraire_nombre_et_unite(copie.get("quantite"))
+        copie["quantite"] = q_val
+        if not copie.get("unite"):
+            copie["unite"] = u_val
+        copie.setdefault("nature", "URGENT")
+        copie.setdefault("designation", "")
+        copie.setdefault("observation", "")
+        besoins.append(copie)
+    d["besoins"] = besoins
+
+    equipements = []
+    for idx, eq in enumerate(d.get("equipements") or [], start=1):
+        if not isinstance(eq, Mapping):
+            continue
+        copie = dict(eq)
+        util_texte = copie.pop("utilisation", None)
+        if util_texte and not copie.get("usage"):
+            h_val, reste = _extraire_nombre_et_unite(util_texte)
+            if copie.get("heures_utilisation") is None and h_val is not None and h_val <= 24:
+                copie["heures_utilisation"] = h_val
+            copie["usage"] = reste or str(util_texte)[:200]
+        copie.setdefault("cle", f"eq-{idx}")
+        copie.setdefault("designation", "")
+        copie.setdefault("reference", "")
+        copie.setdefault("propriete", "")
+        copie.setdefault("heures_utilisation", None)
+        copie.setdefault("usage", "")
+        copie.setdefault("operateur", "")
+        copie.setdefault("etat", "")
+        copie.setdefault("duree_arret", None)
+        copie.setdefault("observation", "")
+        equipements.append(copie)
+    d["equipements"] = equipements
+
+    incidents = []
+    for idx, inc in enumerate(d.get("incidents") or [], start=1):
+        if not isinstance(inc, Mapping):
+            continue
+        copie = dict(inc)
+        copie.setdefault("cle", f"inc-{idx}")
+        if copie.get("nature") not in NATURES_INCIDENT:
+            copie["nature"] = "EVENEMENT_PARTICULIER"
+        copie.setdefault("type", "")
+        copie.setdefault("heure_debut", "")
+        copie.setdefault("heure_fin", "")
+        copie.setdefault("gravite", "")
+        decide = copie.get("decide_par") or ""
+        copie["decide_par"] = DECIDEUR_ANCIEN_VERS_NOUVEAU.get(decide, decide)
+        copie.setdefault("description", "")
+        copie.setdefault("action_entreprise", "")
+        incidents.append(copie)
+    d["incidents"] = incidents
+
+    photos = []
+    for idx, ph in enumerate(d.get("photos") or [], start=1):
+        if isinstance(ph, Mapping):
+            copie = dict(ph)
+            copie.setdefault("cle", f"ph-{idx}")
+            copie.setdefault("element_id", None)
+            copie.setdefault("legende", "")
+            copie.setdefault("horodatage_utc", "")
+            copie.setdefault("latitude", None)
+            copie.setdefault("longitude", None)
+            photos.append(copie)
+    d["photos"] = photos
+
+    previsions = []
+    for pr in d.get("previsions") or []:
+        if isinstance(pr, Mapping):
+            copie = dict(pr)
+            copie.setdefault("activite_id", None)
+            copie.setdefault("equipe_id", None)
+            previsions.append(copie)
+    d["previsions"] = previsions
+
+    pieces = []
+    for pj in d.get("pieces_jointes") or []:
+        if isinstance(pj, Mapping):
+            pieces.append(dict(pj))
+    d["pieces_jointes"] = pieces
+
+    d.setdefault("heure_debut", "")
+    d.setdefault("heure_fin", "")
+    d.setdefault("arret", None)
+    if not isinstance(d.get("meteo"), Mapping):
+        d["meteo"] = {"matin": "", "apres_midi": "", "conditions": ""}
+    d.setdefault("equipes", [])
+    d.setdefault("lots_travailles", [])
+    d.setdefault("materiaux", [])
+    d.setdefault("note_redacteur", "")
+
+    champs_connus = set(SaisieJournalSerializer().fields)
+    return {k: v for k, v in d.items() if k in champs_connus}
+
+
 def valider_media(ligne, *, photo=False):
     """Uniquement les fichiers embarqués du formulaire ; aucun téléchargement distant."""
     fichier = ligne["fichier"]
@@ -159,8 +444,12 @@ def valider_media(ligne, *, photo=False):
         raise ValidationError(
             {"fichier": "Un fichier data: MIME;base64 valide est requis."}
         ) from None
-    if not octets or len(octets) > 2 * 1024 * 1024:
-        raise ValidationError({"fichier": "Le fichier doit peser entre 1 octet et 2 Mio."})
+    limite = TAILLE_MAX_PHOTO_OCTETS if photo else TAILLE_MAX_PIECE_OCTETS
+    limite_mio = 2 if photo else 5
+    if not octets or len(octets) > limite:
+        raise ValidationError(
+            {"fichier": f"Le fichier doit peser entre 1 octet et {limite_mio} Mio."}
+        )
     if photo:
         if mime not in ("image/jpeg", "image/png", "image/webp"):
             raise ValidationError({"fichier": "Format photo non accepté."})
@@ -215,92 +504,148 @@ def valider_media(ligne, *, photo=False):
 def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemins=()):
     if not isinstance(data, Mapping):
         raise ValidationError("Un objet JSON est requis.")
-    # PATCH conserve les sections absentes ; les objets météo/blocage sont fusionnés.
-    fusion = {**(existante or {}), **data}
-    for cle in ("meteo", "blocage"):
-        if isinstance(data.get(cle), dict):
-            fusion[cle] = {**(existante or {}).get(cle, {}), **data[cle]}
+    base_existante = migrer_saisie_ancienne(existante)
+    fusion = {**base_existante, **data}
+    if isinstance(data.get("meteo"), Mapping):
+        fusion["meteo"] = {**base_existante.get("meteo", {}), **data["meteo"]}
     fusion.setdefault("projet_id", str(projet.id))
     fusion.setdefault("date", jour.isoformat())
+
     serializer = SaisieJournalSerializer(data=fusion)
     serializer.is_valid(raise_exception=True)
     saisie = dict(serializer.data)
-    from apps.core.droits import peut_voir_montants
 
-    if "production" in data and not peut_voir_montants(utilisateur):
-        anciens_prix = {
-            cle_production(ligne): ligne["prix_unitaire"]
-            for ligne in (existante or {}).get("production", [])
-        }
-        for ligne in saisie["production"]:
-            if ligne["prix_unitaire"] is not None:
-                raise ValidationError(
-                    {"production": "Le prix exige la permission projets.voir_montants."}
-                )
-            # Une valeur masquée renvoyée par le formulaire ne doit pas effacer
-            # le tarif déjà autorisé en base.
-            ligne["prix_unitaire"] = anciens_prix.get(cle_production(ligne))
     if saisie["projet_id"] != str(projet.id) or saisie["date"] != jour.isoformat():
         raise ValidationError("Le projet et la date du rapport sont immuables.")
-    # Les valeurs par défaut d'un serializer imbriqué sont appliquées explicitement.
-    for cle, classe in (("meteo", "MeteoSerializer"), ("blocage", "BlocageSerializer")):
-        from apps.chantier.serializers import journal as contrats
 
-        nested = getattr(contrats, classe)(data=saisie[cle])
-        nested.is_valid(raise_exception=True)
-        saisie[cle] = dict(nested.data)
+    from apps.chantier.serializers import journal as contrats
+
+    nested_meteo = contrats.MeteoSerializer(data=saisie["meteo"])
+    nested_meteo.is_valid(raise_exception=True)
+    saisie["meteo"] = dict(nested_meteo.data)
+
+    if (
+        saisie["arret"]
+        and saisie["arret"]["motif"] == "INTEMPERIES"
+        and not saisie["meteo"].get("conditions")
+    ):
+        saisie["meteo"]["conditions"] = "ARRET"
+
     cases = cases_du_journal(projet, chemins)
     lots = cases.groupes
-    table_modes = table_modes_execution()
-    controler_equipes(saisie, equipes_du_journal(cases, jour))
+    equipes = equipes_du_journal(cases, jour)
+    equipes_par_id = {e["equipe_id"]: e for e in equipes}
+    controler_equipes(saisie, equipes)
+
     activites = cases.feuilles
-    vus = set()
+    vus_lots: set[str] = set()
+    lots_normalises = []
     for ligne in saisie["lots_travailles"]:
-        identifiant = ligne["lot_id"]
-        if identifiant not in lots or identifiant in vus:
+        identifiant = str(ligne["lot_id"])
+        if identifiant not in lots or identifiant in vus_lots:
             raise ValidationError({"lots_travailles": "Lot extérieur, inactif ou dupliqué."})
-        base_lot = mode_base(cases.mode(lots[identifiant]), table_modes)
-        if base_lot == ModeExecution.SOUS_TRAITANCE_INFORMELLE:
-            raise ValidationError(
-                {"lots_travailles": "Ce lot se suit par la production des intervenants."}
-            )
-        vus.add(identifiant)
-    for section in ("activites", "production"):
-        lignes_vues = set()
+        vus_lots.add(identifiant)
+        lots_normalises.append({"lot_id": identifiant, "observation": ligne["observation"]})
+
+    lignes_vues: set[str] = set()
+    for ligne in saisie["activites"]:
+        act_id = str(ligne["activite_id"])
+        ligne["activite_id"] = act_id
+        activite = activites.get(act_id)
+        if activite is None or act_id in lignes_vues:
+            raise ValidationError({"activites": "Feuille extérieure, clôturée ou dupliquée."})
+        id_groupe = str(cases.groupe_de(activite).pk)
+        if id_groupe not in vus_lots:
+            vus_lots.add(id_groupe)
+            lots_normalises.append({"lot_id": id_groupe, "observation": ""})
+        lignes_vues.add(act_id)
+    saisie["lots_travailles"] = lots_normalises
+
+    ids_arbre = set(cases.arbre.par_id.keys())
+    for section in ("blocages", "photos"):
         for ligne in saisie[section]:
-            activite = activites.get(ligne["activite_id"])
-            cle = cle_production(ligne) if section == "production" else ligne["activite_id"]
-            if activite is None or cle in lignes_vues:
-                raise ValidationError({section: "Activité extérieure, inactive ou dupliquée."})
-            production = (
-                mode_base(cases.mode(activite), table_modes)
-                == ModeExecution.SOUS_TRAITANCE_INFORMELLE
-            )
-            if production != (section == "production"):
-                raise ValidationError({section: "Le mode de suivi ne correspond pas au lot."})
-            if section == "activites" and str(cases.groupe_de(activite).pk) not in vus:
-                raise ValidationError({section: "L'activité doit appartenir à un lot travaillé."})
-            lignes_vues.add(cle)
-    for section in ("incidents", "photos", "pieces_jointes"):
-        cles = [ligne["cle"] for ligne in saisie[section]]
+            elem_id = ligne.get("element_id")
+            if elem_id is not None:
+                try:
+                    elem_uuid = UUID(str(elem_id))
+                except ValueError:
+                    raise ValidationError({section: "Identifiant de case invalide."}) from None
+                if elem_uuid not in ids_arbre:
+                    raise ValidationError({section: "La case désignée n'appartient pas au projet."})
+                ligne["element_id"] = str(elem_uuid)
+
+    for ligne in saisie["blocages"]:
+        if ligne.get("blocage_id") is not None:
+            ligne["blocage_id"] = str(ligne["blocage_id"])
+
+    for ligne in saisie["previsions"]:
+        aid = ligne.get("activite_id")
+        if aid is not None:
+            aid_str = str(aid)
+            feuille = activites.get(aid_str)
+            if feuille is None:
+                raise ValidationError(
+                    {"previsions": "La tâche prévue n'appartient pas au périmètre."}
+                )
+            ligne["activite_id"] = aid_str
+            if not ligne["activite"].strip():
+                ligne["activite"] = feuille.libelle
+        eid = ligne.get("equipe_id")
+        if eid is not None:
+            eid_str = str(eid)
+            equipe = equipes_par_id.get(eid_str)
+            if equipe is None:
+                raise ValidationError(
+                    {"previsions": "L'équipe prévue n'appartient pas au périmètre."}
+                )
+            ligne["equipe_id"] = eid_str
+            if not ligne["equipe"].strip():
+                ligne["equipe"] = equipe["nom"]
+
+    for section in ("incidents", "blocages", "photos", "pieces_jointes"):
+        cles = [ligne["cle"] for ligne in saisie[section] if ligne.get("cle")]
         if len(cles) != len(set(cles)):
             raise ValidationError({section: "Les clés de ligne doivent être uniques."})
-            # JSON standard : ni NaN ni Infinity, y compris dans les flottants imbriqués.
+
     try:
         json.dumps(saisie, allow_nan=False)
     except ValueError:
         raise ValidationError("Les nombres doivent être finis.") from None
+
     for ligne in saisie["photos"]:
         valider_media(ligne, photo=True)
     for ligne in saisie["pieces_jointes"]:
         valider_media(ligne)
-    if len(json.dumps(saisie).encode()) > 16 * 1024 * 1024:
-        raise ValidationError("Le rapport dépasse 16 Mio.")
+    if len(json.dumps(saisie).encode()) > TAILLE_MAX_RAPPORT_OCTETS:
+        raise ValidationError("Le rapport dépasse la taille maximale autorisée (36 Mio).")
     return saisie
 
 
+def _pourcentages_acquis_veille(projet, jour: date) -> dict[str, float]:
+    """Pour chaque feuille en mode POURCENTAGE, le maximum déjà approuvé avant `jour`."""
+    acquis: dict[str, float] = {}
+    for elem_id, pct in Element.objects.filter(
+        projet=projet, mode_mesure=ModeMesure.POURCENTAGE, supprime_le__isnull=True
+    ).values_list("pk", "pourcentage_declare"):
+        if pct is not None:
+            acquis[str(elem_id)] = float(pct)
+    precedents = JournalChantier.objects.filter(
+        rapport__projet=projet,
+        rapport__date_rapport__lt=jour,
+        rapport__supprime_le__isnull=True,
+        rapport__statut=StatutRapport.APPROUVE,
+    ).values_list("saisie", flat=True)
+    for s_prec in precedents:
+        for ligne in (s_prec or {}).get("activites", []):
+            aid = str(ligne.get("activite_id") or "")
+            p = ligne.get("pourcentage_jour")
+            if aid and p is not None:
+                acquis[aid] = max(acquis.get(aid, 0.0), float(p))
+    return acquis
+
+
 def valider_soumission(saisie, projet, chemins=()):
-    erreurs = {}
+    erreurs: dict[str, list[str]] = {}
 
     def exiger(condition, cle, message):
         if not condition:
@@ -308,207 +653,254 @@ def valider_soumission(saisie, projet, chemins=()):
 
     def horaire(valeur):
         try:
-            return time.fromisoformat(valeur) if len(valeur) == 5 else None
+            return time.fromisoformat(valeur) if valeur and len(valeur) == 5 else None
         except ValueError:
             return None
 
-    debut, fin = horaire(saisie["heure_debut"]), horaire(saisie["heure_fin"])
-    exiger(debut is not None, "heure_debut", "Un horaire HH:MM est requis.")
-    exiger(
-        fin is not None and (debut is None or fin > debut),
-        "heure_fin",
-        "La fin doit être postérieure au début.",
-    )
     exiger(
         all(saisie["meteo"].get(k) for k in ("matin", "apres_midi", "conditions")),
         "meteo",
-        "Matin, après-midi et conditions sont requis.",
+        "Matin, après-midi et conditions météo sont requis.",
     )
+
+    debut, fin = horaire(saisie["heure_debut"]), horaire(saisie["heure_fin"])
+    jour = date.fromisoformat(saisie["date"])
+
     if saisie["arret"]:
         exiger(
-            saisie["arret"]["motif"] != "AUTRE" or bool(saisie["arret"]["precision"]),
+            saisie["arret"]["motif"] != "AUTRE" or bool(saisie["arret"]["precision"].strip()),
             "arret",
             "Préciser le motif de l'arrêt.",
         )
-        for cle in (
-            "lots_travailles",
-            "activites",
-            "production",
-            "effectifs",
-            "equipes",
-            "equipements",
-            "materiaux",
-            "livraisons",
-            "besoins",
-            "incidents",
-            "photos",
-            "pieces_jointes",
-            "previsions",
-        ):
-            exiger(not saisie[cle], cle, "Une journée d'arrêt ne déclare pas cette rubrique.")
+        if saisie["heure_debut"] or saisie["heure_fin"]:
+            exiger(
+                debut is not None and fin is not None and fin > debut,
+                "heure_fin",
+                "Lorsque les horaires sont renseignés, la fin doit être postérieure au début.",
+            )
         exiger(
-            saisie["presence_sous_traitant"] is None,
-            "presence_sous_traitant",
-            "Sans objet pour une journée d'arrêt.",
+            not saisie["activites"],
+            "activites",
+            "Une journée d'arrêt complet ne déclare pas d'avancement de travaux.",
         )
         exiger(
-            saisie["blocage"]["niveau"] == "AUCUN",
-            "blocage",
-            "Sans objet pour une journée d'arrêt.",
+            not any(ligne.get("presents") for ligne in saisie["equipes"]),
+            "equipes",
+            "Une journée d'arrêt complet ne pointe pas d'équipe au travail.",
         )
     else:
+        exiger(debut is not None, "heure_debut", "Un horaire HH:MM est requis.")
         exiger(
-            len(saisie["note_cc"].strip()) >= 10,
-            "note_cc",
-            "La note doit comporter au moins 10 caractères.",
+            fin is not None and (debut is None or fin > debut),
+            "heure_fin",
+            "La fin doit être postérieure au début.",
         )
-        table_modes = table_modes_execution()
+        exiger(
+            len((saisie.get("note_redacteur") or "").strip()) >= 10,
+            "note_redacteur",
+            "La synthèse de fin de journée doit comporter au moins 10 caractères.",
+        )
+
         cases = cases_du_journal(projet, chemins)
-        modes = {mode_base(code, table_modes) for code in cases.modes()}
-        equipes = equipes_du_journal(cases, date.fromisoformat(saisie["date"]))
-        exiger_equipes(saisie, equipes, exiger)
-        # Les effectifs par catégorie demeurent pour les tâches en régie sans équipe.
-        if ModeExecution.REGIE in modes and feuilles_sans_equipe(
-            cases, equipes, ModeExecution.REGIE
-        ):
-            exiger(
-                bool(saisie["effectifs"]),
-                "effectifs",
-                "Au moins une catégorie est requise en régie.",
-            )
-        for ligne in saisie["effectifs"]:
-            exiger(
-                bool(ligne["categorie"])
-                and all(ligne[k] is not None for k in ("prevus", "presents", "heures")),
-                "effectifs",
-                "Catégorie, prévus, présents et heures sont requis.",
-            )
-            absence = (
-                ligne["prevus"] is not None
-                and ligne["presents"] is not None
-                and ligne["presents"] < ligne["prevus"]
-            )
-            exiger(
-                not (absence or (ligne["retards"] or 0)) or bool(ligne["observation"]),
-                "effectifs",
-                "Une absence ou un retard exige un motif.",
-            )
-        points = {p["lot_id"]: p for p in saisie["lots_travailles"]}
-        groupes = {
-            ligne["activite_id"]: str(cases.groupe_de(cases.feuilles[ligne["activite_id"]]).pk)
-            for ligne in saisie["activites"]
-            if ligne["activite_id"] in cases.feuilles
-        }
+        equipes = equipes_du_journal(cases, jour)
+        pct_veille = _pourcentages_acquis_veille(projet, jour)
+
+        lignes_ayant_avance: list[tuple[dict, str]] = []
+        groupes_par_activite: dict[str, str] = {}
+
         for ligne in saisie["activites"]:
-            exiger(ligne["quantite_jour"] is not None, "activites", "La quantité est requise.")
-        for identifiant, point in points.items():
-            avance = any(
-                (ligne["quantite_jour"] or 0) > 0
-                and groupes.get(ligne["activite_id"]) == identifiant
-                for ligne in saisie["activites"]
-            )
-            exiger(
-                avance or bool(point["observation"]),
-                "lots_travailles",
-                "Une observation est requise si aucune activité du lot n'a avancé.",
-            )
-        if ModeExecution.SOUS_TRAITANCE_INFORMELLE in modes:
-            exiger(
-                bool(saisie["production"]),
-                "production",
-                "La production est requise pour la sous-traitance informelle.",
-            )
-        for ligne in saisie["production"]:
-            exiger(
-                bool(ligne["intervenant"]) and ligne["quantite_jour"] is not None,
-                "production",
-                "Intervenant et quantité sont requis ; "
-                "le tarif est réservé aux détenteurs des montants.",
-            )
-        # La ligne de l'équipe partenaire remplace la présence du sous-traitant.
-        if ModeExecution.SOUS_TRAITANCE_STRUCTUREE in modes and feuilles_sans_equipe(
-            cases, equipes, ModeExecution.SOUS_TRAITANCE_STRUCTUREE
-        ):
-            presence = saisie["presence_sous_traitant"] or {}
-            exiger(
-                bool(presence.get("presence")) and bool(presence.get("qualite")),
-                "presence_sous_traitant",
-                "Présence et qualité sont requises.",
-            )
-            exiger(
-                presence.get("presence") == "PRESENT" or bool(presence.get("motif")),
-                "presence_sous_traitant",
-                "Motiver une absence ou présence partielle.",
-            )
-        for ligne in saisie["materiaux"]:
-            exiger(
-                bool(ligne["designation"])
-                and bool(ligne["unite"])
-                and ligne["quantite_consommee"] is not None,
-                "materiaux",
-                "Désignation, unité et quantité sont requises.",
-            )
-        for ligne in saisie["livraisons"]:
-            exiger(
-                all(ligne[k] for k in ("fournisseur", "designation", "quantite", "conformite")),
-                "livraisons",
-                "Fournisseur, désignation, quantité et conformité sont requis.",
-            )
-            exiger(
-                ligne["conformite"] == "CONFORME" or bool(ligne["observation"]),
-                "livraisons",
-                "Motiver une livraison non conforme ou partielle.",
-            )
-        for ligne in saisie["equipements"]:
-            exiger(
-                all(ligne[k] for k in ("designation", "propriete", "utilisation", "etat")),
-                "equipements",
-                "Désignation, propriété, utilisation et état sont requis.",
-            )
-            exiger(
-                ligne["etat"] == "BON"
-                or (ligne["duree_arret"] is not None and bool(ligne["observation"])),
-                "equipements",
-                "Préciser la durée et le motif d'immobilisation.",
-            )
-        for ligne in saisie["incidents"]:
-            exiger(
-                len(ligne["description"]) >= 20
-                and bool(ligne["gravite"])
-                and bool(ligne["decide_par"])
-                and bool(ligne["type"]),
-                "incidents",
-                "Décrire l'événement en 20 caractères, avec catégorie, gravité et décideur.",
-            )
-            if ligne["heure_debut"] or ligne["heure_fin"]:
-                d, f = horaire(ligne["heure_debut"]), horaire(ligne["heure_fin"])
+            act_id = str(ligne["activite_id"])
+            feuille = cases.feuilles.get(act_id)
+            if feuille is None:
+                continue
+            groupes_par_activite[act_id] = str(cases.groupe_de(feuille).pk)
+            mode = feuille.mode_mesure or ModeMesure.QUANTITE
+            a_avance = False
+            if mode == ModeMesure.POURCENTAGE:
+                pct = ligne.get("pourcentage_jour")
                 exiger(
-                    d is not None and f is not None and f >= d,
-                    "incidents",
-                    "Les horaires de l'événement sont incohérents.",
+                    pct is not None,
+                    "activites",
+                    f"{feuille.libelle} : le pourcentage cumulé est requis.",
                 )
-        blocage = saisie["blocage"]
-        exiger(bool(blocage["niveau"]), "blocage", "L'incidence sur le chantier est requise.")
-        if blocage["niveau"] != "AUCUN":
-            exiger(
-                bool(blocage["nature"])
-                and len(blocage["description"]) >= 20
-                and bool(blocage["impact"]),
-                "blocage",
-                "Décrire la nature, l'incidence et le blocage (20 caractères).",
+                acquis = pct_veille.get(act_id, 0.0)
+                if pct is not None:
+                    exiger(
+                        pct >= acquis,
+                        "activites",
+                        f"{feuille.libelle} : le pourcentage ({pct} %) ne peut pas être inférieur "
+                        f"au cumul acquis ({acquis} %).",
+                    )
+                    a_avance = pct > acquis
+            elif mode == ModeMesure.JALON:
+                a_avance = bool(ligne.get("jalon_atteint"))
+            else:
+                q_jour = ligne.get("quantite_jour")
+                exiger(
+                    q_jour is not None,
+                    "activites",
+                    f"{feuille.libelle} : la quantité réalisée du jour est requise.",
+                )
+                a_avance = (q_jour or 0) > 0
+
+            if a_avance:
+                lignes_ayant_avance.append((ligne, feuille.libelle))
+
+        exiger_equipes(saisie, equipes, lignes_ayant_avance, exiger)
+
+        ids_avancees = {str(item["activite_id"]) for item, _ in lignes_ayant_avance}
+        for point in saisie["lots_travailles"]:
+            lot_id = str(point["lot_id"])
+            feuilles_lot = [
+                item
+                for item in saisie["activites"]
+                if groupes_par_activite.get(str(item["activite_id"])) == lot_id
+            ]
+            avance_lot = any(str(item["activite_id"]) in ids_avancees for item in feuilles_lot)
+            obs_feuille = any(
+                bool((item.get("observation") or "").strip()) for item in feuilles_lot
             )
-        for ligne in saisie["photos"]:
-            exiger(bool(ligne["legende"]), "photos", "La légende est requise.")
-        for ligne in saisie["besoins"]:
-            exiger(bool(ligne["designation"]), "besoins", "La désignation est requise.")
-        for ligne in saisie["previsions"]:
             exiger(
-                bool(ligne["activite"]) and bool(ligne["objectif"]),
-                "previsions",
-                "L'activité et l'objectif sont requis.",
+                avance_lot or obs_feuille or bool((point.get("observation") or "").strip()),
+                "lots_travailles",
+                "Une observation est requise lorsqu'un lot déclaré n'a pas avancé.",
             )
+
+    # Règles communes aux rubriques renseignées (journée normale ou journée d'arrêt)
+    for ligne in saisie["materiaux"]:
+        exiger(
+            bool(ligne["designation"].strip())
+            and bool(ligne["unite"].strip())
+            and ligne["quantite_consommee"] is not None,
+            "materiaux",
+            "Désignation, unité et quantité consommée sont requises.",
+        )
+    for ligne in saisie["livraisons"]:
+        exiger(
+            bool(ligne["fournisseur"].strip())
+            and bool(ligne["designation"].strip())
+            and (ligne["quantite"] or 0) > 0
+            and bool(ligne["unite"].strip())
+            and bool(ligne["conformite"]),
+            "livraisons",
+            "Fournisseur, désignation, quantité (> 0), unité et conformité sont requis.",
+        )
+        exiger(
+            ligne["conformite"] == "CONFORME" or bool(ligne["observation"].strip()),
+            "livraisons",
+            "Motiver une livraison partielle ou non conforme.",
+        )
+    for ligne in saisie["besoins"]:
+        exiger(bool(ligne["designation"].strip()), "besoins", "La désignation est requise.")
+    for ligne in saisie["equipements"]:
+        exiger(
+            bool(ligne["designation"].strip()) and bool(ligne["propriete"]) and bool(ligne["etat"]),
+            "equipements",
+            "Désignation, propriété et état sont requis.",
+        )
+        if ligne["etat"] == "BON":
+            exiger(
+                ligne["heures_utilisation"] is not None,
+                "equipements",
+                "Indiquer les heures d'utilisation de l'équipement.",
+            )
+        else:
+            exiger(
+                ligne["duree_arret"] is not None and bool(ligne["observation"].strip()),
+                "equipements",
+                "Préciser la durée et le motif d'immobilisation ou de panne.",
+            )
+    for ligne in saisie["incidents"]:
+        gravite_requise = ligne["nature"] != "VISITE_INSTRUCTION"
+        exiger(
+            len(ligne["description"].strip()) >= 20
+            and bool(ligne["decide_par"])
+            and bool(ligne["type"])
+            and (not gravite_requise or bool(ligne["gravite"])),
+            "incidents",
+            "Décrire l'événement en 20 caractères avec catégorie, décideur et gravité.",
+        )
+        if ligne["heure_debut"] or ligne["heure_fin"]:
+            d_inc, f_inc = horaire(ligne["heure_debut"]), horaire(ligne["heure_fin"])
+            exiger(
+                d_inc is not None and f_inc is not None and f_inc >= d_inc,
+                "incidents",
+                "Les horaires de l'événement sont incohérents.",
+            )
+    for ligne in saisie["blocages"]:
+        exiger(
+            bool(ligne["nature"])
+            and len(ligne["description"].strip()) >= 20
+            and bool(ligne["impact"].strip()),
+            "blocages",
+            "Chaque blocage exige nature, description (20 car. min.) et impact.",
+        )
+    for ligne in saisie["photos"]:
+        exiger(bool(ligne["legende"].strip()), "photos", "La légende est requise sur chaque photo.")
+    for ligne in saisie["previsions"]:
+        exiger(
+            bool(ligne["activite"].strip()) and bool(ligne["objectif"].strip()),
+            "previsions",
+            "La tâche et l'objectif sont requis pour chaque prévision.",
+        )
+
     if erreurs:
         raise RapportIncomplet("Le rapport est incomplet pour être soumis.", details=erreurs)
+
+
+def _synchroniser_blocages_du_journal(journal, utilisateur) -> None:
+    """Crée ou met à jour les entrées `Blocage` du suivi opérationnel sans doublon au rejet."""
+    saisie = journal.saisie
+    projet = journal.rapport.projet
+    modifie = False
+    for ligne in saisie.get("blocages", []):
+        severite = SEVERITE_BLOCAGE_PAR_NIVEAU.get(ligne["niveau"], SeveriteBlocage.MINEUR)
+        desc = ligne["description"].strip()
+        impact = (ligne.get("impact") or "").strip()
+        description_complete = f"{desc}\nImpact : {impact}" if impact else desc
+        titre = (ligne.get("titre") or "").strip() or desc[:140]
+        element = None
+        if ligne.get("element_id"):
+            element = Element.objects.filter(
+                pk=ligne["element_id"], projet=projet, supprime_le__isnull=True
+            ).first()
+
+        existant = None
+        if ligne.get("blocage_id"):
+            existant = Blocage.objects.filter(
+                pk=ligne["blocage_id"], projet=projet, supprime_le__isnull=True
+            ).first()
+
+        if existant is not None:
+            modifier_blocage(
+                blocage=existant,
+                modifie_par=utilisateur,
+                titre=titre,
+                description=description_complete,
+                severite=severite,
+            )
+            if existant.element_id != (element.id if element else None):
+                existant.element = element
+                existant.save(update_fields=["element", "modifie_le"])
+        else:
+            cree = creer_blocage(
+                projet=projet,
+                element=element,
+                titre=titre,
+                description=description_complete,
+                severite=severite,
+                auteur=utilisateur,
+                cree_par=utilisateur,
+            )
+            ligne["blocage_id"] = str(cree.id)
+            modifie = True
+
+    if modifie:
+        journal.saisie = saisie
+
+
+def _nb_blocages_critiques(saisie: dict) -> int:
+    return sum(1 for b in saisie.get("blocages", []) if b.get("niveau") == "BLOQUANT")
 
 
 @transaction.atomic
@@ -521,8 +913,6 @@ def creer_journal(*, projet, utilisateur, jour, data):
             details={"date": "avant_enregistrement_projet"},
         )
     verifier_statut_projet_pour_ecriture(projet, action="NOUVEAU_RAPPORT")
-    # Écrit le journal qui en a la permission sur le projet ; un rapport par rédacteur et par
-    # jour, sur sa partie du projet (30/10/2026).
     redacteur = verifier_fonction(projet, utilisateur, REDIGER)
     saisie = normaliser_saisie(
         data, projet=projet, jour=jour, utilisateur=utilisateur, chemins=redacteur.chemins
@@ -543,8 +933,8 @@ def creer_journal(*, projet, utilisateur, jour, data):
                 statut=StatutRapport.BROUILLON,
                 soumis_le=None,
                 effectif_present=effectif_present(saisie),
-                observations=saisie["note_cc"],
-                blocages_critiques=int(saisie["blocage"]["niveau"] == "BLOQUANT"),
+                observations=saisie["note_redacteur"],
+                blocages_critiques=_nb_blocages_critiques(saisie),
             )
             journal = JournalChantier.objects.create(
                 rapport=rapport,
@@ -561,7 +951,6 @@ def creer_journal(*, projet, utilisateur, jour, data):
 
 
 def verrouiller(journal):
-    # Ordre unique : rapport puis complément, également pour les vues historiques.
     rapport = get_object_or_404(
         RapportJournalier.objects.select_for_update(), pk=journal.rapport_id
     )
@@ -575,7 +964,7 @@ def enregistrer(journal, utilisateur, data):
     verifier_auteur(rapport, utilisateur)
     if rapport.statut not in (StatutRapport.BROUILLON, StatutRapport.REJETE):
         raise RapportNonModifiable("Un rapport soumis ne peut plus être modifié.")
-    verifier_jour(rapport.date_rapport)
+    verifier_jour(rapport.date_rapport, statut_actuel=rapport.statut)
     verifier_statut_projet_pour_ecriture(rapport.projet, action="NOUVEAU_RAPPORT")
     ancienne_saisie = journal.saisie
     journal.saisie = normaliser_saisie(
@@ -587,10 +976,9 @@ def enregistrer(journal, utilisateur, data):
         chemins=chemins_des_cases(journal.perimetre_ids),
     )
     journal.save(update_fields=["saisie", "modifie_le"])
-    # La saisie est la source de vérité, y compris pour les anciennes listes.
     rapport.effectif_present = effectif_present(journal.saisie)
-    rapport.observations = journal.saisie["note_cc"]
-    rapport.blocages_critiques = int(journal.saisie["blocage"]["niveau"] == "BLOQUANT")
+    rapport.observations = journal.saisie["note_redacteur"]
+    rapport.blocages_critiques = _nb_blocages_critiques(journal.saisie)
     rapport.save(
         update_fields=["effectif_present", "observations", "blocages_critiques", "modifie_le"]
     )
@@ -601,7 +989,9 @@ def enregistrer(journal, utilisateur, data):
             ActionAudit.MODIFICATION,
             avant={
                 "champs_modifies": [
-                    cle for cle in journal.saisie if ancienne_saisie.get(cle) != journal.saisie[cle]
+                    cle
+                    for cle in journal.saisie
+                    if (ancienne_saisie or {}).get(cle) != journal.saisie[cle]
                 ]
             },
             evenement="BROUILLON_ENREGISTRE",
@@ -620,7 +1010,6 @@ def soumettre_journal(*, journal, utilisateur, data):
 
     journal = verrouiller(journal)
     avant = {"statut": statut_journal(journal)}
-    # Stabiliser l'arbre (modes d'exécution) pour la validation et la photographie.
     list(
         Element.objects.filter(projet=journal.rapport.projet)
         .select_for_update()
@@ -631,6 +1020,7 @@ def soumettre_journal(*, journal, utilisateur, data):
     rapport = journal.rapport
     chemins = chemins_des_cases(journal.perimetre_ids)
     valider_soumission(journal.saisie, rapport.projet, chemins)
+    _synchroniser_blocages_du_journal(journal, utilisateur)
     journal.photographie = contexte_projet(
         rapport.projet, rapport.date_rapport, chemins=chemins, auteur=utilisateur
     )
@@ -639,8 +1029,8 @@ def soumettre_journal(*, journal, utilisateur, data):
     rapport.valide_par = None
     rapport.valide_le = None
     rapport.commentaire_validation = ""
+    rapport.blocages_critiques = _nb_blocages_critiques(journal.saisie)
     rapport.save()
-    # Les signataires attendus sont figés maintenant ; sans validateur, l'étape est sautée.
     signatures.figer_signataires(journal)
     signatures.reevaluer(journal)
     journal.save()
@@ -649,33 +1039,27 @@ def soumettre_journal(*, journal, utilisateur, data):
         declencheur_type="RAPPORT_SOUMISSION",
         declencheur_id=rapport.id,
     )
-    tracer(journal, utilisateur, ActionAudit.SIGNATURE, avant=avant, evenement="SOUMISSION_CC")
+    tracer(journal, utilisateur, ActionAudit.SIGNATURE, avant=avant, evenement="SOUMISSION")
     return journal
 
 
 @transaction.atomic
 def signer_journal(*, journal, utilisateur, etape, commentaire=""):
-    """Une signature de l'étape en cours ; l'étape se clôt quand tous les attendus ont signé.
-
-    `etape` : « CT » pour la validation, « CP » pour l'approbation — les noms des routes, pas
-    ceux des rôles : signe qui a la permission sur le projet (30/10/2026).
-    """
+    """Signature de l'étape en cours (`VALIDATION` ou `APPROBATION`, avec alias `CT` / `CP`)."""
     journal = verrouiller(journal)
     verifier_statut_projet_pour_ecriture(journal.rapport.projet)
     attendu = statut_journal(journal)
-    signatures.signer(
-        journal,
-        utilisateur,
-        signatures.VALIDATION if etape == "CT" else signatures.APPROBATION,
-        commentaire,
+    cible_etape = (
+        signatures.VALIDATION if etape in ("CT", signatures.VALIDATION) else signatures.APPROBATION
     )
+    signatures.signer(journal, utilisateur, cible_etape, commentaire)
     journal.save()
     tracer(
         journal,
         utilisateur,
         ActionAudit.SIGNATURE,
         avant={"statut": attendu},
-        evenement=f"SIGNATURE_{etape}",
+        evenement=f"SIGNATURE_{cible_etape}",
         commentaire=commentaire,
     )
     return journal
@@ -685,10 +1069,8 @@ def signer_journal(*, journal, utilisateur, etape, commentaire=""):
 def rejeter_journal(*, journal, utilisateur, motif):
     journal = verrouiller(journal)
     statut = statut_journal(journal)
-    if statut not in ("SOUMIS", "VALIDE_CT"):
-        raise ErreurMetier("Seul un rapport soumis ou validé par le CT peut être rejeté.")
-    # Refuse une personne attendue à l'étape en cours ; le rapport repart chez son auteur et
-    # toutes les signatures sont effacées.
+    if statut not in ("SOUMIS", "VALIDE"):
+        raise ErreurMetier("Seul un rapport soumis ou validé peut être rejeté.")
     if not signatures.peut_refuser(journal, utilisateur):
         raise PermissionDenied("Vous n'êtes pas attendu pour signer ce rapport.")
     verifier_statut_projet_pour_ecriture(journal.rapport.projet)
@@ -722,8 +1104,6 @@ def supprimer_brouillon(*, journal, utilisateur):
     verifier_statut_projet_pour_ecriture(journal.rapport.projet)
     if journal.rapport.statut != StatutRapport.BROUILLON:
         raise ErreurMetier("Seuls les brouillons peuvent être supprimés.")
-    # Exception limitée aux nouveaux brouillons ; la règle historique delete()
-    # reste en vigueur pour les rapports archivés et les anciennes routes.
     journal.rapport.supprime_le = timezone.now()
     journal.rapport.supprime_par = utilisateur
     journal.rapport.save(update_fields=["supprime_le", "supprime_par", "modifie_le"])
@@ -744,7 +1124,6 @@ def alerter_journal(*, journal, utilisateur, data):
     if not creee and alerte.type != data["type"]:
         raise ErreurMetier("Cette clé identifie déjà un autre type d'alerte.")
     if creee:
-        # Ceux qui signeront ce rapport : les validateurs et approbateurs de sa partie du projet.
         chemins = chemins_des_cases(journal.perimetre_ids)
         projet = journal.rapport.projet
         destinataires = {

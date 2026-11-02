@@ -1,16 +1,10 @@
-"""La synthèse périodique d'un chantier, agrégée de ses rapports journaliers.
+"""La synthèse périodique d'un chantier, agrégée de ses rapports journaliers validés/approuvés.
 
-C'est le calcul que `agregerSynthese` (frontend, `features/chantier/regles.ts`)
-rejouait en simulation ; il vit désormais ici, et la projection a la forme
-exacte de `ChargeSynthese`.
-
-- **Le récapitulatif** reprend les lignes du journal de la période, absences
-  comprises. Un brouillon y compte pour un rapport manquant : la synthèse doit
-  dire la même chose à tous ses lecteurs.
-- **Les chiffres** ne viennent que des rapports remis (soumis, validés,
-  approuvés, ou rejetés depuis) : un rapport manquant n'a rien à compter.
-- **Une fois signée par le CT**, la synthèse se lit dans sa photographie, et
-  non plus dans le calcul vivant.
+- **Le récapitulatif** reprend les lignes du journal des jours ouvrés de la période, absences
+  comprises. Un brouillon y compte pour un rapport manquant.
+- **Les chiffres consolidés** (avancement, présence par équipe, matériaux livrés/consommés,
+  incidents, blocages) ne proviennent **que des rapports `VALIDE` et `APPROUVE`** (A5).
+- **Une fois signée**, la synthèse se lit dans sa photographie normalisée.
 """
 
 import math
@@ -18,10 +12,12 @@ from collections import OrderedDict
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.chantier.models import JournalChantier, SynthesePeriodique
 from apps.chantier.selectors.journal import (
+    _calendrier_autour_arbre,
     contexte_projet,
     document,
     journal_periode,
@@ -34,24 +30,29 @@ from apps.chantier.services.fonctions import (
     tient_fonction,
 )
 from apps.chantier.services.journal import aujourdhui
+from apps.projets.selectors.arbre import charger_arbre
+from apps.projets.services.calendrier_ouvre import calendrier_entreprise
+from apps.projets.services.sante_calculs import compter_jours_ouvres
 
 FUSEAU = ZoneInfo("Africa/Abidjan")
-
-#: Le délai laissé au signataire attendu, comme pour un rapport (RG-F2-03).
 DELAI_SIGNATURE = timedelta(hours=24)
+HEURE_ECHEANCE_VALIDATION = time(17, 0)
 
-#: L'heure à laquelle la synthèse d'une période close est attendue, le lendemain.
-HEURE_ECHEANCE_CT = time(17, 0)
+#: Tous les rapports remis (même en attente ou rejetés) comptent dans « reçus ».
+REMIS = ("SOUMIS", "VALIDE", "APPROUVE", "REJETE", "VALIDE_CT", "APPROUVE_CP")
 
-#: Les situations d'un rapport remis au circuit — même rejeté depuis.
-REMIS = ("SOUMIS", "VALIDE_CT", "APPROUVE_CP", "REJETE")
+#: Seuls les rapports validés ou approuvés alimentent les chiffres consolidés (A5).
+CONSOLIDABLES = ("VALIDE", "APPROUVE", "VALIDE_CT", "APPROUVE_CP")
 
-#: Au-delà, on renonce à remonter le passé pour trouver l'avancement de départ.
 PROFONDEUR_RELEVE = 30
+
+STATUT_HISTORIQUE_VERS_NOUVEAU = {
+    "VALIDE_CT": "VALIDE",
+    "APPROUVE_CP": "APPROUVE",
+}
 
 
 def arrondi(valeur: float, decimales: int = 0) -> float:
-    """Arrondi au plus proche, la moitié vers le haut — `Math.round` côté frontend."""
     facteur = 10**decimales
     resultat = math.floor(valeur * facteur + 0.5) / facteur
     return int(resultat) if decimales == 0 else resultat
@@ -67,44 +68,56 @@ def reference(projet, type_, debut) -> str:
     return f"SYNT-{debut.year}-{projet.reference[-3:]}-{suffixe}"
 
 
-def releve(projet, jour) -> tuple[float, float]:
-    """Le dernier avancement connu du chantier à `jour`, et son théorique.
-
-    Le dernier rapport remis à cette date qui en porte un — une journée
-    d'arrêt n'en porte pas. Sans rapport, le chantier part de zéro.
-    """
+def releve(projet, jour: date, *, arbre=None, calendrier=None) -> tuple[float, float]:
+    """Dernier avancement consolidé (`VALIDE` ou `APPROUVE`) connu à `jour`, et son théorique."""
     journaux = (
         JournalChantier.objects.filter(
             rapport__projet=projet,
             rapport__date_rapport__lte=jour,
             rapport__supprime_le__isnull=True,
-            rapport__statut__in=["SOUMIS", "APPROUVE", "REJETE"],
+        )
+        .filter(
+            Q(rapport__statut="APPROUVE") | Q(rapport__statut="SOUMIS", valide_ct_le__isnull=False)
         )
         .select_related("rapport", "rapport__projet", "rapport__auteur", "valide_ct_par")
         .order_by("-rapport__date_rapport")[:PROFONDEUR_RELEVE]
     )
     for journal in journaux:
-        charge = document(journal, relance_le=None)
+        charge = document(journal, relance_le=None, arbre=arbre, calendrier=calendrier)
         if charge["avancement"] is not None:
             return charge["avancement"], charge["avancement_theorique"] or 0
     return 0, 0
 
 
-def _avancement_activite(ligne) -> int:
-    if ligne["quantite_prevue"] <= 0:
+def _avancement_debut_activite(ligne: dict) -> int:
+    mode = ligne.get("mode_mesure", "QUANTITE")
+    if mode == "POURCENTAGE":
+        return min(100, arrondi(ligne.get("pourcentage_veille") or 0))
+    if mode == "JALON":
         return 0
-    cumul = ligne["cumul_veille"] + (ligne["quantite_jour"] or 0)
-    return min(100, arrondi(100 * cumul / ligne["quantite_prevue"]))
+    prevue = ligne.get("quantite_prevue") or 0
+    if prevue <= 0:
+        return 0
+    return min(100, arrondi(100 * (ligne.get("cumul_veille") or 0) / prevue))
+
+
+def _avancement_fin_activite(ligne: dict) -> int:
+    mode = ligne.get("mode_mesure", "QUANTITE")
+    if mode == "POURCENTAGE":
+        pct = ligne.get("pourcentage_jour")
+        if pct is None:
+            pct = ligne.get("pourcentage_veille") or 0
+        return min(100, arrondi(pct))
+    if mode == "JALON":
+        return 100 if ligne.get("jalon_atteint") else 0
+    prevue = ligne.get("quantite_prevue") or 0
+    if prevue <= 0:
+        return 0
+    cumul = (ligne.get("cumul_veille") or 0) + (ligne.get("quantite_jour") or 0)
+    return min(100, arrondi(100 * cumul / prevue))
 
 
 def _avancement_par_lot(lots, documents):
-    """Pour chaque lot, ses activités travaillées : où elles partaient, où elles arrivent.
-
-    Une activité se suit de la première à la dernière fois qu'elle a été
-    travaillée dans la période. Son objectif est l'écart de son avancement
-    théorique sur ces jours, plus le pas d'une journée : le théorique relevé
-    le premier jour est déjà celui du soir.
-    """
     blocs = []
     for lot in lots:
         occurrences = OrderedDict()
@@ -113,20 +126,21 @@ def _avancement_par_lot(lots, documents):
                 if travaux["lot"]["id"] != lot["id"]:
                     continue
                 for ligne in travaux["activites"]:
-                    occurrences.setdefault(ligne["libelle"], []).append(ligne)
+                    cle = ligne.get("activite_id") or ligne["libelle"]
+                    occurrences.setdefault(cle, []).append(ligne)
         activites = []
-        for libelle, lignes in occurrences.items():
+        for _cle, lignes in occurrences.items():
             depart, arrivee = lignes[0], lignes[-1]
             ecart = arrivee["avancement_theorique"] - depart["avancement_theorique"]
             pas = ecart / (len(lignes) - 1) if len(lignes) > 1 else 0
-            prevue = depart["quantite_prevue"] or 1
             activites.append(
                 {
-                    "libelle": libelle,
+                    "libelle": arrivee["libelle"],
+                    "mode_mesure": arrivee.get("mode_mesure", "QUANTITE"),
                     "unite": arrivee["unite"],
                     "quantite_prevue": arrivee["quantite_prevue"],
-                    "avancement_debut": arrondi(100 * depart["cumul_veille"] / prevue),
-                    "avancement_fin": _avancement_activite(arrivee),
+                    "avancement_debut": _avancement_debut_activite(depart),
+                    "avancement_fin": _avancement_fin_activite(arrivee),
                     "objectif_gain": arrondi(ecart + pas),
                 }
             )
@@ -135,53 +149,105 @@ def _avancement_par_lot(lots, documents):
 
 
 def _effectifs(documents):
-    categories = OrderedDict()
+    """Agrège le pointage nominatif par équipe (`equipes`), avec repli historique."""
+    groupes_equipes = OrderedDict()
+    categories_historiques = OrderedDict()
+
     for charge in documents:
-        for ligne in charge["effectifs"] or []:
-            categories.setdefault(ligne["categorie"], []).append(ligne)
-    return [
+        if charge.get("equipes"):
+            for eq in charge["equipes"]:
+                intitule = (
+                    f"{eq['nom']} ({eq['entreprise']})" if eq.get("entreprise") else eq["nom"]
+                )
+                groupes_equipes.setdefault(intitule, []).append(eq)
+        elif charge.get("effectifs"):
+            for cat in charge["effectifs"]:
+                categories_historiques.setdefault(cat["categorie"], []).append(cat)
+
+    resultat = [
         {
-            "categorie": categorie,
-            "prevu_par_jour": max(ligne["prevus"] or 0 for ligne in lignes),
-            "presence_moyenne": arrondi(
-                sum(ligne["presents"] or 0 for ligne in lignes) / len(lignes), 1
-            ),
-            "heures": arrondi(sum(ligne["heures"] or 0 for ligne in lignes)),
-            "absences": sum(
-                max(0, (ligne["prevus"] or 0) - (ligne["presents"] or 0)) for ligne in lignes
-            ),
+            "categorie": nom_eq,
+            "prevu_par_jour": max(eq["membres"] or 0 for eq in lignes),
+            "presence_moyenne": arrondi(sum(len(eq["presents"]) for eq in lignes) / len(lignes), 1),
+            "heures": arrondi(sum(eq.get("heures") or 0 for eq in lignes)),
+            "absences": sum(len(eq.get("absents") or []) for eq in lignes),
             "observation": next(
-                (ligne["observation"] for ligne in lignes if ligne["observation"]), None
+                (eq["observation"] for eq in lignes if eq.get("observation")), None
             ),
         }
-        for categorie, lignes in categories.items()
+        for nom_eq, lignes in groupes_equipes.items()
     ]
+
+    for categorie, lignes in categories_historiques.items():
+        resultat.append(
+            {
+                "categorie": categorie,
+                "prevu_par_jour": max(ligne.get("prevus") or 0 for ligne in lignes),
+                "presence_moyenne": arrondi(
+                    sum(ligne.get("presents") or 0 for ligne in lignes) / len(lignes), 1
+                ),
+                "heures": arrondi(sum(ligne.get("heures") or 0 for ligne in lignes)),
+                "absences": sum(
+                    max(0, (ligne.get("prevus") or 0) - (ligne.get("presents") or 0))
+                    for ligne in lignes
+                ),
+                "observation": next(
+                    (ligne["observation"] for ligne in lignes if ligne.get("observation")), None
+                ),
+            }
+        )
+    return resultat
 
 
 def _materiaux(documents):
-    """Consommé et livré de la période. Le module stocks n'existe pas : pas de stock inventé."""
+    """Consommé et livré de la période, agrégés sur les rapports validés/approuvés."""
     materiaux = OrderedDict()
     for charge in documents:
         for ligne in charge["materiaux"]:
+            cle = (ligne["designation"].strip().lower(), (ligne["unite"] or "").strip().lower())
             cumul = materiaux.setdefault(
-                ligne["designation"],
+                cle,
                 {
                     "designation": ligne["designation"],
                     "unite": ligne["unite"],
                     "stock_debut": None,
-                    "consomme": 0,
-                    "livre": 0,
+                    "consomme": 0.0,
+                    "livre": 0.0,
                     "stock_fin": None,
                     "seuil_alerte": None,
                 },
             )
-            cumul["consomme"] += ligne["utilise"] or 0
-            cumul["livre"] += ligne["livre"] or 0
+            cumul["consomme"] = round(cumul["consomme"] + float(ligne["utilise"] or 0), 3)
+            cumul["livre"] = round(cumul["livre"] + float(ligne["livre"] or 0), 3)
     return list(materiaux.values())
 
 
-def calculer(request, projet, type_, debut, fin) -> dict:
-    """La synthèse calculée maintenant, sans ce que le CT y écrit ni le circuit."""
+def _normaliser_calcul_lu(calcul_brut: dict) -> dict:
+    """Normalise une photographie de synthèse antérieure (statuts et libellés sans rôle en dur)."""
+    c = dict(calcul_brut)
+    if "validateurs_nom" not in c:
+        c["validateurs_nom"] = c.get("conducteur_travaux_nom") or ""
+    if "approbateurs_nom" not in c:
+        c["approbateurs_nom"] = c.get("chef_projet_nom") or ""
+    recap = []
+    for ligne in c.get("recapitulatif") or []:
+        copie = dict(ligne)
+        copie["statut"] = STATUT_HISTORIQUE_VERS_NOUVEAU.get(
+            copie.get("statut"), copie.get("statut")
+        )
+        ch = dict(copie.get("chantier") or {})
+        if "redacteur_nom" not in ch:
+            ch["redacteur_nom"] = ch.get("chef_chantier_nom") or ""
+        copie["chantier"] = ch
+        if "note_redacteur" not in copie:
+            copie["note_redacteur"] = copie.get("note_chef_chantier")
+        recap.append(copie)
+    c["recapitulatif"] = recap
+    return c
+
+
+def calculer(request, projet, type_, debut: date, fin: date) -> dict:
+    """La synthèse calculée maintenant sur les seuls rapports validés et approuvés."""
     lignes = sorted(
         (
             ligne
@@ -193,16 +259,21 @@ def calculer(request, projet, type_, debut, fin) -> dict:
         key=lambda ligne: ligne["date"],
     )
     remises = [ligne for ligne in lignes if ligne["statut"] in REMIS]
+    validees = [ligne for ligne in lignes if ligne["statut"] in CONSOLIDABLES]
+
+    arbre = charger_arbre(projet)
+    cal_arbre = _calendrier_autour_arbre(arbre, min(fin, aujourdhui()))
+    cal_periode = calendrier_entreprise(debut, fin)
+
     documents = [
-        document(journal, relance_le=None)
+        document(journal, relance_le=None, arbre=arbre, calendrier=cal_arbre)
         for journal in journaux_visibles(request)
-        .filter(rapport_id__in=[ligne["id"] for ligne in remises])
+        .filter(rapport_id__in=[ligne["id"] for ligne in validees])
         .order_by("rapport__date_rapport")
     ]
 
     contexte = contexte_projet(projet, min(fin, aujourdhui()))
     lots = {lot["id"]: lot for lot in contexte["lots"]}
-    # Un lot clôturé depuis reste dans la synthèse de la période où il a été travaillé.
     for charge in documents:
         for lot in charge["lots"]:
             lots.setdefault(lot["id"], lot)
@@ -217,14 +288,21 @@ def calculer(request, projet, type_, debut, fin) -> dict:
     livraisons = [livraison for charge in documents for livraison in charge["livraisons"]]
     avec_effectifs = [
         ligne
-        for ligne in remises
+        for ligne in validees
         if ligne["effectif_present"] is not None and ligne["effectif_prevu"] is not None
     ]
 
-    depart, theorique_depart = releve(projet, debut - timedelta(days=1))
-    arrivee, theorique = releve(projet, min(fin, aujourdhui()))
+    depart, theorique_depart = releve(
+        projet, debut - timedelta(days=1), arbre=arbre, calendrier=cal_arbre
+    )
+    arrivee, theorique = releve(projet, min(fin, aujourdhui()), arbre=arbre, calendrier=cal_arbre)
     depart, arrivee = arrondi(depart), arrondi(arrivee)
     theorique_depart, theorique = arrondi(theorique_depart), arrondi(theorique)
+
+    fin_effective = min(fin, aujourdhui())
+    nb_jours_ouvres = (
+        compter_jours_ouvres(debut, fin_effective, cal_periode) if fin_effective >= debut else 0
+    )
 
     return {
         "reference": reference(projet, type_, debut),
@@ -235,16 +313,14 @@ def calculer(request, projet, type_, debut, fin) -> dict:
         "projet_nom": projet.nom,
         "projet_reference": projet.reference,
         "localisation": contexte["localisation"],
-        "chef_projet_nom": contexte["chef_projet_nom"],
-        "conducteur_travaux_nom": contexte["conducteur_travaux_nom"],
+        "approbateurs_nom": contexte["approbateurs_nom"],
+        "validateurs_nom": contexte["validateurs_nom"],
         "lots": lots,
         "chiffres": {
-            "jours_ouvres": len({ligne["date"] for ligne in lignes}),
+            "jours_ouvres": nb_jours_ouvres,
             "rapports_attendus": len(lignes),
             "rapports_recus": len(remises),
-            "rapports_valides": sum(
-                ligne["statut"] in ("VALIDE_CT", "APPROUVE_CP") for ligne in lignes
-            ),
+            "rapports_valides": len(validees),
             "effectifs_presents": sum(ligne["effectif_present"] for ligne in avec_effectifs),
             "effectifs_prevus": sum(ligne["effectif_prevu"] for ligne in avec_effectifs),
             "heures": arrondi(sum(ligne["heures"] for ligne in effectifs)),
@@ -253,7 +329,9 @@ def calculer(request, projet, type_, debut, fin) -> dict:
                 livraison["conformite"] != "CONFORME" for livraison in livraisons
             ),
             "incidents": len(incidents),
-            "incidents_majeurs": sum(incident["gravite"] != "MINEUR" for incident in incidents),
+            "incidents_majeurs": sum(
+                incident.get("gravite") in ("SIGNIFICATIF", "GRAVE") for incident in incidents
+            ),
             "blocages": sum(len(charge["blocages"]) for charge in documents),
         },
         "progression": {
@@ -271,11 +349,6 @@ def calculer(request, projet, type_, debut, fin) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Ce que le CT écrit, et le circuit
-# ---------------------------------------------------------------------------
-
-
 def synthese_enregistree(projet, type_, debut, fin) -> SynthesePeriodique | None:
     if type_ not in SynthesePeriodique.Type.values:
         return None
@@ -287,12 +360,6 @@ def synthese_enregistree(projet, type_, debut, fin) -> SynthesePeriodique | None
 
 
 def statut(synthese: SynthesePeriodique | None, type_, fin) -> str:
-    """Où en est la synthèse — de quoi décider ce que l'écran propose.
-
-    `LIBRE` : période personnalisée, hors circuit. `EN_COURS` : la période
-    n'est pas close. `A_REDIGER` : close, et le CT n'a encore rien écrit.
-    Sinon, le statut enregistré.
-    """
     if type_ not in SynthesePeriodique.Type.values:
         return "LIBRE"
     if synthese:
@@ -300,35 +367,36 @@ def statut(synthese: SynthesePeriodique | None, type_, fin) -> str:
     return "EN_COURS" if fin >= aujourdhui() else "A_REDIGER"
 
 
-def _echeance_ct(fin):
-    lendemain = datetime.combine(fin + timedelta(days=1), HEURE_ECHEANCE_CT, tzinfo=FUSEAU)
+def _echeance_validation(fin):
+    lendemain = datetime.combine(fin + timedelta(days=1), HEURE_ECHEANCE_VALIDATION, tzinfo=FUSEAU)
     return lendemain.isoformat()
 
 
 def circuit(synthese, etat, calcul) -> list:
-    """La signature du CT, puis celle du CP. Une période personnalisée n'en a pas."""
+    """Signature de rédaction/validation, puis d'approbation (par permission)."""
     if etat == "LIBRE":
         return []
     statuts = SynthesePeriodique.Statut
-    signee_ct = synthese is not None and etat in (statuts.SOUMISE, statuts.APPROUVEE)
-    decidee_cp = synthese is not None and etat in (statuts.APPROUVEE, statuts.REJETEE)
-    ct = {
-        "role": "CT",
-        "signataire_nom": nom(synthese.signee_ct_par)
-        if signee_ct
-        else calcul["conducteur_travaux_nom"],
-        "etat": "SIGNE" if signee_ct else "A_VENIR" if etat == "EN_COURS" else "EN_ATTENTE",
-        "signe_le": synthese.signee_ct_le.isoformat() if signee_ct else None,
+    signee_val = synthese is not None and etat in (statuts.SOUMISE, statuts.APPROUVEE)
+    decidee_app = synthese is not None and etat in (statuts.APPROUVEE, statuts.REJETEE)
+    etape_val = {
+        "role": "VALIDATION",
+        "signataire_nom": nom(synthese.signee_ct_par) if signee_val else calcul["validateurs_nom"],
+        "etat": "SIGNE" if signee_val else "A_VENIR" if etat == "EN_COURS" else "EN_ATTENTE",
+        "signe_le": synthese.signee_ct_le.isoformat() if signee_val else None,
         "echeance": None,
         "commentaire": None,
     }
     if etat in ("A_REDIGER", statuts.BROUILLON):
-        ct["echeance"] = _echeance_ct(date.fromisoformat(calcul["date_fin"]))
+        etape_val["echeance"] = _echeance_validation(date.fromisoformat(calcul["date_fin"]))
     elif etat == statuts.REJETEE:
-        ct["echeance"] = (synthese.decidee_cp_le + DELAI_SIGNATURE).isoformat()
-    cp = {
-        "role": "CP",
-        "signataire_nom": nom(synthese.decidee_cp_par) if decidee_cp else calcul["chef_projet_nom"],
+        etape_val["echeance"] = (synthese.decidee_cp_le + DELAI_SIGNATURE).isoformat()
+
+    etape_app = {
+        "role": "APPROBATION",
+        "signataire_nom": nom(synthese.decidee_cp_par)
+        if decidee_app
+        else calcul["approbateurs_nom"],
         "etat": "SIGNE"
         if etat == statuts.APPROUVEE
         else "REJETE"
@@ -336,28 +404,26 @@ def circuit(synthese, etat, calcul) -> list:
         else "EN_ATTENTE"
         if etat == statuts.SOUMISE
         else "A_VENIR",
-        "signe_le": synthese.decidee_cp_le.isoformat() if decidee_cp else None,
+        "signe_le": synthese.decidee_cp_le.isoformat() if decidee_app else None,
         "echeance": (synthese.signee_ct_le + DELAI_SIGNATURE).isoformat()
         if etat == statuts.SOUMISE
         else None,
-        "commentaire": (synthese.commentaire_cp or None) if decidee_cp else None,
+        "commentaire": (synthese.commentaire_cp or None) if decidee_app else None,
     }
-    return [ct, cp]
+    return [etape_val, etape_app]
 
 
-def etape_a_signer(utilisateur, projet, etat) -> str | None:
-    """L'étape que cet utilisateur peut signer maintenant, ou `None` : le serveur décide.
-
-    « CT » : rédiger puis signer, tant que la synthèse n'est pas soumise (`synthese_rediger`) ;
-    « CP » : approuver ou rejeter une synthèse soumise (`synthese_approuver`). C'est la
-    vérification que les services refont à l'action (`verifier_fonction`) : l'écran n'a plus
-    à recopier la règle, et un rôle personnalisé y trouve son bouton.
-    """
+def etape_a_signer(
+    utilisateur, projet, etat, synthese: SynthesePeriodique | None = None
+) -> str | None:
+    """Étape signable par cet utilisateur (`VALIDATION` | `APPROBATION` | `None`)."""
     statuts = SynthesePeriodique.Statut
     if etat in ("A_REDIGER", statuts.BROUILLON, statuts.REJETEE):
-        return "CT" if tient_fonction(projet, utilisateur, SYNTHESE_REDIGER) else None
+        return "VALIDATION" if tient_fonction(projet, utilisateur, SYNTHESE_REDIGER) else None
     if etat == statuts.SOUMISE:
-        return "CP" if tient_fonction(projet, utilisateur, SYNTHESE_APPROUVER) else None
+        if synthese is not None and synthese.signee_ct_par_id == utilisateur.id:
+            return None
+        return "APPROBATION" if tient_fonction(projet, utilisateur, SYNTHESE_APPROUVER) else None
     return None
 
 
@@ -366,8 +432,11 @@ def projection(request, projet, type_, debut, fin) -> dict:
     synthese = synthese_enregistree(projet, type_, debut, fin)
     etat = statut(synthese, type_, fin)
     figee = synthese is not None and bool(synthese.photographie)
-    calcul = synthese.photographie if figee else calculer(request, projet, type_, debut, fin)
-    # Un brouillon reste au CT : les autres lecteurs ne voient qu'une appréciation signée.
+    calcul = (
+        _normaliser_calcul_lu(synthese.photographie)
+        if figee
+        else calculer(request, projet, type_, debut, fin)
+    )
     publiee = synthese is not None and etat != SynthesePeriodique.Statut.BROUILLON
     redacteur = etat in ("A_REDIGER", "BROUILLON", "REJETEE") and tient_fonction(
         projet, request.user, SYNTHESE_REDIGER
@@ -385,7 +454,6 @@ def projection(request, projet, type_, debut, fin) -> dict:
         if publiee and synthese.appreciation
         else None,
         "objectifs": synthese.objectifs if publiee else [],
-        # Ce que le CT a en cours d'écriture, pour qu'il le reprenne : à lui seul.
         "redaction": {
             "appreciation": synthese.appreciation if synthese else "",
             "objectifs": synthese.objectifs if synthese else [],
@@ -393,12 +461,11 @@ def projection(request, projet, type_, debut, fin) -> dict:
         if redacteur
         else None,
         "circuit": circuit(synthese, etat, calcul),
-        "etape_a_signer": etape_a_signer(request.user, projet, etat),
+        "etape_a_signer": etape_a_signer(request.user, projet, etat, synthese=synthese),
     }
 
 
 def suivi(request, *, projet_id=None, depuis=None) -> list:
-    """Les synthèses enregistrées des chantiers visibles : où en est chacune."""
     from apps.chantier.selectors.journal import projets_visibles
 
     qs = SynthesePeriodique.objects.filter(projet__in=projets_visibles(request))

@@ -1,20 +1,14 @@
-"""Le journal connaît les équipes (décision du 30/10/2026, point 6).
+"""Pointage nominatif par équipe et rattachement des travaux aux équipes du chantier.
 
-- **Les équipes du journal** sont celles affectées aux tâches du rédacteur, y compris par
-  héritage (l'affectation la plus précise l'emporte). Leurs membres sont ceux de l'équipe à la
-  date du journal (arrivés, pas encore partis).
-- **Les présents se cochent équipe par équipe**, avec les heures de l'équipe : ils remplacent les
-  effectifs par catégorie. Une équipe est **attendue** quand elle tient une tâche en régie ou en
-  sous-traitance structurée commencée à cette date ; sa ligne est alors requise. Pour une tâche
-  en sous-traitance structurée, la ligne de l'équipe partenaire remplace « présence du
-  sous-traitant », qualité comprise.
-- **La production par ouvrier** reste réservée aux tâches suivies à la production (tâcherons) :
-  l'ouvrier se choisit parmi les membres de l'équipe de la tâche.
-- **Transition** : une tâche sans équipe garnie de membres garde l'ancienne saisie (effectifs
-  par catégorie, présence du sous-traitant, intervenant en texte libre).
-
-Ajouter une personne au registre de main-d'œuvre exige toujours sa permission : le journal ne
-l'ouvre pas (décision 6.4).
+- **Les équipes du journal** sont toutes celles affectées aux feuilles du périmètre du rédacteur,
+  y compris par héritage dans l'arbre (`equipes_par_case`), quel que soit le mode d'exécution
+  (régie, sous-traitance structurée ou tâcheronnat). Leurs membres sont ceux actifs dans l'équipe
+  à la date du journal (arrivés, pas encore partis).
+- **Pointage nominatif unifié** : les présents et retards se cochent équipe par équipe avec les
+  heures travaillées.
+- **Garde-fou travaux ↔ équipes (A3)** : toute feuille ayant progressé ce jour doit désigner au
+  moins une équipe affectée comptant au moins un membre coché présent avec des heures > 0. Une
+  équipe sans tâche travaillée ce jour ne bloque pas la soumission.
 """
 
 from __future__ import annotations
@@ -30,24 +24,30 @@ from apps.projets.selectors.arbre_api import equipes_par_case
 from apps.projets.services.referentiels import mode_base, table_modes_execution
 
 __all__ = [
-    "cle_production",
     "controler_equipes",
     "effectif_present",
     "equipes_du_journal",
+    "equipes_par_feuille",
     "exiger_equipes",
-    "feuilles_sans_equipe",
 ]
 
-#: Les modes dont les tâches font cocher la présence de leurs équipes.
-MODES_PRESENCE = (ModeExecution.REGIE, ModeExecution.SOUS_TRAITANCE_STRUCTUREE)
 
-
-def _commencee(feuille, jour) -> bool:
+def _commencee(feuille, jour: date) -> bool:
     return feuille.date_debut_prevue is None or feuille.date_debut_prevue <= jour
 
 
+def equipes_par_feuille(cases) -> dict[str, list[str]]:
+    """Pour chaque feuille du journal (`str(pk)`), la liste des `equipe_id` affectées."""
+    _directes, effectives = equipes_par_case(cases.arbre)
+    resultat: dict[str, list[str]] = {}
+    for identifiant, feuille in cases.feuilles.items():
+        _porteur, liste = effectives.get(feuille.pk, (None, []))
+        resultat[identifiant] = [str(equipe["equipe_id"]) for equipe in liste]
+    return resultat
+
+
 def equipes_du_journal(cases, jour: date) -> list[dict]:
-    """Les équipes des tâches du journal, avec leurs membres à la date `jour`."""
+    """Les équipes affectées aux feuilles du journal, avec leurs membres à la date `jour`."""
     _directes, effectives = equipes_par_case(cases.arbre)
     table_modes = table_modes_execution()
     portees: dict[str, dict] = {}
@@ -55,12 +55,13 @@ def equipes_du_journal(cases, jour: date) -> list[dict]:
         _porteur, liste = effectives.get(feuille.pk, (None, []))
         base = mode_base(cases.mode(feuille), table_modes)
         for equipe in liste:
+            eid = str(equipe["equipe_id"])
             portee = portees.setdefault(
-                equipe["equipe_id"], {"activites": [], "modes": set(), "modes_du_jour": set()}
+                eid, {"activites": [], "modes": set(), "modes_du_jour": set()}
             )
             portee["activites"].append(identifiant)
             portee["modes"].add(base)
-            if _commencee(feuille, jour):
+            if _commencee(feuille, jour) or cases.arbre.commence(feuille):
                 portee["modes_du_jour"].add(base)
     if not portees:
         return []
@@ -86,7 +87,7 @@ def equipes_du_journal(cases, jour: date) -> list[dict]:
     ):
         identifiant = str(equipe.pk)
         portee, liste = portees[identifiant], membres.get(identifiant, [])
-        presence = bool(liste) and bool(portee["modes"] & set(MODES_PRESENCE))
+        presence = bool(liste)
         equipes.append(
             {
                 "equipe_id": identifiant,
@@ -97,11 +98,8 @@ def equipes_du_journal(cases, jour: date) -> list[dict]:
                 else "",
                 "corps_etat": equipe.corps_etat,
                 "activites": portee["activites"],
-                # La présence de l'équipe se coche dans le journal.
                 "presence": presence,
-                # Sa ligne est requise : elle tient une tâche commencée à cette date.
-                "attendue": presence and bool(portee["modes_du_jour"] & set(MODES_PRESENCE)),
-                # Une tâche en sous-traitance structurée : la qualité est notée.
+                "attendue": presence and bool(portee["modes_du_jour"]),
                 "qualite": presence and ModeExecution.SOUS_TRAITANCE_STRUCTUREE in portee["modes"],
                 "membres": liste,
             }
@@ -109,47 +107,35 @@ def equipes_du_journal(cases, jour: date) -> list[dict]:
     return equipes
 
 
-def feuilles_sans_equipe(cases, equipes, mode) -> bool:
-    """Une tâche de ce mode n'a aucune équipe garnie de membres : l'ancienne saisie demeure."""
-    table_modes = table_modes_execution()
-    couvertes = {a for e in equipes if e["membres"] for a in e["activites"]}
-    return any(
-        identifiant not in couvertes and mode_base(cases.mode(feuille), table_modes) == mode
-        for identifiant, feuille in cases.feuilles.items()
-    )
+def controler_equipes(saisie: dict, equipes: list[dict], refuser=None) -> None:
+    """Valide le pointage des équipes et les équipes rattachées aux feuilles travaillées.
 
-
-def cle_production(ligne) -> tuple:
-    """Une ligne de production par tâche et par ouvrier (ou par intervenant nommé)."""
-    return (ligne["activite_id"], ligne.get("personne_id") or ligne.get("intervenant", ""))
-
-
-def controler_equipes(saisie, equipes, refuser=None) -> None:
-    """La forme des lignes d'équipe et de production ; complète le nom des ouvriers choisis.
-
-    `refuser(section, ligne, motif)` : au retour du réseau, la ligne fautive est écartée et
-    signalée au lieu de faire échouer tout l'envoi ; un présent qui a quitté l'équipe est retiré
-    de sa ligne.
+    `refuser(section, ligne, motif)` : au retour du réseau, la référence fautive est écartée et
+    signalée au lieu de faire échouer tout l'envoi.
     """
 
-    def ecarter(section, ligne, motif) -> None:
+    def ecarter(section: str, ligne: dict, motif: str) -> None:
         if refuser is None:
             raise ValidationError({section: motif})
         refuser(section, ligne, motif)
 
     par_id = {e["equipe_id"]: e for e in equipes}
     gardees, presents_par_equipe = [], {}
-    for ligne in saisie["equipes"]:
-        equipe = par_id.get(ligne["equipe_id"])
-        if equipe is None or not equipe["presence"] or ligne["equipe_id"] in presents_par_equipe:
+    for ligne in saisie.get("equipes", []):
+        eid = str(ligne["equipe_id"])
+        ligne["equipe_id"] = eid
+        equipe = par_id.get(eid)
+        if equipe is None or eid in presents_par_equipe:
             ecarter(
                 "equipes",
                 ligne,
-                "Équipe extérieure au journal, sans présence à cocher ou dupliquée.",
+                "Équipe extérieure au journal ou dupliquée.",
             )
             continue
         membres = {m["personne_id"] for m in equipe["membres"]}
-        partis = [p for p in ligne["presents"] if p not in membres]
+        presents_str = [str(p) for p in ligne.get("presents", [])]
+        retards_str = [str(p) for p in ligne.get("retards", [])]
+        partis = [p for p in presents_str if p not in membres]
         if partis and refuser is None:
             raise ValidationError(
                 {"equipes": f"{equipe['nom']} : un présent n'est pas membre de l'équipe ce jour."}
@@ -157,80 +143,92 @@ def controler_equipes(saisie, equipes, refuser=None) -> None:
         for personne in partis:
             refuser(
                 "equipes",
-                {"equipe_id": ligne["equipe_id"], "personne_id": personne},
+                {"equipe_id": eid, "personne_id": personne},
                 f"{equipe['nom']} : cette personne n'est plus membre de l'équipe ce jour.",
             )
-        ligne["presents"] = [p for p in ligne["presents"] if p in membres]
-        ligne["retards"] = [p for p in ligne["retards"] if p in membres]
+        ligne["presents"] = [p for p in presents_str if p in membres]
+        ligne["retards"] = [p for p in retards_str if p in membres and p in set(ligne["presents"])]
         gardees.append(ligne)
-        presents_par_equipe[ligne["equipe_id"]] = set(ligne["presents"])
+        presents_par_equipe[eid] = set(ligne["presents"])
     saisie["equipes"] = gardees
-    gardees = []
-    for ligne in saisie["production"]:
-        garnies = [e for e in equipes if ligne["activite_id"] in e["activites"] and e["membres"]]
-        if not garnies:
-            if ligne["personne_id"]:
-                ecarter("production", ligne, "Cette tâche n'a pas d'équipe affectée.")
-            else:
-                gardees.append(ligne)
+
+    for ligne in saisie.get("activites", []):
+        act_id = str(ligne["activite_id"])
+        equipes_valides = []
+        for eid_brut in ligne.get("equipe_ids", []):
+            eid = str(eid_brut)
+            equipe = par_id.get(eid)
+            if equipe is None or act_id not in equipe["activites"]:
+                ecarter(
+                    "activites",
+                    {"activite_id": act_id, "equipe_id": eid},
+                    "Cette équipe n'est pas affectée à cette tâche.",
+                )
+                continue
+            if eid not in equipes_valides:
+                equipes_valides.append(eid)
+        ligne["equipe_ids"] = equipes_valides
+
+
+def exiger_equipes(
+    saisie: dict,
+    equipes: list[dict],
+    lignes_ayant_avance: list[tuple[dict, str]],
+    exiger,
+) -> None:
+    """À la soumission : valide les équipes pointées et impose au moins une équipe active par
+    feuille ayant avancé ce jour (garde-fou A3)."""
+    par_id = {e["equipe_id"]: e for e in equipes}
+    pointages = {str(ligne["equipe_id"]): ligne for ligne in saisie.get("equipes", [])}
+
+    for eid, ligne in pointages.items():
+        equipe = par_id.get(eid)
+        if equipe is None:
             continue
-        if not ligne["personne_id"]:
-            ecarter(
-                "production", ligne, "Choisir l'ouvrier parmi les membres de l'équipe de la tâche."
+        presents = ligne.get("presents", [])
+        retards = ligne.get("retards", [])
+        if presents:
+            exiger(
+                (ligne.get("heures") or 0) > 0,
+                "equipes",
+                f"{equipe['nom']} : les heures travaillées (> 0) de l'équipe sont requises.",
             )
-            continue
-        equipe, membre = next(
-            (
-                (e, m)
-                for e in garnies
-                for m in e["membres"]
-                if m["personne_id"] == ligne["personne_id"]
-            ),
-            (None, None),
-        )
-        if membre is None:
-            ecarter(
-                "production", ligne, "L'ouvrier n'est pas membre de l'équipe de la tâche ce jour."
+            exiger(
+                not equipe["qualite"] or bool(ligne.get("qualite")),
+                "equipes",
+                f"{equipe['nom']} : l'appréciation de conformité est requise.",
             )
-            continue
-        presents = presents_par_equipe.get(equipe["equipe_id"])
-        if presents is not None and ligne["personne_id"] not in presents:
-            ecarter("production", ligne, f"{membre['nom']} n'est pas coché présent.")
-            continue
-        ligne["intervenant"] = membre["nom"]
-        gardees.append(ligne)
-    saisie["production"] = gardees
+            manquants = len(equipe["membres"]) - len(presents)
+            exiger(
+                not (manquants > 0 or retards) or bool((ligne.get("observation") or "").strip()),
+                "equipes",
+                f"{equipe['nom']} : une absence ou un retard exige un motif en observation.",
+            )
+        elif retards:
+            exiger(False, "equipes", f"{equipe['nom']} : un retard suppose un membre présent.")
 
-
-def exiger_equipes(saisie, equipes, exiger) -> None:
-    """À la soumission : une ligne par équipe attendue ; une absence ou un retard se motive."""
-    lignes = {ligne["equipe_id"]: ligne for ligne in saisie["equipes"]}
-    for equipe in equipes:
-        ligne = lignes.get(equipe["equipe_id"])
-        if ligne is None:
-            exiger(not equipe["attendue"], "equipes", f"{equipe['nom']} : présence à cocher.")
-            continue
-        manquants = len(equipe["membres"]) - len(ligne["presents"])
+    for ligne_act, libelle in lignes_ayant_avance:
+        equipe_ids = [str(e) for e in ligne_act.get("equipe_ids", [])]
         exiger(
-            not (manquants or ligne["retards"]) or bool(ligne["observation"].strip()),
-            "equipes",
-            f"{equipe['nom']} : une absence ou un retard exige un motif.",
+            bool(equipe_ids),
+            "activites",
+            f"{libelle} : rattacher au moins une équipe affectée ayant réalisé ces travaux.",
         )
-        exiger(
-            not ligne["presents"] or ligne["heures"] is not None,
-            "equipes",
-            f"{equipe['nom']} : les heures de l'équipe sont requises.",
-        )
-        exiger(
-            not (equipe["qualite"] and ligne["presents"]) or bool(ligne["qualite"]),
-            "equipes",
-            f"{equipe['nom']} : la qualité du travail est requise.",
-        )
+        if equipe_ids:
+            equipe_active = any(
+                bool(pointages.get(eid, {}).get("presents"))
+                and (pointages.get(eid, {}).get("heures") or 0) > 0
+                for eid in equipe_ids
+            )
+            exiger(
+                equipe_active,
+                "activites",
+                f"{libelle} : au moins une équipe rattachée doit compter un présent (> 0 h).",
+            )
 
 
-def effectif_present(saisie) -> int:
-    """Les présents du jour : les effectifs par catégorie, plus les personnes cochées
-    (une personne membre de deux équipes ne compte qu'une fois)."""
-    categories = sum(ligne["presents"] or 0 for ligne in saisie.get("effectifs", []))
-    personnes = {p for ligne in saisie.get("equipes", []) for p in ligne["presents"]}
+def effectif_present(saisie: dict) -> int:
+    """Les présents du jour : personnes uniques cochées (+ historique catégories)."""
+    categories = sum(ligne.get("presents") or 0 for ligne in saisie.get("effectifs", []))
+    personnes = {str(p) for ligne in saisie.get("equipes", []) for p in ligne.get("presents", [])}
     return categories + len(personnes)

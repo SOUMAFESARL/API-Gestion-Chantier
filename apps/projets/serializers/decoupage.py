@@ -25,6 +25,7 @@ __all__ = [
     "InsertionNiveauSerializer",
     "MesureSerializer",
     "ModeleEnregistrementSerializer",
+    "ModificationListeSerializer",
     "MotifSerializer",
     "NiveauCreationSerializer",
     "NiveauModificationSerializer",
@@ -91,6 +92,11 @@ class CreationListeSerializer(serializers.Serializer):
     valeurs = serializers.ListField(
         child=serializers.CharField(max_length=200), required=False, default=list
     )
+
+
+class ModificationListeSerializer(serializers.Serializer):
+    libelle = serializers.CharField(max_length=100, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
 
 
 class AjoutValeursSerializer(serializers.Serializer):

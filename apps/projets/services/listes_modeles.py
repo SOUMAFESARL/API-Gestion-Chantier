@@ -47,13 +47,17 @@ __all__ = [
     "enregistrer_modele",
     "enregistrer_modele_plateforme",
     "gabarit_du_modele",
+    "generer_modele_excel_liste",
+    "importer_valeurs_fichier",
     "liste_en_dict",
     "listes_disponibles",
     "modele_par_defaut",
     "modeles_disponibles",
+    "modifier_liste_entreprise",
     "personnaliser_modele",
     "resoudre_liste",
     "resoudre_modele",
+    "retirer_liste_entreprise",
     "retirer_valeur",
     "valeurs_de_liste",
 ]
@@ -222,6 +226,198 @@ def retirer_valeur(valeur_id, utilisateur=None) -> None:
         raise NotFound("Cette valeur est introuvable.")
     # Retirer une valeur ne change aucune case déjà saisie (§4.8) : elle n'est plus proposée.
     valeur.delete(utilisateur=utilisateur)
+
+
+@transaction.atomic
+def modifier_liste_entreprise(liste, *, libelle: str | None = None, description: str | None = None):
+    """Renommer ou décrire une liste créée par l'entreprise."""
+    if not isinstance(liste, ListeValeursEntreprise):
+        raise ErreurMetier("Une liste fournie par la plateforme ne se modifie pas.")
+    if libelle is not None:
+        propre = nom_propre(libelle)
+        if not propre:
+            raise ValidationError({"libelle": "Le nom de la liste est obligatoire."})
+        cle = cle_comparaison(propre)
+        homonymes = [
+            autre.libelle
+            for autre in [*ListeValeursPlateforme.objects.all(), *ListeValeursEntreprise.objects.all()]
+            if autre.pk != liste.pk and cle_comparaison(autre.libelle) == cle
+        ]
+        if homonymes:
+            raise ErreurMetier(
+                f"Une liste porte déjà ce nom : « {homonymes[0]} ».",
+                details={"libelle": propre},
+            )
+        liste.libelle = propre
+    if description is not None:
+        liste.description = description
+    liste.save()
+    return liste
+
+
+@transaction.atomic
+def retirer_liste_entreprise(liste, utilisateur=None) -> None:
+    """Retire une liste créée par l'entreprise (suppression logique)."""
+    if not isinstance(liste, ListeValeursEntreprise):
+        raise ErreurMetier("Une liste fournie par la plateforme ne se retire pas.")
+    niveaux = NiveauModeleEntreprise.objects.filter(
+        liste_entreprise=liste, modele__supprime_le__isnull=True
+    ).select_related("modele")
+    if niveaux.exists():
+        noms = ", ".join(sorted({f"« {n.modele.nom} »" for n in niveaux}))
+        raise ErreurMetier(
+            f"Cette liste sert encore aux modèles {noms} : changez la liste de leurs niveaux, "
+            "ou retirez ces modèles, avant de la retirer."
+        )
+    liste.delete(utilisateur=utilisateur)
+
+
+_ENTETES_LIBELLE = {"libelle", "libelles", "valeur", "valeurs", "nom", "intitule", "designation"}
+_ENTETES_GROUPE = {
+    "groupe",
+    "groupes",
+    "groupe (optionnel)",
+    "groupe (facultatif)",
+    "categorie",
+    "famille",
+}
+
+
+@transaction.atomic
+def importer_valeurs_fichier(
+    liste, fichier, *, par_la_plateforme: bool = False, auteur=None
+) -> dict:
+    """Importe les valeurs d'une liste depuis un fichier `.xlsx` ou `.csv` (colonnes Libellé | Groupe)."""
+    from apps.projets.services.import_export import lire_fichier
+
+    if par_la_plateforme and not isinstance(liste, ListeValeursPlateforme):
+        raise ErreurMetier("La plateforme n'ajoute des valeurs qu'à ses propres listes.")
+    lignes = lire_fichier(fichier)
+    if not lignes:
+        raise ValidationError({"fichier": "Le fichier est vide."})
+
+    premiere = [cle_comparaison(c) for c in lignes[0]]
+    col_libelle, col_groupe = 0, 1
+    debut = 0
+    if any(c in _ENTETES_LIBELLE or c in _ENTETES_GROUPE for c in premiere):
+        debut = 1
+        col_libelle = next((i for i, c in enumerate(premiere) if c in _ENTETES_LIBELLE), 0)
+        col_groupe = next(
+            (i for i, c in enumerate(premiere) if c in _ENTETES_GROUPE),
+            1 if col_libelle == 0 else 0,
+        )
+
+    donnees = lignes[debut:]
+    if not donnees:
+        raise ValidationError({"fichier": "Aucune valeur trouvée sous la ligne d'en-tête."})
+
+    deja = valeurs_de_liste(liste)
+    existantes = {cle_comparaison(v["libelle"]) for v in deja}
+    ordre = max((v["ordre"] for v in deja), default=0)
+    ajoutees, ignorees = [], []
+
+    for ligne in donnees:
+        libelle = nom_propre(ligne[col_libelle] if col_libelle < len(ligne) else "")
+        if not libelle:
+            continue
+        groupe = nom_propre(
+            ligne[col_groupe]
+            if col_groupe is not None and col_groupe != col_libelle and col_groupe < len(ligne)
+            else ""
+        )[:100]
+        libelle = libelle[:200]
+        cle = cle_comparaison(libelle)
+        if cle in existantes:
+            ignorees.append(libelle)
+            continue
+        existantes.add(cle)
+        ordre += 1
+        if par_la_plateforme:
+            valeur = ValeurListePlateforme.objects.create(
+                liste=liste, libelle=libelle, groupe=groupe, ordre=ordre, cree_par=auteur
+            )
+        else:
+            valeur = ValeurListeEntreprise.objects.create(
+                liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
+                liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
+                libelle=libelle,
+                groupe=groupe,
+                ordre=ordre,
+                cree_par=auteur,
+            )
+        ajoutees.append(
+            {"id": str(valeur.pk), "libelle": valeur.libelle, "groupe": groupe, "ordre": ordre}
+        )
+    return {"ajoutees": ajoutees, "ignorees": ignorees}
+
+
+def generer_modele_excel_liste() -> tuple[bytes, str]:
+    """Génère le fichier `.xlsx` exemple type à remplir pour importer les valeurs d'une liste."""
+    import io
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    classeur = Workbook()
+    feuille = classeur.active
+    feuille.title = "Valeurs à importer"
+
+    fond_entete = PatternFill(start_color="1B3A4B", end_color="1B3A4B", fill_type="solid")
+    police_entete = Font(bold=True, color="FFFFFF", size=11)
+    police_exemple = Font(italic=True, color="475569", size=10)
+
+    entetes = ["Libellé", "Groupe (optionnel)"]
+    feuille.append(entetes)
+    for col in range(1, len(entetes) + 1):
+        cellule = feuille.cell(row=1, column=col)
+        cellule.fill = fond_entete
+        cellule.font = police_entete
+        cellule.alignment = Alignment(vertical="center")
+
+    exemples = [
+        ["Terrassement général", "Gros œuvre"],
+        ["Fondations béton armé", "Gros œuvre"],
+        ["Électricité courant fort / faible", "Second œuvre"],
+    ]
+    for rang, ligne in enumerate(exemples, start=2):
+        feuille.append(ligne)
+        for col in range(1, len(ligne) + 1):
+            feuille.cell(row=rang, column=col).font = police_exemple
+
+    feuille.column_dimensions["A"].width = 42
+    feuille.column_dimensions["B"].width = 32
+    feuille.freeze_panes = "A2"
+
+    aide = classeur.create_sheet(title="Mode d'emploi")
+    aide.append(["Colonne", "Obligatoire", "Description"])
+    for col in range(1, 4):
+        cellule = aide.cell(row=1, column=col)
+        cellule.fill = fond_entete
+        cellule.font = police_entete
+    aide.append(
+        [
+            "Libellé",
+            "Oui",
+            "Le nom de la valeur proposée dans les listes déroulantes (200 caractères max). Les doublons sont ignorés automatiquement.",
+        ]
+    )
+    aide.append(
+        [
+            "Groupe (optionnel)",
+            "Non",
+            "Permet de regrouper visuellement les valeurs par famille ou catégorie dans le sélecteur (100 caractères max).",
+        ]
+    )
+    aide.column_dimensions["A"].width = 24
+    aide.column_dimensions["B"].width = 16
+    aide.column_dimensions["C"].width = 85
+
+    tampon = io.BytesIO()
+    classeur.save(tampon)
+    return (
+        tampon.getvalue(),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 # --------------------------------------------------------------------------

@@ -43,7 +43,9 @@ from apps.platform_admin.views import (
 )
 from apps.platform_admin.views.decoupage import (
     DecoupageListeDetailView,
+    DecoupageListeModeleExcelView,
     DecoupageListesView,
+    DecoupageListeValeursImporterView,
     DecoupageListeValeursView,
     DecoupageModeleDetailView,
     DecoupageModelesView,
@@ -248,6 +250,11 @@ urlpatterns = [
     # Découpage : listes de valeurs et modèles de la plateforme (lus par toutes les entreprises)
     path("admins/decoupage/listes/", DecoupageListesView.as_view(), name="admins-decoupage-listes"),
     path(
+        "admins/decoupage/listes/modele-excel/",
+        DecoupageListeModeleExcelView.as_view(),
+        name="admins-decoupage-listes-modele-excel",
+    ),
+    path(
         "admins/decoupage/listes/<uuid:pk>/",
         DecoupageListeDetailView.as_view(),
         name="admins-decoupage-liste-detail",
@@ -256,6 +263,11 @@ urlpatterns = [
         "admins/decoupage/listes/<uuid:pk>/valeurs/",
         DecoupageListeValeursView.as_view(),
         name="admins-decoupage-liste-valeurs",
+    ),
+    path(
+        "admins/decoupage/listes/<uuid:pk>/valeurs/importer/",
+        DecoupageListeValeursImporterView.as_view(),
+        name="admins-decoupage-liste-valeurs-importer",
     ),
     path(
         "admins/decoupage/valeurs/<uuid:pk>/",

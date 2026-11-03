@@ -39,6 +39,7 @@ __all__ = [
     "ajouter_valeurs",
     "creer_liste",
     "enregistrer_modele",
+    "importer_valeurs_fichier",
     "lire_liste",
     "lire_modele",
     "lister_listes",
@@ -232,6 +233,26 @@ def ajouter_valeurs(pk, *, valeurs: list[str], groupe: str = "", auteur=None) ->
     if resultat["ajoutees"]:
         journaliser_plateforme(
             action="DECOUPAGE_VALEURS_AJOUT",
+            acteur=auteur,
+            detail={
+                "liste_id": str(pk),
+                "libelle": liste.libelle,
+                "valeurs": [v["libelle"] for v in resultat["ajoutees"]],
+            },
+        )
+    return resultat
+
+
+def importer_valeurs_fichier(pk, *, fichier, auteur=None) -> dict:
+    """Import Excel/CSV de valeurs dans une liste de la plateforme."""
+    with _public():
+        liste = _liste(pk)
+        resultat = lm.importer_valeurs_fichier(
+            liste, fichier, par_la_plateforme=True, auteur=auteur
+        )
+    if resultat["ajoutees"]:
+        journaliser_plateforme(
+            action="DECOUPAGE_VALEURS_IMPORT",
             acteur=auteur,
             detail={
                 "liste_id": str(pk),

@@ -46,7 +46,9 @@ from apps.projets.views.decoupage import (
     ElementRouvrirView,
     ElementSuspendreView,
     ListeDetailView,
+    ListeModeleExcelView,
     ListesView,
+    ListeValeursImporterView,
     ListeValeursView,
     ModeleDetailView,
     ModelePersonnaliserView,
@@ -127,6 +129,11 @@ urlpatterns = [
     ),
     # Découpage : listes de valeurs et modèles (plateforme + entreprise)
     path("decoupage/listes/", ListesView.as_view(), name="decoupage-listes"),
+    path(
+        "decoupage/listes/modele-excel/",
+        ListeModeleExcelView.as_view(),
+        name="decoupage-listes-modele-excel",
+    ),
     re_path(
         rf"^decoupage/listes/{ORIGINE}/(?P<pk>{UUID})/$",
         ListeDetailView.as_view(),
@@ -136,6 +143,11 @@ urlpatterns = [
         rf"^decoupage/listes/{ORIGINE}/(?P<pk>{UUID})/valeurs/$",
         ListeValeursView.as_view(),
         name="decoupage-liste-valeurs",
+    ),
+    re_path(
+        rf"^decoupage/listes/{ORIGINE}/(?P<pk>{UUID})/valeurs/importer/$",
+        ListeValeursImporterView.as_view(),
+        name="decoupage-liste-valeurs-importer",
     ),
     path(
         "decoupage/valeurs/<uuid:pk>/",

@@ -10,7 +10,8 @@ Les vues restent sans logique : permission, validation, service, réponse
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
-from rest_framework.parsers import JSONParser
+from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -26,6 +27,8 @@ from apps.platform_admin.services import decoupage as service
 
 __all__ = [
     "DecoupageListeDetailView",
+    "DecoupageListeModeleExcelView",
+    "DecoupageListeValeursImporterView",
     "DecoupageListeValeursView",
     "DecoupageListesView",
     "DecoupageModeleDetailView",
@@ -126,6 +129,51 @@ class DecoupageListeValeursView(APIView):
         donnees.is_valid(raise_exception=True)
         resultat = service.ajouter_valeurs(pk, **donnees.validated_data, auteur=request.user)
         return Response(resultat, status=status.HTTP_201_CREATED)
+
+
+class DecoupageListeValeursImporterView(APIView):
+    """`POST /api/v1/admins/decoupage/listes/{id}/valeurs/importer/` — import Excel/CSV."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [MultiPartParser]
+
+    @schema(
+        summary="Importer les valeurs d'une liste de la plateforme depuis un fichier Excel ou CSV",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            }
+        },
+    )
+    def post(self, request, pk):
+        exiger_superviseur(request)
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        resultat = service.importer_valeurs_fichier(pk, fichier=fichier, auteur=request.user)
+        return Response(resultat, status=status.HTTP_201_CREATED)
+
+
+class DecoupageListeModeleExcelView(APIView):
+    """`GET /api/v1/admins/decoupage/listes/modele-excel/` — exemple type Excel à remplir."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+
+    @schema(
+        summary="Télécharger le modèle Excel d'import de liste de valeurs",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.projets.services.listes_modeles import generer_modele_excel_liste
+
+        contenu, type_mime = generer_modele_excel_liste()
+        reponse = HttpResponse(contenu, content_type=type_mime)
+        reponse["Content-Disposition"] = 'attachment; filename="modele-liste-valeurs.xlsx"'
+        return reponse
 
 
 class DecoupageValeurDetailView(APIView):

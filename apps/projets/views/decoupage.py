@@ -33,6 +33,7 @@ from apps.projets.serializers.decoupage import (
     InsertionNiveauSerializer,
     MesureSerializer,
     ModeleEnregistrementSerializer,
+    ModificationListeSerializer,
     MotifSerializer,
     NiveauCreationSerializer,
     NiveauModificationSerializer,
@@ -64,6 +65,8 @@ __all__ = [
     "ElementRouvrirView",
     "ElementSuspendreView",
     "ListeDetailView",
+    "ListeModeleExcelView",
+    "ListeValeursImporterView",
     "ListeValeursView",
     "ListesView",
     "ModeleDetailView",
@@ -169,13 +172,30 @@ def _liste_de_url(origine, pk):
 
 
 class ListeDetailView(APIView):
-    """`GET /api/v1/decoupage/listes/{origine}/{id}/`."""
+    """`GET`/`PATCH`/`DELETE /api/v1/decoupage/listes/{origine}/{id}/`."""
 
-    permission_classes = [IsAuthenticated, APermission.pour("projets.lire")]
+    def get_permissions(self):
+        code = "projets.lire" if self.request.method == "GET" else "projets.modeles_gerer"
+        return [IsAuthenticated(), APermission.pour(code)()]
 
     @schema(summary="Une liste et ses valeurs")
     def get(self, request, origine, pk):
         return Response(lm.liste_en_dict(_liste_de_url(origine, pk)))
+
+    @schema(
+        summary="Renommer ou décrire une liste de l'entreprise",
+        request=ModificationListeSerializer,
+    )
+    def patch(self, request, origine, pk):
+        donnees = ModificationListeSerializer(data=request.data, partial=True)
+        donnees.is_valid(raise_exception=True)
+        liste = lm.modifier_liste_entreprise(_liste_de_url(origine, pk), **donnees.validated_data)
+        return Response(lm.liste_en_dict(liste))
+
+    @schema(summary="Retirer une liste créée par l'entreprise", responses={204: None})
+    def delete(self, request, origine, pk):
+        lm.retirer_liste_entreprise(_liste_de_url(origine, pk), utilisateur=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ListeValeursView(APIView):
@@ -195,8 +215,53 @@ class ListeValeursView(APIView):
             _liste_de_url(origine, pk),
             donnees.validated_data["valeurs"],
             donnees.validated_data["groupe"],
+            auteur=request.user,
         )
         return Response(resultat, status=status.HTTP_201_CREATED)
+
+
+class ListeValeursImporterView(APIView):
+    """`POST /api/v1/decoupage/listes/{origine}/{id}/valeurs/importer/` — import Excel/CSV."""
+
+    parser_classes = [MultiPartParser]
+    permission_classes = [IsAuthenticated, APermission.pour("projets.modeles_gerer")]
+
+    @schema(
+        summary="Importer les valeurs d'une liste depuis un fichier Excel ou CSV",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            }
+        },
+    )
+    def post(self, request, origine, pk):
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        resultat = lm.importer_valeurs_fichier(
+            _liste_de_url(origine, pk), fichier, auteur=request.user
+        )
+        return Response(resultat, status=status.HTTP_201_CREATED)
+
+
+class ListeModeleExcelView(APIView):
+    """`GET /api/v1/decoupage/listes/modele-excel/` — exemple type Excel à remplir pour une liste."""
+
+    permission_classes = [IsAuthenticated, APermission.pour("projets.lire")]
+
+    @schema(
+        summary="Télécharger le modèle Excel d'import de liste de valeurs",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        from django.http import HttpResponse
+
+        contenu, type_mime = lm.generer_modele_excel_liste()
+        reponse = HttpResponse(contenu, content_type=type_mime)
+        reponse["Content-Disposition"] = 'attachment; filename="modele-liste-valeurs.xlsx"'
+        return reponse
 
 
 class ValeurListeDetailView(APIView):

@@ -166,6 +166,7 @@ def ajouter_valeurs(
     ordre = max((v["ordre"] for v in deja), default=0)
     groupe = nom_propre(groupe)
     ajoutees, ignorees = [], []
+    a_creer = []
     for libelle in libelles:
         propre = nom_propre(libelle)
         if not propre:
@@ -177,21 +178,31 @@ def ajouter_valeurs(
         existantes.add(cle)
         ordre += 1
         if par_la_plateforme:
-            valeur = ValeurListePlateforme.objects.create(
-                liste=liste, libelle=propre, groupe=groupe, ordre=ordre, cree_par=auteur
+            valeur = ValeurListePlateforme(
+                liste=liste,
+                libelle=propre,
+                groupe=groupe,
+                cle_comparaison=cle,
+                ordre=ordre,
+                cree_par=auteur,
             )
         else:
-            valeur = ValeurListeEntreprise.objects.create(
+            valeur = ValeurListeEntreprise(
                 liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
                 liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
                 libelle=propre,
                 groupe=groupe,
+                cle_comparaison=cle,
                 ordre=ordre,
                 cree_par=auteur,
             )
+        a_creer.append(valeur)
         ajoutees.append(
             {"id": str(valeur.pk), "libelle": valeur.libelle, "groupe": groupe, "ordre": ordre}
         )
+    if a_creer:
+        classe_valeur = ValeurListePlateforme if par_la_plateforme else ValeurListeEntreprise
+        classe_valeur.objects.bulk_create(a_creer, batch_size=1000)
     return {"ajoutees": ajoutees, "ignorees": ignorees}
 
 
@@ -315,6 +326,7 @@ def importer_valeurs_fichier(
     existantes = {cle_comparaison(v["libelle"]) for v in deja}
     ordre = max((v["ordre"] for v in deja), default=0)
     ajoutees, ignorees = [], []
+    a_creer = []
 
     for ligne in donnees:
         libelle = nom_propre(ligne[col_libelle] if col_libelle < len(ligne) else "")
@@ -333,21 +345,31 @@ def importer_valeurs_fichier(
         existantes.add(cle)
         ordre += 1
         if par_la_plateforme:
-            valeur = ValeurListePlateforme.objects.create(
-                liste=liste, libelle=libelle, groupe=groupe, ordre=ordre, cree_par=auteur
+            valeur = ValeurListePlateforme(
+                liste=liste,
+                libelle=libelle,
+                groupe=groupe,
+                cle_comparaison=cle,
+                ordre=ordre,
+                cree_par=auteur,
             )
         else:
-            valeur = ValeurListeEntreprise.objects.create(
+            valeur = ValeurListeEntreprise(
                 liste_entreprise=liste if isinstance(liste, ListeValeursEntreprise) else None,
                 liste_plateforme=liste if isinstance(liste, ListeValeursPlateforme) else None,
                 libelle=libelle,
                 groupe=groupe,
+                cle_comparaison=cle,
                 ordre=ordre,
                 cree_par=auteur,
             )
+        a_creer.append(valeur)
         ajoutees.append(
             {"id": str(valeur.pk), "libelle": valeur.libelle, "groupe": groupe, "ordre": ordre}
         )
+    if a_creer:
+        classe_valeur = ValeurListePlateforme if par_la_plateforme else ValeurListeEntreprise
+        classe_valeur.objects.bulk_create(a_creer, batch_size=1000)
     return {"ajoutees": ajoutees, "ignorees": ignorees}
 
 
@@ -618,8 +640,12 @@ def _ecrire_gabarit(modele, niveaux: list[dict], lignes: list[list[str]]) -> Non
                 alerter=bool(niveau.get("alerter")),
             )
     classe_ligne = LigneModelePlateforme if plateforme else LigneModeleEntreprise
-    for ordre, cellules in enumerate(verdict["lignes_retenues"]):
-        classe_ligne.objects.create(modele=modele, ordre=ordre, valeurs=cellules)
+    lignes_a_creer = [
+        classe_ligne(modele=modele, ordre=ordre, valeurs=cellules)
+        for ordre, cellules in enumerate(verdict["lignes_retenues"])
+    ]
+    if lignes_a_creer:
+        classe_ligne.objects.bulk_create(lignes_a_creer, batch_size=1000)
 
 
 def _un_seul_defaut_par_type(classe, modele) -> None:

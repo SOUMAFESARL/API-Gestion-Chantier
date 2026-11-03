@@ -26,6 +26,7 @@ import io
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogue.models.referentiel import cle_comparaison
@@ -45,8 +46,11 @@ __all__ = [
     "lire_tableau",
 ]
 
-TAILLE_MAX = 5 * 1024 * 1024
-LIGNES_MAX = 5000
+TAILLE_MAX_MO = getattr(settings, "IMPORT_EXCEL_TAILLE_MAX_MO", 20)
+TAILLE_MAX = TAILLE_MAX_MO * 1024 * 1024
+LIGNES_MAX = getattr(settings, "IMPORT_EXCEL_LIGNES_MAX", 20000)
+COLONNES_MAX_LECTURE = 30
+LIGNES_VIDES_CONSECUTIVES_MAX = 200
 
 #: Les colonnes de données, reconnues par leur nom (sans accents ni majuscules).
 COLONNES_DONNEES = {
@@ -109,7 +113,7 @@ def lire_fichier(fichier) -> list[list[str]]:
     """Les lignes du fichier, en texte, lignes vides retirées."""
     nom = (getattr(fichier, "name", "") or "").lower()
     if getattr(fichier, "size", 0) and fichier.size > TAILLE_MAX:
-        raise ValidationError({"fichier": "Le fichier dépasse 5 Mo."})
+        raise ValidationError({"fichier": f"Le fichier dépasse {TAILLE_MAX_MO} Mo."})
     contenu = fichier.read()
     if nom.endswith(".xlsx"):
         from openpyxl import load_workbook
@@ -118,8 +122,23 @@ def lire_fichier(fichier) -> list[list[str]]:
             classeur = load_workbook(io.BytesIO(contenu), read_only=True, data_only=True)
         except Exception:
             raise ValidationError({"fichier": "Ce fichier Excel ne s'ouvre pas."}) from None
-        feuille = classeur.worksheets[0]
-        lignes = [[_cellule(v) for v in ligne] for ligne in feuille.iter_rows(values_only=True)]
+        try:
+            feuille = classeur.worksheets[0]
+            lignes = []
+            vides_consecutives = 0
+            for brute in feuille.iter_rows(values_only=True, max_col=COLONNES_MAX_LECTURE):
+                ligne = [_cellule(v) for v in brute]
+                if any(c for c in ligne):
+                    lignes.append(ligne)
+                    vides_consecutives = 0
+                    if len(lignes) > LIGNES_MAX + 1:
+                        break
+                else:
+                    vides_consecutives += 1
+                    if vides_consecutives >= LIGNES_VIDES_CONSECUTIVES_MAX:
+                        break
+        finally:
+            classeur.close()
     elif nom.endswith(".csv"):
         for encodage in ("utf-8-sig", "cp1252"):
             try:
@@ -134,9 +153,9 @@ def lire_fichier(fichier) -> list[list[str]]:
         lignes = [
             [_cellule(v) for v in ligne] for ligne in csv.reader(io.StringIO(texte), dialecte)
         ]
+        lignes = [ligne for ligne in lignes if any(c for c in ligne)]
     else:
         raise ValidationError({"fichier": "Formats acceptés : .xlsx et .csv."})
-    lignes = [ligne for ligne in lignes if any(c for c in ligne)]
     if len(lignes) > LIGNES_MAX + 1:
         raise ValidationError({"fichier": f"Au plus {LIGNES_MAX} lignes de tâches."})
     return lignes

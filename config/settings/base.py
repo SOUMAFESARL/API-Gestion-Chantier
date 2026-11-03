@@ -231,6 +231,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # L'API journal contrôle aussi les nombres, types et tailles de chaque fichier.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 24 * 1024 * 1024
 
+# Plafonds d'import Excel/CSV pour les modèles de découpage, listes de valeurs et tableaux de démarrage.
+IMPORT_EXCEL_TAILLE_MAX_MO = config("IMPORT_EXCEL_TAILLE_MAX_MO", default=20, cast=int)
+IMPORT_EXCEL_LIGNES_MAX = config("IMPORT_EXCEL_LIGNES_MAX", default=20000, cast=int)
+
 
 # --------------------------------------------------------------------------
 # Authentification

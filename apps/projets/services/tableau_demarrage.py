@@ -217,13 +217,14 @@ def verifier_tableau(niveaux: list[dict], lignes: list) -> dict:
         retenues.append({**ligne, "cellules": cellules})
 
     # §5.7 : une ligne dont la dernière case a des enfants sur d'autres lignes est sans effet.
+    # Calcul en O(N) via l'ensemble des préfixes stricts de tous les chemins retenus.
     chemins = [_chemin(ligne["cellules"]) for ligne in retenues]
+    prefixes_parents = {
+        chemin[:i] for chemin in chemins for i in range(1, len(chemin))
+    }
     finales = []
     for ligne, chemin in zip(retenues, chemins, strict=True):
-        parente = any(
-            len(autre) > len(chemin) and autre[: len(chemin)] == chemin for autre in chemins
-        )
-        if parente:
+        if chemin in prefixes_parents:
             avertissements.append(
                 {
                     "regle": "SANS_EFFET",

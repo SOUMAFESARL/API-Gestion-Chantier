@@ -32,6 +32,8 @@ __all__ = [
     "DecoupageListeValeursView",
     "DecoupageListesView",
     "DecoupageModeleDetailView",
+    "DecoupageModeleExcelView",
+    "DecoupageModeleImporterFichierView",
     "DecoupageModelesView",
     "DecoupageValeurDetailView",
 ]
@@ -255,3 +257,52 @@ class DecoupageModeleDetailView(APIView):
         exiger_superviseur(request)
         service.retirer_modele(pk, auteur=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DecoupageModeleExcelView(APIView):
+    """`GET /api/v1/admins/decoupage/modeles/modele-excel/` — exemple type Excel (.xlsx)."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+
+    @schema(
+        summary="Télécharger un exemple type Excel (.xlsx) de modèle de découpage",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.projets.services.import_export import generer_modele_excel_decoupage
+
+        contenu = generer_modele_excel_decoupage()
+        reponse = HttpResponse(
+            contenu,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        reponse["Content-Disposition"] = 'attachment; filename="modele-decoupage-plateforme.xlsx"'
+        return reponse
+
+
+class DecoupageModeleImporterFichierView(APIView):
+    """`POST /api/v1/admins/decoupage/modeles/importer-fichier/` — extrait niveaux et lignes."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [MultiPartParser]
+
+    @schema(
+        summary="Importer les niveaux et lignes d'un modèle depuis un fichier Excel ou CSV",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            }
+        },
+    )
+    def post(self, request):
+        from apps.projets.services.import_export import importer_modele_fichier
+
+        exiger_superviseur(request)
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        return Response(importer_modele_fichier(fichier, pour_plateforme=True))

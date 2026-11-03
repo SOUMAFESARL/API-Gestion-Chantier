@@ -70,11 +70,14 @@ __all__ = [
     "ListeValeursView",
     "ListesView",
     "ModeleDetailView",
+    "ModeleExcelDecoupageView",
+    "ModeleImporterFichierView",
     "ModelePersonnaliserView",
     "ModelesView",
     "ProjetArbreView",
     "ProjetDecoupageExporterView",
     "ProjetDecoupageImporterView",
+    "ProjetDecoupageModeleExcelView",
     "ProjetDecoupageView",
     "ProjetDqeAppliquerView",
     "ProjetDqeView",
@@ -359,6 +362,54 @@ class ModelePersonnaliserView(APIView):
         return Response(lm.modele_en_dict(copie), status=status.HTTP_201_CREATED)
 
 
+class ModeleExcelDecoupageView(APIView):
+    """`GET /api/v1/decoupage/modeles/modele-excel/` — exemple type Excel (.xlsx) à remplir."""
+
+    permission_classes = [IsAuthenticated, APermission.pour("projets.lire")]
+
+    @schema(
+        summary="Télécharger un exemple type Excel (.xlsx) de modèle de découpage",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.projets.services.import_export import generer_modele_excel_decoupage
+
+        contenu = generer_modele_excel_decoupage()
+        reponse = HttpResponse(
+            contenu,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        reponse["Content-Disposition"] = 'attachment; filename="modele-decoupage-projet.xlsx"'
+        return reponse
+
+
+class ModeleImporterFichierView(APIView):
+    """`POST /api/v1/decoupage/modeles/importer-fichier/` — extrait niveaux et lignes d'un Excel/CSV."""
+
+    parser_classes = [MultiPartParser]
+    permission_classes = [IsAuthenticated, APermission.pour("projets.modeles_gerer")]
+
+    @schema(
+        summary="Importer les niveaux et lignes d'un modèle depuis un fichier Excel ou CSV",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"fichier": {"type": "string", "format": "binary"}},
+                "required": ["fichier"],
+            }
+        },
+    )
+    def post(self, request):
+        from apps.projets.services.import_export import importer_modele_fichier
+
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
+        return Response(importer_modele_fichier(fichier, pour_plateforme=False))
+
+
 # --------------------------------------------------------------------------
 # Tableau de démarrage et arbre d'un projet
 # --------------------------------------------------------------------------
@@ -572,6 +623,46 @@ class ProjetDecoupageExporterView(APIView):
         )
         reponse = HttpResponse(contenu, content_type=type_mime)
         nom = f"decoupage-{projet.reference or projet.pk}.{format_fichier}"
+        reponse["Content-Disposition"] = f'attachment; filename="{nom}"'
+        return reponse
+
+
+class ProjetDecoupageModeleExcelView(APIView):
+    """`GET /api/v1/projets/{id}/decoupage/modele-excel/` — exemple type Excel (.xlsx) à remplir
+    pour importer le découpage de ce projet (adapté à ses niveaux ou au modèle choisi)."""
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @schema(
+        summary="Télécharger un exemple type Excel (.xlsx) à remplir pour découper le projet",
+        parameters=[
+            OpenApiParameter("modele_origine", str, enum=["PLATEFORME", "ENTREPRISE"]),
+            OpenApiParameter("modele_id", str),
+        ],
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.projets.services.import_export import generer_modele_excel_projet
+
+        projet = _projet(request, self, pk)
+        reference = None
+        if request.query_params.get("modele_id"):
+            ref = ReferenceSerializer(
+                data={
+                    "origine": request.query_params.get("modele_origine", "PLATEFORME"),
+                    "id": request.query_params["modele_id"],
+                }
+            )
+            ref.is_valid(raise_exception=True)
+            reference = {**ref.validated_data, "id": str(ref.validated_data["id"])}
+        contenu = generer_modele_excel_projet(projet, reference)
+        reponse = HttpResponse(
+            contenu,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        nom = f"modele-decoupage-{projet.reference or projet.pk}.xlsx"
         reponse["Content-Disposition"] = f'attachment; filename="{nom}"'
         return reponse
 

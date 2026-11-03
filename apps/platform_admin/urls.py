@@ -48,6 +48,8 @@ from apps.platform_admin.views.decoupage import (
     DecoupageListeValeursImporterView,
     DecoupageListeValeursView,
     DecoupageModeleDetailView,
+    DecoupageModeleExcelView,
+    DecoupageModeleImporterFichierView,
     DecoupageModelesView,
     DecoupageValeurDetailView,
 )
@@ -278,6 +280,16 @@ urlpatterns = [
         "admins/decoupage/modeles/",
         DecoupageModelesView.as_view(),
         name="admins-decoupage-modeles",
+    ),
+    path(
+        "admins/decoupage/modeles/modele-excel/",
+        DecoupageModeleExcelView.as_view(),
+        name="admins-decoupage-modeles-modele-excel",
+    ),
+    path(
+        "admins/decoupage/modeles/importer-fichier/",
+        DecoupageModeleImporterFichierView.as_view(),
+        name="admins-decoupage-modeles-importer-fichier",
     ),
     path(
         "admins/decoupage/modeles/<uuid:pk>/",

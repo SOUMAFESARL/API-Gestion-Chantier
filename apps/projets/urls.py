@@ -51,11 +51,14 @@ from apps.projets.views.decoupage import (
     ListeValeursImporterView,
     ListeValeursView,
     ModeleDetailView,
+    ModeleExcelDecoupageView,
+    ModeleImporterFichierView,
     ModelePersonnaliserView,
     ModelesView,
     ProjetArbreView,
     ProjetDecoupageExporterView,
     ProjetDecoupageImporterView,
+    ProjetDecoupageModeleExcelView,
     ProjetDecoupageView,
     ProjetDqeAppliquerView,
     ProjetDqeView,
@@ -156,6 +159,16 @@ urlpatterns = [
     ),
     path("decoupage/modeles/", ModelesView.as_view(), name="decoupage-modeles"),
     path(
+        "decoupage/modeles/modele-excel/",
+        ModeleExcelDecoupageView.as_view(),
+        name="decoupage-modeles-modele-excel",
+    ),
+    path(
+        "decoupage/modeles/importer-fichier/",
+        ModeleImporterFichierView.as_view(),
+        name="decoupage-modeles-importer-fichier",
+    ),
+    path(
         "decoupage/modeles/PLATEFORME/<uuid:pk>/personnaliser/",
         ModelePersonnaliserView.as_view(),
         name="decoupage-modele-personnaliser",
@@ -207,6 +220,11 @@ urlpatterns = [
         "projets/<uuid:pk>/decoupage/exporter/",
         ProjetDecoupageExporterView.as_view(),
         name="projet-decoupage-exporter",
+    ),
+    path(
+        "projets/<uuid:pk>/decoupage/modele-excel/",
+        ProjetDecoupageModeleExcelView.as_view(),
+        name="projet-decoupage-modele-excel",
     ),
     path("projets/<uuid:pk>/decoupage/dqe/", ProjetDqeView.as_view(), name="projet-decoupage-dqe"),
     path(

@@ -145,12 +145,18 @@ class ProjetEquipeListCreateView(BaseEquipeView):
         donnees = EquipeCreationSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
         v = donnees.validated_data
+        membres_developpes = []
+        for m in v["membres"]:
+            copie = dict(m)
+            ids = copie.pop("personne_ids", [copie.get("personne_id")])
+            for pid in ids:
+                membres_developpes.append({**copie, "personne_id": pid})
         equipe, avertissements = service.creer_equipe(
             projet,
             nom=v["nom"],
             corps_etat=v["corps_etat"],
             entreprise_partenaire=v["entreprise_partenaire_id"],
-            membres=[dict(m) for m in v["membres"]],
+            membres=membres_developpes,
             createur=request.user,
         )
         return _reponse_equipe(equipe, avertissements, statut=status.HTTP_201_CREATED)
@@ -195,28 +201,43 @@ class ProjetEquipeDetailView(BaseEquipeView):
 
 
 class ProjetEquipeMembreListCreateView(BaseEquipeView):
-    """`POST /api/v1/projets/{id}/equipes/{equipe_id}/membres/` — ajouter un membre du registre."""
+    """`POST /api/v1/projets/{id}/equipes/{equipe_id}/membres/` — ajouter un ou plusieurs membres du registre."""
 
     @extend_schema(
         tags=TAGS,
-        summary="Ajouter un membre",
+        summary="Ajouter un ou plusieurs membres partageant la même fonction",
         description=(
-            "La personne vient du registre de main-d'œuvre. Une personne déjà dans une autre "
-            "équipe le même jour est acceptée, avec un avertissement."
+            "Les personnes viennent du registre de main-d'œuvre (`personne_id` ou `personne_ids`). "
+            "Une personne déjà dans une autre équipe le même jour est acceptée, avec un avertissement."
         ),
         request=MembreCreationSerializer,
         responses={201: MembreSerializer, **ERREURS_EQUIPES},
     )
+    @transaction.atomic
     def post(self, request, pk, equipe_id):
         projet = self.projet(request, pk)
         equipe = get_object_or_404(EquipeChantier, projet=projet, pk=equipe_id)
         donnees = MembreCreationSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
-        membre, avertissements = service.ajouter_membre(
-            equipe, createur=request.user, **donnees.validated_data
-        )
+        valides = dict(donnees.validated_data)
+        ids = valides.pop("personne_ids", [valides.get("personne_id")])
+        membres = []
+        avertissements = []
+        for pid in ids:
+            membre, avert = service.ajouter_membre(
+                equipe,
+                createur=request.user,
+                **{**valides, "personne_id": pid},
+            )
+            membres.append(membre)
+            avertissements.extend(avert)
+        serialises = MembreSerializer(membres, many=True).data
         return Response(
-            {**MembreSerializer(membre).data, "avertissements": avertissements},
+            {
+                **serialises[0],
+                "membres": serialises,
+                "avertissements": avertissements,
+            },
             status=status.HTTP_201_CREATED,
         )
 

@@ -192,11 +192,30 @@ class EquipeSerializer(serializers.ModelSerializer):
 
 
 class MembreCreationSerializer(serializers.Serializer):
-    personne_id = serializers.UUIDField()
+    personne_id = serializers.UUIDField(required=False)
+    personne_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_empty=False
+    )
     fonction = serializers.ChoiceField(choices=FONCTIONS, required=False, default="OUVRIER")
     est_chef = serializers.BooleanField(required=False, default=False)
     date_arrivee = serializers.DateField(required=False, allow_null=True, default=None)
     date_depart = serializers.DateField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs):
+        ids = list(dict.fromkeys(attrs.get("personne_ids") or []))
+        if attrs.get("personne_id") and attrs["personne_id"] not in ids:
+            ids.insert(0, attrs["personne_id"])
+        if not ids:
+            raise serializers.ValidationError(
+                {"personne_id": "Sélectionnez au moins une personne du registre."}
+            )
+        if (attrs.get("est_chef") or attrs.get("fonction") == "CHEF_EQUIPE") and len(ids) > 1:
+            raise serializers.ValidationError(
+                {"est_chef": "Une équipe n'a qu'un seul chef : sélectionnez une seule personne."}
+            )
+        attrs["personne_ids"] = ids
+        attrs["personne_id"] = ids[0]
+        return attrs
 
 
 class MembreModificationSerializer(serializers.Serializer):

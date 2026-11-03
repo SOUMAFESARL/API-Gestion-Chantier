@@ -501,13 +501,25 @@ def _modele_en_dict(modele, noms_plateforme, type_projet=None, defaut=None) -> d
 def modele_par_defaut(type_projet: str | None):
     """Le modèle qui pré-remplit le tableau d'un projet de ce type.
 
-    Celui que l'entreprise a désigné pour ce type, sinon celui de la plateforme, sinon le premier
-    modèle plateforme conçu pour ce type, sinon le premier modèle plateforme.
+    Priorité :
+    1. Le modèle que l'entreprise a désigné par défaut pour ce type (`par_defaut_pour`) ;
+    2. Sinon un modèle de l'entreprise conçu pour ce type (`types_projet`) ;
+    3. Sinon le modèle plateforme par défaut pour ce type ;
+    4. Sinon un modèle plateforme conçu pour ce type ;
+    5. Sinon le premier modèle de l'entreprise, ou à défaut de la plateforme.
     """
     plateforme = list(ModeleDecoupagePlateforme.objects.filter(est_actif=True).order_by("nom"))
+    entreprise = (
+        []
+        if _schema_public()
+        else list(ModeleDecoupageEntreprise.objects.order_by("nom"))
+    )
     if type_projet:
-        for modele in ModeleDecoupageEntreprise.objects.order_by("nom"):
+        for modele in entreprise:
             if type_projet in (modele.par_defaut_pour or []):
+                return modele
+        for modele in entreprise:
+            if type_projet in (modele.types_projet or []):
                 return modele
         for modele in plateforme:
             if type_projet in (modele.par_defaut_pour or []):
@@ -515,19 +527,33 @@ def modele_par_defaut(type_projet: str | None):
         for modele in plateforme:
             if type_projet in (modele.types_projet or []):
                 return modele
+    if entreprise:
+        return entreprise[0]
     return plateforme[0] if plateforme else None
 
 
 def modeles_disponibles(type_projet: str | None = None) -> list[dict]:
-    """Tous les modèles, ceux du type demandé en tête (§3.9), le modèle par défaut d'abord."""
+    """Tous les modèles (entreprise et plateforme), ceux du type demandé en tête (§3.9),
+    le modèle par défaut d'abord, puis les modèles de l'entreprise avant ceux de la plateforme."""
     plateforme = list(ModeleDecoupagePlateforme.objects.filter(est_actif=True).order_by("nom"))
-    entreprise = list(ModeleDecoupageEntreprise.objects.select_related("origine").order_by("nom"))
+    entreprise = (
+        []
+        if _schema_public()
+        else list(ModeleDecoupageEntreprise.objects.select_related("origine").order_by("nom"))
+    )
     noms_plateforme = {cle_comparaison(m.nom) for m in plateforme}
     defaut = modele_par_defaut(type_projet)
     tous = [
-        _modele_en_dict(m, noms_plateforme, type_projet, defaut) for m in [*plateforme, *entreprise]
+        _modele_en_dict(m, noms_plateforme, type_projet, defaut) for m in [*entreprise, *plateforme]
     ]
-    tous.sort(key=lambda d: (not d["par_defaut"], not d["pour_ce_type"], d["nom_affiche"]))
+    tous.sort(
+        key=lambda d: (
+            not d["par_defaut"],
+            not d["pour_ce_type"],
+            d["origine"] != ENTREPRISE,
+            d["nom_affiche"],
+        )
+    )
     return tous
 
 

@@ -251,6 +251,13 @@ class DecoupageModeleDetailView(APIView):
         return Response(service.enregistrer_modele(pk, auteur=request.user, **valides))
 
     @schema(
+        summary="Mettre à jour un modèle de la plateforme (sa version augmente)",
+        request=ModelePlateformeEnregistrementSerializer,
+    )
+    def patch(self, request, pk):
+        return self.put(request, pk)
+
+    @schema(
         summary="Retirer un modèle de la plateforme (suppression logique)", responses={204: None}
     )
     def delete(self, request, pk):

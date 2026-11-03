@@ -344,6 +344,10 @@ class ModeleDetailView(APIView):
         modele = lm.enregistrer_modele(modele=modele, **donnees.validated_data)
         return Response(lm.modele_en_dict(modele))
 
+    @schema(summary="Mettre à jour ce modèle", request=ModeleEnregistrementSerializer)
+    def patch(self, request, origine, pk):
+        return self.put(request, origine, pk)
+
     @schema(summary="Supprimer ce modèle de l'entreprise", responses={204: None})
     def delete(self, request, origine, pk):
         self._modele_entreprise(origine, pk).delete(utilisateur=request.user)

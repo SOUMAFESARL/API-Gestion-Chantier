@@ -603,8 +603,8 @@ def importer_modele_fichier(fichier, *, pour_plateforme: bool = False) -> dict:
             colonnes_niveaux.append(index)
     if not colonnes_niveaux:
         raise ValidationError({"fichier": "Aucune colonne de niveau (Phase, Lot, Activité…)."})
-    if len(colonnes_niveaux) > 5:
-        raise ValidationError({"fichier": "Un modèle compte au plus 5 niveaux."})
+    if len(colonnes_niveaux) > 10:
+        raise ValidationError({"fichier": "Un modèle compte au plus 10 niveaux."})
 
     if pour_plateforme:
         from apps.catalogue.models import ListeValeursPlateforme

@@ -1082,10 +1082,6 @@ def rejeter_journal(*, journal, utilisateur, motif):
     rapport.valide_par = utilisateur
     rapport.valide_le = timezone.now()
     rapport.save()
-    journal.signatures = []
-    journal.valide_ct_par = None
-    journal.valide_ct_le = None
-    journal.save()
     tracer(
         journal,
         utilisateur,

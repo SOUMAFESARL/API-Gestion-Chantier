@@ -447,22 +447,26 @@ def reference(journal):
 
 
 def _signataires(journal, etape, *, ouverte, rejete) -> list[dict]:
+    r = journal.rapport
+    rejete_par_id = str(r.valide_par_id) if rejete and r.valide_par_id else None
     faites = {s["utilisateur_id"]: s for s in journal.signatures or [] if s["etape"] == etape}
     figes = (journal.signataires_attendus or {}).get(etape, [])
     effectifs = set(circuit_signatures.attendus_effectifs(journal, etape)) if figes else set()
+    ids = list(dict.fromkeys([*figes, *faites, *([rejete_par_id] if rejete_par_id else [])]))
     noms = {
         str(u.pk): nom(u)
-        for u in Utilisateur.objects.filter(pk__in=[*figes, *faites]).only("prenom", "nom", "email")
+        for u in Utilisateur.objects.filter(pk__in=ids).only("prenom", "nom", "email")
     }
     lignes = []
-    for uid in dict.fromkeys([*figes, *faites]):
+    for uid in ids:
         signature = faites.get(uid)
+        est_rejeteur = rejete and (rejete_par_id == uid if rejete_par_id else True)
         if signature:
             etat = "SIGNE"
+        elif est_rejeteur:
+            etat = "REJETE"
         elif uid not in effectifs:
             etat = "RETIRE"
-        elif rejete:
-            etat = "REJETE"
         else:
             etat = "EN_ATTENTE" if ouverte else "A_VENIR"
         lignes.append(
@@ -470,8 +474,20 @@ def _signataires(journal, etape, *, ouverte, rejete) -> list[dict]:
                 "utilisateur_id": uid,
                 "nom": signature["nom"] if signature else noms.get(uid, ""),
                 "etat": etat,
-                "signe_le": signature["signe_le"] if signature else None,
-                "commentaire": signature["commentaire"] if signature else None,
+                "signe_le": (
+                    signature["signe_le"]
+                    if signature
+                    else (r.valide_le.isoformat() if est_rejeteur and r.valide_le else None)
+                ),
+                "commentaire": (
+                    signature["commentaire"]
+                    if signature
+                    else (
+                        r.commentaire_validation
+                        if est_rejeteur and r.commentaire_validation
+                        else None
+                    )
+                ),
             }
         )
     return lignes
@@ -493,6 +509,8 @@ def circuit(journal, contexte):
     validation_signee = bool(journal.valide_ct_le)
     approbation_signee = statut == "APPROUVE"
     rejete = statut == "REJETE"
+    rejete_validation = rejete and not validation_signee
+    rejete_approbation = rejete and validation_signee
     echeance_val = (r.soumis_le + timedelta(hours=24)).isoformat() if r.soumis_le else None
     echeance_app = (
         (journal.valide_ct_le + timedelta(hours=24)).isoformat() if journal.valide_ct_le else None
@@ -500,14 +518,14 @@ def circuit(journal, contexte):
     validation = _signataires(
         journal,
         circuit_signatures.VALIDATION,
-        ouverte=redaction_signee and not validation_signee,
-        rejete=rejete,
+        ouverte=redaction_signee and not validation_signee and not rejete,
+        rejete=rejete_validation,
     )
     approbation = _signataires(
         journal,
         circuit_signatures.APPROBATION,
-        ouverte=validation_signee and not approbation_signee,
-        rejete=rejete and validation_signee,
+        ouverte=validation_signee and not approbation_signee and not rejete,
+        rejete=rejete_approbation,
     )
     return [
         {
@@ -527,12 +545,16 @@ def circuit(journal, contexte):
                 validation,
                 close=validation_signee,
                 ouverte=redaction_signee,
-                rejete=rejete and not validation_signee,
+                rejete=rejete_validation,
             ),
-            "signe_le": journal.valide_ct_le.isoformat() if validation_signee else None,
+            "signe_le": (
+                journal.valide_ct_le.isoformat()
+                if validation_signee
+                else (r.valide_le.isoformat() if rejete_validation and r.valide_le else None)
+            ),
             "echeance": echeance_val,
             "commentaire": r.commentaire_validation
-            if rejete and not validation_signee
+            if rejete_validation
             else journal.commentaire_ct,
             "signataires": validation,
             "sans_signataire": redaction_signee and not validation,
@@ -545,12 +567,16 @@ def circuit(journal, contexte):
                 approbation,
                 close=approbation_signee,
                 ouverte=validation_signee,
-                rejete=rejete and validation_signee,
+                rejete=rejete_approbation,
             ),
-            "signe_le": r.valide_le.isoformat() if approbation_signee else None,
+            "signe_le": (
+                r.valide_le.isoformat()
+                if (approbation_signee or rejete_approbation) and r.valide_le
+                else None
+            ),
             "echeance": echeance_app,
             "commentaire": r.commentaire_validation
-            if approbation_signee or (rejete and validation_signee)
+            if approbation_signee or rejete_approbation
             else None,
             "signataires": approbation,
             "sans_signataire": validation_signee and not approbation_signee and not approbation,

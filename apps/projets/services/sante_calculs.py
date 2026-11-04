@@ -178,13 +178,20 @@ def _combiner(enfants: list[ResultatCase], enveloppe) -> ResultatCase:
     if chiffres and len(chiffres) == len(enfants):
         physique = float(round(somme_ponderee / somme_poids, 2)) if somme_poids else 0.0
         return ResultatCase(somme_poids, physique, partiel_enfant, exclus)
-    if enveloppe is not None:
+    if chiffres and enveloppe is not None:
         physique = float(round(min(Decimal(100), somme_ponderee / enveloppe), 2))
         return ResultatCase(enveloppe, physique, partiel_enfant, exclus)
     if chiffres:
         physique = float(round(somme_ponderee / somme_poids, 2)) if somme_poids else 0.0
-        return ResultatCase(None, physique, True, exclus)
-    return ResultatCase(None, None, False, exclus)
+        return ResultatCase(somme_poids, physique, True, exclus)
+    mesures = [r for r in enfants if r.physique is not None]
+    if mesures:
+        exclus_mesures = len(enfants) - len(mesures) + sum(r.exclus for r in enfants)
+        partiel_mesures = len(mesures) < len(enfants) or any(r.partiel for r in mesures)
+        somme_physique = sum((Decimal(str(r.physique)) for r in mesures), Decimal(0))
+        physique = float(round(somme_physique / Decimal(len(mesures)), 2))
+        return ResultatCase(enveloppe, physique, partiel_mesures, exclus_mesures)
+    return ResultatCase(enveloppe, None, False, exclus)
 
 
 def calculer_arbre(arbre) -> dict:

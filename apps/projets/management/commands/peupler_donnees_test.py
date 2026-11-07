@@ -434,6 +434,13 @@ class Command(BaseCommand):
             action="store_true",
             help="Supprime physiquement les chantiers TEST-2026-* avant de les recréer.",
         )
+        parser.add_argument(
+            "--chantiers",
+            nargs="+",
+            metavar="REFERENCE",
+            help="Ne crée que ces chantiers (TEST-2026-002…) — la suite d'étanchéité n'a pas "
+            "besoin des huit.",
+        )
 
     def handle(self, *args, **options):
         from django.conf import settings
@@ -464,8 +471,13 @@ class Command(BaseCommand):
             self.utilisateurs = self._collaborateurs(options["motdepasse"])
             self.tiers = self._tiers()
             self.registre = self._registre()
+            retenus = options.get("chantiers")
+            inconnus = set(retenus or []) - {c.reference for c in CHANTIERS}
+            if inconnus:
+                raise CommandError(f"Chantiers inconnus : {', '.join(sorted(inconnus))}")
             for chantier in CHANTIERS:
-                self._chantier(chantier)
+                if retenus is None or chantier.reference in retenus:
+                    self._chantier(chantier)
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Jeu de test prêt."))
         self.stdout.write(

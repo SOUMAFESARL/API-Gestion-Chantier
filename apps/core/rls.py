@@ -119,6 +119,8 @@ def appliquer_contexte_rls(execute, sql, params, many, context):
                 )
             raise
         connexion.etat_rls = voulu
+        # Compté à part : un aller-retour vers la base que `CaptureQueriesContext` ne voit pas.
+        connexion.reglages_rls = getattr(connexion, "reglages_rls", 0) + 1
     return execute(sql, params, many, context)
 
 

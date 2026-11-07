@@ -26,18 +26,22 @@ concurrency:
 jobs:
   verifications:
     # Décision du développeur (29/10/2026) : les tests automatisés sont supprimés le temps de
-    # la refonte du découpage. Restent les vérifications qui ne dépendent d'aucun test : la
-    # configuration Django se charge, et aucune migration ne manque au regard des modèles.
-    name: Vérifications Django
+    # la refonte du découpage. Restent les vérifications qui ne dépendent d'aucun test — la
+    # configuration Django se charge, aucune migration ne manque —, et **une exception** : la
+    # suite d'étanchéité entre entreprises (D9, plan de sortie du multi-schéma §4.3, lot 7).
+    # Elle bloque le déploiement : une fuite entre clients ne part pas en production.
+    name: Vérifications Django et étanchéité
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     services:
       postgres:
         image: postgres:16
 
+        # Le rôle créé par l'image est **superutilisateur** : PostgreSQL ne lui applique aucune
+        # politique RLS. Django se connecte donc avec `ccd`, créé plus bas sans privilège.
         env:
-          POSTGRES_USER: ccd
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test-only
           POSTGRES_DB: ccd_digital
 
@@ -45,7 +49,7 @@ jobs:
           - 5432:5432
 
         options: >-
-          --health-cmd "pg_isready -U ccd -d ccd_digital"
+          --health-cmd "pg_isready -U postgres -d ccd_digital"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -78,6 +82,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/local.txt
 
+      - name: Créer le rôle applicatif et le rôle de la portée plateforme
+        env:
+          PGPASSWORD: test-only
+        run: |
+          psql -h 127.0.0.1 -U postgres -d ccd_digital -v ON_ERROR_STOP=1 -c             "CREATE ROLE ccd LOGIN PASSWORD 'test-only' NOSUPERUSER NOBYPASSRLS CREATEDB;"
+          psql -h 127.0.0.1 -U postgres -d ccd_digital -v app=ccd -f scripts/sql/roles_rls.sql
+
       - name: Vérifier la configuration Django
         run: |
           python manage.py check
@@ -85,6 +96,12 @@ jobs:
       - name: Vérifier qu'aucune migration ne manque
         run: |
           python manage.py makemigrations --check --dry-run
+
+      # Couches 1 et 2 (socle du contexte, RLS) et couche 3 (chaque route, appelée par une
+      # entreprise sur les lignes d'une autre). Deux entreprises peuplées : 2 à 3 minutes.
+      - name: Suite d'étanchéité entre entreprises
+        run: |
+          python -m pytest apps/core/tests tests/etancheite -p no:cacheprovider -q -rfs
 
   deploy:
     name: Déploiement production sur cPanel

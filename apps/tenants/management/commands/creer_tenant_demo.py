@@ -9,9 +9,9 @@ d'étanchéité a besoin de deux entreprises peuplées dans la même base.
 """
 
 from django.core.management.base import BaseCommand
-from apps.core.passerelle_schema import contexte_schema
 
 from apps.core.enums import RoleGlobal, StatutEntreprise, StatutUtilisateur
+from apps.core.passerelle_schema import contexte_schema
 from apps.tenants.models import Domaine, Entreprise
 
 SLUG_PAR_DEFAUT = "demo"
@@ -86,7 +86,11 @@ class Command(BaseCommand):
         # L'utilisateur vit dans le schéma du tenant, pas dans `public`.
         with contexte_schema(slug):
             from apps.accounts.models import Utilisateur
+            from apps.accounts.services.roles import initialiser_roles_par_defaut
 
+            # Les rôles avant le fondateur : `Utilisateur.save` ne rattache le rôle `DG` que
+            # s'il existe déjà (même ordre que `services/inscription.activer`).
+            initialiser_roles_par_defaut()
             utilisateur = Utilisateur.objects.filter(email=options["email"]).first()
             if utilisateur is None:
                 # `create_user`, jamais `create_superuser` — règle R-64 de T-020.
@@ -172,6 +176,10 @@ class Command(BaseCommand):
         if utilisateur.email == EMAIL_TECHNIQUE:
             return
         if utilisateur.is_owner and utilisateur.role_global == RoleGlobal.DIRECTEUR_GENERAL:
+            if utilisateur.role_id is None:
+                # Démonstration montée avant la correction du lot 7 : `save` rattache le rôle.
+                utilisateur.save(update_fields=["role", "role_global", "modifie_le"])
+                self.stdout.write(self.style.WARNING("  rôle DG rattaché au fondateur"))
             return
 
         utilisateur.role_global = RoleGlobal.DIRECTEUR_GENERAL
@@ -242,6 +250,7 @@ class Command(BaseCommand):
         """
         from datetime import date
         from decimal import Decimal
+
         from django.utils import timezone
 
         from apps.chantier.models import RapportJournalier

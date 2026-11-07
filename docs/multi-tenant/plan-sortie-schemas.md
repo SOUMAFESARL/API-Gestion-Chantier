@@ -287,6 +287,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 4 | Fait le 07/11/2026 — voir ci-dessous | `27b9ccd` |
 | 5 | Fait le 07/11/2026 — voir ci-dessous | `1132ff3` |
 | 6 | Fait le 07/11/2026 — voir ci-dessous ; reste le report de `feature/perf-requetes` (§11, étape 6) | `29157a2` |
+| 7 | Fait le 07/11/2026 — voir ci-dessous | _à venir_ |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 
@@ -344,3 +345,27 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 - Les droits effectifs (`permissions_du_role`) de CP, CC, VI et IT sont identiques ; les `administration.*` et les verbes génériques (`ECRITURE`, `LECTURE`…) encore liés dans l'ancienne base n'y comptent pas.
 
 **Reste hors du lot 6** : le report de `feature/perf-requetes` (droits en une requête, préchargement des arbres) ; les tarifs des plans — le jeu d'ensemencement porte 19 000, 49 000 et 119 000 FCFA, relevés en base, quand le §5 (A7) les veut à `NULL` ; le déploiement cPanel et `scripts/deploy-cpanel.sh` (`migrate_schemas`, `gerer_entreprises`), au lot 9.
+
+### Lot 7 — ce qui a été fait, et ce qu'il a fait apparaître
+
+- **Suite d'étanchéité** (`tests/etancheite/`), en CI avant tout déploiement, avec les tests du socle (`apps/core/tests`) : **443 tests**, zéro fuite. Deux entreprises, `demo` (A) et `beta` (B), montées par `creer_tenant_demo` et `peupler_donnees_test --chantiers TEST-2026-002 TEST-2026-006` (option ajoutée : deux chantiers suffisent), puis complétées des lignes que le jeu ne crée pas (avenant, dépendance, synthèse, listes et modèle d'entreprise, exception de calendrier, abonnement, facture, paiement, demande d'inscription) : **aucune route n'est sautée**.
+  - **Chaque route** de l'URLconf (introspection), pour chaque méthode, appelée par le DG de A sur les identifiants de B : 403, 404 ou 405 ; aucun identifiant ni adresse de B dans le corps ; **les lignes de B intactes** (témoin : nombre et empreinte du contenu, table par table, tables de plateforme à clé `entreprise` comprises).
+  - **Chaque liste**, appelée par A, y compris avec les identifiants de B en filtre (`?projet=<B>`).
+  - **Contrôle positif** : B lit ses propres lignes par les mêmes routes — sans lui, un 404 rendu à A pourrait n'être qu'une route mal désignée.
+  - Un paramètre d'URL que la table `CIBLES` ne connaît pas fait **échouer** la suite : une route nouvelle ne passe pas en silence.
+  - **Couches 1 et 2 sur chaque modèle et chaque table** : hors contexte, `objects` et `tous_objets` lèvent `HorsContexteEntreprise` ; le SQL brut ne voit aucune ligne d'entreprise ; dans A, aucune ligne de B ; le rôle de connexion n'est ni superutilisateur ni `BYPASSRLS`.
+  - Écarts tolérés, chacun avec sa raison (`REFUS_ATYPIQUES`, `CONTROLE_SANS_OBJET`) : les routes de listes de découpage répondent 400 « introuvable » au lieu de 404 (`resoudre_liste`), l'import de fichier 415 à un corps JSON.
+- **CI** : le service PostgreSQL de GitHub crée un superutilisateur, à qui la RLS ne s'applique pas. Django s'y connecte désormais avec un rôle `ccd` créé sans privilège, et `roles_rls.sql` est joué avant les tests.
+- **Ce qu'il a fait apparaître : une fuite entre clients**, antérieure à la D9. `GET /api/v1/cinetpay/statut/<transaction>/` rendait le paiement d'une autre entreprise (statut, montant, facture, raison sociale) et en déclenchait la vérification auprès de CinetPay. `paiement_abonnement` est une table de plateforme, hors RLS : seule la vue la protège, et elle ne filtrait pas. Bornée à l'entreprise du compte, avant tout appel à CinetPay.
+- **Ce qu'il a fait apparaître : le fondateur sans rôle.** Dans une entreprise neuve (inscription comme démonstration), le fondateur était créé **avant** la matrice des rôles : `Utilisateur.save` ne trouvait pas le rôle `DG` et laissait `role_id` nul. Les rôles sont désormais semés d'abord ; `creer_tenant_demo` répare les démonstrations existantes.
+- **Coût des requêtes** (`manage.py mesurer_requetes`, reportée de `feature/perf-requetes` ; mesure dans `tmp/perf/mesure_schema_unique.json`). Elle compte à part les **réglages** de session — `SET search_path` hier, `set_config` de la RLS aujourd'hui, que Django ne voit pas —, et compare les **allers-retours** :
+
+  | 30 appels mesurés (3 comptes × 10 endpoints) | Requêtes utiles | Réglages | Allers-retours |
+  |---|---|---|---|
+  | `develop`, multi-schéma (`mesure_avant.json`) | 833 | 833 | 1 666 |
+  | Schéma unique | 861 | 54 | **915 (−45 %)** |
+
+  **À données égales, aucune requête utile de plus.** Les 28 d'écart viennent du jeu : la base neuve montre 11 chantiers au DG, l'ancienne 9, et la liste comme le tableau de bord relisent l'arbre de chaque chantier (4 et 6 requêtes par chantier — le N+1 que corrigent les lots 3-4 de `feature/perf-requetes`, toujours à reporter). Vérifié requête par requête contre l'ancien modèle. Les durées ne se comparent pas d'une base à l'autre (volumes différents) ; elles ne sont pas retenues.
+
+**Reste hors du lot 7** : le report de `feature/perf-requetes` (§11, étape 6) ; les codes 400/415 des listes de découpage, à aligner sur 404 ; les corps d'écriture qui désigneraient une ligne de B (`{"projet": "<B>"}`) ne sont éprouvés que par les clés composites et la RLS, pas par la suite.
+

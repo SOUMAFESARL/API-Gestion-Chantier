@@ -439,6 +439,13 @@ def provisionner(demande: DemandeInscription) -> Entreprise:
     )
 
     with contexte_entreprise(entreprise):
+        # La matrice des rôles, dès la création de l'entreprise. Semée paresseusement, au premier
+        # affichage de l'écran des rôles, elle manquait aux invités du fondateur : refusés
+        # partout, sans message (le fondateur, lui, court-circuite la matrice). **Avant** le
+        # fondateur : `Utilisateur.save` ne rattache le rôle `DG` que s'il existe déjà — semé
+        # après, le fondateur restait sans rôle (`role_id` nul), écart trouvé au lot 7.
+        initialiser_roles_par_defaut()
+
         # D-DEMO-01 / T-S1-01 : le premier inscrit est Directeur Général et propriétaire
         # immuable de l'entreprise. Le mot de passe est déjà haché : `create_user` le hacherait
         # une seconde fois, il est donc posé tel quel.
@@ -453,11 +460,6 @@ def provisionner(demande: DemandeInscription) -> Entreprise:
         administrateur.is_owner = True
         administrateur.password = demande.mot_de_passe_transitoire
         administrateur.save(update_fields=["is_owner", "password", "modifie_le"])
-
-        # La matrice des rôles, dès la création de l'entreprise. Semée paresseusement, au premier
-        # affichage de l'écran des rôles, elle manquait aux invités du fondateur : refusés
-        # partout, sans message (le fondateur, lui, court-circuite la matrice).
-        initialiser_roles_par_defaut()
 
     # L'abonnement d'essai — 14 jours. Son tarif reste inconnu tant que l'arbitrage A7 n'est pas
     # rendu, ce qui n'empêche pas d'essayer, seulement de facturer.

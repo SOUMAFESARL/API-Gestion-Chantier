@@ -259,19 +259,25 @@ class StatutPaiementView(APIView):
         responses={200: StatutPaiementResponseSerializer},
     )
     def get(self, request, transaction_id: str):
-        with contexte_schema(schema_public()):
-            paiement = (
-                PaiementAbonnement.objects.filter(reference_transaction=transaction_id)
-                .select_related("facture__abonnement__plan", "facture__entreprise")
-                .first()
-            )
+        # `paiement_abonnement` est une table de la plateforme, hors RLS : seule cette vue la
+        # cloisonne. Sans ce filtre, le compte d'une entreprise lisait le paiement d'une autre
+        # — statut, montant, facture — et en déclenchait la vérification auprès de CinetPay
+        # (fuite trouvée par la suite d'étanchéité, lot 7 de D9). Le personnel de l'éditeur,
+        # sans entreprise, garde la vue d'ensemble.
+        entreprise_id = getattr(request.user, "entreprise_id", None)
 
-            if not paiement:
-                paiement = (
-                    PaiementAbonnement.objects.filter(reference_commande=transaction_id)
-                    .select_related("facture__abonnement__plan", "facture__entreprise")
-                    .first()
-                )
+        def chercher(**filtre):
+            paiements = PaiementAbonnement.objects.filter(**filtre)
+            if entreprise_id is not None:
+                paiements = paiements.filter(facture__entreprise_id=entreprise_id)
+            return paiements.select_related(
+                "facture__abonnement__plan", "facture__entreprise"
+            ).first()
+
+        with contexte_schema(schema_public()):
+            paiement = chercher(reference_transaction=transaction_id) or chercher(
+                reference_commande=transaction_id
+            )
 
             if not paiement:
                 return Response(

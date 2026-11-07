@@ -6,6 +6,8 @@ Garantit la suppression propre et atomique d'une entreprise :
    - Paiements et factures (paiement_abonnement, facture)
    - Abonnements et rappels / relances (rappel_expiration_abonnement, relance_essai, abonnement)
    - Modules catalogue souscrits (catalogue_entreprise_module)
+   - Registre global des adresses e-mail (registre_email) — il protège l'entreprise
+     (`on_delete=PROTECT`) : tant qu'une adresse y pointe, elle ne se supprime pas
    - Demandes d'inscription associées (demande_inscription)
    - Domaines rattachés (domaine)
    - Entrée principale dans entreprise_cliente
@@ -18,7 +20,7 @@ import uuid
 from typing import Any
 
 from django.conf import settings
-from django.db import connection
+from django.db import connection, transaction
 from django_tenants.utils import schema_context
 
 from apps.accounts.models import Utilisateur
@@ -177,8 +179,11 @@ def supprimer_entreprise_proprement(identifiant: str) -> dict[str, Any]:
     ent_id_str = str(entreprise.id) if entreprise else None
     ent_email = entreprise.email_contact if entreprise else None
 
-    # 2. Exécution atomique
-    with connection.cursor() as cursor:
+    # 2. Exécution atomique — tout ou rien. Sans transaction, chaque instruction était validée
+    # seule : une erreur en cours de route (une référence oubliée, par exemple) laissait le
+    # schéma détruit et la facturation effacée, mais l'entreprise toujours en base, pointant
+    # vers un schéma qui n'existe plus. `DROP SCHEMA` est transactionnel sous PostgreSQL.
+    with transaction.atomic(), connection.cursor() as cursor:
         # A. DROP SCHEMA CASCADE
         if schema_nom:
             cursor.execute(f'DROP SCHEMA IF EXISTS "{schema_nom}" CASCADE;')
@@ -257,6 +262,13 @@ def supprimer_entreprise_proprement(identifiant: str) -> dict[str, Any]:
                 [ent_ids],
             )
             rapport["tables_nettoyees"]["demande_inscription_par_entreprise"] = cursor.rowcount
+
+            # registre_email : les adresses des collaborateurs, libérées avec l'entreprise
+            cursor.execute(
+                "DELETE FROM public.registre_email WHERE entreprise_id = ANY(%s);",
+                [ent_ids],
+            )
+            rapport["tables_nettoyees"]["registre_email"] = cursor.rowcount
 
             # telephone_entreprise
             cursor.execute(

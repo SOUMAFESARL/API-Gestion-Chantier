@@ -209,7 +209,7 @@ Sans données réelles, pas de fenêtre de maintenance à négocier : on prévie
 | — | Admin Django | **Supprimée** |
 | — | Vocabulaire « tenant », en-tête `X-Tenant` | **Supprimés** partout, frontend compris |
 | — | Nettoyage du frontend | **Dès que possible** (§11, étape 1) |
-| — | Branches en cours | `fix/nettoyage-registre-email` **fusionnée dans `develop`** le 07/11 (non poussée) ; lots 2 à 4 de `feature/perf-requetes` **reportés** dans `feature/schema-unique` |
+| — | Branches en cours | `fix/nettoyage-registre-email` **fusionnée dans `develop`** le 07/11 (non poussée) ; lots 2 à 4 de `feature/perf-requetes` **reportés** dans `feature/schema-unique` (fait le 07/11, voir fin de document) |
 
 ### 8.1 Vérifier le rôle de production (Q5)
 
@@ -286,7 +286,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8`, `801a502` |
 | 4 | Fait le 07/11/2026 — voir ci-dessous | `27b9ccd` |
 | 5 | Fait le 07/11/2026 — voir ci-dessous | `1132ff3` |
-| 6 | Fait le 07/11/2026 — voir ci-dessous ; reste le report de `feature/perf-requetes` (§11, étape 6) | `29157a2` |
+| 6 | Fait le 07/11/2026 — voir ci-dessous ; report de `feature/perf-requetes` fait le même jour (section en fin de document) | `29157a2` ; report : `c8b9015`, `660940c`, `19b31f7`, `3fda63c` |
 | 7 | Fait le 07/11/2026 — voir ci-dessous | `6f83185` |
 | 8 | Fait le 07/11/2026 — voir ci-dessous | `13dd34d` |
 
@@ -393,3 +393,30 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 - **Vérifié** : connexion du DG de `demo` — claims du jeton, profil de connexion, `/utilisateurs/moi/`, liste des projets ; 443 tests de la CI.
 
 **Reste** : la bascule (lot 9), backend et frontend ensemble — le frontend de `chore/retrait-sous-domaines` ne doit pas partir sur `develop` avant.
+
+### Étape 6 du §11 — le report de `feature/perf-requetes`
+
+Les lots 2 à 4 de la branche (non fusionnée) sont repris sur `feature/schema-unique`, un commit par lot. Le lot 1 (`343eba5`, `TENANT_LIMIT_SET_CALLS`) est sans objet et le lot 6 (`fbda69d`, résolution du client par le jeton) aussi : le middleware qu'ils touchaient n'existe plus. Le lot 5 (`.env.local` du frontend) n'est pas du ressort de cette branche.
+
+| Commit | Reprend | Ce qui a changé au report |
+|---|---|---|
+| `c8b9015` | `186c050`, droits | Identique : `_permissions_cochees` rend les permissions d'un rôle en une jointure au lieu d'une requête par ligne rôle-module ; une panne du calcul est journalisée |
+| `660940c` | `186c050`, modules actifs | **Refait.** L'ancien cache vivait sur l'instance `Entreprise` posée par le middleware ; elle n'existe plus. Le résultat se retient désormais **sur l'objet `request`** (middleware des modules fermés, puis droits) et le calcul filtre par `entreprise_id` sans relire la table des entreprises. Sans `request` — tâche, commande, administration de la plateforme qui ouvre et ferme les modules — il est toujours relu |
+| `19b31f7` | `6d5cd94`, liste | Identique : `precharger_arbres` et `libelles_des_roles` |
+| `3fda63c` | `d97a686`, tableau de bord et détail | Identique |
+
+**Mesure** (`mesurer_requetes`, entreprise `demo`, 3 comptes, 10 endpoints ; référence avant report : `tmp/perf/mesure_avant_report.json`, après : `tmp/perf/mesure_report_final.json`). Les empreintes de **toutes** les réponses sont identiques à la référence, statuts HTTP compris.
+
+| | Requêtes utiles | Allers-retours |
+|---|---|---|
+| Avant le report | 863 | 917 |
+| Droits (`c8b9015`) | 743 | 797 |
+| Modules actifs (`660940c`) | 647 | 701 |
+| Liste (`19b31f7`) | 506 | 560 |
+| Tableau de bord et détail (`3fda63c`) | **364** | **418** |
+
+Liste des projets vue par le DG (11 chantiers) : 115 → **17** requêtes, et 17 à 19 pour les trois comptes — le coût ne dépend plus du nombre de chantiers (le N+1 relevé au lot 7). Tableau de bord du DG : 88 → 20. Détail d'un projet : 37 → 18. Socle d'un appel authentifié pour un compte non-DG : 14 → 8.
+
+**Vérifié** : `check` et `makemigrations --check` propres ; `pytest apps/core/tests tests/etancheite` (la commande de la CI) rend **443 passés** sur deux passages, et un passage a rendu 1 échec — `test_controle_positif_b_lit_ses_propres_lignes[chantier/rapports/<pk>/]`, un 404 — qui ne s'est pas reproduit, ni seul ni aux deux passages suivants. Le commit d'avant le report a passé 443/443 sur son unique passage : l'échec n'est donc **ni expliqué ni écarté**. À surveiller en CI.
+
+**Reste de ce que la branche avait ouvert** (hors report) : la barrière JWT §5.2 et le lot 8 de la branche (structure par schéma) sont à reprendre à part, sans lien avec ce report.

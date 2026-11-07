@@ -266,7 +266,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | **5** | **Lot 5** — inscription, connexion, suppression, retrait de `X-Tenant` | Backend | Étape 4 | 3 j |
 | **6** | **Lot 6 et report de `feature/perf-requetes`** — base neuve, ensemencement, droits en une requête, préchargement des arbres | Backend | Étape 5 | 2 à 3 j |
 | **7** | **Lots 7 et 8** — suite d'étanchéité complète en CI ; retrait de django-tenants, de l'admin Django et du vocabulaire « tenant » | Backend | Étape 6 | 6 j |
-| **8** | **Fait le 07/11/2026** (voir §12, « Étape 8 ») — **Nettoyage du frontend, partie liée au contrat** : `schema` / `schema_name` deviennent `entreprise` ; libellés « sous-domaine » de l'administration | Frontend | Étape 7 (contrat stabilisé) | 0,5 j |
+| **8** | **Fait le 07/11/2026** (backend `80ba4c7`, frontend `6ca875c` ; voir §12, « Étape 8 ») — **Nettoyage du frontend, partie liée au contrat** : `schema` / `schema_name` deviennent `entreprise` ; libellés « sous-domaine » de l'administration | Frontend | Étape 7 (contrat stabilisé) | 0,5 j |
 | **9** | **Lot 9 — bascule** en production, backend et frontend ensemble | Les deux | Étapes 7 et 8 | 1 j |
 
 **Avec les autres chantiers :**

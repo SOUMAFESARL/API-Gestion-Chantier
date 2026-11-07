@@ -233,7 +233,7 @@ class TestAuthentification:
         return SimpleNamespace(pk=pk, entreprise_id=entreprise)
 
     def test_lot_1_sans_claim_ni_colonne_rien_ne_change(self):
-        verifier_et_activer(self.utilisateur(), {"schema": "demo"})
+        verifier_et_activer(self.utilisateur(), {"role_global": "DG"})
         assert entreprise_courante_id() is None
 
     def test_personnel_de_l_editeur_sans_entreprise(self):

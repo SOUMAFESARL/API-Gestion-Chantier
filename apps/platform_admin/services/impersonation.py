@@ -147,7 +147,6 @@ def demarrer_session_assistance(
     # Création du jeton JWT d'accès spécifique pour l'assistance (1 heure stricte)
     token = AccessToken.for_user(target_user)
     token.set_exp(lifetime=DUREE_SESSION_ASSISTANCE)
-    token["schema"] = entreprise.slug
     token[CLAIM_ENTREPRISE] = str(entreprise.pk)
     token["role_global"] = target_user.role_global
     token["is_impersonation"] = True
@@ -174,7 +173,7 @@ def demarrer_session_assistance(
             "cible_email": target_user.email,
             "cible_nom": f"{target_user.nom} {target_user.prenom}".strip(),
             "entreprise_nom": entreprise.nom_commercial or entreprise.raison_sociale,
-            "entreprise_schema": entreprise.slug,
+            "entreprise_slug": entreprise.slug,
             "motif": motif_nettoye,
             "mode": "LECTURE_SEULE",
             "expire_dans_secondes": duree_secondes,
@@ -245,7 +244,7 @@ def demarrer_session_assistance(
                 "id": str(entreprise.id),
                 "raison_sociale": entreprise.raison_sociale,
                 "nom_commercial": entreprise.nom_commercial or entreprise.raison_sociale,
-                "schema_name": entreprise.slug,
+                "slug": entreprise.slug,
             },
             "utilisateur": {
                 "id": str(target_user.id),

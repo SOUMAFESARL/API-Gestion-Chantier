@@ -65,7 +65,6 @@ class ProfilAdminSerializer(serializers.Serializer):
     is_superuser = serializers.BooleanField(read_only=True)
     is_staff = serializers.BooleanField(read_only=True)
     langue = serializers.CharField(read_only=True)
-    schema = serializers.CharField(read_only=True)
 
 
 class ReponseConnexionAdminSerializer(serializers.Serializer):

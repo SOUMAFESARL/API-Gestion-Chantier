@@ -18,7 +18,7 @@ __all__ = [
 class ProfilEntrepriseSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
     raison_sociale = serializers.CharField(read_only=True)
-    schema_name = serializers.CharField(read_only=True)
+    slug = serializers.CharField(read_only=True)
     logo_url = serializers.CharField(read_only=True, allow_null=True)
 
 
@@ -48,7 +48,6 @@ class ProfilDetailResponseSerializer(serializers.Serializer):
     double_authentification_active = serializers.BooleanField(read_only=True)
     doit_changer_mot_de_passe = serializers.BooleanField(read_only=True)
     langue = serializers.CharField(read_only=True)
-    schema = serializers.CharField(read_only=True)
     entreprise = ProfilEntrepriseSerializer(read_only=True, allow_null=True)
     permissions = serializers.ListField(
         child=serializers.CharField(), read_only=True,

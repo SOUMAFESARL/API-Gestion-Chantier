@@ -113,7 +113,6 @@ def authentifier_super_admin(
         "is_superuser": super_admin.is_superuser,
         "is_staff": super_admin.is_staff,
         "langue": super_admin.langue,
-        "schema": "public",
     }
 
     # Journalisation de l'accès réussi dans JournalPlateforme

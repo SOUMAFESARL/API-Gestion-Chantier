@@ -24,7 +24,7 @@ from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
 from apps.core.enums import ActionAudit
 from apps.core.exceptions import ErreurMetier
-from apps.entreprises.selectors import entreprise_courante
+from apps.entreprises.selectors import entreprise_courante, url_logo
 from apps.core.permissions import obtenir_portee_role
 
 __all__ = [
@@ -91,24 +91,12 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
     entreprise_info = None
     entreprise = entreprise_courante()
     if entreprise is not None:
-        if entreprise:
-            logo_url = None
-            if getattr(entreprise, "logo", None) and hasattr(entreprise.logo, "url"):
-                try:
-                    logo_url = (
-                        request.build_absolute_uri(entreprise.logo.url)
-                        if request
-                        else entreprise.logo.url
-                    )
-                except Exception:
-                    logo_url = entreprise.logo.url
-
-            entreprise_info = {
-                "id": str(entreprise.pk),
-                "raison_sociale": getattr(entreprise, "raison_sociale", ""),
-                "schema_name": entreprise.slug,
-                "logo_url": logo_url,
-            }
+        entreprise_info = {
+            "id": str(entreprise.pk),
+            "raison_sociale": entreprise.raison_sociale,
+            "slug": entreprise.slug,
+            "logo_url": url_logo(entreprise, request),
+        }
 
     # 3. Permissions effectives
     from apps.core.droits import permissions_effectives
@@ -163,9 +151,6 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "double_authentification_active": utilisateur.double_authentification,
         "doit_changer_mot_de_passe": utilisateur.doit_changer_mot_de_passe,
         "langue": utilisateur.langue,
-        # Contrat d'avant la D9 : le slug, ou `public` pour le personnel de l'éditeur. Devient
-        # `entreprise` avec le frontend (plan de sortie du multi-schéma, §11 étape 8).
-        "schema": entreprise.slug if entreprise is not None else "public",
         "entreprise": entreprise_info,
         "permissions": perms_effectives,
         # ENTREPRISE : tous les chantiers ; PROJET : ceux où la personne est affectée.

@@ -76,7 +76,6 @@ class ProfilCompletAdminSerializer(serializers.ModelSerializer):
     role_global = serializers.CharField(default="AD", read_only=True)
     role_libelle = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
-    schema = serializers.CharField(default="public", read_only=True)
     langue = serializers.CharField(default="fr", read_only=True)
     photo_url = serializers.SerializerMethodField()
 
@@ -95,7 +94,6 @@ class ProfilCompletAdminSerializer(serializers.ModelSerializer):
             "is_superuser",
             "is_staff",
             "langue",
-            "schema",
         ]
 
     def get_role(self, obj: Utilisateur) -> str:

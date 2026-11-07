@@ -141,7 +141,7 @@ class JournalPlateformeSerializer(serializers.ModelSerializer):
         detail = obj.detail or {}
         return (
             detail.get("entreprise_nom")
-            or detail.get("entreprise_schema")
+            or detail.get("entreprise_slug")
             or detail.get("raison_sociale")
             or str(obj.entreprise_id or "")
         )

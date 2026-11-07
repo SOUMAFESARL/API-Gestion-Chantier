@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from apps.core.contexte import entreprise_courante_id
 
-__all__ = ["entreprise_courante", "slug_courant"]
+__all__ = ["entreprise_courante", "slug_courant", "url_logo"]
 
 
 def entreprise_courante():
@@ -37,3 +37,18 @@ def slug_courant() -> str | None:
     """
     identifiant = entreprise_courante_id()
     return _slug_de(identifiant) if identifiant else None
+
+
+def url_logo(entreprise, request=None) -> str | None:
+    """L'URL du logo de l'entreprise, absolue quand la requête est connue ; `None` sans logo.
+
+    `Entreprise.logo` est une **clé de stockage**, pas un fichier : l'URL se calcule à la lecture
+    (une URL S3 signée périme), comme dans `EntrepriseSerializer`.
+    """
+    from django.core.files.storage import default_storage
+
+    cle = getattr(entreprise, "logo", "") or ""
+    if not cle:
+        return None
+    url = default_storage.url(cle)
+    return request.build_absolute_uri(url) if request is not None else url

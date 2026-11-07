@@ -21,7 +21,7 @@ from apps.core.contexte import contexte_entreprise, portee_plateforme
 
 
 def trouver_entreprise(identifiant: str):
-    """Une entreprise par son identifiant, ou par son slug (encore `schema_name` jusqu'au lot 8)."""
+    """Une entreprise par son identifiant, ou par son slug."""
     from apps.entreprises.models import Entreprise
 
     try:

@@ -83,7 +83,7 @@ class LectureSeuleAssistanceMiddleware:
         ip = extraire_ip_client(request)
         super_admin_id = payload.get("impersonateur_id")
         super_admin_email = payload.get("impersonateur_email")
-        schema = payload.get("schema")
+        entreprise_cible = payload.get("entreprise")
 
         logger.warning(
             "Tentative d'écriture bloquée en mode assistance : super_admin=%s methode=%s url=%s ip=%s",
@@ -102,7 +102,7 @@ class LectureSeuleAssistanceMiddleware:
                     "super_admin_email": super_admin_email,
                     "methode": request.method,
                     "chemin": request.path,
-                    "schema_cible": schema,
+                    "entreprise_cible": entreprise_cible,
                 },
                 adresse_ip=ip,
                 appareil=request.headers.get("User-Agent", "")[:255],

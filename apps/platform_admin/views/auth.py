@@ -78,7 +78,6 @@ class ConnexionAdminView(APIView):
                         "is_superuser": True,
                         "is_staff": True,
                         "langue": "fr",
-                        "schema": "public",
                     },
                 },
                 response_only=True,

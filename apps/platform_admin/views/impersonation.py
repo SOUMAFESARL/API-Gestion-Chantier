@@ -120,11 +120,8 @@ class DeconnexionAssistanceView(APIView):
             payload = request.impersonation_payload
             super_admin_id = payload.get("impersonateur_id")
             super_admin_email = payload.get("impersonateur_email", "")
-            if not entreprise_id and payload.get("schema"):
-                from apps.entreprises.models import Entreprise
-                ent = Entreprise.objects.filter(slug=payload.get("schema")).first()
-                if ent:
-                    entreprise_id = ent.id
+            if not entreprise_id:
+                entreprise_id = payload.get("entreprise")
 
         clore_session_assistance(
             super_admin_id=super_admin_id,

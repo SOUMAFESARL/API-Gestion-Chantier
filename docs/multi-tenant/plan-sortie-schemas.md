@@ -266,7 +266,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | **5** | **Lot 5** — inscription, connexion, suppression, retrait de `X-Tenant` | Backend | Étape 4 | 3 j |
 | **6** | **Lot 6 et report de `feature/perf-requetes`** — base neuve, ensemencement, droits en une requête, préchargement des arbres | Backend | Étape 5 | 2 à 3 j |
 | **7** | **Lots 7 et 8** — suite d'étanchéité complète en CI ; retrait de django-tenants, de l'admin Django et du vocabulaire « tenant » | Backend | Étape 6 | 6 j |
-| **8** | **Nettoyage du frontend, partie liée au contrat** : `schema` / `schema_name` deviennent `entreprise` ; libellés « sous-domaine » de l'administration | Frontend | Étape 7 (contrat stabilisé) | 0,5 j |
+| **8** | **Fait le 07/11/2026** (voir §12, « Étape 8 ») — **Nettoyage du frontend, partie liée au contrat** : `schema` / `schema_name` deviennent `entreprise` ; libellés « sous-domaine » de l'administration | Frontend | Étape 7 (contrat stabilisé) | 0,5 j |
 | **9** | **Lot 9 — bascule** en production, backend et frontend ensemble | Les deux | Étapes 7 et 8 | 1 j |
 
 **Avec les autres chantiers :**
@@ -384,3 +384,12 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 **Ce qui ne change pas** : le contrat de l'API. `schema` et `schema_name` restent dans le jeton, le profil, la connexion et l'emprunt d'identité (valeur : le slug, ou `public` pour le personnel de l'éditeur) jusqu'à l'étape 8 du §11, où le frontend passe à `entreprise`.
 
 **Reste hors du lot 8** : l'étape 8 du frontend (contrat `schema` → `entreprise`, type `AccuseActivation.statut`) ; le report de `feature/perf-requetes` ; `docs/deploiement-cpanel.md` et la crontab de cPanel, au lot 9 ; les imports inutilisés antérieurs relevés par ruff dans les fichiers touchés, laissés en l'état.
+
+### Étape 8 du §11 — le contrat, des deux côtés
+
+- **Contrat** (D9 §6) : le jeton ne porte plus le claim `schema` — le claim `entreprise` suffit, et il est absent pour le personnel de l'éditeur (connexion comme emprunt d'identité). Les réponses perdent le `schema` de premier niveau (profil de connexion, `/utilisateurs/moi/`, connexion et comptes du back-office) ; dans l'objet `entreprise` (connexion, profil, projet), `schema_name` devient **`slug`**. Le journal de la plateforme écrit `entreprise_slug` et `entreprise_cible` au lieu de `entreprise_schema` et `schema_cible`.
+- **Frontend** (`chore/retrait-sous-domaines`) : il ne lisait aucun de ces champs ; deux types les déclaraient (`EntrepriseProfil.schema_name` devient `slug`, `ChargeUtilisateurSuperAdmin.schema` disparaît). `AccuseActivation.statut` vaut `PRET`, et la simulation d'activation rejoue le nouveau contrat (l'espace est prêt dès l'activation). Aucun libellé « sous-domaine » ne restait (étape 1). `lint` et `typecheck` passent.
+- **Ce qu'elle a fait apparaître : l'URL du logo.** `Entreprise.logo` est une clé de stockage, mais le profil et le serializer de projet lisaient `logo.url` : le profil rendait toujours `logo_url: null`, et le projet aurait répondu **500** pour toute entreprise ayant un logo — ce que la réparation de `request.tenant` (lot 8) venait de rendre atteignable. Les deux passent par `url_logo()` (`apps/entreprises/selectors`), qui calcule l'URL à la lecture comme `EntrepriseSerializer`.
+- **Vérifié** : connexion du DG de `demo` — claims du jeton, profil de connexion, `/utilisateurs/moi/`, liste des projets ; 443 tests de la CI.
+
+**Reste** : la bascule (lot 9), backend et frontend ensemble — le frontend de `chore/retrait-sous-domaines` ne doit pas partir sur `develop` avant.

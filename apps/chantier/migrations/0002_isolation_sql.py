@@ -1,7 +1,7 @@
-"""Clés composites d'isolation du journal de chantier (D9, lot 2, règle R-3).
+"""Clés composites d'isolation du journal de chantier (D9, règle R-3).
 
 `(projet_id, entreprise_id) → projet(id, entreprise_id)` : un rapport, un blocage, une relance ou
-une synthèse ne peut pas rattacher le projet d'une autre entreprise. Voir `projets` 0003.
+une synthèse ne peut pas rattacher le projet d'une autre entreprise. Voir `projets` 0002.
 """
 
 from django.db import migrations
@@ -23,8 +23,8 @@ def cle_composite(table: str) -> migrations.RunSQL:
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("chantier", "0002_initial"),
-        ("projets", "0002_projet_id_entreprise"),
+        ("chantier", "0001_initial"),
+        ("projets", "0001_initial"),
     ]
 
     operations = [cle_composite(table) for table in ENFANTS]

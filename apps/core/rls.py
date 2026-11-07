@@ -173,7 +173,7 @@ def tables_attendues() -> set[str]:
     return tables | set(TABLES_A_ENTREPRISE_NULLABLE)
 
 
-def diagnostic_isolation(connexion) -> list[str]:
+def diagnostic_isolation(connexion, *, tables: bool = True) -> list[str]:
     """Les défauts de la deuxième couche sur `connexion` ; une liste vide si tout est en place.
 
     1. le rôle de connexion n'est ni superutilisateur ni `BYPASSRLS` — sinon la RLS, même
@@ -211,6 +211,9 @@ def diagnostic_isolation(connexion) -> list[str]:
             defauts.append(f"Le rôle « {role} » n'a pas BYPASSRLS.")
         elif not ligne[1]:
             defauts.append(f"Le rôle « {role} » n'est pas accordé à « {utilisateur} ».")
+
+        if not tables:
+            return defauts
 
         curseur.execute(
             """

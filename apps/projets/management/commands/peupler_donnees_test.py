@@ -373,22 +373,29 @@ FENETRE_JOURNAUX = 15  # jours ouvrés couverts par des journaux, jusqu'à aujou
 
 
 # Rôles personnalisés dont le jeu a besoin. Ils existaient à la main dans l'ancienne base `demo` ;
-# une base neuve ne les a pas, et le jeu doit se monter seul. Permissions relevées le 07/11/2026.
-# Les trois avaient les mêmes permissions.
-_PERMISSIONS_ROLES_PERSONNALISES = {
+# une base neuve ne les a pas, et le jeu doit se monter seul. Droits **effectifs** relevés le
+# 07/11/2026 (`permissions_du_role`, lot 6) : `IT` rédige et valide ; `MOE` et `MOA` n'en avaient
+# aucun. Leur donner ceux d'`IT` (lot 3) les faisait rédiger un journal par jour — deux fois plus
+# de journaux que l'ancien modèle. Ils reçoivent la lecture seule : ils suivent, ne rédigent pas.
+_PERMISSIONS_IT = {
     "chantier": ["chantier.lire", "chantier.rediger", "chantier.valider"],
     "pilotage": ["pilotage.lire", "pilotage.voir_montants"],
     "projets": [
         "projets.affecter_membres", "projets.changer_statut", "projets.creer", "projets.ecrire",
         "projets.gerer_equipes", "projets.lire", "projets.resilier_archiver",
-        "projets.voir_montants", "projets.voir_tous",
+        "projets.voir_montants",
     ],
     "tiers": ["tiers.ecrire", "tiers.lire"],
 }
+_PERMISSIONS_LECTURE = {
+    "chantier": ["chantier.lire"],
+    "pilotage": ["pilotage.lire"],
+    "projets": ["projets.lire"],
+}
 ROLES_PERSONNALISES = {
-    "IT": ("Ingénieur / Technicien", "Contrôle qualité, suivi des non-conformités et vérification des documents techniques"),
-    "MOE": ("Maître d'Œuvre", "Supervision technique, coordination architecturale et validation des avancements"),
-    "MOA": ("Maître d'Ouvrage (Client)", "Suivi de l'avancement global du chantier et consultation des rapports d'activité"),
+    "IT": ("Ingénieur / Technicien", "Contrôle qualité, suivi des non-conformités et vérification des documents techniques", _PERMISSIONS_IT),
+    "MOE": ("Maître d'Œuvre", "Supervision technique, coordination architecturale et validation des avancements", _PERMISSIONS_LECTURE),
+    "MOA": ("Maître d'Ouvrage (Client)", "Suivi de l'avancement global du chantier et consultation des rapports d'activité", _PERMISSIONS_LECTURE),
 }
 
 
@@ -402,6 +409,11 @@ def _quantite_montant(unite, qte, pu, echelle) -> tuple[int, int]:
         return 1, round(pu * echelle)
     quantite = max(1, round(qte * echelle))
     return quantite, quantite * pu
+
+
+def adresse_entreprise(email: str, slug: str) -> str:
+    """`cp.kone@demo.ci` dans l'entreprise `beta` : `cp.kone@beta.ci`."""
+    return f"{email.split('@', 1)[0]}@{slug}.ci"
 
 
 def _q(valeur) -> Decimal:
@@ -439,6 +451,7 @@ class Command(BaseCommand):
                 f"Aucune entreprise « {slug} ». Lancez d'abord `creer_tenant_demo`."
             )
 
+        self.slug = slug
         self.alea = random.Random(GRAINE)
         self.aujourdhui = timezone.localdate()
         with contexte_entreprise(entreprise):
@@ -456,7 +469,7 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Jeu de test prêt."))
         self.stdout.write(
-            f"  Connexion : http://localhost:3000 — comptes *@demo.ci, mot de passe "
+            f"  Connexion : http://localhost:3000 — comptes *@{slug}.ci, mot de passe "
             f"« {options['motdepasse']} » (cp.kone, ct.yao, cc.coulibaly…)"
         )
 
@@ -518,14 +531,14 @@ class Command(BaseCommand):
         from apps.accounts.models import Role
         from apps.accounts.services.roles import creer_role
 
-        for code, (libelle, description) in ROLES_PERSONNALISES.items():
+        for code, (libelle, description, permissions) in ROLES_PERSONNALISES.items():
             if Role.objects.filter(code=code, supprime_le__isnull=True).exists():
                 continue
             creer_role(
                 code=code,
                 libelle=libelle,
                 description=description,
-                permissions_modules=_PERMISSIONS_ROLES_PERSONNALISES,
+                permissions_modules=permissions,
                 portee="ENTREPRISE",
             )
             self.stdout.write(f"  Rôle personnalisé créé : {code}")
@@ -535,7 +548,11 @@ class Command(BaseCommand):
         from apps.core.enums import StatutUtilisateur
 
         resultat = {}
-        for email, prenom, nom, code, telephone in COLLABORATEURS:
+        for cle, prenom, nom, code, telephone in COLLABORATEURS:
+            # L'adresse est unique sur toute la plateforme (D9) : chaque entreprise peuplée a son
+            # domaine, `@demo.ci` pour `demo`, `@beta.ci` pour `beta`. Les gabarits gardent
+            # `@demo.ci` comme clé.
+            email = adresse_entreprise(cle, self.slug)
             utilisateur = Utilisateur.objects.filter(email=email).first()
             if utilisateur is None:
                 role = Role.objects.filter(code=code, supprime_le__isnull=True).first()
@@ -552,7 +569,7 @@ class Command(BaseCommand):
                     statut=StatutUtilisateur.ACTIF,
                 )
                 self.stdout.write(f"  Collaborateur créé : {email} ({code})")
-            resultat[email] = utilisateur
+            resultat[cle] = utilisateur
         self.dg = Utilisateur.objects.filter(is_owner=True).first() or resultat["cp.kone@demo.ci"]
         return resultat
 
@@ -591,10 +608,13 @@ class Command(BaseCommand):
         crees = 0
         for partenaire_nom, effectif in effectifs.items():
             partenaire = self.tiers[partenaire_nom] if partenaire_nom else None
+            # Ordre de création : relancé sur un registre existant, le jeu recompose les mêmes
+            # équipes qu'à la première passe. Sans ordre, PostgreSQL rend les lignes dans
+            # l'ordre qu'il veut, et les journaux changent (lot 6, TEST-2026-006).
             existantes = list(
                 PersonneMainOeuvre.objects.filter(
                     entreprise_partenaire=partenaire, utilisateur__isnull=True, est_actif=True
-                )
+                ).order_by("cree_le", "id")
             )
             while len(existantes) < effectif:
                 prenom, nom = paires.pop()

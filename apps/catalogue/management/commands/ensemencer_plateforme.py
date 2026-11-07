@@ -2,9 +2,10 @@
 
     python manage.py ensemencer_plateforme
 
-Décision D9 (schéma unique) : la base de production repart de zéro. Les migrations du catalogue
-le peuplaient en **recopiant** les tables locales des schémas d'entreprise ; sur une base neuve,
-il n'y a rien à recopier, et le catalogue resterait partiel (1 module, 13 permissions).
+Décision D9 (schéma unique) : la base de production repart de zéro, et les migrations aussi
+(lot 6) — elles ne créent plus que les tables. Le catalogue, que les anciennes migrations
+peuplaient en recopiant les tables des schémas d'entreprise, vient d'ici. `monter_base` appelle
+cette commande sur une base sans catalogue.
 
 Cette commande charge `apps/catalogue/fixtures/plateforme_initiale.json`, extrait de la base au
 07/11/2026 : modules, permissions, modèles de rôles, référentiels, listes de valeurs, modèles de

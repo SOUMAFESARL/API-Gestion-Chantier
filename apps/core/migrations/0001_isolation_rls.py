@@ -103,12 +103,12 @@ END $$;
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("accounts", "0003_jeton_reinitialisation_personnel"),
+        ("accounts", "0002_initial"),
         ("audit", "0001_initial"),
         ("tiers", "0001_initial"),
         ("onboarding", "0001_initial"),
-        ("projets", "0003_isolation_sql"),
-        ("chantier", "0003_isolation_sql"),
+        ("projets", "0002_isolation_sql"),
+        ("chantier", "0002_isolation_sql"),
     ]
 
     operations = [

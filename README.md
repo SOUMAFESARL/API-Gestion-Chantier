@@ -89,24 +89,23 @@ Créez simplement une base de données vide nommée `ccd_digital` avec votre uti
 
 ## 🔄 5. Migrations et Données de Démo
 
-Exécutez les commandes suivantes dans l'ordre :
+Une fois par serveur PostgreSQL, en superutilisateur, créez le rôle de la portée plateforme :
+```bash
+psql -U postgres -f scripts/sql/roles_rls.sql
+```
 
-1. **Appliquer les migrations de la base de données :**
-   ```bash
-   python manage.py migrate_schemas --shared
-   python manage.py migrate_schemas
-   ```
+Puis, sur une base vide, une seule commande :
+```bash
+python manage.py monter_base --demo demo beta
+```
 
-2. **Créer l'entreprise et les utilisateurs de démo :**
-   ```bash
-   python manage.py creer_tenant_demo
-   ```
+Elle applique les migrations, vérifie l'isolation (RLS), ensemence le catalogue de la
+plateforme et les jours fériés, puis crée et peuple deux entreprises de démonstration :
+* comptes `*@demo.ci` et `*@beta.ci` (`admin@`, `cp.kone@`, `ct.yao@`, `cc.coulibaly@`…) ;
+* mot de passe commun : `Demo1234!`.
 
-Cette commande prépare automatiquement :
-* Le schéma client de test (`demo`)
-* Le compte administrateur :
-  * **Email :** `admin@demo.ci`
-  * **Mot de passe :** `Demo1234!`
+`--super-admin <email>` crée en plus le compte du personnel CCD Digital, avec le mot de passe
+lu dans la variable d'environnement `CCD_SUPER_ADMIN_MOTDEPASSE`.
 
 ---
 

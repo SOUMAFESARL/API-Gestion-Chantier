@@ -286,6 +286,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8`, `801a502` |
 | 4 | Fait le 07/11/2026 — voir ci-dessous | `27b9ccd` |
 | 5 | Fait le 07/11/2026 — voir ci-dessous | `1132ff3` |
+| 6 | Fait le 07/11/2026 — voir ci-dessous ; reste le report de `feature/perf-requetes` (§11, étape 6) | — |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 
@@ -328,3 +329,18 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 - **Restes du lot 3 corrigés** : quatre lectures de `connection.tenant`, que plus rien ne pose — le profil (`/utilisateurs/moi/`) sans entreprise, l'écran d'abonnement en 400 pour tous, CinetPay (sauvé par un repli), le pays de l'import de main-d'œuvre (toujours CI).
 
 **Reste hors du lot 5** : `peupler_donnees_test` n'écrit que des adresses `@demo.ci` et ne peut donc peupler qu'une entreprise par base (lot 6) ; `Domaine`, `schema_name` et le claim `schema` (lots 8 et étape 8 du frontend) ; le type `AccuseActivation.statut` du frontend, qui annonce `PROVISIONNEMENT` (étape 8) ; les copies locales `module` / `permission`, encore copiées à l'inscription (Q3).
+
+### Lot 6 — ce qui a été fait, et ce qu'il a fait apparaître
+
+- **Migrations remises à zéro dans toutes les applications** : `0001_initial` régénérée depuis les modèles (`accounts` coupée en 0001/0002, comme au lot 2). Les 193 anciennes migrations et leurs migrations de données disparaissent. Restent écrites à la main : `projets.0002` et `chantier.0002` (16 clés composites, immuabilité de `historique_date` dans sa version « purge » du lot 5), `core.0001` (RLS) et **`core.0002_planifier_taches`**, qui réunit les quatre tâches planifiées éparpillées dans `billing` et `tenants` (F3 de nuit, relance des essais, rappels d'abonnement, paiements CinetPay).
+- **`manage.py monter_base`** : une base vide se monte en une commande — `migrate`, `verifier_isolation`, `ensemencer_plateforme` (sauté si le catalogue est là), jours fériés de l'année et de la suivante ; `--super-admin <email>` crée le compte du personnel (mot de passe lu dans `CCD_SUPER_ADMIN_MOTDEPASSE`, jamais sur la ligne de commande) ; `--demo demo beta` crée et peuple des entreprises de démonstration (refusé hors `DEBUG`). Prérequis, une fois par serveur : `scripts/sql/roles_rls.sql`.
+- **Critère tenu** : `migrate` d'une passe en **22 s** ; `check --database default` propre ; 46 tables sous RLS forcée ; 20 jours fériés, 4 tâches planifiées, 1 compte du personnel. Avec `demo` et `beta` peuplées : 6 min.
+- **Ce qu'il a fait apparaître : `core.E101` bloquait `migrate`.** Le contrôle du lot 4 tourne avant la migration ; sur une base neuve, il signalait l'absence de RLS sur des tables pas encore créées — et il aurait bloqué tout déploiement ajoutant une table d'entreprise. Avec des migrations en attente, il ne vérifie plus que les rôles ; les tables le sont par `verifier_isolation`, après `migrate`.
+- **Un jeu par entreprise** : `creer_tenant_demo --entreprise <slug>` et `peupler_donnees_test` donnent aux comptes le domaine de l'entreprise (`@demo.ci`, `@beta.ci`) ; l'adresse étant unique sur la plateforme, deux entreprises peuplées cohabitent dans la base — ce que la suite d'étanchéité (lot 7) attend.
+- **Comparaison avec l'ancien modèle** (`scripts/sql/chiffres_cles.sql`, même requête des deux côtés : statut, avancement réel et théorique, santé, badge, contenu de chaque chantier, journaux et blocages par statut, droits par compte) : **identique**, sauf TEST-2026-006 (40,31 % contre 40,35 %). Trois écarts trouvés en route, aucun dû au schéma :
+  - les rôles `MOE` et `MOA`, recréés au lot 3 avec les droits d'`IT`, rédigeaient un journal par jour (deux fois plus de journaux) ; dans l'ancienne base, leurs droits **effectifs** étaient vides. Ils reçoivent la lecture seule ;
+  - l'ancienne base n'avait **aucun jour férié chargé** : l'avancement théorique de deux chantiers en différait ;
+  - TEST-2026-006 : l'ancienne base **réutilisait** son registre de main-d'œuvre, lu sans ordre ; les équipes n'ont pas les mêmes personnes. Le registre se lit désormais dans l'ordre de création (non revérifié contre l'ancien modèle).
+- Les droits effectifs (`permissions_du_role`) de CP, CC, VI et IT sont identiques ; les `administration.*` et les verbes génériques (`ECRITURE`, `LECTURE`…) encore liés dans l'ancienne base n'y comptent pas.
+
+**Reste hors du lot 6** : le report de `feature/perf-requetes` (droits en une requête, préchargement des arbres) ; les tarifs des plans — le jeu d'ensemencement porte 19 000, 49 000 et 119 000 FCFA, relevés en base, quand le §5 (A7) les veut à `NULL` ; le déploiement cPanel et `scripts/deploy-cpanel.sh` (`migrate_schemas`, `gerer_entreprises`), au lot 9.

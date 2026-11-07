@@ -1,10 +1,11 @@
-"""Crée l'entreprise de démonstration et son premier administrateur.
+"""Crée une entreprise de démonstration et son premier administrateur.
 
-    python manage.py creer_tenant_demo
+    python manage.py creer_tenant_demo                       # entreprise `demo`, admin@demo.ci
+    python manage.py creer_tenant_demo --entreprise beta     # entreprise `beta`, admin@beta.ci
 
-Idempotent : relancer la commande ne casse rien.
-Accessible ensuite sur http://demo.localhost:8000/ — les navigateurs
-résolvent `*.localhost` vers 127.0.0.1 sans toucher au fichier hosts.
+Idempotent : relancer la commande ne casse rien. Les adresses prennent le domaine de
+l'entreprise (`@<slug>.ci`) : l'adresse est unique sur toute la plateforme (D9), et la suite
+d'étanchéité a besoin de deux entreprises peuplées dans la même base.
 """
 
 from django.core.management.base import BaseCommand
@@ -13,8 +14,7 @@ from apps.core.passerelle_schema import contexte_schema
 from apps.core.enums import RoleGlobal, StatutEntreprise, StatutUtilisateur
 from apps.tenants.models import Domaine, Entreprise
 
-CODE_SCHEMA = "demo"
-DOMAINE = "demo.localhost"
+SLUG_PAR_DEFAUT = "demo"
 
 # Compte d'accès à l'admin Django, créé seulement avec `--acces-django`.
 EMAIL_TECHNIQUE = "dev@demo.ci"
@@ -22,10 +22,11 @@ MOT_DE_PASSE_TECHNIQUE = "Dev1234!"
 
 
 class Command(BaseCommand):
-    help = "Crée l'entreprise de démonstration (schéma `demo`) et son administrateur."
+    help = "Crée une entreprise de démonstration (`demo` par défaut) et son administrateur."
 
     def add_arguments(self, parser):
-        parser.add_argument("--email", default="admin@demo.ci")
+        parser.add_argument("--entreprise", default=SLUG_PAR_DEFAUT, help="Slug de l'entreprise.")
+        parser.add_argument("--email", default=None, help="Par défaut : admin@<slug>.ci.")
         parser.add_argument("--motdepasse", default="Demo1234!")
         parser.add_argument(
             "--acces-django",
@@ -50,13 +51,20 @@ class Command(BaseCommand):
     # bloc, et la 0033 d'`accounts` butait sur les déclencheurs différés laissés
     # par les rôles de la 0028 (31/10/2026). `provisionner` fait de même.
     def handle(self, *args, **options):
-        entreprise = Entreprise.objects.filter(schema_name=CODE_SCHEMA).first()
+        slug = options["entreprise"]
+        self.slug = slug
+        domaine_web = f"{slug}.localhost"
+        options["email"] = options["email"] or f"admin@{slug}.ci"
+        entreprise = Entreprise.objects.filter(schema_name=slug).first()
         cree = entreprise is None
         if cree:
             entreprise = Entreprise.objects.create(
-                schema_name=CODE_SCHEMA,
-                raison_sociale="Entreprise de démonstration",
-                nom_commercial="Démo BTP",
+                schema_name=slug,
+                raison_sociale="Entreprise de démonstration"
+                + ("" if slug == SLUG_PAR_DEFAUT else f" {slug.capitalize()}"),
+                nom_commercial="Démo BTP"
+                if slug == SLUG_PAR_DEFAUT
+                else f"{slug.capitalize()} BTP",
                 pays="CI",
                 ville="Abidjan",
                 email_contact=options["email"],
@@ -67,7 +75,7 @@ class Command(BaseCommand):
         )
 
         domaine, cree_domaine = Domaine.objects.get_or_create(
-            domain=DOMAINE, defaults={"tenant": entreprise, "is_primary": True}
+            domain=domaine_web, defaults={"tenant": entreprise, "is_primary": True}
         )
         self.stdout.write(
             self.style.SUCCESS(
@@ -76,7 +84,7 @@ class Command(BaseCommand):
         )
 
         # L'utilisateur vit dans le schéma du tenant, pas dans `public`.
-        with contexte_schema(CODE_SCHEMA):
+        with contexte_schema(slug):
             from apps.accounts.models import Utilisateur
 
             utilisateur = Utilisateur.objects.filter(email=options["email"]).first()
@@ -122,9 +130,9 @@ class Command(BaseCommand):
             self._creer_compte_technique()
 
         self.stdout.write("")
-        self.stdout.write(self.style.WARNING(f"  Ouvrir  http://{DOMAINE}:8000/api/health/"))
+        self.stdout.write(self.style.WARNING(f"  Ouvrir  http://{domaine_web}:8000/api/health/"))
         if options["acces_django"]:
-            self.stdout.write(self.style.WARNING(f"  Admin   http://{DOMAINE}:8000/admin/"))
+            self.stdout.write(self.style.WARNING(f"  Admin   http://{domaine_web}:8000/admin/"))
 
     def _retirer_privileges_techniques(self, utilisateur) -> None:
         """Répare un administrateur créé avant la correction de **R-64**.
@@ -254,10 +262,10 @@ class Command(BaseCommand):
 
         initialiser_roles_par_defaut()
         chef_projet = self._collaborateur_demo(
-            "cp@demo.ci", "Kouamé", "Djatchi", RoleGlobal.CHEF_PROJET, mot_de_passe
+            f"cp@{self.slug}.ci", "Kouamé", "Djatchi", RoleGlobal.CHEF_PROJET, mot_de_passe
         )
         chef_chantier = self._collaborateur_demo(
-            "cc@demo.ci", "Sidibé", "Gbané", RoleGlobal.CHEF_CHANTIER, mot_de_passe
+            f"cc@{self.slug}.ci", "Sidibé", "Gbané", RoleGlobal.CHEF_CHANTIER, mot_de_passe
         )
 
         # 1. Tiers

@@ -1,6 +1,6 @@
 """Modèles principaux pour l'application projets — MLD §6.1 et §6.4.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 """
 
 from django.db import models

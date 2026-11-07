@@ -9,7 +9,6 @@ et ses privilèges superuser sont activés.
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutUtilisateur
@@ -36,35 +35,34 @@ class Command(BaseCommand):
         except ValidationError as erreur:
             raise CommandError(" ".join(erreur.messages)) from erreur
 
-        with contexte_schema(schema_public()):
-            existant = Utilisateur.objects.filter(email__iexact=email).first()
-            if existant is not None:
-                existant.is_superuser = True
-                existant.is_staff = True
-                existant.is_active = True
-                existant.statut = StatutUtilisateur.ACTIF
-                existant.role_global = RoleGlobal.ADMIN
-                if options.get("nom"):
-                    existant.nom = options["nom"]
-                if options.get("prenom"):
-                    existant.prenom = options["prenom"]
-                existant.set_password(motdepasse)
-                existant.save()
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        f"Compte Super Admin existant mis à niveau avec succès : {existant.email} (is_superuser=True)"
-                    )
+        existant = Utilisateur.objects.filter(email__iexact=email).first()
+        if existant is not None:
+            existant.is_superuser = True
+            existant.is_staff = True
+            existant.is_active = True
+            existant.statut = StatutUtilisateur.ACTIF
+            existant.role_global = RoleGlobal.ADMIN
+            if options.get("nom"):
+                existant.nom = options["nom"]
+            if options.get("prenom"):
+                existant.prenom = options["prenom"]
+            existant.set_password(motdepasse)
+            existant.save()
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Compte Super Admin existant mis à niveau avec succès : {existant.email} (is_superuser=True)"
                 )
-                return
-
-            utilisateur = Utilisateur.objects.create_superuser(
-                email=email,
-                password=motdepasse,
-                nom=options["nom"],
-                prenom=options["prenom"],
-                role_global=RoleGlobal.ADMIN,
-                statut=StatutUtilisateur.ACTIF,
             )
+            return
+
+        utilisateur = Utilisateur.objects.create_superuser(
+            email=email,
+            password=motdepasse,
+            nom=options["nom"],
+            prenom=options["prenom"],
+            role_global=RoleGlobal.ADMIN,
+            statut=StatutUtilisateur.ACTIF,
+        )
 
         self.stdout.write(
             self.style.SUCCESS(

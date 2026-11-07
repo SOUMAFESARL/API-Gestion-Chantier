@@ -1,4 +1,4 @@
-"""Routes de la configuration initiale — schéma tenant uniquement.
+"""Routes de la configuration initiale — entreprise active uniquement.
 
 Le code d'étape voyage en `<str:code>` et **n'est pas validé par l'URL** : un
 code inconnu doit répondre `400 validation` avec le catalogue en `details`, pas

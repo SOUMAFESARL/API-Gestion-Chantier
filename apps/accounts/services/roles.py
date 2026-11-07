@@ -434,7 +434,7 @@ def creer_role(
     if code in ("DG", "ADMIN", "AD"):
         raise ValidationError(_("Le rôle Directeur Général est réservé et ne peut pas être créé."))
     if "directeur general" in libelle.lower() or "directeur général" in libelle.lower():
-        raise ValidationError(_("Le libellé Directeur Général est réservé au fondateur du tenant."))
+        raise ValidationError(_("Le libellé Directeur Général est réservé au fondateur de l'entreprise."))
 
     with transaction.atomic():
         if Role.objects.filter(code=code, supprime_le__isnull=True).exists():

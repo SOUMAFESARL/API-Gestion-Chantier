@@ -10,7 +10,7 @@ Règles de gestion :
 - H-02 : Chaque action d'écriture du Super Admin crée exactement une entrée dans
   JournalPlateforme (schéma public).
 - L9-1 : Chaque action modifiant l'espace d'une entreprise crée exactement une entrée dans
-  JournalAudit (schéma tenant).
+  JournalAudit (table d'entreprise).
 """
 
 from __future__ import annotations
@@ -19,15 +19,15 @@ import logging
 from typing import Any
 
 from django.db import transaction
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
+from apps.core.contexte import contexte_entreprise
 from apps.accounts.models import Utilisateur
 from apps.audit.models import JournalAudit
 from apps.core.droits import est_dg
 from apps.core.emails import envoyer
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.platform_admin.models import JournalPlateforme
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ SUJET_SUPPRESSION_ENTREPRISE = "Suppression de votre espace CCD Digital"
 
 def trouver_dg_actif_entreprise(entreprise: Entreprise) -> Utilisateur | None:
     """Trouve l'utilisateur actif faisant office de DG dans le schéma de l'entreprise."""
-    with contexte_schema(entreprise.schema_name):
+    with contexte_entreprise(entreprise):
         candidats = Utilisateur.objects.filter(
             supprime_le__isnull=True,
             is_active=True,
@@ -61,7 +61,7 @@ def notifier_dg_action_plateforme(
     if not dg or not dg.email:
         logger.info(
             "Aucun DG actif trouvé pour l'entreprise %s : aucun e-mail envoyé.",
-            entreprise.schema_name,
+            entreprise.slug,
         )
         return
 
@@ -79,13 +79,13 @@ def notifier_dg_action_plateforme(
         if envoye:
             logger.info(
                 "Courriel envoyé au DG de l'entreprise %s : %s",
-                entreprise.schema_name,
+                entreprise.slug,
                 sujet,
             )
         else:
             logger.error(
                 "Courriel au DG de l'entreprise %s NON envoyé : %s",
-                entreprise.schema_name,
+                entreprise.slug,
                 sujet,
             )
 
@@ -101,20 +101,19 @@ def journaliser_plateforme(
     appareil: str = "",
 ) -> JournalPlateforme:
     """Crée exactement une entrée dans le JournalPlateforme (schéma public, H-02)."""
-    with contexte_schema(schema_public()):
-        user_id = getattr(acteur, "id", None)
-        ent_id = getattr(entreprise, "id", None)
-        return JournalPlateforme.objects.create(
-            utilisateur_id=user_id,
-            entreprise_id=ent_id,
-            action=action,
-            detail=detail or {},
-            adresse_ip=adresse_ip,
-            appareil=appareil[:255] if appareil else "",
-        )
+    user_id = getattr(acteur, "id", None)
+    ent_id = getattr(entreprise, "id", None)
+    return JournalPlateforme.objects.create(
+        utilisateur_id=user_id,
+        entreprise_id=ent_id,
+        action=action,
+        detail=detail or {},
+        adresse_ip=adresse_ip,
+        appareil=appareil[:255] if appareil else "",
+    )
 
 
-def journaliser_tenant(
+def journaliser_entreprise(
     entreprise: Entreprise,
     action: ActionAudit | str,
     type_entite: str,
@@ -125,7 +124,7 @@ def journaliser_tenant(
     appareil: str = "",
 ) -> None:
     """Crée exactement une entrée dans le JournalAudit du schéma de l'entreprise (L9-1)."""
-    with contexte_schema(entreprise.schema_name):
+    with contexte_entreprise(entreprise):
         user_id = getattr(acteur, "id", None)
         JournalAudit.objects.create(
             utilisateur_id=user_id,

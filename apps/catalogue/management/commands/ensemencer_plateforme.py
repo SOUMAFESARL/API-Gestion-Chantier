@@ -44,9 +44,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from django.apps import apps
 
-        from apps.tenants.models import Entreprise
+        from apps.entreprises.models import Entreprise
 
-        entreprises = Entreprise.objects.exclude(schema_name="public").count()
+        entreprises = Entreprise.objects.all().count()
         if entreprises:
             raise CommandError(
                 f"{entreprises} entreprise(s) en base : le catalogue est en usage, il ne se "

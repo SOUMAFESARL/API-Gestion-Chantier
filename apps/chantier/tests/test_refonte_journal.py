@@ -70,7 +70,7 @@ def _creer_utilisateur(email: str, prenom: str, nom: str, role_code: str) -> Uti
 
 
 @pytest.fixture
-def contexte_chantier(db, schema_demo):
+def contexte_chantier(db, entreprise_demo):
     """Chantier complet avec arbre à 2 niveaux, 3 feuilles (3 modes de mesure) et 2 équipes."""
     initialiser_roles_par_defaut()
     cp = _creer_utilisateur(
@@ -190,7 +190,7 @@ def contexte_chantier(db, schema_demo):
     }
 
 
-@pytest.mark.tenant
+@pytest.mark.entreprise
 def test_calendrier_ouvre_et_fenetre_lundi_accepte_vendredi(contexte_chantier):
     """Un lundi ouvré, la fenêtre de 3 jours ouvrés inclut jeudi et vendredi et refuse dimanche."""
     projet = contexte_chantier["projet"]
@@ -212,7 +212,7 @@ def test_calendrier_ouvre_et_fenetre_lundi_accepte_vendredi(contexte_chantier):
         assert journal_ven.rapport.date_rapport == vendredi
 
 
-@pytest.mark.tenant
+@pytest.mark.entreprise
 def test_preparation_exclut_suspendues_et_marque_attendues_ce_jour(contexte_chantier):
     projet = contexte_chantier["projet"]
     cc = contexte_chantier["cc"]
@@ -242,7 +242,7 @@ def test_preparation_exclut_suspendues_et_marque_attendues_ce_jour(contexte_chan
         assert ids[str(contexte_chantier["f_jalon"].id)]["attendue_ce_jour"] is False
 
 
-@pytest.mark.tenant
+@pytest.mark.entreprise
 def test_garde_fou_equipe_a3_et_trois_modes_mesure_f3(contexte_chantier):
     """Vérifie le garde-fou A3, le circuit sans _CT/_CP et la synchronisation F3 des 3 modes."""
     c = contexte_chantier
@@ -331,7 +331,7 @@ def test_garde_fou_equipe_a3_et_trois_modes_mesure_f3(contexte_chantier):
         assert c["projet"].avancement_reel == Decimal("55.00")
 
 
-@pytest.mark.tenant
+@pytest.mark.entreprise
 def test_piege_rejet_hors_fenetre_et_deduplication_blocage(contexte_chantier):
     """Un rapport rejeté reste modifiable après J-2 et ne duplique pas ses lignes Blocage."""
     c = contexte_chantier
@@ -387,7 +387,7 @@ def test_piege_rejet_hors_fenetre_et_deduplication_blocage(contexte_chantier):
     assert premier_blocage.titre == "Rupture ciment (BC-2026-88)"
 
 
-@pytest.mark.tenant
+@pytest.mark.entreprise
 def test_compatibilite_rapport_historique_et_synthese_consolidee(contexte_chantier):
     """Vérifie la lecture d'un rapport ancien et l'exclusion des SOUMIS des chiffres consolidés."""
     c = contexte_chantier

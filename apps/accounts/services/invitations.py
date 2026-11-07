@@ -17,7 +17,7 @@ from apps.audit.services import journaliser
 from apps.billing.services.quota import verifier_quota_avant_invitation
 from apps.core.contexte import activer_entreprise, entreprise_courante_id, portee_plateforme
 from apps.core.emails import adresse_frontend, envoyer
-from apps.core.passerelle_schema import entreprise_courante
+from apps.entreprises.selectors import entreprise_courante
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.core.exceptions import ErreurConflit, ErreurMetier
 
@@ -315,7 +315,7 @@ def _trouver_par_empreinte(empreinte: str, *, verrouiller: bool = False) -> Invi
 
     Le lien d'invitation arrive sans jeton de connexion, donc sans entreprise active : on lit
     l'entreprise de l'invitation en portée plateforme, puis on l'active — l'acceptation crée le
-    compte et ses jetons **dans cette entreprise**. C'est le `set_tenant` d'hier, sans balayer
+    compte et ses jetons **dans cette entreprise**. Plus de balayage
     les schémas un par un.
     """
     if entreprise_courante_id() is None:

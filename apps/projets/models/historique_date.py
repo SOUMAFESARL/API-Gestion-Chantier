@@ -1,6 +1,6 @@
 """Modèle HistoriqueDate — MLD §6.6 & RG-11.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets).
 """
 

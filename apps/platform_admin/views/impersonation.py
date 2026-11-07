@@ -2,7 +2,6 @@
 
 import logging
 
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
@@ -31,7 +30,7 @@ from apps.platform_admin.services.impersonation import (
     lister_utilisateurs_entreprise,
     verifier_super_admin,
 )
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -122,8 +121,8 @@ class DeconnexionAssistanceView(APIView):
             super_admin_id = payload.get("impersonateur_id")
             super_admin_email = payload.get("impersonateur_email", "")
             if not entreprise_id and payload.get("schema"):
-                from apps.tenants.models import Entreprise
-                ent = Entreprise.objects.filter(schema_name=payload.get("schema")).first()
+                from apps.entreprises.models import Entreprise
+                ent = Entreprise.objects.filter(slug=payload.get("schema")).first()
                 if ent:
                     entreprise_id = ent.id
 
@@ -255,32 +254,31 @@ class JournalPlateformeListView(APIView):
         filtres = FiltresJournalPlateformeSerializer(data=request.query_params)
         filtres.is_valid(raise_exception=True)
 
-        with contexte_schema(schema_public()):
-            qs = journal_plateforme(**filtres.validated_data)
-            pagination = PaginationStandard()
-            page = pagination.paginate_queryset(qs, request, view=self)
+        qs = journal_plateforme(**filtres.validated_data)
+        pagination = PaginationStandard()
+        page = pagination.paginate_queryset(qs, request, view=self)
 
-            ids_agents = {e.utilisateur_id for e in page if e.utilisateur_id}
-            ids_entreprises = {e.entreprise_id for e in page if e.entreprise_id}
-            noms_agents = {
-                str(u.id): (f"{u.prenom} {u.nom}".strip() or u.email)
-                for u in Utilisateur.tous_objets.filter(id__in=ids_agents).only(
-                    "id", "prenom", "nom", "email"
-                )
-            }
-            noms_entreprises = {
-                str(e.id): (e.nom_commercial or e.raison_sociale)
-                for e in Entreprise.objects.filter(id__in=ids_entreprises).only(
-                    "id", "nom_commercial", "raison_sociale"
-                )
-            }
+        ids_agents = {e.utilisateur_id for e in page if e.utilisateur_id}
+        ids_entreprises = {e.entreprise_id for e in page if e.entreprise_id}
+        noms_agents = {
+            str(u.id): (f"{u.prenom} {u.nom}".strip() or u.email)
+            for u in Utilisateur.tous_objets.filter(id__in=ids_agents).only(
+                "id", "prenom", "nom", "email"
+            )
+        }
+        noms_entreprises = {
+            str(e.id): (e.nom_commercial or e.raison_sociale)
+            for e in Entreprise.objects.filter(id__in=ids_entreprises).only(
+                "id", "nom_commercial", "raison_sociale"
+            )
+        }
 
-            contexte = {
-                "noms_agents": noms_agents,
-                "noms_entreprises": noms_entreprises,
-            }
-            donnees = JournalPlateformeSerializer(page, many=True, context=contexte).data
-            return pagination.get_paginated_response(donnees)
+        contexte = {
+            "noms_agents": noms_agents,
+            "noms_entreprises": noms_entreprises,
+        }
+        donnees = JournalPlateformeSerializer(page, many=True, context=contexte).data
+        return pagination.get_paginated_response(donnees)
 
 
 class ActionsJournalPlateformeView(APIView):
@@ -299,8 +297,7 @@ class ActionsJournalPlateformeView(APIView):
     )
     def get(self, request):
         verifier_super_admin(request.user)
-        with contexte_schema(schema_public()):
-            return Response(
-                {"actions": codes_actions_journal()},
-                status=status.HTTP_200_OK,
-            )
+        return Response(
+            {"actions": codes_actions_journal()},
+            status=status.HTTP_200_OK,
+        )

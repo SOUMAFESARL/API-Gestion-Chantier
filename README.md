@@ -2,7 +2,7 @@
 
 Bienvenue sur le dépôt backend de l'application de gestion de chantier BTP.  
 Ce projet est développé avec **Python 3.12+**, **Django 5.2** et **Django REST Framework**.  
-Il utilise une architecture SaaS multi-tenant avec PostgreSQL.
+Il utilise une architecture SaaS multi-entreprises avec PostgreSQL : un seul schéma, une colonne `entreprise_id` et la sécurité au niveau des lignes (décision D9).
 
 Ce guide est fait pour vous aider à lancer le projet sur votre machine en quelques minutes.
 
@@ -122,8 +122,8 @@ Le backend est prêt et écoute sur :
 * **Console d'administration :** `http://localhost:8000/admin/`
 
 > 💡 **Architecture Domaine Unique (Option A) :**  
-> Toutes les requêtes (plateforme et tenant) s'adressent à `http://localhost:8000`.  
-> Le schéma PostgreSQL du client est automatiquement résolu par le token JWT (`Authorization: Bearer <token>`).
+> Toutes les requêtes (plateforme et entreprises) s'adressent à `http://localhost:8000`.  
+> L'entreprise est celle que désigne le jeton JWT (`Authorization: Bearer <token>`).
 
 
 ---

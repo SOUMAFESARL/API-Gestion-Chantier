@@ -89,12 +89,12 @@ def peut_voir_montants(utilisateur, request=None) -> bool:
     return a_permission(utilisateur, "projets.voir_montants", request=request)
 
 
-def _obtenir_modules_actifs(tenant=None) -> set[str]:
+def _obtenir_modules_actifs(entreprise=None) -> set[str]:
     """Codes des modules ouverts à l'entreprise — voir `apps.core.modules_actifs`."""
-    return codes_modules_actifs(tenant)
+    return codes_modules_actifs(entreprise)
 
 
-def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]:
+def permissions_effectives(collaborateur, request=None, entreprise=None) -> set[str]:
     """Calcule l'ensemble exact des codes de permissions accordées au collaborateur (A-04, A-06, A-12)."""
     if not collaborateur or not getattr(collaborateur, "is_authenticated", False):
         return set()
@@ -109,7 +109,7 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
             request._permissions_effectives_cache = perms
         return perms
 
-    modules_actifs = _obtenir_modules_actifs(tenant)
+    modules_actifs = _obtenir_modules_actifs(entreprise)
 
     from apps.catalogue.models import CataloguePermission
 
@@ -230,7 +230,7 @@ def permissions_effectives(collaborateur, request=None, tenant=None) -> set[str]
 
 
 
-def permissions_du_role(role, tenant=None) -> set[str]:
+def permissions_du_role(role, entreprise=None) -> set[str]:
     """Renvoie les permissions accordées par un rôle (Règles B-08, B-09)."""
     if not role or not getattr(role, "est_actif", True):
         return set()
@@ -246,11 +246,11 @@ def permissions_du_role(role, tenant=None) -> set[str]:
             self.is_authenticated = True
             self.pk = None
 
-    return permissions_effectives(_PorteurFictif(role), tenant=tenant)
+    return permissions_effectives(_PorteurFictif(role), entreprise=entreprise)
 
-def a_permission(collaborateur, code_permission: str, request=None, tenant=None) -> bool:
+def a_permission(collaborateur, code_permission: str, request=None, entreprise=None) -> bool:
     """Vérifie si le collaborateur possède un code de permission spécifique."""
-    perms = permissions_effectives(collaborateur, request=request, tenant=tenant)
+    perms = permissions_effectives(collaborateur, request=request, entreprise=entreprise)
     return code_permission in perms
 
 

@@ -1,7 +1,7 @@
 """Vue API du réglage de l'en-tête et du pied des documents PDF.
 
 Route : `GET` et `PATCH /api/v1/entreprise/documents/`, déclarée avec les autres
-routes `entreprise/` dans `apps/tenants/urls_tenant.py`.
+routes `entreprise/` dans `apps/entreprises/urls_profil.py`.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.audit.services import journaliser
 from apps.core.droits import APermission
 from apps.core.enums import ActionAudit
@@ -30,18 +31,18 @@ from apps.projets.services.parametres_documents import resoudre_documents
 __all__ = ["ParametresDocumentsView"]
 
 
-def _corps(request, tenant, parametres: ParametresDocuments) -> dict:
+def _corps(request, entreprise, parametres: ParametresDocuments) -> dict:
     return {
         "reglage": ParametresDocumentsSerializer(parametres).data,
-        **resoudre_documents(parametres, tenant, request),
+        **resoudre_documents(parametres, entreprise, request),
     }
 
 
-def _tenant(request):
-    tenant = getattr(request, "tenant", None)
-    if tenant is None or tenant.schema_name == "public":
-        raise RequeteRefusee(_("Aucun tenant résolu."))
-    return tenant
+def _entreprise(request):
+    entreprise = entreprise_courante()
+    if entreprise is None:
+        raise RequeteRefusee(_("Aucune entreprise active."))
+    return entreprise
 
 
 class ParametresDocumentsView(APIView):
@@ -66,8 +67,8 @@ class ParametresDocumentsView(APIView):
         tags=["entreprise"],
     )
     def get(self, request):
-        tenant = _tenant(request)
-        return Response(_corps(request, tenant, ParametresDocuments.courant()))
+        entreprise = _entreprise(request)
+        return Response(_corps(request, entreprise, ParametresDocuments.courant()))
 
     @extend_schema(
         summary="Modifier l'en-tête et le pied des documents",
@@ -84,7 +85,7 @@ class ParametresDocumentsView(APIView):
         tags=["entreprise"],
     )
     def patch(self, request):
-        tenant = _tenant(request)
+        entreprise = _entreprise(request)
         with transaction.atomic():
             parametres = ParametresDocuments.courant()
             serializer = ParametresDocumentsSerializer(
@@ -109,4 +110,4 @@ class ParametresDocumentsView(APIView):
                 appareil=(request.META.get("HTTP_USER_AGENT", "") or "")[:255],
             )
 
-        return Response(_corps(request, tenant, parametres), status=status.HTTP_200_OK)
+        return Response(_corps(request, entreprise, parametres), status=status.HTTP_200_OK)

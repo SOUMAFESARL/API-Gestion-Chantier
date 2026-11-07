@@ -1,11 +1,10 @@
 """Débloque un compte bloqué après cinq tentatives échouées.
 
     python manage.py debloquer_compte chef@btp.ci
-    python manage.py debloquer_compte chef@btp.ci --schema demo
     python manage.py debloquer_compte chef@btp.ci --simulation
 
-Sans `--schema`, la commande cherche l'adresse dans **tous** les schémas
-clients : c'est le cas d'usage du support, qui reçoit un appel et ne sait
+L'adresse est unique sur la plateforme (D9, R-8) : la commande la cherche dans toutes les
+entreprises, en portée plateforme. C'est le cas d'usage du support, qui reçoit un appel et ne sait
 pas toujours de quelle entreprise vient la personne.
 
 Cette commande ne réactive **pas** un compte désactivé par un
@@ -14,8 +13,8 @@ Un compte désactivé se réactive depuis l'administration (workflow T5).
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
+from apps.core.contexte import portee_plateforme
 from apps.core.enums import StatutUtilisateur
 
 
@@ -28,96 +27,68 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("email", help="Adresse email du compte.")
         parser.add_argument(
-            "--schema",
-            help="Schéma de l'entreprise cliente. Omis, la recherche porte sur tous.",
-        )
-        parser.add_argument(
             "--simulation",
             action="store_true",
             help="Affiche l'état du compte sans rien modifier.",
         )
 
     def handle(self, *args, **options):
+        from apps.accounts.models import Utilisateur
+
         email = options["email"].strip().lower()
-        schemas = [options["schema"]] if options["schema"] else self._schemas_clients()
-
-        if not schemas:
-            raise CommandError("Aucune entreprise cliente enregistrée.")
-
-        trouve = False
-        for code_schema in schemas:
-            if self._traiter(code_schema, email, simulation=options["simulation"]):
-                trouve = True
-
-        if not trouve:
-            raise CommandError(f"Aucun compte « {email} » dans {self._enumerer(schemas)}.")
+        with portee_plateforme(motif="commande debloquer_compte"):
+            utilisateur = (
+                Utilisateur.objects.filter(email__iexact=email).select_related("entreprise").first()
+            )
+            if utilisateur is None:
+                raise CommandError(f"Aucun compte « {email} » sur la plateforme.")
+            self._traiter(utilisateur, simulation=options["simulation"])
 
     # ----------------------------------------------------------------------
 
-    def _schemas_clients(self) -> list[str]:
-        from apps.tenants.models import Entreprise
+    def _traiter(self, utilisateur, *, simulation: bool) -> None:
+        entreprise = utilisateur.entreprise
+        portee = entreprise.slug if entreprise else "personnel de l'éditeur"
+        self.stdout.write(self.style.MIGRATE_HEADING(f"\nEntreprise « {portee} »"))
+        self.stdout.write(f"  compte             : {utilisateur.email}")
+        self.stdout.write(f"  statut             : {utilisateur.statut}")
+        self.stdout.write(f"  tentatives échouées: {utilisateur.tentatives_echouees}")
+        etat = "oui" if utilisateur.est_bloque else "non"
+        self.stdout.write(f"  bloqué             : {etat}")
 
-        with contexte_schema(schema_public()):
-            return list(
-                Entreprise.objects.exclude(schema_name=schema_public())
-                .order_by("schema_name")
-                .values_list("schema_name", flat=True)
+        if utilisateur.bloque_le:
+            # Aucune échéance à annoncer : un blocage ne s'éteint plus seul
+            # (T-008 §6.3). On dit depuis quand, et par où il se lève.
+            self.stdout.write(
+                f"  bloqué depuis      : {utilisateur.bloque_le:%d/%m/%Y à %H:%M}"
+            )
+            self.stdout.write(
+                "  sortie             : email de réinitialisation, ou cette commande"
             )
 
-    def _traiter(self, code_schema: str, email: str, *, simulation: bool) -> bool:
-        with contexte_schema(code_schema):
-            from apps.accounts.models import Utilisateur
-
-            utilisateur = Utilisateur.objects.filter(email__iexact=email).first()
-            if utilisateur is None:
-                return False
-
-            self.stdout.write(self.style.MIGRATE_HEADING(f"\nSchéma « {code_schema} »"))
-            self.stdout.write(f"  compte             : {utilisateur.email}")
-            self.stdout.write(f"  statut             : {utilisateur.statut}")
-            self.stdout.write(f"  tentatives échouées: {utilisateur.tentatives_echouees}")
-            etat = "oui" if utilisateur.est_bloque else "non"
-            self.stdout.write(f"  bloqué             : {etat}")
-
-            if utilisateur.bloque_le:
-                # Aucune échéance à annoncer : un blocage ne s'éteint plus seul
-                # (T-008 §6.3). On dit depuis quand, et par où il se lève.
-                self.stdout.write(
-                    f"  bloqué depuis      : {utilisateur.bloque_le:%d/%m/%Y à %H:%M}"
+        if utilisateur.statut == StatutUtilisateur.DESACTIVE:
+            self.stdout.write(
+                self.style.WARNING(
+                    "  -> Ce compte est DÉSACTIVÉ, pas bloqué. Un blocage se lève par "
+                    "désactivation attend un administrateur (workflow T5). Cette "
+                    "commande n'y touche pas."
                 )
-                self.stdout.write(
-                    "  sortie             : email de réinitialisation, ou cette commande"
-                )
+            )
+            return
 
-            if utilisateur.statut == StatutUtilisateur.DESACTIVE:
-                self.stdout.write(
-                    self.style.WARNING(
-                        "  -> Ce compte est DÉSACTIVÉ, pas bloqué. Un blocage se lève par "
-                        "désactivation attend un administrateur (workflow T5). Cette "
-                        "commande n'y touche pas."
-                    )
-                )
-                return True
+        if not utilisateur.est_bloque and utilisateur.tentatives_echouees == 0:
+            self.stdout.write(
+                self.style.SUCCESS("  -> Rien à faire, le compte est utilisable.")
+            )
+            return
 
-            if not utilisateur.est_bloque and utilisateur.tentatives_echouees == 0:
-                self.stdout.write(
-                    self.style.SUCCESS("  -> Rien à faire, le compte est utilisable.")
-                )
-                return True
+        if simulation:
+            self.stdout.write(self.style.WARNING("  -> Simulation : aucune modification."))
+            return
 
-            if simulation:
-                self.stdout.write(self.style.WARNING("  -> Simulation : aucune modification."))
-                return True
+        utilisateur.bloque_le = None
+        utilisateur.tentatives_echouees = 0
+        utilisateur.save(update_fields=["bloque_le", "tentatives_echouees", "modifie_le"])
 
-            utilisateur.bloque_le = None
-            utilisateur.tentatives_echouees = 0
-            utilisateur.save(update_fields=["bloque_le", "tentatives_echouees", "modifie_le"])
-
-            self.stdout.write(self.style.SUCCESS("  -> Débloqué. Le compte peut se reconnecter."))
-            return True
-
-    @staticmethod
-    def _enumerer(schemas: list[str]) -> str:
-        if len(schemas) == 1:
-            return f"le schéma « {schemas[0]} »"
-        return f"les {len(schemas)} schémas clients"
+        self.stdout.write(self.style.SUCCESS("  -> Débloqué. Le compte peut se reconnecter."))
+        return

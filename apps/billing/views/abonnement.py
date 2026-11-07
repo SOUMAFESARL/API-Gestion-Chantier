@@ -11,8 +11,7 @@ from rest_framework.views import APIView
 
 from apps.billing.models import JOURS_ESSAI, Abonnement, Plan
 from apps.billing.serializers import AbonnementSerializer
-from apps.core.passerelle_schema import contexte_schema, schema_public
-from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
+from apps.entreprises.selectors import entreprise_courante
 
 __all__ = ["AbonnementView"]
 
@@ -27,14 +26,14 @@ class AbonnementView(APIView):
         responses={200: AbonnementSerializer},
     )
     def get(self, request):
-        tenant = _entreprise_active()
-        if tenant is None:
+        entreprise = entreprise_courante()
+        if entreprise is None:
             return Response(
-                {"detail": "Aucun tenant actif."},
+                {"detail": "Aucune entreprise active."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Le droit se lit dans le schéma de l'entreprise : sous `contexte_schema(public)`, le rôle
+        # Le droit se lit dans l'entreprise active : hors d'elle, le rôle
         # de l'utilisateur y était cherché en vain et la vue répondait 500 à tout le monde.
         from apps.core.droits import a_permission
 
@@ -42,45 +41,44 @@ class AbonnementView(APIView):
             request.user, "administration.abonnement_voir", request=request
         )
 
-        with contexte_schema(schema_public()):
-            abonnement = Abonnement.objects.filter(entreprise=tenant).select_related("plan").first()
+        abonnement = Abonnement.objects.filter(entreprise=entreprise).select_related("plan").first()
 
-            # Auto-provisionnement de l'essai si manquant (ex: compte créé avant la migration)
-            if abonnement is None:
-                plan_essai = (
-                    Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
-                    or Plan.objects.filter(code=Plan.Code.PRO).first()
+        # Auto-provisionnement de l'essai si manquant (ex: compte créé avant la migration)
+        if abonnement is None:
+            plan_essai = (
+                Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
+                or Plan.objects.filter(code=Plan.Code.PRO).first()
+            )
+            if not plan_essai:
+                plan_essai = Plan.objects.create(
+                    code=Plan.Code.MAITRE_OEUVRE,
+                    libelle="Maître d'Œuvre",
+                    limite_projets=50,
+                    limite_utilisateurs=25,
+                    limite_stockage_mo=10000,
+                    acces_ia=True,
+                    est_actif=True,
                 )
-                if not plan_essai:
-                    plan_essai = Plan.objects.create(
-                        code=Plan.Code.MAITRE_OEUVRE,
-                        libelle="Maître d'Œuvre",
-                        limite_projets=50,
-                        limite_utilisateurs=25,
-                        limite_stockage_mo=10000,
-                        acces_ia=True,
-                        est_actif=True,
-                    )
-                aujourdhui = timezone.localdate()
-                abonnement = Abonnement.objects.create(
-                    entreprise=tenant,
-                    plan=plan_essai,
-                    date_debut=aujourdhui,
-                    date_fin=aujourdhui + timedelta(days=JOURS_ESSAI),
-                    fin_essai=aujourdhui + timedelta(days=JOURS_ESSAI),
-                    statut=Abonnement.Statut.ESSAI,
-                )
+            aujourdhui = timezone.localdate()
+            abonnement = Abonnement.objects.create(
+                entreprise=entreprise,
+                plan=plan_essai,
+                date_debut=aujourdhui,
+                date_fin=aujourdhui + timedelta(days=JOURS_ESSAI),
+                fin_essai=aujourdhui + timedelta(days=JOURS_ESSAI),
+                statut=Abonnement.Statut.ESSAI,
+            )
 
-            serializer = AbonnementSerializer(abonnement)
-            data = serializer.data
+        serializer = AbonnementSerializer(abonnement)
+        data = serializer.data
 
-            if not voit_abonnement:
-                return Response(
-                    {
-                        "jours_essai_restants": data.get("jours_essai_restants"),
-                        "est_expire": data.get("est_expire"),
-                    },
-                    status=status.HTTP_200_OK,
-                )
+        if not voit_abonnement:
+            return Response(
+                {
+                    "jours_essai_restants": data.get("jours_essai_restants"),
+                    "est_expire": data.get("est_expire"),
+                },
+                status=status.HTTP_200_OK,
+            )
 
-            return Response(data, status=status.HTTP_200_OK)
+        return Response(data, status=status.HTTP_200_OK)

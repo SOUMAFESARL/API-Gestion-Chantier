@@ -2,7 +2,7 @@
 
 Gestion documentaire : dossiers, documents, versions, partages, RFI.
 
-Schéma       : tenant
+Tables       : d'entreprise (`ModeleEntreprise`)
 Module CDC   : 11
 Entités MCD  : Dossier, Document, VersionDocument, LiaisonDocument, PartageDocument, AccesDocument
 """

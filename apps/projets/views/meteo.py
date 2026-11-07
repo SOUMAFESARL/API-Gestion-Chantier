@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.core.enums import RoleGlobal
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.referentiels.villes import lister_villes, nom_agglomeration
@@ -33,7 +34,7 @@ from apps.projets.services.meteo import (
 ROLES_VUE_SIEGE = frozenset({"AD", "DG", "DF", "RF", "RA", "RH"})
 
 
-def _localiser(request, tenant) -> tuple[str, str]:
+def _localiser(request, entreprise) -> tuple[str, str]:
     """La ville dont montrer la météo, et d'où elle vient.
 
     L'ordre compte :
@@ -45,7 +46,7 @@ def _localiser(request, tenant) -> tuple[str, str]:
     4. Rôle de chantier : affectation la plus récente de l'utilisateur.
     5. À défaut : ville de l'entreprise.
     """
-    ville_entreprise = (getattr(tenant, "ville", "") or "") if tenant else ""
+    ville_entreprise = (getattr(entreprise, "ville", "") or "") if entreprise else ""
 
     ville_demandee = request.query_params.get("ville")
     if ville_demandee:
@@ -134,10 +135,10 @@ class MeteoProjetView(APIView):
         responses={200: MeteoResponseSerializer},
     )
     def get(self, request):
-        tenant = getattr(request, "tenant", None)
-        pays = (getattr(tenant, "pays", "") or "CI") if tenant else "CI"
+        entreprise = entreprise_courante()
+        pays = (getattr(entreprise, "pays", "") or "CI") if entreprise else "CI"
 
-        ville, portee = _localiser(request, tenant)
+        ville, portee = _localiser(request, entreprise)
 
         if not (ville or "").strip():
             return Response(
@@ -177,9 +178,9 @@ class ReferentielVillesView(APIView):
         responses={200: ReferentielVillesResponseSerializer},
     )
     def get(self, request):
-        tenant = getattr(request, "tenant", None)
+        entreprise = entreprise_courante()
         demande = request.query_params.get("pays") or ""
-        pays = (demande or getattr(tenant, "pays", "") or "CI").strip().upper()
+        pays = (demande or getattr(entreprise, "pays", "") or "CI").strip().upper()
 
         return Response(
             {

@@ -5,15 +5,15 @@ import uuid
 from datetime import timedelta
 
 from django.db.models import Prefetch, Q
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework.exceptions import NotFound
 
+from apps.core.contexte import contexte_entreprise
 from apps.accounts.models import Utilisateur
 from apps.billing.models import Abonnement, PaiementAbonnement, Plan
 from apps.catalogue.models import CatalogueModule
 from apps.core.enums import StatutEntreprise, StatutUtilisateur
 from apps.projets.models import Projet
-from apps.tenants.models import DemandeInscription, Entreprise, TelephoneEntreprise
+from apps.entreprises.models import DemandeInscription, Entreprise, TelephoneEntreprise
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +93,9 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
     active_le = None
     dirigeant = None
 
-    if ent.schema_name and ent.schema_name != "public":
+    if ent.slug:
         try:
-            with contexte_schema(ent.schema_name):
+            with contexte_entreprise(ent):
                 nb_utilisateurs = Utilisateur.objects.filter(statut=StatutUtilisateur.ACTIF).count()
                 nb_projets = Projet.objects.filter(supprime_le__isnull=True).count()
                 chef = (
@@ -114,8 +114,8 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
                     active_le = premier_connecte.last_login.isoformat()
         except Exception as e:
             logger.warning(
-                "Impossible de compter les ressources pour le tenant %s : %s",
-                ent.schema_name,
+                "Impossible de compter les ressources pour l'entreprise %s : %s",
+                ent.slug,
                 e,
             )
 
@@ -136,7 +136,7 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
         "id": str(ent.id),
         "raison_sociale": ent.raison_sociale,
         "nom_commercial": ent.nom_commercial or ent.raison_sociale,
-        "slug": ent.schema_name,
+        "slug": ent.slug,
         "pays": ent.pays,
         "ville": ent.ville,
         "email_contact": ent.email_contact,
@@ -176,7 +176,7 @@ def modules_du_client(ent: Entreprise) -> list[dict]:
     from apps.core.droits import _obtenir_modules_actifs
 
     # La règle lit aussi les tables du client en repli : on la pose dans son schéma.
-    with contexte_schema(ent.schema_name):
+    with contexte_entreprise(ent):
         actifs = _obtenir_modules_actifs(ent)
     return [
         {
@@ -194,9 +194,8 @@ def modules_du_client(ent: Entreprise) -> list[dict]:
 
 def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
     """Retourne la liste des clients de la plateforme avec abonnements et compteurs."""
-    public_schema = schema_public()
     qs = (
-        Entreprise.objects.exclude(schema_name=public_schema)
+        Entreprise.objects.all()
         .prefetch_related(
             "abonnements__plan",
             "abonnements__factures__paiements",
@@ -210,7 +209,7 @@ def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
         qs = qs.filter(
             Q(raison_sociale__icontains=terme)
             | Q(nom_commercial__icontains=terme)
-            | Q(schema_name__icontains=terme)
+            | Q(slug__icontains=terme)
             | Q(email_contact__icontains=terme)
             | Q(ville__icontains=terme)
         )
@@ -220,10 +219,9 @@ def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
 
 def obtenir_fiche_client(client_id: uuid.UUID | str) -> dict:
     """Retourne la fiche détaillée d'une entreprise cliente."""
-    public_schema = schema_public()
     ent = (
         Entreprise.objects.filter(pk=client_id)
-        .exclude(schema_name=public_schema)
+        
         .prefetch_related(
             "abonnements__plan",
             "abonnements__factures__paiements",

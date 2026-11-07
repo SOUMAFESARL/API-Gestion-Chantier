@@ -16,10 +16,10 @@ MARQUE = "ETANCHEITE"
 def completer(slug: str) -> None:
     """Complète l'entreprise `slug` ; rejouable."""
     from apps.core.contexte import contexte_entreprise, portee_plateforme
-    from apps.tenants.models import Entreprise
+    from apps.entreprises.models import Entreprise
 
     with portee_plateforme(motif="suite d'étanchéité : complément du jeu de test"):
-        entreprise = Entreprise.objects.get(schema_name=slug)
+        entreprise = Entreprise.objects.get(slug=slug)
         _facturation(entreprise, slug)
         _demande_inscription(entreprise, slug)
     with contexte_entreprise(entreprise):
@@ -109,7 +109,7 @@ def _facturation(entreprise, slug: str) -> None:
 
 
 def _demande_inscription(entreprise, slug: str) -> None:
-    from apps.tenants.models import DemandeInscription
+    from apps.entreprises.models import DemandeInscription
 
     if DemandeInscription.objects.filter(entreprise=entreprise).exists():
         return

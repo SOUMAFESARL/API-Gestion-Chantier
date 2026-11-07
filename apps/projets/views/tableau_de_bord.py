@@ -1,6 +1,6 @@
 """Vue d'agrégation du Tableau de bord de pilotage décisionnel BTP — Maquette M10.
 
-Alimentée à 100% par les modèles réels du schéma tenant :
+Alimentée à 100% par les modèles réels du schéma entreprise :
 - Projets & Chantiers (apps.projets)
 - Rapports journaliers & Effectifs réels (apps.chantier)
 - Météo en direct & Alertes intempéries (Open-Meteo)
@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.chantier.models import RapportJournalier
 from apps.core.droits import APermission, peut_voir_montants
 from apps.core.enums import StatutProjet, StatutRapport
@@ -56,8 +57,8 @@ class TableauDeBordView(APIView):
         responses={200: TableauDeBordResponseSerializer},
     )
     def get(self, request):
-        tenant = getattr(request, "tenant", None)
-        pays = getattr(tenant, "pays", "CI") if tenant else "CI"
+        entreprise = entreprise_courante()
+        pays = getattr(entreprise, "pays", "CI") if entreprise else "CI"
 
         projets_base = (
             Projet.objects.filter(supprime_le__isnull=True)
@@ -137,8 +138,8 @@ class TableauDeBordView(APIView):
                 "bons_paiement_a_valider": [],
                 "receptions_materiaux": [],
                 "meteo": (
-                    obtenir_meteo(tenant.ville, pays=pays, portee=PORTEE_ENTREPRISE)
-                    if tenant and getattr(tenant, "ville", "")
+                    obtenir_meteo(entreprise.ville, pays=pays, portee=PORTEE_ENTREPRISE)
+                    if entreprise and getattr(entreprise, "ville", "")
                     else meteo_indisponible(RAISON_VILLE_ABSENTE, "", PORTEE_ENTREPRISE)
                 ),
                 "aucun_chantier": True,
@@ -282,7 +283,7 @@ class TableauDeBordView(APIView):
         if premier_chantier is not None:
             ville_meteo, portee_meteo = premier_chantier.ville, PORTEE_CHANTIER
         else:
-            ville_meteo = (getattr(tenant, "ville", "") or "") if tenant else ""
+            ville_meteo = (getattr(entreprise, "ville", "") or "") if entreprise else ""
             portee_meteo = PORTEE_ENTREPRISE
 
         meteo_data = obtenir_meteo(ville_meteo, pays=pays, portee=portee_meteo)

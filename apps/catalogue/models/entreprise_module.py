@@ -1,4 +1,4 @@
-"""Modèle EntrepriseModule — association et droits d'usage par tenant."""
+"""Modèle EntrepriseModule — association et droits d'usage par entreprise."""
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -9,14 +9,14 @@ __all__ = ["EntrepriseModule"]
 
 
 class EntrepriseModule(ModeleBase):
-    """Droit d'usage d'un module du catalogue par une entreprise (tenant).
+    """Droit d'usage d'un module du catalogue par une entreprise.
 
     Table stockée dans le schéma `public`, reliant l'entreprise au module du catalogue.
     Permet l'activation/désactivation granulaire par entreprise sans réplication de données.
     """
 
     entreprise = models.ForeignKey(
-        "tenants.Entreprise",
+        "entreprises.Entreprise",
         on_delete=models.CASCADE,
         related_name="modules_souscrits",
         verbose_name=_("entreprise"),

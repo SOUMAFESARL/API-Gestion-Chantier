@@ -1,6 +1,6 @@
 """Commande de gestion Django pour l'évaluation quotidienne automatique des statuts chantiers.
 
-Parcourt les schémas tenants d'entreprises clientes et applique les transitions calendaires
+Parcourt les entreprises clientes et applique les transitions calendaires
 strictes sur les Activités, les Lots et les Projets :
 - PLANIFIE (EN_ATTENTE) -> EN_COURS si date_du_jour >= date_debut_prevue
 - EN_COURS -> EN_RETARD si date_du_jour > date_fin_prevue (si non clôturé)
@@ -10,20 +10,21 @@ strictes sur les Activités, les Lots et les Projets :
 from datetime import date
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from apps.core.passerelle_schema import contexte_schema
 
 from apps.projets.services.machine_etats import executer_evaluation_quotidienne_schema
-from apps.tenants.models import Entreprise
+from apps.core.commandes import trouver_entreprise
+from apps.core.contexte import contexte_entreprise
+from apps.entreprises.models import Entreprise
 
 
 class Command(BaseCommand):
-    help = "Évalue et met à jour les statuts calendaires des activités, lots et projets de tous les tenants."
+    help = "Évalue et met à jour les statuts calendaires des activités, lots et projets de toutes les entreprises."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--schema",
+            "--entreprise",
             type=str,
-            help="Nom de schéma tenant spécifique à évaluer (optionnel).",
+            help="Slug d'une seule entreprise à évaluer (optionnel).",
         )
         parser.add_argument(
             "--date",
@@ -32,7 +33,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        schema_cible = options.get("schema")
+        schema_cible = options.get("entreprise")
         date_str = options.get("date")
 
         if date_str:
@@ -54,9 +55,9 @@ class Command(BaseCommand):
             from apps.core.enums import StatutEntreprise
 
             schemas = list(
-                Entreprise.objects.exclude(schema_name="public")
+                Entreprise.objects.all()
                 .filter(statut__in=[StatutEntreprise.ACTIF, StatutEntreprise.ESSAI])
-                .values_list("schema_name", flat=True)
+                .values_list("slug", flat=True)
             )
 
         total_activites = 0
@@ -65,7 +66,7 @@ class Command(BaseCommand):
 
         for schema_name in schemas:
             try:
-                with contexte_schema(schema_name):
+                with contexte_entreprise(trouver_entreprise(schema_name)):
                     rapport = executer_evaluation_quotidienne_schema(date_reference=date_ref)
                     total_activites += rapport["activites_modifiees"]
                     total_lots += rapport["lots_modifies"]

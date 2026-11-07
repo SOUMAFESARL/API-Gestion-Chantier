@@ -1,12 +1,11 @@
 """Listes de valeurs et modèles de découpage de la plateforme, gérés au back-office.
 
 Décisions v1.2 du découpage, §3 et §4 : le super admin crée les listes plateforme (« Phases »,
-« Lots »…) et les modèles plateforme ; chaque entreprise les lit **sans copie**, depuis le schéma
-`public`. Une correction faite ici est donc vue partout immédiatement.
+« Lots »…) et les modèles plateforme ; chaque entreprise les lit **sans copie**, depuis les tables
+de la plateforme. Une correction faite ici est donc vue partout immédiatement.
 
-- **Tout se passe dans le schéma `public`** (`schema_context`) : le back-office est servi sur le
-  domaine public comme sur celui d'une entreprise (`config/urls_tenant.py`), et ces tables
-  n'existent qu'une fois.
+- **Ce sont des tables de plateforme** (sans `entreprise_id`) : elles n'existent qu'une fois, et
+  le back-office y écrit sans entreprise active (D9).
 - **Les briques sont celles du découpage** (`apps.projets.services.listes_modeles`) : ajout de
   valeurs sans doublon, enregistrement d'un gabarit vérifié par C-1 à C-4, représentation d'un
   gabarit. Ce module n'ajoute que ce qui est propre à la plateforme : retrait d'une liste, d'une
@@ -21,7 +20,6 @@ dans les vues).
 from __future__ import annotations
 
 from django.db import transaction
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogue.models import (
@@ -50,10 +48,6 @@ __all__ = [
     "retirer_modele",
     "retirer_valeur",
 ]
-
-
-def _public():
-    return contexte_schema(schema_public())
 
 
 # --------------------------------------------------------------------------
@@ -130,20 +124,18 @@ def _refuser_homonyme(libelle: str, exclure=None) -> None:
 # Listes de valeurs
 # --------------------------------------------------------------------------
 def lister_listes(*, avec_valeurs: bool = True) -> list[dict]:
-    with _public():
-        return [
-            _liste_en_dict(liste, avec_valeurs=avec_valeurs)
-            for liste in ListeValeursPlateforme.objects.order_by("ordre", "libelle")
-        ]
+    return [
+        _liste_en_dict(liste, avec_valeurs=avec_valeurs)
+        for liste in ListeValeursPlateforme.objects.order_by("ordre", "libelle")
+    ]
 
 
 def lire_liste(pk) -> dict:
-    with _public():
-        return _liste_en_dict(_liste(pk))
+    return _liste_en_dict(_liste(pk))
 
 
 def creer_liste(*, libelle: str, description: str = "", valeurs=None, auteur=None) -> dict:
-    with _public(), transaction.atomic():
+    with transaction.atomic():
         libelle = lm.nom_propre(libelle)
         if not libelle:
             raise ValidationError({"libelle": "Le nom de la liste est obligatoire."})
@@ -173,7 +165,7 @@ def creer_liste(*, libelle: str, description: str = "", valeurs=None, auteur=Non
 def modifier_liste(pk, *, donnees: dict, auteur=None) -> dict:
     """Renommer, décrire ou réordonner une liste. Les niveaux qui la citent la suivent : le lien
     passe par l'identifiant, jamais par le nom (§4.3)."""
-    with _public(), transaction.atomic():
+    with transaction.atomic():
         liste = _liste(pk)
         avant = {"libelle": liste.libelle, "description": liste.description, "ordre": liste.ordre}
         if "libelle" in donnees:
@@ -207,7 +199,7 @@ def retirer_liste(pk, *, auteur=None) -> None:
     niveau ou retirer le modèle. Les entreprises qui la citent (niveaux de projets, modèles
     personnalisés) la gardent ; elle n'est plus proposée (§3.11, §4.8).
     """
-    with _public(), transaction.atomic():
+    with transaction.atomic():
         liste = _liste(pk)
         modeles = _modeles_qui_citent(liste)
         if modeles:
@@ -227,9 +219,8 @@ def retirer_liste(pk, *, auteur=None) -> None:
 
 def ajouter_valeurs(pk, *, valeurs: list[str], groupe: str = "", auteur=None) -> dict:
     """Ajout en masse ; une valeur déjà présente (sans accents, casse ni espaces) est ignorée."""
-    with _public():
-        liste = _liste(pk)
-        resultat = lm.ajouter_valeurs(liste, valeurs, groupe, par_la_plateforme=True, auteur=auteur)
+    liste = _liste(pk)
+    resultat = lm.ajouter_valeurs(liste, valeurs, groupe, par_la_plateforme=True, auteur=auteur)
     if resultat["ajoutees"]:
         journaliser_plateforme(
             action="DECOUPAGE_VALEURS_AJOUT",
@@ -245,11 +236,10 @@ def ajouter_valeurs(pk, *, valeurs: list[str], groupe: str = "", auteur=None) ->
 
 def importer_valeurs_fichier(pk, *, fichier, auteur=None) -> dict:
     """Import Excel/CSV de valeurs dans une liste de la plateforme."""
-    with _public():
-        liste = _liste(pk)
-        resultat = lm.importer_valeurs_fichier(
-            liste, fichier, par_la_plateforme=True, auteur=auteur
-        )
+    liste = _liste(pk)
+    resultat = lm.importer_valeurs_fichier(
+        liste, fichier, par_la_plateforme=True, auteur=auteur
+    )
     if resultat["ajoutees"]:
         journaliser_plateforme(
             action="DECOUPAGE_VALEURS_IMPORT",
@@ -273,7 +263,7 @@ def _valeur(pk) -> ValeurListePlateforme:
 def modifier_valeur(pk, *, donnees: dict, auteur=None) -> dict:
     """Corriger une valeur. Les cases déjà saisies ne changent pas : une valeur choisie dans une
     liste est recopiée dans l'intitulé de la case (§4.6, §4.8)."""
-    with _public(), transaction.atomic():
+    with transaction.atomic():
         valeur = _valeur(pk)
         avant = {"libelle": valeur.libelle, "groupe": valeur.groupe, "ordre": valeur.ordre}
         if "libelle" in donnees:
@@ -312,7 +302,7 @@ def modifier_valeur(pk, *, donnees: dict, auteur=None) -> dict:
 
 def retirer_valeur(pk, *, auteur=None) -> None:
     """Retire une valeur de la plateforme (suppression logique) : elle n'est plus proposée."""
-    with _public(), transaction.atomic():
+    with transaction.atomic():
         valeur = _valeur(pk)
         valeur.delete(utilisateur=auteur)
     journaliser_plateforme(
@@ -328,25 +318,22 @@ def retirer_valeur(pk, *, auteur=None) -> None:
 def lister_modeles() -> list[dict]:
     """Tous les modèles de la plateforme, actifs ou non (un modèle inactif n'est plus proposé
     aux entreprises, mais se garde au back-office)."""
-    with _public():
-        return [
-            _modele_en_dict(m, avec_gabarit=False)
-            for m in ModeleDecoupagePlateforme.objects.order_by("nom")
-        ]
+    return [
+        _modele_en_dict(m, avec_gabarit=False)
+        for m in ModeleDecoupagePlateforme.objects.order_by("nom")
+    ]
 
 
 def lire_modele(pk) -> dict:
-    with _public():
-        return _modele_en_dict(_modele(pk))
+    return _modele_en_dict(_modele(pk))
 
 
 def enregistrer_modele(pk=None, *, auteur=None, **donnees) -> dict:
     """Créer (sans `pk`) ou mettre à jour un modèle ; la version augmente à chaque mise à jour."""
-    with _public():
-        modele = _modele(pk) if pk is not None else None
-        version_avant = modele.version if modele else None
-        modele = lm.enregistrer_modele_plateforme(modele=modele, auteur=auteur, **donnees)
-        resultat = _modele_en_dict(modele)
+    modele = _modele(pk) if pk is not None else None
+    version_avant = modele.version if modele else None
+    modele = lm.enregistrer_modele_plateforme(modele=modele, auteur=auteur, **donnees)
+    resultat = _modele_en_dict(modele)
     journaliser_plateforme(
         action="DECOUPAGE_MODELE_CREATION" if pk is None else "DECOUPAGE_MODELE_MODIFICATION",
         acteur=auteur,
@@ -365,7 +352,7 @@ def enregistrer_modele(pk=None, *, auteur=None, **donnees) -> dict:
 def retirer_modele(pk, *, auteur=None) -> None:
     """Retire un modèle (suppression logique). Aucun projet déjà créé n'est touché (§3.11) ; les
     copies personnalisées des entreprises restent les leurs."""
-    with _public(), transaction.atomic():
+    with transaction.atomic():
         modele = _modele(pk)
         modele.delete(utilisateur=auteur)
     journaliser_plateforme(

@@ -165,7 +165,7 @@ class RequeteComptes(RequeteEntreprise):
 
     Elle partage tout de `RequeteEntreprise`, sauf ce qu'elle fait **sans entreprise active** :
     elle ne refuse pas, elle rend le **personnel de CCD Digital** (`entreprise` nulle). C'est ce
-    que rendait la table `utilisateur` du schéma `public` sous django-tenants, et ce qu'attend le
+    que rendait la table `utilisateur` du schéma `public` dans l'ancien modèle multi-schéma, et ce qu'attend le
     code de l'administration de la plateforme, qui tourne sans entreprise.
 
     | Contexte | Comptes visibles |

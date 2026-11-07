@@ -1,6 +1,6 @@
 """Modèles du calendrier d'entreprise — SFD F3 §6 & Erratum v1.0.1 (E-4).
 
-Schéma : tenant (application « projets »).
+Tables d'entreprise (`ModeleEntreprise`), application « projets ».
 
 Règle des trois couches (de la plus faible à la plus forte) :
 1. Semaine type (`SemaineType`) : jours de la semaine travaillés par défaut
@@ -11,13 +11,13 @@ Règle des trois couches (de la plus faible à la plus forte) :
    ou non ouvré, et motif. Une exception l'emporte sur un jour férié national,
    qui l'emporte sur la semaine type.
 
-Pourquoi ces modèles sont dans l'application tenant « projets » :
+Pourquoi ces modèles sont des tables d'entreprise de l'application « projets » :
 Un calendrier unique s'applique à toute l'entreprise (partout où l'on compte des
 jours ouvrés : avancement temporel, durée de projet, rapports journaliers attendus).
 Chaque entreprise disposant de sa propre semaine type et de ses propres exceptions
 (ex. fêtes musulmanes saisies par chaque entreprise comme exceptions non ouvrées),
-ces données appartiennent strictement au schéma tenant de l'entreprise (`TENANT_APPS`)
-et ne peuvent pas résider dans `referentiels` (partagé dans le schéma public).
+ces données appartiennent strictement à l'entreprise (`ModeleEntreprise`)
+et ne peuvent pas résider dans `referentiels` (partagé par toute la plateforme).
 Il n'y a pas de calendrier propre à un projet.
 """
 
@@ -32,7 +32,7 @@ __all__ = ["ExceptionCalendrier", "SemaineType"]
 
 
 class SemaineType(ModeleEntreprise):
-    """Semaine type de travail d'une entreprise (ligne unique par schéma tenant).
+    """Semaine type de travail d'une entreprise (ligne unique par entreprise).
 
     Première couche du calendrier d'entreprise : définit quels jours de la semaine
     sont réputés travaillés par défaut (du lundi au vendredi par défaut).

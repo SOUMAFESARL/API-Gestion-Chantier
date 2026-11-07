@@ -1,6 +1,6 @@
 """Serializers du module « referentiels ».
 
-Référentiels partagés par tous les tenants.
+Référentiels partagés par toutes les entreprises.
 """
 
 from rest_framework import serializers

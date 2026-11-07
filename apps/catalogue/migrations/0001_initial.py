@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tenants', '0001_initial'),
+        ('entreprises', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -72,7 +72,7 @@ class Migration(migrations.Migration):
                 ('supprime_le', models.DateTimeField(blank=True, db_index=True, help_text='Non nul = ligne supprimée logiquement. Jamais de suppression physique.', null=True, verbose_name='supprimé le')),
                 ('est_actif', models.BooleanField(default=True, help_text='Indique si le module est actif pour cette entreprise.', verbose_name='est actif')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(help_text='Entreprise cliente abonnée au module.', on_delete=django.db.models.deletion.CASCADE, related_name='modules_souscrits', to='tenants.entreprise', verbose_name='entreprise')),
+                ('entreprise', models.ForeignKey(help_text='Entreprise cliente abonnée au module.', on_delete=django.db.models.deletion.CASCADE, related_name='modules_souscrits', to='entreprises.entreprise', verbose_name='entreprise')),
                 ('module', models.ForeignKey(help_text='Module catalogue souscrit.', on_delete=django.db.models.deletion.PROTECT, related_name='entreprises_associees', to='catalogue.cataloguemodule', verbose_name='module')),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
             ],

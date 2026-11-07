@@ -2,7 +2,7 @@
 
 Journal de chantier : rapports journaliers, production, photos, blocages.
 
-Schéma       : tenant
+Tables       : d'entreprise (`ModeleEntreprise`)
 Module CDC   : 2
 Entités MCD  : RapportJournalier, LigneAvancement, ProductionIntervenant, Photo, Blocage
 """

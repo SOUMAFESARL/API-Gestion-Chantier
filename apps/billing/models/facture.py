@@ -43,7 +43,7 @@ class Facture(ModeleBase):
         verbose_name=_("abonnement"),
     )
     entreprise = models.ForeignKey(
-        "tenants.Entreprise",
+        "entreprises.Entreprise",
         on_delete=models.RESTRICT,
         related_name="factures",
         verbose_name=_("entreprise cliente"),

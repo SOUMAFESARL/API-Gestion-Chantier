@@ -1,13 +1,13 @@
 """Routes de développement — **NON VERSIONNÉ, jamais en production.**
 
 Ce fichier est écarté par `.git/info/exclude` : il n'existe que sur un poste de
-développement, et `urls_public.py` l'importe dans un `suppress(ImportError)`.
+développement, et `config/urls.py` l'importe dans un `suppress(ImportError)`.
 Sur un dépôt cloné, il n'y a rien à monter.
 
 **Ce qu'il expose est destructeur**, et mérite donc trois verrous plutôt qu'un :
 
   1. le fichier n'existe pas ailleurs ;
-  2. `urls_public.py` ne le monte que si `DEBUG` ;
+  2. `config/urls.py` ne le monte que si `DEBUG` ;
   3. la vue elle-même exige `OUTILS_TEST=1` dans l'environnement.
 
 Un seul verrou finit toujours par sauter — celui qu'on désarme « cinq minutes
@@ -31,16 +31,14 @@ def _autorise() -> bool:
 
 @csrf_exempt
 def reinitialiser_base(request):
-    """Efface les entreprises d'essai, leurs schémas et leurs demandes.
+    """Efface les entreprises d'essai et leurs demandes.
 
     C'est ce que le bouton « Repartir de zéro » appelle. Il effaçait jusqu'ici
     le seul état du navigateur, ce qui suffisait tant que l'inscription était
     simulée — depuis qu'elle écrit vraiment en base, cela ne suffit plus.
 
-    **`public` et `demo` sont préservés.** Le premier rend `localhost`
-    résolvable : le supprimer ferait répondre 404 à toute requête, y compris à
-    la page d'inscription qui porte ce bouton. Le second est l'espace de
-    démonstration, avec les comptes qui servent à se connecter.
+    **`demo` est préservée** : c'est l'espace de démonstration, avec les comptes qui
+    servent à se connecter.
     """
     if not _autorise():
         return JsonResponse(
@@ -50,10 +48,10 @@ def reinitialiser_base(request):
     if request.method != "POST":
         return JsonResponse({"erreur": {"code": "methode", "details": {}}}, status=405)
 
-    from apps.tenants.models import DemandeInscription, Entreprise
+    from apps.entreprises.models import DemandeInscription, Entreprise
 
     avant = {
-        "entreprises": Entreprise.objects.exclude(schema_name__in=["public", "demo"]).count(),
+        "entreprises": Entreprise.objects.exclude(slug="demo").count(),
         "demandes": DemandeInscription.tous_objets.count(),
     }
 
@@ -62,7 +60,7 @@ def reinitialiser_base(request):
     return JsonResponse(
         {
             "efface": avant,
-            "conserves": ["public", "demo"],
+            "conserves": ["demo"],
         }
     )
 

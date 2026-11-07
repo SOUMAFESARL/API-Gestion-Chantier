@@ -1,6 +1,6 @@
 """Modèle Blocage — Suivi des blocages et points bloquants sur chantier.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 2 (Suivi Technique et Chantier).
 """
 

@@ -288,6 +288,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 5 | Fait le 07/11/2026 — voir ci-dessous | `1132ff3` |
 | 6 | Fait le 07/11/2026 — voir ci-dessous ; reste le report de `feature/perf-requetes` (§11, étape 6) | `29157a2` |
 | 7 | Fait le 07/11/2026 — voir ci-dessous | `6f83185` |
+| 8 | Fait le 07/11/2026 — voir ci-dessous | à venir |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 
@@ -369,3 +370,17 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 
 **Reste hors du lot 7** : le report de `feature/perf-requetes` (§11, étape 6) ; les codes 400/415 des listes de découpage, à aligner sur 404 ; les corps d'écriture qui désigneraient une ligne de B (`{"projet": "<B>"}`) ne sont éprouvés que par les clés composites et la RLS, pas par la suite.
 
+### Lot 8 — ce qui a été fait, et ce qu'il a fait apparaître
+
+- **Plus de django-tenants** : retiré de `requirements/base.txt`, avec les réglages `TENANT_*` et `PUBLIC_SCHEMA_*`, la passerelle `apps/core/passerelle_schema.py` (61 fichiers réécrits sur `contexte_entreprise`, `portee_plateforme` et les lectures `entreprise_courante()` / `slug_courant()` de `apps/entreprises/selectors`), `scripts/audit_catalogue.py` et `migrate_schemas` (route de maintenance `migrer-bd` et `scripts/deploy-cpanel.sh` : `migrate` puis `verifier_isolation`). `check`, `makemigrations --check`, `monter_base` et les tests passent avec le module rendu **inimportable**.
+- **`apps/tenants` devient `apps/entreprises`** (label `entreprises`, migrations `0001` réécrites en place : la base repart de zéro). **`schema_name` devient `slug`** (R-13). **`Domaine` disparaît** (table et migration).
+- **Une seule URLconf** : `config/urls.py` remplace `urls_tenant` et `urls_public` ; `apps/entreprises/urls_tenant.py` devient `urls_profil.py`. Les routes ne changent pas.
+- **Plus d'admin Django** : application, 14 `admin.py`, route et réglage `ENABLE_DJANGO_ADMIN` retirés ; `creer_entreprise_demo` (ex-`creer_tenant_demo`) perd `--acces-django` et le compte technique.
+- **Commandes** : `initialiser_plateforme` (l'entreprise `public` et son domaine) et `gerer_entreprises` retirées — la route de maintenance garde l'inspection, la suppression et l'activation d'abonnement ; l'étape `gerer_entreprises --activer-abonnement e_3at_btp` du déploiement est retirée. `--schema` devient `--entreprise` (`evaluer_statuts_quotidiens`, `relever_dates_hors_cadre`, `retirer_dg_des_chantiers`, `relancer_rapports_manquants`) ; `debloquer_compte` cherche l'adresse en portée plateforme (elle est unique). `vider_inscription_test` passe par `supprimer_definitivement` (elle appelait encore `delete(force_drop=True)`). Tâches planifiées : `…_tous_tenants` devient `…_toutes_entreprises` (réglages et `core.0002`).
+- **Vocabulaire** : `grep -riP "(?<!main)(?<!con)tenant"` ne rend plus rien dans `apps`, `config`, `tests`, `scripts`, `requirements`, `.github`, `manage.py`, `passenger_wsgi.py` (le `grep -ri tenant` du critère attrape « main**tenant** » et « con**tenant** »). Skills `django-expert-reference`, `revue-backend`, `sprint-task-lifecycle` et `README.md` réécrits sur la D9. Restent les documents de `docs/` (historique) et les scripts d'archive `generate_manual_*`.
+- **Ce qu'il a fait apparaître : 17 lectures de `request.tenant`**, que plus rien ne posait depuis le lot 3. Elles rendaient « aucune entreprise » à tout le monde : profil d'entreprise et configuration (`/entreprise/`, `/parametres/configuration/`, 400 « Aucun tenant résolu »), réglage des documents, factures et alertes d'expiration (403), unicité de l'e-mail de contact, entreprise du projet, onboarding, météo et tableau de bord (repli sur Abidjan / CI), liste des modules (tous ouverts). Elles lisent désormais l'entreprise active ; vérifié avec le DG de `demo` : les neuf routes répondent 200 avec ses données. **La suite d'étanchéité ne pouvait pas le voir** : une vue qui ne trouve aucune entreprise ne fuit rien, et son contrôle positif ne regarde pas le contenu de ces routes-là.
+- **Base locale** : remontée par `monter_base --demo demo beta` en 5 min 36 ; l'ancienne est conservée sous `ccd_schema_unique_avant_lot8`. **443 tests** du socle et de l'étanchéité, et les 6 du journal de chantier (fixture `entreprise_demo`, hors CI), passent.
+
+**Ce qui ne change pas** : le contrat de l'API. `schema` et `schema_name` restent dans le jeton, le profil, la connexion et l'emprunt d'identité (valeur : le slug, ou `public` pour le personnel de l'éditeur) jusqu'à l'étape 8 du §11, où le frontend passe à `entreprise`.
+
+**Reste hors du lot 8** : l'étape 8 du frontend (contrat `schema` → `entreprise`, type `AccuseActivation.statut`) ; le report de `feature/perf-requetes` ; `docs/deploiement-cpanel.md` et la crontab de cPanel, au lot 9 ; les imports inutilisés antérieurs relevés par ruff dans les fichiers touchés, laissés en l'état.

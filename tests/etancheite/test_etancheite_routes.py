@@ -56,9 +56,9 @@ FILTRES = {
     "utilisateur": "accounts.Utilisateur",
     "auteur": "accounts.Utilisateur",
     "tiers": "tiers.Tiers",
-    "entreprise": "tenants.Entreprise",
-    "entreprise_id": "tenants.Entreprise",
-    "client": "tenants.Entreprise",
+    "entreprise": "entreprises.Entreprise",
+    "entreprise_id": "entreprises.Entreprise",
+    "client": "entreprises.Entreprise",
     "rapport": "chantier.RapportJournalier",
 }
 

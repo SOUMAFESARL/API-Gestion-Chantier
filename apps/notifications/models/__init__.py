@@ -2,7 +2,7 @@
 
 Notifications in-app, email et push, et leurs préférences.
 
-Schéma       : tenant
+Tables       : d'entreprise (`ModeleEntreprise`)
 Module CDC   : Transverse
 Entités MCD  : Notification, PreferenceNotification
 """

@@ -1,7 +1,7 @@
 """Modèle JournalPlateforme — MLD §4.6.
 
 Journal immuable à insertion seule retraçant toutes les actions effectuées par
-le personnel de l'éditeur sur la plateforme et les tenants clients (dont les
+le personnel de l'éditeur sur la plateforme et les entreprises clientes (dont les
 sessions d'assistance en direct / impersonifications).
 """
 

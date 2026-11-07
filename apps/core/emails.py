@@ -1,7 +1,7 @@
 """L'envoi d'emails — un seul chemin, deux formats, jamais d'exception.
 
 **Pourquoi ce module existe.** Les emails du produit vivaient en `f-string`
-dans trois services : `tenants/services/inscription.py`,
+dans trois services : `entreprises/services/inscription.py`,
 `accounts/services/invitations.py` et `accounts/services/reinitialisation.py`.
 Trois conséquences :
 

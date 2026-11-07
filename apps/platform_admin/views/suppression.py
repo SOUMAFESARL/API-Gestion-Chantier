@@ -4,7 +4,6 @@ import logging
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -19,12 +18,12 @@ from apps.platform_admin.services.notifications import (
     SUJET_SUPPRESSION_ENTREPRISE,
     trouver_dg_actif_entreprise,
 )
-from apps.tenants.models import Entreprise
-from apps.tenants.services.sauvegarde_entreprise import (
+from apps.entreprises.models import Entreprise
+from apps.entreprises.services.sauvegarde_entreprise import (
     SauvegardeImpossible,
     sauvegarder_entreprise,
 )
-from apps.tenants.services.suppression_definitive import (
+from apps.entreprises.services.suppression_definitive import (
     apercu_suppression,
     est_protegee,
     supprimer_definitivement,
@@ -51,7 +50,7 @@ def _erreur(request, code: str, message: str, statut: int) -> Response:
 
 def _entreprise_cliente(client_id) -> Entreprise:
     return get_object_or_404(
-        Entreprise.objects.exclude(schema_name=schema_public()), pk=client_id
+        Entreprise.objects.all(), pk=client_id
     )
 
 
@@ -59,7 +58,7 @@ def _prevenir_dg_avant_suppression(entreprise: Entreprise) -> None:
     """Le DG apprend la suppression avant qu'elle ait lieu — sans le motif, interne à l'éditeur."""
     dg = trouver_dg_actif_entreprise(entreprise)
     if not dg or not dg.email:
-        logger.info("Suppression de %s : aucun DG actif à prévenir.", entreprise.schema_name)
+        logger.info("Suppression de %s : aucun DG actif à prévenir.", entreprise.slug)
         return
     message = (
         "Bonjour,\n\n"
@@ -81,7 +80,7 @@ def _prevenir_dg_avant_suppression(entreprise: Entreprise) -> None:
     if not envoye:
         logger.error(
             "Suppression de %s : le courriel au DG n'est pas parti.",
-            entreprise.schema_name,
+            entreprise.slug,
         )
 
 
@@ -163,7 +162,7 @@ class SupprimerClientDefinitivementView(APIView):
 
         # 7. Confirmation égale au nom technique (slug)
         saisie = str(request.data.get("confirmation", "")).strip().lower()
-        if saisie != entreprise.schema_name.lower():
+        if saisie != entreprise.slug.lower():
             return _erreur(
                 request,
                 "confirmation_invalide",
@@ -188,34 +187,33 @@ class SupprimerClientDefinitivementView(APIView):
         _prevenir_dg_avant_suppression(entreprise)
 
         identifiant = str(entreprise.id)
-        schema = entreprise.schema_name
+        slug = entreprise.slug
         raison = entreprise.raison_sociale
 
         rapport = supprimer_definitivement(entreprise)
 
-        with contexte_schema(schema_public()):
-            JournalPlateforme.objects.create(
-                utilisateur_id=request.user.id,
-                entreprise_id=entreprise.id,
-                action="SUPPRESSION_DEFINITIVE_ENTREPRISE",
-                detail={
-                    "schema": schema,
-                    "raison_sociale": raison,
-                    "motif": motif,
-                    "sauvegarde": sauvegarde.name,
-                    "nb_utilisateurs": rapport["nb_utilisateurs"],
-                    "nb_projets": rapport["nb_projets"],
-                    "nb_adresses_liberees": len(rapport["adresses_liberees"]),
-                },
-                adresse_ip=extraire_ip_client(request),
-                appareil=request.headers.get("User-Agent", "")[:255],
-            )
+        JournalPlateforme.objects.create(
+            utilisateur_id=request.user.id,
+            entreprise_id=entreprise.id,
+            action="SUPPRESSION_DEFINITIVE_ENTREPRISE",
+            detail={
+                "slug": slug,
+                "raison_sociale": raison,
+                "motif": motif,
+                "sauvegarde": sauvegarde.name,
+                "nb_utilisateurs": rapport["nb_utilisateurs"],
+                "nb_projets": rapport["nb_projets"],
+                "nb_adresses_liberees": len(rapport["adresses_liberees"]),
+            },
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
 
         return Response(
             {
                 "statut": "supprimee",
                 "id": identifiant,
-                "slug": schema,
+                "slug": slug,
                 "sauvegarde": sauvegarde.name,
                 **rapport,
             },

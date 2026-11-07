@@ -6,10 +6,10 @@ from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.billing.models import Abonnement, RappelExpiration
+from apps.core.contexte import contexte_entreprise
 from apps.core.emails import envoyer
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 
@@ -54,73 +54,70 @@ def alerte_expiration(abonnement, aujourd_hui=None):
 
 
 def notifications_expiration(entreprise):
-    with contexte_schema(schema_public()):
-        abonnement = (
-            Abonnement.objects.filter(entreprise=entreprise)
-            .order_by("-date_debut", "-cree_le", "-pk")
-            .first()
-        )
-        alerte = alerte_expiration(abonnement) if abonnement else None
-        return [alerte] if alerte else []
+    abonnement = (
+        Abonnement.objects.filter(entreprise=entreprise)
+        .order_by("-date_debut", "-cree_le", "-pk")
+        .first()
+    )
+    alerte = alerte_expiration(abonnement) if abonnement else None
+    return [alerte] if alerte else []
 
 
 def envoyer_rappels_expiration():
     """Rejouable le meme jour ; les echecs SMTP restent eligibles a une reprise."""
     aujourd_hui = timezone.localdate()
     envoyes = 0
-    with contexte_schema(schema_public()):
-        candidats = list(
-            Abonnement.objects.filter(
-                statut=Abonnement.Statut.ACTIF,
-                date_fin__in=[aujourd_hui + timedelta(days=j) for j in SEUILS_EXPIRATION],
-            )
-            .exclude(entreprise__schema_name=schema_public())
-            .values_list("pk", flat=True)
+    candidats = list(
+        Abonnement.objects.filter(
+            statut=Abonnement.Statut.ACTIF,
+            date_fin__in=[aujourd_hui + timedelta(days=j) for j in SEUILS_EXPIRATION],
         )
-        for abonnement_id in candidats:
-            try:
-                # Serialise les executions concurrentes et les renouvellements de cette ligne.
-                with transaction.atomic():
-                    abonnement = (
-                        Abonnement.objects.select_for_update()
-                        .select_related("entreprise")
-                        .get(pk=abonnement_id)
+        .values_list("pk", flat=True)
+    )
+    for abonnement_id in candidats:
+        try:
+            # Serialise les executions concurrentes et les renouvellements de cette ligne.
+            with transaction.atomic():
+                abonnement = (
+                    Abonnement.objects.select_for_update()
+                    .select_related("entreprise")
+                    .get(pk=abonnement_id)
+                )
+                seuil = (abonnement.date_fin - aujourd_hui).days
+                if (
+                    abonnement.statut != Abonnement.Statut.ACTIF
+                    or seuil not in SEUILS_EXPIRATION
+                ):
+                    continue
+                with contexte_entreprise(abonnement.entreprise):
+                    destinataires = list(
+                        Utilisateur.objects.filter(
+                            role_global__in=(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL),
+                            statut=StatutUtilisateur.ACTIF,
+                            is_active=True,
+                        )
+                        .values_list("email", flat=True)
+                        .distinct()
                     )
-                    seuil = (abonnement.date_fin - aujourd_hui).days
-                    if (
-                        abonnement.statut != Abonnement.Statut.ACTIF
-                        or seuil not in SEUILS_EXPIRATION
-                    ):
+                alerte = alerte_expiration(abonnement, aujourd_hui)
+                for email in destinataires:
+                    rappel, _ = RappelExpiration.objects.get_or_create(
+                        abonnement=abonnement,
+                        date_echeance=abonnement.date_fin,
+                        seuil=seuil,
+                        destinataire=email,
+                    )
+                    if rappel.envoye_le:
                         continue
-                    with contexte_schema(abonnement.entreprise.schema_name):
-                        destinataires = list(
-                            Utilisateur.objects.filter(
-                                role_global__in=(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL),
-                                statut=StatutUtilisateur.ACTIF,
-                                is_active=True,
-                            )
-                            .values_list("email", flat=True)
-                            .distinct()
-                        )
-                    alerte = alerte_expiration(abonnement, aujourd_hui)
-                    for email in destinataires:
-                        rappel, _ = RappelExpiration.objects.get_or_create(
-                            abonnement=abonnement,
-                            date_echeance=abonnement.date_fin,
-                            seuil=seuil,
-                            destinataire=email,
-                        )
-                        if rappel.envoye_le:
-                            continue
-                        if envoyer(
-                            "abonnement_expiration",
-                            "Votre abonnement arrive a expiration",
-                            email,
-                            {**alerte, "raison_sociale": abonnement.entreprise.raison_sociale},
-                        ):
-                            rappel.envoye_le = timezone.now()
-                            rappel.save(update_fields=["envoye_le", "modifie_le"])
-                            envoyes += 1
-            except Exception:
-                logger.exception("Echec du rappel d'abonnement %s", abonnement_id)
+                    if envoyer(
+                        "abonnement_expiration",
+                        "Votre abonnement arrive a expiration",
+                        email,
+                        {**alerte, "raison_sociale": abonnement.entreprise.raison_sociale},
+                    ):
+                        rappel.envoye_le = timezone.now()
+                        rappel.save(update_fields=["envoye_le", "modifie_le"])
+                        envoyes += 1
+        except Exception:
+            logger.exception("Echec du rappel d'abonnement %s", abonnement_id)
     return envoyes

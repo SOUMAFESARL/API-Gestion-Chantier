@@ -13,7 +13,6 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.accounts.services.authentification import (
@@ -48,11 +47,10 @@ def authentifier_super_admin(
     et possède l'attribut `is_superuser=True`.
     """
     email_nettoye = email.strip().lower()
-    public_schema = schema_public()
     echec: ErreurMetier | None = None
     super_admin: Utilisateur | None = None
 
-    with contexte_schema(public_schema), transaction.atomic():
+    with transaction.atomic():
         candidat = (
             Utilisateur.objects.select_for_update().filter(email__iexact=email_nettoye).first()
         )
@@ -83,17 +81,16 @@ def authentifier_super_admin(
     # En cas d'échec d'authentification
     if echec is not None or super_admin is None:
         try:
-            with contexte_schema(public_schema):
-                JournalPlateforme.objects.create(
-                    action="ECHEC_CONNEXION_SUPER_ADMIN",
-                    detail={
-                        "email": email_nettoye,
-                        "motif": "identifiants_invalides",
-                        "statut": "ECHEC",
-                    },
-                    adresse_ip=adresse_ip,
-                    appareil=appareil[:255] if appareil else "",
-                )
+            JournalPlateforme.objects.create(
+                action="ECHEC_CONNEXION_SUPER_ADMIN",
+                detail={
+                    "email": email_nettoye,
+                    "motif": "identifiants_invalides",
+                    "statut": "ECHEC",
+                },
+                adresse_ip=adresse_ip,
+                appareil=appareil[:255] if appareil else "",
+            )
         except Exception:
             logger.exception(
                 "Échec de journalisation d'audit pour tentative de connexion Super Admin."
@@ -121,20 +118,19 @@ def authentifier_super_admin(
 
     # Journalisation de l'accès réussi dans JournalPlateforme
     try:
-        with contexte_schema(public_schema):
-            JournalPlateforme.objects.create(
-                utilisateur_id=super_admin.id,
-                action="CONNEXION_SUPER_ADMIN",
-                detail={
-                    "email": super_admin.email,
-                    "nom": f"{super_admin.nom} {super_admin.prenom}".strip(),
-                    "role_global": super_admin.role_global,
-                    "origine": origine,
-                    "statut": "SUCCES",
-                },
-                adresse_ip=adresse_ip,
-                appareil=appareil[:255] if appareil else "",
-            )
+        JournalPlateforme.objects.create(
+            utilisateur_id=super_admin.id,
+            action="CONNEXION_SUPER_ADMIN",
+            detail={
+                "email": super_admin.email,
+                "nom": f"{super_admin.nom} {super_admin.prenom}".strip(),
+                "role_global": super_admin.role_global,
+                "origine": origine,
+                "statut": "SUCCES",
+            },
+            adresse_ip=adresse_ip,
+            appareil=appareil[:255] if appareil else "",
+        )
     except Exception:
         logger.exception(
             "Échec d'enregistrement de la connexion Super Admin dans JournalPlateforme."
@@ -155,7 +151,6 @@ def deconnecter_super_admin(
     appareil: str = "",
 ) -> None:
     """Clôture la session Super Admin et révoque le jeton de renouvellement."""
-    public_schema = schema_public()
 
     # Révocation côté serveur via la liste noire Redis si jeton fourni
     if refresh_token:
@@ -182,25 +177,23 @@ def deconnecter_super_admin(
                 payload = jwt.decode(refresh_token, options={"verify_signature": False})
                 token_uid = payload.get("user_id")
                 if token_uid:
-                    with contexte_schema(public_schema):
-                        u = Utilisateur.objects.filter(pk=token_uid).first()
-                        if u:
-                            user_id = u.id
-                            user_email = u.email
+                    u = Utilisateur.objects.filter(pk=token_uid).first()
+                    if u:
+                        user_id = u.id
+                        user_email = u.email
             except Exception:
                 pass
 
-        with contexte_schema(public_schema):
-            JournalPlateforme.objects.create(
-                utilisateur_id=user_id,
-                action="DECONNEXION_SUPER_ADMIN",
-                detail={
-                    "email": user_email,
-                    "statut": "SUCCES",
-                },
-                adresse_ip=adresse_ip,
-                appareil=appareil[:255] if appareil else "",
-            )
+        JournalPlateforme.objects.create(
+            utilisateur_id=user_id,
+            action="DECONNEXION_SUPER_ADMIN",
+            detail={
+                "email": user_email,
+                "statut": "SUCCES",
+            },
+            adresse_ip=adresse_ip,
+            appareil=appareil[:255] if appareil else "",
+        )
     except Exception:
         logger.exception(
             "Échec d'enregistrement de la déconnexion Super Admin dans JournalPlateforme."

@@ -1,6 +1,6 @@
 """Services métier pour la gestion des blocages de chantier (MLD §6.6, CDC Module 2).
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Chaque mutation déclenche un recalcul réactif asynchrone de l'indice de santé (C8).
 """
 

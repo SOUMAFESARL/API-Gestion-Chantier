@@ -1,6 +1,6 @@
 """Modèle MotifReport — motifs dynamiques de report de dates prévisionnelles.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets).
 """
 

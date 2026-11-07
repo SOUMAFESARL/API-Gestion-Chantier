@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tenants', '0001_initial'),
+        ('entreprises', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
                 ('suppression_prevue_le', models.DateField(blank=True, null=True, verbose_name='suppression prévue le')),
                 ('donnees_supprimees_le', models.DateTimeField(blank=True, null=True, verbose_name='données supprimées le')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='abonnements', to='tenants.entreprise')),
+                ('entreprise', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='abonnements', to='entreprises.entreprise')),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
             ],
             options={
@@ -66,7 +66,7 @@ class Migration(migrations.Migration):
                 ('contexte_facturation', models.JSONField(blank=True, default=dict)),
                 ('abonnement', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='factures', to='billing.abonnement', verbose_name='abonnement')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='factures', to='tenants.entreprise', verbose_name='entreprise cliente')),
+                ('entreprise', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='factures', to='entreprises.entreprise', verbose_name='entreprise cliente')),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
             ],
             options={

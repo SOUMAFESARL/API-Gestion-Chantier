@@ -7,7 +7,7 @@
 la durée médiane de trois appels, une **empreinte** de la réponse JSON, et le nombre de requêtes
 de **réglage** de la session, qui ne font pas de travail mais coûtent un aller-retour :
 
-- dans l'ancien modèle (django-tenants), les `SET search_path`, que Django compte parmi les
+- dans l'ancien modèle multi-schéma, les `SET search_path`, que Django compte parmi les
   requêtes (colonne `search_path` des anciennes mesures) ;
 - dans le schéma unique (D9), le `set_config` de la RLS (`apps.core.rls`), envoyé par le curseur
   brut, que Django ne voit pas (colonne `rls`).
@@ -173,10 +173,10 @@ class Command(BaseCommand):
         from apps.core.contexte import contexte_entreprise, portee_plateforme
         from apps.projets.management.commands.peupler_donnees_test import adresse_entreprise
         from apps.projets.models import Projet
-        from apps.tenants.models import Entreprise
+        from apps.entreprises.models import Entreprise
 
         with portee_plateforme(motif="mesurer_requetes : entreprise mesurée"):
-            entreprise = Entreprise.objects.filter(schema_name=slug).first()
+            entreprise = Entreprise.objects.filter(slug=slug).first()
         if entreprise is None:
             raise CommandError(f"Aucune entreprise « {slug} ».")
 

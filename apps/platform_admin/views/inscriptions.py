@@ -1,28 +1,29 @@
-"""Validation des inscriptions par un super admin du schema public."""
+"""Validation des inscriptions par un super admin de la plateforme."""
 
 from django.db import connection
 from django.shortcuts import get_object_or_404
-from apps.core.passerelle_schema import schema_public, schema_courant
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.contexte import entreprise_courante_id
 from apps.core.ip_restriction import extraire_ip_client
 from apps.platform_admin.serializers.inscriptions import (
     DemandeInscriptionAdminSerializer,
     RefusInscriptionSerializer,
 )
 from apps.platform_admin.services.inscriptions import decider_inscription
-from apps.tenants.models import DemandeInscription
+from apps.entreprises.models import DemandeInscription
 
 
 class SuperAdminPublic(BasePermission):
     def has_permission(self, request, view):
         return (
-            schema_courant() == schema_public()
+            entreprise_courante_id() is None
             and request.user.is_authenticated
+            and getattr(request.user, "entreprise_id", None) is None
             and request.user.is_active
             and request.user.is_superuser
         )
@@ -30,7 +31,7 @@ class SuperAdminPublic(BasePermission):
 
 ERREURS = {
     401: OpenApiResponse(description="Authentification requise."),
-    403: OpenApiResponse(description="Super admin du schema public requis."),
+    403: OpenApiResponse(description="Super admin de la plateforme requis."),
     404: OpenApiResponse(description="Demande introuvable."),
     409: OpenApiResponse(description="Etat incompatible avec cette decision."),
 }

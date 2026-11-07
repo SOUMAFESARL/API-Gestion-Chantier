@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Utilitaire en ligne de commande de Django.
 
-Rappel multi-tenant : `migrate` seul ne fait rien d'utile ici.
-Utiliser `migrate_schemas --shared` ou `migrate_schemas --tenant`.
+Une base vide se monte par `python manage.py monter_base` (migrations, contrôle de l'isolation,
+ensemencement).
 """
 
 import os

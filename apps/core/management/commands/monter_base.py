@@ -15,7 +15,7 @@ Sur une base **vide** (créée, sans table), dans l'ordre :
 5. avec `--super-admin` : le compte du personnel CCD Digital (Q4, Q8), entreprise nulle. Le mot de
    passe se lit dans la variable d'environnement `CCD_SUPER_ADMIN_MOTDEPASSE`, jamais sur la
    ligne de commande, qui reste dans l'historique du terminal ;
-6. avec `--demo` (refusé quand `DEBUG` est faux) : pour chaque slug, `creer_tenant_demo` puis
+6. avec `--demo` (refusé quand `DEBUG` est faux) : pour chaque slug, `creer_entreprise_demo` puis
    `peupler_donnees_test`. Deux entreprises (`demo beta`) donnent ce dont la suite d'étanchéité a
    besoin.
 
@@ -86,7 +86,7 @@ class Command(BaseCommand):
 
         for slug in options["demo"] or []:
             self._etape(f"Entreprise de démonstration « {slug} »")
-            call_command("creer_tenant_demo", entreprise=slug)
+            call_command("creer_entreprise_demo", entreprise=slug)
             call_command("peupler_donnees_test", entreprise=slug)
 
         self.stdout.write("")

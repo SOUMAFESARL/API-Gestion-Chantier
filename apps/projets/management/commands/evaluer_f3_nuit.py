@@ -1,7 +1,7 @@
 r"""Évaluation de nuit du suivi d'avancement (F3), sans Celery.
 
 Fait exactement ce que fait la tâche Celery Beat de 00 h 01
-(`apps.projets.tasks.evaluer_f3_nuit_tous_tenants`) : rattrapage des rapports
+(`apps.projets.tasks.evaluer_f3_nuit_toutes_entreprises`) : rattrapage des rapports
 approuvés non synchronisés, indice de santé, statuts et alertes de retard, pour
 chaque entreprise active ou en essai.
 
@@ -15,12 +15,12 @@ l'appelle :
 
 from django.core.management.base import BaseCommand
 
-from apps.projets.tasks import evaluer_f3_nuit_tous_tenants
+from apps.projets.tasks import evaluer_f3_nuit_toutes_entreprises
 
 
 class Command(BaseCommand):
     help = "Évaluation de nuit F3 (indice de santé, statuts, alertes) pour toutes les entreprises."
 
     def handle(self, *args, **options):
-        resultat = evaluer_f3_nuit_tous_tenants()
+        resultat = evaluer_f3_nuit_toutes_entreprises()
         self.stdout.write(self.style.SUCCESS(f"Évaluation F3 terminée : {resultat}"))

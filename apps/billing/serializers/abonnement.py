@@ -23,7 +23,7 @@ class PlanResumeSerializer(serializers.ModelSerializer):
 
 
 class AbonnementSerializer(serializers.ModelSerializer):
-    """Sérialiseur pour la lecture de l'abonnement du tenant — T-025 §8."""
+    """Sérialiseur pour la lecture de l'abonnement de l'entreprise — T-025 §8."""
 
     plan = PlanResumeSerializer(read_only=True)
     jours_essai_restants = serializers.IntegerField(read_only=True)

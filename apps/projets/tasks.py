@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # en premier. Les services s'importent dans le corps des tâches.
 
 __all__ = [
-    "evaluer_f3_nuit_tous_tenants",
+    "evaluer_f3_nuit_toutes_entreprises",
     "notifier_dg_derive_delai",
     "recalculer_sante_projet_task",
 ]
@@ -106,7 +106,7 @@ def notifier_dg_derive_delai(
 
 
 @shared_task
-def evaluer_f3_nuit_tous_tenants() -> dict:
+def evaluer_f3_nuit_toutes_entreprises() -> dict:
     """Tâche Celery Beat quotidienne de nuit à 00h01 (SFD F3 §4.6, §7).
 
     Pour chaque entreprise cliente, dans son contexte d'entreprise :
@@ -126,15 +126,15 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
         evaluer_statut_projet,
         evaluer_statuts_arbre,
     )
-    from apps.tenants.models import Entreprise
+    from apps.entreprises.models import Entreprise
 
-    entreprises = Entreprise.objects.exclude(schema_name="public").filter(
+    entreprises = Entreprise.objects.all().filter(
         statut__in=[StatutEntreprise.ACTIF, StatutEntreprise.ESSAI]
     )
     rapport_global = {}
 
     for ent in entreprises:
-        if not ent.schema_name:
+        if not ent.slug:
             continue
         try:
             with contexte_entreprise(ent):
@@ -153,9 +153,9 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                             nb_rattrapes += 1
                     except Exception as err:
                         logger.error(
-                            "Erreur lors du rattrapage du rapport %s (tenant %s) : %s",
+                            "Erreur lors du rattrapage du rapport %s (entreprise %s) : %s",
                             rap_id,
-                            ent.schema_name,
+                            ent.slug,
                             err,
                             exc_info=True,
                         )
@@ -166,9 +166,9 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                         evaluer_statuts_arbre(projet_arbre)
                     except Exception as err:
                         logger.error(
-                            "Erreur d'évaluation des cases du projet %s (tenant %s) : %s",
+                            "Erreur d'évaluation des cases du projet %s (entreprise %s) : %s",
                             projet_arbre.id,
-                            ent.schema_name,
+                            ent.slug,
                             err,
                             exc_info=True,
                         )
@@ -183,9 +183,9 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                         enregistrer_releve(projet_releve)
                     except Exception as err:
                         logger.error(
-                            "Erreur du relevé d'avancement du projet %s (tenant %s) : %s",
+                            "Erreur du relevé d'avancement du projet %s (entreprise %s) : %s",
                             projet_releve.id,
-                            ent.schema_name,
+                            ent.slug,
                             err,
                             exc_info=True,
                         )
@@ -209,9 +209,9 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                         nb_indices += 1
                     except Exception as err:
                         logger.error(
-                            "Erreur lors du recalcul de santé du projet %s (tenant %s) : %s",
+                            "Erreur lors du recalcul de santé du projet %s (entreprise %s) : %s",
                             pid,
-                            ent.schema_name,
+                            ent.slug,
                             err,
                             exc_info=True,
                         )
@@ -232,9 +232,9 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
 
                     except Exception as err:
                         logger.error(
-                            "Erreur lors de l'évaluation du statut du projet %s (tenant %s) : %s",
+                            "Erreur lors de l'évaluation du statut du projet %s (entreprise %s) : %s",
                             proj.id,
-                            ent.schema_name,
+                            ent.slug,
                             err,
                             exc_info=True,
                         )
@@ -244,31 +244,31 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                     except Exception as err:
                         logger.error(
                             "Erreur lors de la détection des alertes de retard du "
-                            "projet %s (tenant %s) : %s",
+                            "projet %s (entreprise %s) : %s",
                             proj.id,
-                            ent.schema_name,
+                            ent.slug,
                             err,
                             exc_info=True,
                         )
 
-                rapport_global[ent.schema_name] = {
+                rapport_global[ent.slug] = {
                     "rapports_rattrapes": nb_rattrapes,
                     "projets_indices_recalcules": nb_indices,
                     "projets_modifies": nb_projets_modifies,
                 }
                 logger.info(
-                    "Évaluation F3 nuit réussie pour tenant '%s' : %s",
-                    ent.schema_name,
-                    rapport_global[ent.schema_name],
+                    "Évaluation F3 nuit réussie pour l'entreprise '%s' : %s",
+                    ent.slug,
+                    rapport_global[ent.slug],
                 )
         except Exception as e:
             logger.error(
-                "Erreur lors de l'évaluation F3 nuit pour tenant '%s' : %s",
-                ent.schema_name,
+                "Erreur lors de l'évaluation F3 nuit pour l'entreprise '%s' : %s",
+                ent.slug,
                 e,
                 exc_info=True,
             )
-            rapport_global[ent.schema_name] = {"erreur": str(e)}
+            rapport_global[ent.slug] = {"erreur": str(e)}
 
     return rapport_global
 

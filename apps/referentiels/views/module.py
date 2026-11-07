@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.catalogue.models import CatalogueModule
 from apps.accounts.models import Module
 from apps.accounts.services.roles import (
@@ -31,14 +32,14 @@ class ModuleListView(APIView):
         responses={200: ModuleItemSerializer(many=True)},
     )
     def get(self, request):
-        tenant = getattr(request, "tenant", None)
-        if tenant and getattr(tenant, "schema_name", "public") != "public":
+        entreprise = entreprise_courante()
+        if entreprise is not None:
             # Même règle que les droits réels : tout module actif du catalogue, sauf ceux que le
             # super admin a désactivés pour cette entreprise. « Administration » n'est pas un
             # module qu'on souscrit : il reste hors de cette liste.
             from apps.core.droits import MODULES_SYSTEME, _obtenir_modules_actifs
 
-            codes_actifs = _obtenir_modules_actifs(tenant) - MODULES_SYSTEME
+            codes_actifs = _obtenir_modules_actifs(entreprise) - MODULES_SYSTEME
             ids_actifs = [
                 m.id
                 for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)

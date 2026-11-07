@@ -49,9 +49,9 @@ CIBLES: dict[tuple[str, str], str] = {
     ("invitations", "pk"): "accounts.Utilisateur",
     ("comptes", "pk"): "accounts.Utilisateur",
     ("roles", "pk"): "accounts.Role",
-    ("clients", "client_id"): "tenants.Entreprise",
-    ("entreprises", "entreprise_id"): "tenants.Entreprise",
-    ("inscriptions", "pk"): "tenants.DemandeInscription",
+    ("clients", "client_id"): "entreprises.Entreprise",
+    ("entreprises", "entreprise_id"): "entreprises.Entreprise",
+    ("inscriptions", "pk"): "entreprises.DemandeInscription",
     ("factures", "pk"): "billing.Facture",
     ("statut", "transaction_id"): "billing.PaiementAbonnement.reference_transaction",
 }
@@ -243,7 +243,7 @@ def modeles_d_entreprise():
     """Tout modèle qui rattache ses lignes à une entreprise : les `ModeleEntreprise` (sous RLS),
     et les tables de la plateforme qui portent une clé `entreprise` (abonnement, factures,
     demandes d'inscription…) — celles-là, seule la vue les protège."""
-    from apps.tenants.models import Entreprise
+    from apps.entreprises.models import Entreprise
 
     for modele in apps.get_models():
         if not modele._meta.managed or modele is Entreprise:

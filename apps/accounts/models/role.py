@@ -1,6 +1,6 @@
 """Modèles pour la gestion dynamique des rôles et des permissions par module.
 
-Schéma : tenant (et public pour d'éventuels rôles plateforme).
+Tables d'entreprise (`ModeleEntreprise`) : chaque entreprise a ses rôles.
 Entités : Role, RoleModulePermission.
 """
 
@@ -15,7 +15,7 @@ __all__ = ["Role", "RoleModulePermission"]
 
 
 class Role(ModeleEntreprise):
-    """Rôle au sein d'une organisation cliente (tenant).
+    """Rôle au sein d'une organisation cliente.
 
     Les rôles système (AD, CP, CT, CC, DG, DF, VI) sont initialisés par défaut
     et ne peuvent pas être supprimés pour garantir la stabilité des workflows
@@ -97,7 +97,7 @@ class RoleModulePermissionQuerySet(RequeteEntreprise):
 class RoleModulePermission(ModeleEntreprise):
     """Permissions accordées à un rôle sur l'un des modules applicatifs dynamiques BTP.
 
-    Matrice par défaut au niveau de l'entreprise (tenant).
+    Matrice par défaut au niveau de l'entreprise.
     Intégrité référentielle stricte : la suppression d'un module supprime
     automatiquement en cascade ses permissions associées.
     """

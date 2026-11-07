@@ -29,7 +29,7 @@ def relancer_essais() -> int:
     **Elle tourne sans entreprise** : les abonnements sont des tables de la
     plateforme. Puis elle **ouvre le contexte de chaque client** pour compter ce
     qui y a été construit. Sans lui, le compte lèverait `HorsContexteEntreprise`
-    (D9, R-4) — là où, sous django-tenants, il trouvait zéro sans rien dire.
+    (D9, R-4) — là où, dans l'ancien modèle multi-schéma, il trouvait zéro sans rien dire.
 
     **Elle ne décide de rien.** Le passage en lecture seule est évalué à la
     requête, pas ici : une tâche qui coupe l'accès à 06 h 00 UTC couperait
@@ -52,7 +52,7 @@ def relancer_essais() -> int:
         ).select_related("entreprise")
 
         for abonnement in abonnements:
-            schema = abonnement.entreprise.schema_name
+            schema = abonnement.entreprise.slug
 
             try:
                 with contexte_entreprise(abonnement.entreprise_id):

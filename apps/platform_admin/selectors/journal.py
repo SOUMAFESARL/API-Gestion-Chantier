@@ -1,6 +1,5 @@
 """Sélecteurs pour le journal d'audit de la plateforme."""
 
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.platform_admin.models import JournalPlateforme
 
@@ -14,26 +13,24 @@ def journal_plateforme(
     action=None,
 ):
     """Le journal filtré, du plus récent au plus ancien — un QuerySet, non évalué."""
-    with contexte_schema(schema_public()):
-        qs = JournalPlateforme.objects.all()
+    qs = JournalPlateforme.objects.all()
 
-        if du is not None:
-            qs = qs.filter(horodatage__date__gte=du)
-        if au is not None:
-            qs = qs.filter(horodatage__date__lte=au)
-        if utilisateur_id is not None:
-            qs = qs.filter(utilisateur_id=utilisateur_id)
-        if entreprise_id is not None:
-            qs = qs.filter(entreprise_id=entreprise_id)
-        if action:
-            qs = qs.filter(action=action)
+    if du is not None:
+        qs = qs.filter(horodatage__date__gte=du)
+    if au is not None:
+        qs = qs.filter(horodatage__date__lte=au)
+    if utilisateur_id is not None:
+        qs = qs.filter(utilisateur_id=utilisateur_id)
+    if entreprise_id is not None:
+        qs = qs.filter(entreprise_id=entreprise_id)
+    if action:
+        qs = qs.filter(action=action)
 
-        return qs.order_by("-horodatage", "-id")
+    return qs.order_by("-horodatage", "-id")
 
 
 def codes_actions_journal() -> list[str]:
     """Retourne la liste triée des codes d'action distincts présents au journal."""
-    with contexte_schema(schema_public()):
-        return sorted(
-            set(JournalPlateforme.objects.values_list("action", flat=True).distinct())
-        )
+    return sorted(
+        set(JournalPlateforme.objects.values_list("action", flat=True).distinct())
+    )

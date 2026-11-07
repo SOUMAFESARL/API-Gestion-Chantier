@@ -4,11 +4,8 @@ Le code ne connaît que `django.core.cache` : **Redis en production, cache
 local en développement**. Le support est un réglage, pas une dépendance.
 
 **Pourquoi pas les tables `token_blacklist` de SimpleJWT** — décision S4.
-`OutstandingToken` porte une clé étrangère vers `AUTH_USER_MODEL`, et
-`utilisateur` existe dans `public` **et** dans chaque schéma client (écart
-E1) : placée dans `SHARED_APPS` la table pointerait vers `public.utilisateur`,
-où l'UUID d'un utilisateur de `demo` n'existe pas ; placée dans `TENANT_APPS`
-elle ne couvrirait pas le personnel de la plateforme. Deux autres raisons en
+La raison d'origine — la table `utilisateur` existait dans chaque schéma (écart E1) — a disparu
+avec la D9. Restent les deux autres, en
 §3.1 : la table grandit sans fin, et le renouvellement est la requête la plus
 fréquente de l'API après la lecture.
 
@@ -20,7 +17,7 @@ révoqué d'un client refuserait le jeton d'un autre.
 
 import time
 
-from apps.core.passerelle_schema import schema_courant
+from apps.entreprises.selectors import slug_courant
 from django.core.cache import cache
 from django.db import connection
 from django.utils.translation import gettext_lazy as _
@@ -68,21 +65,21 @@ class ServiceIndisponible(ErreurMetier):
     default_detail = _("Service momentanément indisponible. Réessayez dans un instant.")
 
 
-def _schema() -> str:
-    """Le schéma courant, résolu par django-tenants avant la vue."""
-    return schema_courant()
+def _portee() -> str:
+    """Le slug de l'entreprise active, ou `plateforme` pour le personnel de l'éditeur."""
+    return slug_courant() or "plateforme"
 
 
 def _cle_revoque(jti: str) -> str:
-    return f"{PREFIXE}:revoque:{_schema()}:{jti}"
+    return f"{PREFIXE}:revoque:{_portee()}:{jti}"
 
 
 def _cle_session(sid: str) -> str:
-    return f"{PREFIXE}:session:{_schema()}:{sid}"
+    return f"{PREFIXE}:session:{_portee()}:{sid}"
 
 
 def _cle_epoque(utilisateur_id) -> str:
-    return f"{PREFIXE}:epoque:{_schema()}:{utilisateur_id}"
+    return f"{PREFIXE}:epoque:{_portee()}:{utilisateur_id}"
 
 
 def _ecrire(cle: str, valeur: str, ttl: int) -> None:

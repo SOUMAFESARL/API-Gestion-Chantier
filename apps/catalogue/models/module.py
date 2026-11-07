@@ -11,7 +11,7 @@ __all__ = ["CatalogueModule"]
 class CatalogueModule(ModeleBase):
     """Module applicatif dynamique souverain de la plateforme BTP.
 
-    Stocké uniquement dans le schéma `public`. Les tenants y font référence
+    Table de plateforme, sans `entreprise_id`. Les entreprises y font référence
     directement sans duplication de données ni dérive d'identifiants.
     """
 

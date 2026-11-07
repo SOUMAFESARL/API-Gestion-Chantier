@@ -1,6 +1,6 @@
 """Troisième couche de l'isolation : deux entreprises peuplées, et ce qu'il faut pour les opposer.
 
-`demo` (A) et `beta` (B) sont créées par les commandes de développement — `creer_tenant_demo`,
+`demo` (A) et `beta` (B) sont créées par les commandes de développement — `creer_entreprise_demo`,
 puis `peupler_donnees_test` sur deux chantiers (`TEST-2026-002` : blocages, journaux manquants ;
 `TEST-2026-006` : arrêt de chantier) —, puis complétées (`completer`) des lignes que le jeu ne crée
 pas et que des routes désignent. Le peuplement se fait **une fois par session**, hors des
@@ -40,7 +40,7 @@ def django_db_setup(django_db_setup, django_db_blocker):
         annee = timezone.localdate().year
         call_command("charger_jours_feries", annees=[annee, annee + 1], stdout=silence)
         for slug in (SLUG_A, SLUG_B):
-            call_command("creer_tenant_demo", entreprise=slug, stdout=silence)
+            call_command("creer_entreprise_demo", entreprise=slug, stdout=silence)
             call_command(
                 "peupler_donnees_test", entreprise=slug, chantiers=CHANTIERS, stdout=silence
             )
@@ -108,13 +108,13 @@ def _jeton(entreprise):
 @pytest.fixture(scope="session")
 def monde(django_db_setup, django_db_blocker) -> Monde:
     from apps.core.contexte import portee_plateforme
-    from apps.tenants.models import Entreprise
+    from apps.entreprises.models import Entreprise
 
     with django_db_blocker.unblock():
         with portee_plateforme(motif="suite d'étanchéité : inventaire de B"):
-            a = Entreprise.objects.get(schema_name=SLUG_A)
-            b = Entreprise.objects.get(schema_name=SLUG_B)
-            exemples, identifiants = {"tenants.Entreprise": str(b.pk)}, {str(b.pk)}
+            a = Entreprise.objects.get(slug=SLUG_A)
+            b = Entreprise.objects.get(slug=SLUG_B)
+            exemples, identifiants = {"entreprises.Entreprise": str(b.pk)}, {str(b.pk)}
             from apps.projets.models import Projet
 
             reference = Projet._base_manager.get(entreprise=b, reference=PROJET_DE_REFERENCE)

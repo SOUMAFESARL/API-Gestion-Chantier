@@ -14,14 +14,14 @@ class Migration(migrations.Migration):
         ('accounts', '0001_initial'),
         ('auth', '0012_alter_user_first_name_max_length'),
         ('catalogue', '0001_initial'),
-        ('tenants', '0001_initial'),
+        ('entreprises', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='utilisateur',
             name='entreprise',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='utilisateurs', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='utilisateurs', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='utilisateur',
@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='appareil',
             name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='appareil',
@@ -71,7 +71,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='invitation',
             name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='invitation',
@@ -86,7 +86,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='jetonreinitialisation',
             name='entreprise',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='jetonreinitialisation',
@@ -106,7 +106,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='module',
             name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='module',
@@ -121,7 +121,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='permission',
             name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='permission',
@@ -141,7 +141,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='role',
             name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='role',
@@ -161,7 +161,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='rolemodulepermission',
             name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise'),
+            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
         ),
         migrations.AddField(
             model_name='rolemodulepermission',

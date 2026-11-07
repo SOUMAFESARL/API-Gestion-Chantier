@@ -24,11 +24,11 @@ from django.db import transaction
 from rest_framework.exceptions import APIException, ValidationError
 
 from apps.catalogue.models.referentiel import cle_comparaison
-from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
+from apps.entreprises.selectors import entreprise_courante
 from apps.projets.models import PersonneMainOeuvre
 from apps.projets.services import main_oeuvre
 from apps.projets.services.import_export import lire_fichier
-from apps.tenants.services.telephones import est_e164, normaliser_telephone
+from apps.entreprises.services.telephones import est_e164, normaliser_telephone
 
 __all__ = [
     "appliquer_import",
@@ -71,7 +71,7 @@ def _texte(valeur) -> str:
 
 
 def _pays_entreprise() -> str:
-    pays = (getattr(_entreprise_active(), "pays", "") or "").upper()
+    pays = (getattr(entreprise_courante(), "pays", "") or "").upper()
     return pays if pays in PAYS else "CI"
 
 

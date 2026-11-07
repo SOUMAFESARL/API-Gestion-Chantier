@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.tenants.models import DemandeInscription
+from apps.entreprises.models import DemandeInscription
 
 
 class DemandeInscriptionAdminSerializer(serializers.ModelSerializer):

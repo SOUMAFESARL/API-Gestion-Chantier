@@ -2,7 +2,6 @@
 
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.exceptions import ValidationError
@@ -26,14 +25,13 @@ _exiger_superviseur = exiger_superviseur
 
 
 def _journaliser(request, action: str, detail: dict) -> None:
-    with contexte_schema(schema_public()):
-        JournalPlateforme.objects.create(
-            utilisateur_id=request.user.id,
-            action=action,
-            detail=detail,
-            adresse_ip=request.META.get("REMOTE_ADDR"),
-            appareil=request.headers.get("User-Agent", "")[:255],
-        )
+    JournalPlateforme.objects.create(
+        utilisateur_id=request.user.id,
+        action=action,
+        detail=detail,
+        adresse_ip=request.META.get("REMOTE_ADDR"),
+        appareil=request.headers.get("User-Agent", "")[:255],
+    )
 
 
 def _identite_publique(request) -> dict:
@@ -50,13 +48,12 @@ class TarifsPublicsView(APIView):
 
     @extend_schema(summary="Tarifs publics des forfaits", responses={200: dict})
     def get(self, request):
-        with contexte_schema(schema_public()):
-            plans = Plan.objects.filter(
-                est_actif=True,
-                code__in=[c.value for c in CODES_FORFAITS],
-                prix_mensuel_montant__isnull=False,
-            ).order_by("prix_mensuel_montant")
-            return Response([tarif_public(p) for p in plans], status=status.HTTP_200_OK)
+        plans = Plan.objects.filter(
+            est_actif=True,
+            code__in=[c.value for c in CODES_FORFAITS],
+            prix_mensuel_montant__isnull=False,
+        ).order_by("prix_mensuel_montant")
+        return Response([tarif_public(p) for p in plans], status=status.HTTP_200_OK)
 
 
 class IdentitePublicView(APIView):
@@ -67,8 +64,7 @@ class IdentitePublicView(APIView):
 
     @extend_schema(summary="Identité publique de la plateforme", responses={200: dict})
     def get(self, request):
-        with contexte_schema(schema_public()):
-            return Response(_identite_publique(request), status=status.HTTP_200_OK)
+        return Response(_identite_publique(request), status=status.HTTP_200_OK)
 
 
 class AdminTarifsView(APIView):
@@ -84,7 +80,7 @@ class AdminTarifsView(APIView):
         serializer.is_valid(raise_exception=True)
         demandes = serializer.validated_data["tarifs"]
 
-        with contexte_schema(schema_public()), transaction.atomic():
+        with transaction.atomic():
             plans = {p.code: p for p in Plan.objects.select_for_update().filter(
                 code__in=[d["plan_code"] for d in demandes]
             )}
@@ -106,9 +102,8 @@ class AdminTarifsView(APIView):
                 plan.save()
 
         _journaliser(request, "MODIFICATION_TARIFS", {"forfaits": sorted(plans)})
-        with contexte_schema(schema_public()):
-            lus = Plan.objects.filter(code__in=list(plans)).order_by("prix_mensuel_montant")
-            return Response([tarif_public(p) for p in lus], status=status.HTTP_200_OK)
+        lus = Plan.objects.filter(code__in=list(plans)).order_by("prix_mensuel_montant")
+        return Response([tarif_public(p) for p in lus], status=status.HTTP_200_OK)
 
     def patch(self, request):
         """Alias de `PUT` : le client HTTP du frontend n'expose que PATCH pour les écritures."""
@@ -138,16 +133,15 @@ class AdminIdentiteView(APIView):
             if fichier.size > OCTETS_LOGO_MAX:
                 raise ValidationError({"logo": [_("Le logo ne peut pas dépasser 2 Mo.")]})
 
-        with contexte_schema(schema_public()):
-            identite = IdentitePlateforme.obtenir()
-            if nom is not None:
-                identite.nom = str(nom).strip()
-            if fichier is not None:
-                identite.logo = fichier
-            elif retirer:
-                identite.logo = None
-            identite.save()
-            reponse = _identite_publique(request)
+        identite = IdentitePlateforme.obtenir()
+        if nom is not None:
+            identite.nom = str(nom).strip()
+        if fichier is not None:
+            identite.logo = fichier
+        elif retirer:
+            identite.logo = None
+        identite.save()
+        reponse = _identite_publique(request)
 
         _journaliser(request, "MODIFICATION_IDENTITE_PLATEFORME", {"nom": reponse["nom"], "logo": bool(reponse["logo_url"])})
         return Response(reponse, status=status.HTTP_200_OK)

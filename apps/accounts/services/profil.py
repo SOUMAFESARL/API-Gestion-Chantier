@@ -24,8 +24,7 @@ from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
 from apps.core.enums import ActionAudit
 from apps.core.exceptions import ErreurMetier
-from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
-from apps.core.passerelle_schema import schema_courant
+from apps.entreprises.selectors import entreprise_courante
 from apps.core.permissions import obtenir_portee_role
 
 __all__ = [
@@ -71,8 +70,6 @@ class FormatFichierInvalide(ErreurMetier):
 
 def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
     """Construit la représentation complète et sécurisée du profil utilisateur."""
-    schema_name = schema_courant()
-
     if getattr(utilisateur, "pk", None):
         user_frais = Utilisateur.objects.filter(pk=utilisateur.pk).select_related("role").first()
         if user_frais:
@@ -91,12 +88,9 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
             avatar_url = utilisateur.avatar.url
 
     # 2. Informations de l'entreprise — l'entreprise active, posée par le jeton vérifié (D9).
-    # `connection.tenant` venait de django-tenants : plus rien ne le pose, le profil perdait
-    # l'entreprise.
     entreprise_info = None
-    tenant = _entreprise_active()
-    if tenant is not None:
-        entreprise = tenant
+    entreprise = entreprise_courante()
+    if entreprise is not None:
         if entreprise:
             logo_url = None
             if getattr(entreprise, "logo", None) and hasattr(entreprise.logo, "url"):
@@ -112,7 +106,7 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
             entreprise_info = {
                 "id": str(entreprise.pk),
                 "raison_sociale": getattr(entreprise, "raison_sociale", ""),
-                "schema_name": entreprise.schema_name,
+                "schema_name": entreprise.slug,
                 "logo_url": logo_url,
             }
 
@@ -120,7 +114,7 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
     from apps.core.droits import permissions_effectives
 
     perms_effectives = sorted(
-        permissions_effectives(utilisateur, request=request, tenant=tenant)
+        permissions_effectives(utilisateur, request=request, entreprise=entreprise)
     )
 
     # 4. Rôle unique & compatibilité frontend (B-02 : la base est la seule source de vérité)
@@ -169,7 +163,9 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         "double_authentification_active": utilisateur.double_authentification,
         "doit_changer_mot_de_passe": utilisateur.doit_changer_mot_de_passe,
         "langue": utilisateur.langue,
-        "schema": schema_name,
+        # Contrat d'avant la D9 : le slug, ou `public` pour le personnel de l'éditeur. Devient
+        # `entreprise` avec le frontend (plan de sortie du multi-schéma, §11 étape 8).
+        "schema": entreprise.slug if entreprise is not None else "public",
         "entreprise": entreprise_info,
         "permissions": perms_effectives,
         # ENTREPRISE : tous les chantiers ; PROJET : ceux où la personne est affectée.

@@ -1,57 +1,40 @@
-"""Fixtures multi-tenant pour les tests du journal de chantier."""
+"""Fixtures des tests du journal de chantier : une entreprise `demo` active pendant le test."""
 
 import pytest
 from django.core.cache import cache
 from django.core.management import call_command
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
-SCHEMA_TEST = "demo"
-HOTE_TEST = "demo.localhost"
+from apps.core.contexte import contexte_entreprise
+
+SLUG_TEST = "demo"
 
 
 @pytest.fixture(scope="session")
 def django_db_setup(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():
         from apps.core.enums import StatutEntreprise
-        from apps.tenants.models import Domaine, Entreprise
+        from apps.entreprises.models import Entreprise
 
-        with contexte_schema(schema_public()):
-            public, _ = Entreprise.objects.get_or_create(
-                schema_name=schema_public(),
-                defaults={
-                    "raison_sociale": "CCD Digital",
-                    "email_contact": "contact@ccd-digital.ci",
-                    "statut": StatutEntreprise.ACTIF,
-                },
+        call_command("synchroniser_catalogue_permissions")
+        if not Entreprise.objects.filter(slug=SLUG_TEST).exists():
+            Entreprise.objects.create(
+                slug=SLUG_TEST,
+                raison_sociale="Entreprise de test",
+                email_contact="test@demo.ci",
+                statut=StatutEntreprise.ACTIF,
             )
-            public.auto_create_schema = False
-            Domaine.objects.get_or_create(
-                domain="localhost", defaults={"tenant": public, "is_primary": True}
-            )
-            call_command("synchroniser_catalogue_permissions")
-
-            entreprise = Entreprise.objects.filter(schema_name=SCHEMA_TEST).first()
-            if entreprise is None:
-                entreprise = Entreprise(
-                    schema_name=SCHEMA_TEST,
-                    raison_sociale="Entreprise de test",
-                    email_contact="test@demo.ci",
-                    statut=StatutEntreprise.ACTIF,
-                )
-                entreprise.save(verbosity=0)
-
-            Domaine.objects.get_or_create(
-                domain=HOTE_TEST, defaults={"tenant": entreprise, "is_primary": True}
-            )
-            call_command("propager_roles_systeme")
+        call_command("propager_roles_systeme")
 
     return django_db_setup
 
 
 @pytest.fixture
-def schema_demo():
-    with contexte_schema(SCHEMA_TEST):
-        yield SCHEMA_TEST
+def entreprise_demo():
+    from apps.entreprises.models import Entreprise
+
+    entreprise = Entreprise.objects.get(slug=SLUG_TEST)
+    with contexte_entreprise(entreprise):
+        yield entreprise
 
 
 @pytest.fixture(autouse=True)

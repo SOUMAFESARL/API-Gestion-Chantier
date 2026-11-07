@@ -3,7 +3,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -45,26 +44,24 @@ class AdminPermissionListCreateView(APIView):
         responses={200: AdminPermissionSerializer(many=True)},
     )
     def get(self, request):
-        with contexte_schema("public"):
-            permissions = (
-                Permission.objects.filter(supprime_le__isnull=True)
-                .prefetch_related("modules")
-                .order_by("ordre", "code")
-            )
-            serializer = AdminPermissionSerializer(permissions, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        permissions = (
+            Permission.objects.filter(supprime_le__isnull=True)
+            .prefetch_related("modules")
+            .order_by("ordre", "code")
+        )
+        serializer = AdminPermissionSerializer(permissions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        summary="Créer une permission et propager à tous les tenants (Super Admin)",
+        summary="Créer une permission et propager à toutes les entreprises (Super Admin)",
         description="Crée une nouvelle permission granulaire et l'associe sélectivement aux modules spécifiés.",
         request=AdminPermissionCreateSerializer,
         responses={201: AdminPermissionSerializer},
     )
     def post(self, request):
         exiger_superviseur(request)
-        with contexte_schema("public"):
-            serializer = AdminPermissionCreateSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
+        serializer = AdminPermissionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         try:
             perm = propager_creation_permission(
@@ -80,10 +77,9 @@ class AdminPermissionListCreateView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with contexte_schema("public"):
-            perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
-            retour = AdminPermissionSerializer(perm_complet)
-            return Response(retour.data, status=status.HTTP_201_CREATED)
+        perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
+        retour = AdminPermissionSerializer(perm_complet)
+        return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
 class AdminPermissionDetailUpdateDeleteView(APIView):
@@ -97,12 +93,11 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
         responses={200: AdminPermissionSerializer},
     )
     def get(self, request, pk):
-        with contexte_schema("public"):
-            perm = get_object_or_404(
-                Permission.objects.prefetch_related("modules"), pk=pk, supprime_le__isnull=True
-            )
-            serializer = AdminPermissionSerializer(perm)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        perm = get_object_or_404(
+            Permission.objects.prefetch_related("modules"), pk=pk, supprime_le__isnull=True
+        )
+        serializer = AdminPermissionSerializer(perm)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Modifier une permission et propager (Super Admin)",
@@ -128,10 +123,9 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with contexte_schema("public"):
-            perm_complet = Permission.objects.prefetch_related("modules").get(id=perm_maj.id)
-            retour = AdminPermissionSerializer(perm_complet)
-            return Response(retour.data, status=status.HTTP_200_OK)
+        perm_complet = Permission.objects.prefetch_related("modules").get(id=perm_maj.id)
+        retour = AdminPermissionSerializer(perm_complet)
+        return Response(retour.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Supprimer logiquement une permission (Super Admin)",
@@ -184,7 +178,6 @@ class AdminPermissionAffecterModulesView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with contexte_schema("public"):
-            perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
-            retour = AdminPermissionSerializer(perm_complet)
-            return Response(retour.data, status=status.HTTP_200_OK)
+        perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
+        retour = AdminPermissionSerializer(perm_complet)
+        return Response(retour.data, status=status.HTTP_200_OK)

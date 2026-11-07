@@ -1,6 +1,6 @@
 """Modèle MiseAJourInline — Suivi d'avancement physique manuel (SFD F3 §10).
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets) & 2 (Suivi Technique des Travaux).
 """
 

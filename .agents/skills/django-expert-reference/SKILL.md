@@ -13,23 +13,35 @@ Ce qui suit ne répète pas la documentation de Django : il dit **où ce projet 
 quels patrons généraux y comptent vraiment. Quand une règle du livre contredit une convention
 d'ici, c'est la convention d'ici qui s'applique.
 
-## 1. Ce que le multi-tenant change
+## 1. Ce que l'isolation entre entreprises change
 
-Un schéma PostgreSQL par entreprise cliente (django-tenants). L'isolation vient du `search_path`,
-pas d'un filtre.
+Un seul schéma PostgreSQL ; chaque table d'entreprise porte `entreprise_id` (décision **D9**,
+`04_Conception/plan_technique/architecture_globale_systeme/decision_schema_unique_CCD_Digital.md`).
+L'isolation tient en trois couches : l'ORM refuse le hors-contexte, la RLS de PostgreSQL filtre
+toute requête, la suite d'étanchéité (`tests/etancheite/`) éprouve chaque route en CI.
 
-- **`SHARED_APPS` ou `TENANT_APPS`** (`config/settings/base.py`) : à trancher avant le premier
-  modèle d'une application. Une application métier dans `SHARED_APPS` met tous les clients dans la
-  même table, et cela ne se rattrape pas après la première migration.
-- **Pas de colonne `tenant_id`**, pas de filtre « par entreprise » dans les requêtes métier.
-- **Migrations** : `migrate_schemas --shared` puis `--tenant`. `migrate` seul ne fait rien d'utile.
-- **Une tâche Celery n'hérite pas du schéma.** Elle reçoit `schema_name` en argument et travaille
-  dans `with schema_context(schema_name):`. Sans cela elle tourne sur `public`, ne trouve rien et
-  ne lève rien. Modèle : `apps/projets/tasks.py`.
+- **Un modèle d'entreprise hérite de `ModeleEntreprise`** (`apps/core/models`) : il reçoit la colonne
+  `entreprise` et les gestionnaires cloisonnés. Une table de plateforme (catalogue, plans,
+  entreprises) n'en hérite pas, et le dit dans sa docstring.
+- **Une nouvelle table d'entreprise ajoute sa politique RLS** à sa migration :
+  `isolation_entreprise("<table>")` (voir `core.0001_isolation_rls`). `verifier_isolation` échoue
+  sinon.
+- **Pas de filtre `entreprise=` écrit à la main** dans les requêtes métier : le gestionnaire le pose.
+  Hors entreprise active, `objects` lève `HorsContexteEntreprise` — c'est voulu.
+- **Le code de l'éditeur qui traverse les entreprises** ouvre `portee_plateforme(motif=…)` ; pour
+  une entreprise donnée, `contexte_entreprise(entreprise)` (`apps/core/contexte.py`). L'entreprise
+  active se lit par `entreprise_courante()` ou `slug_courant()` (`apps/entreprises/selectors`),
+  jamais sur la requête.
+- **Une tâche Celery n'hérite pas de l'entreprise.** Elle reçoit `entreprise_id` et se décore de
+  `@avec_entreprise`. Sans cela, sa première requête lève `HorsContexteEntreprise`.
 - **Redis n'isole rien.** `CACHES` n'a pas de `KEY_FUNCTION` : une clé de cache qui porte une donnée
-  d'un client contient le nom du schéma. Une clé sans schéma n'est acceptable que pour une donnée
-  identique pour tous (ex. la météo d'une ville, `apps/projets/services/meteo.py`).
-- **Tests** : un test métier s'exécute dans un schéma — fixture `schema_demo` de `conftest.py`.
+  d'un client contient l'identifiant (ou le slug) de l'entreprise. Une clé sans entreprise n'est
+  acceptable que pour une donnée identique pour tous (ex. la météo d'une ville,
+  `apps/projets/services/meteo.py`).
+- **Une base vide se monte** par `python manage.py monter_base` (après `scripts/sql/roles_rls.sql`,
+  une fois par serveur).
+- **Tests** : un test métier s'exécute avec une entreprise active — fixture `entreprise_demo` de
+  `apps/chantier/tests/conftest.py`.
 
 ## 2. Organisation d'une application
 
@@ -96,11 +108,11 @@ la main.
 
 ## 6. Celery
 
-- Arguments **primitifs** : identifiants et nom de schéma, jamais une instance de modèle.
+- Arguments **primitifs** : identifiants (dont `entreprise_id`), jamais une instance de modèle.
 - Tâches **idempotentes** : rejouées avec les mêmes arguments, elles laissent le même état.
 - `bind=True, max_retries=…` pour ce qui dépend d'un service tiers (email, CinetPay).
-- Une tâche planifiée « tous tenants » boucle sur les entreprises actives et ouvre un
-  `schema_context` par entreprise.
+- Une tâche planifiée « toutes entreprises » boucle sur les entreprises actives et ouvre un
+  `contexte_entreprise` par entreprise.
 
 ## 7. Paiement et webhooks (CinetPay)
 
@@ -122,8 +134,8 @@ la main.
 | Anti-pattern | Conséquence | Parade |
 |---|---|---|
 | Requête dans la boucle d'un serializer | N+1, latence multipliée | `select_related` / `prefetch_related` dans le selector |
-| Tâche Celery sans `schema_context` | Tourne sur `public`, ne trouve rien, ne lève rien | Passer `schema_name`, ouvrir le contexte |
-| Clé de cache sans le schéma | Un client lit la donnée d'un autre | Schéma dans la clé |
+| Tâche Celery sans entreprise | Lève `HorsContexteEntreprise` à la première requête | Passer `entreprise_id`, `@avec_entreprise` |
+| Clé de cache sans l'entreprise | Un client lit la donnée d'un autre | Entreprise dans la clé |
 | Instance de modèle passée à une tâche | Donnée périmée, échec de sérialisation | Passer l'identifiant, recharger dans la tâche |
 | Écriture multi-tables sans transaction | État incohérent si une étape échoue | `transaction.atomic()` + `select_for_update()` |
 | Règle de gestion dans la vue | Réécrite ailleurs, puis divergente | La mettre dans `services/` |

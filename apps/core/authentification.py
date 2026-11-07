@@ -96,7 +96,7 @@ def entreprise_du_jeton(request) -> uuid.UUID | None:
     """L'entreprise que désigne le jeton d'accès **vérifié** de la requête, ou `None`.
 
     Pour les middlewares, qui passent avant l'authentification de DRF et n'ont plus de
-    `request.tenant`. La signature et l'expiration sont vérifiées, mais le compte n'est pas
+    d'entreprise posée. La signature et l'expiration sont vérifiées, mais le compte n'est pas
     encore comparé au claim : ce qu'un middleware en tire ne doit **que restreindre** (lecture
     seule, module fermé), jamais ouvrir un accès. Lu une fois par requête.
     """

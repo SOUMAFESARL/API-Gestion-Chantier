@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -55,26 +54,24 @@ class AdminModuleListCreateView(APIView):
         responses={200: AdminModuleListSerializer(many=True)},
     )
     def get(self, request):
-        with contexte_schema("public"):
-            modules = (
-                Module.objects.filter(supprime_le__isnull=True)
-                .prefetch_related(PREFETCH_PERMISSIONS_ACTIVES)
-                .order_by("ordre", "code")
-            )
-            serializer = AdminModuleListSerializer(modules, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        modules = (
+            Module.objects.filter(supprime_le__isnull=True)
+            .prefetch_related(PREFETCH_PERMISSIONS_ACTIVES)
+            .order_by("ordre", "code")
+        )
+        serializer = AdminModuleListSerializer(modules, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        summary="Créer un module et propager à tous les tenants (Super Admin)",
-        description="Crée un nouveau module applicatif avec ses permissions initiales et propage immédiatement dans tous les tenants.",
+        summary="Créer un module et propager à toutes les entreprises (Super Admin)",
+        description="Crée un nouveau module applicatif avec ses permissions initiales et propage immédiatement dans toutes les entreprises.",
         request=AdminModuleCreateSerializer,
         responses={201: AdminModuleDetailSerializer},
     )
     def post(self, request):
         exiger_superviseur(request)
-        with contexte_schema("public"):
-            serializer = AdminModuleCreateSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
+        serializer = AdminModuleCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         try:
             module = propager_creation_module(
@@ -91,12 +88,11 @@ class AdminModuleListCreateView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with contexte_schema("public"):
-            module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
-                id=module.id
-            )
-            retour = AdminModuleDetailSerializer(module_complet)
-            return Response(retour.data, status=status.HTTP_201_CREATED)
+        module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
+            id=module.id
+        )
+        retour = AdminModuleDetailSerializer(module_complet)
+        return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
 class AdminModuleDetailUpdateDeleteView(APIView):
@@ -111,18 +107,17 @@ class AdminModuleDetailUpdateDeleteView(APIView):
         responses={200: AdminModuleDetailSerializer},
     )
     def get(self, request, pk):
-        with contexte_schema("public"):
-            module = get_object_or_404(
-                Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES),
-                pk=pk,
-                supprime_le__isnull=True,
-            )
-            serializer = AdminModuleDetailSerializer(module)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        module = get_object_or_404(
+            Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES),
+            pk=pk,
+            supprime_le__isnull=True,
+        )
+        serializer = AdminModuleDetailSerializer(module)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Modifier un module et propager (Super Admin)",
-        description="Met à jour les métadonnées et/ou les autorisations d'un module et synchronise tous les tenants.",
+        description="Met à jour les métadonnées et/ou les autorisations d'un module et synchronise toutes les entreprises.",
         request=AdminModuleUpdateSerializer,
         responses={200: AdminModuleDetailSerializer},
     )
@@ -146,16 +141,15 @@ class AdminModuleDetailUpdateDeleteView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with contexte_schema("public"):
-            module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
-                id=module_maj.id
-            )
-            retour = AdminModuleDetailSerializer(module_complet)
-            return Response(retour.data, status=status.HTTP_200_OK)
+        module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
+            id=module_maj.id
+        )
+        retour = AdminModuleDetailSerializer(module_complet)
+        return Response(retour.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Supprimer logiquement un module (Super Admin)",
-        description="Désactive et supprime logiquement le module dans public et tous les tenants.",
+        description="Désactive et supprime logiquement le module dans le catalogue et dans toutes les entreprises.",
         responses={200: dict},
     )
     def delete(self, request, pk):
@@ -186,7 +180,7 @@ class AdminModuleAffecterPermissionsView(APIView):
 
     @extend_schema(
         summary="Affecter des permissions à un module (Super Admin)",
-        description="Associe ou remplace l'ensemble des permissions autorisées pour ce module et synchronise tous les tenants.",
+        description="Associe ou remplace l'ensemble des permissions autorisées pour ce module et synchronise toutes les entreprises.",
         request=AdminModuleAffecterPermissionsSerializer,
         responses={200: AdminModuleDetailSerializer},
     )
@@ -205,12 +199,11 @@ class AdminModuleAffecterPermissionsView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with contexte_schema("public"):
-            mod_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
-                id=mod.id
-            )
-            retour = AdminModuleDetailSerializer(mod_complet)
-            return Response(retour.data, status=status.HTTP_200_OK)
+        mod_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
+            id=mod.id
+        )
+        retour = AdminModuleDetailSerializer(mod_complet)
+        return Response(retour.data, status=status.HTTP_200_OK)
 
     def patch(self, request, pk):
         """Alias de `PUT` : le client HTTP du back-office n'a pas de PUT."""
@@ -229,28 +222,26 @@ class AdminModuleDesactiverView(APIView):
     @extend_schema(
         summary="Désactiver un module (Super Admin)",
         request=None,
-        description="Désactive le module dans le schéma public et tous les tenants.",
+        description="Désactive le module dans le catalogue et dans toutes les entreprises.",
         responses={200: AdminModuleDetailSerializer, 409: dict},
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with contexte_schema("public"):
-            module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
-            if not module.est_actif:
-                return Response(
-                    {"erreur": {"code": "conflit", "message": _("Ce module est déjà désactivé.")}},
-                    status=status.HTTP_409_CONFLICT,
-                )
+        module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
+        if not module.est_actif:
+            return Response(
+                {"erreur": {"code": "conflit", "message": _("Ce module est déjà désactivé.")}},
+                status=status.HTTP_409_CONFLICT,
+            )
         mod_maj = propager_modification_module(
             module_id=pk, est_actif=False, modifie_par=request.user
         )
-        with contexte_schema("public"):
-            module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
-                id=mod_maj.id
-            )
-            return Response(
-                AdminModuleDetailSerializer(module_complet).data, status=status.HTTP_200_OK
-            )
+        module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
+            id=mod_maj.id
+        )
+        return Response(
+            AdminModuleDetailSerializer(module_complet).data, status=status.HTTP_200_OK
+        )
 
 
 class AdminModuleReactiverView(APIView):
@@ -261,25 +252,23 @@ class AdminModuleReactiverView(APIView):
     @extend_schema(
         summary="Réactiver un module (Super Admin)",
         request=None,
-        description="Réactive le module dans le schéma public et tous les tenants.",
+        description="Réactive le module dans le catalogue et dans toutes les entreprises.",
         responses={200: AdminModuleDetailSerializer, 409: dict},
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with contexte_schema("public"):
-            module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
-            if module.est_actif:
-                return Response(
-                    {"erreur": {"code": "conflit", "message": _("Ce module est déjà actif.")}},
-                    status=status.HTTP_409_CONFLICT,
-                )
+        module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
+        if module.est_actif:
+            return Response(
+                {"erreur": {"code": "conflit", "message": _("Ce module est déjà actif.")}},
+                status=status.HTTP_409_CONFLICT,
+            )
         mod_maj = propager_modification_module(
             module_id=pk, est_actif=True, modifie_par=request.user
         )
-        with contexte_schema("public"):
-            module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
-                id=mod_maj.id
-            )
-            return Response(
-                AdminModuleDetailSerializer(module_complet).data, status=status.HTTP_200_OK
-            )
+        module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
+            id=mod_maj.id
+        )
+        return Response(
+            AdminModuleDetailSerializer(module_complet).data, status=status.HTTP_200_OK
+        )

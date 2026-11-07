@@ -127,7 +127,7 @@ class ModeleEntreprise(ModeleBase):
     """
 
     entreprise = models.ForeignKey(
-        "tenants.Entreprise",
+        "entreprises.Entreprise",
         on_delete=models.PROTECT,
         related_name="+",
         db_index=True,

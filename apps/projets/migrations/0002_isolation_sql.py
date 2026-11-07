@@ -6,7 +6,7 @@
 - **Immuabilité de `historique_date`** (RG-07, RG-11) : mise à jour et suppression refusées, sauf
   la purge de l'entreprise de la ligne par la suppression définitive — la session a pris le rôle
   de la portée plateforme et `ccd.purge_entreprise` (local à la transaction, posé par
-  `apps.tenants.services.suppression_definitive`) désigne l'entreprise de la ligne.
+  `apps.entreprises.services.suppression_definitive`) désigne l'entreprise de la ligne.
 
 Reprend, depuis la remise à zéro des migrations (lot 6), les anciennes `projets` 0003 et 0004.
 """

@@ -6,7 +6,6 @@ import uuid
 
 from django.db import transaction
 from django.utils import timezone
-from apps.core.passerelle_schema import schema_public
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.billing.models import Abonnement, Plan
@@ -20,10 +19,10 @@ from apps.platform_admin.selectors.clients import (
 from apps.platform_admin.services.notifications import (
     SUJET_MODIFICATION_PLATEFORME,
     journaliser_plateforme,
-    journaliser_tenant,
+    journaliser_entreprise,
     notifier_dg_action_plateforme,
 )
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +36,7 @@ def suspendre_client_plateforme(
     **kwargs,
 ) -> dict:
     """Suspend l'accès d'une entreprise cliente et enregistre l'action au journal."""
-    public_schema = schema_public()
-    ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
+    ent = Entreprise.objects.filter(pk=entreprise_id).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
 
@@ -67,7 +65,7 @@ def suspendre_client_plateforme(
 
     logger.info(
         "Entreprise %s (%s) suspendue par %s. Motif : %s",
-        ent.schema_name,
+        ent.slug,
         ent.id,
         admin_user,
         motif,
@@ -83,8 +81,7 @@ def reactiver_client_plateforme(
     **kwargs,
 ) -> dict:
     """Réactive une entreprise cliente suspendue et rétablit son abonnement."""
-    public_schema = schema_public()
-    ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
+    ent = Entreprise.objects.filter(pk=entreprise_id).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
 
@@ -113,7 +110,7 @@ def reactiver_client_plateforme(
         appareil=appareil,
     )
 
-    logger.info("Entreprise %s (%s) réactivée par %s", ent.schema_name, ent.id, admin_user)
+    logger.info("Entreprise %s (%s) réactivée par %s", ent.slug, ent.id, admin_user)
     return formater_client_plateforme(ent)
 
 
@@ -126,8 +123,7 @@ def changer_plan_client_plateforme(
     **kwargs,
 ) -> dict:
     """Modifie le forfait d'abonnement d'une entreprise cliente."""
-    public_schema = schema_public()
-    ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
+    ent = Entreprise.objects.filter(pk=entreprise_id).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
 
@@ -177,7 +173,7 @@ def changer_plan_client_plateforme(
 
     logger.info(
         "Forfait de l'entreprise %s modifié de %s vers %s par %s",
-        ent.schema_name,
+        ent.slug,
         ancien_code,
         nouveau_plan.code,
         admin_user,
@@ -194,8 +190,7 @@ def modifier_echeance_client_plateforme(
     appareil: str = "",
 ) -> dict:
     """Modifie la date d'échéance de l'abonnement en cours d'une entreprise cliente."""
-    public_schema = schema_public()
-    ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
+    ent = Entreprise.objects.filter(pk=entreprise_id).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
 
@@ -264,7 +259,7 @@ def modifier_echeance_client_plateforme(
             "date_fin": date_fin.isoformat(),
             "fin_essai": nouvelle_fin_essai.isoformat() if nouvelle_fin_essai else None,
         }
-        journaliser_tenant(
+        journaliser_entreprise(
             entreprise=ent,
             action="MODIFICATION",
             type_entite="Abonnement",
@@ -291,7 +286,7 @@ def modifier_echeance_client_plateforme(
 
     logger.info(
         "Échéance de l'entreprise %s modifiée vers %s par %s",
-        ent.schema_name,
+        ent.slug,
         date_fin,
         admin_user,
     )

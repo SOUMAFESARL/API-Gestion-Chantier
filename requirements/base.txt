@@ -1,9 +1,7 @@
 # CCD Digital — dépendances communes à tous les environnements
-# Django 5.2 LTS : supporté jusqu'en avril 2028, et compatible django-tenants.
-# Ne pas passer en Django 6 tant que django-tenants ne l'annonce pas explicitement.
+# Django 5.2 LTS : supporté jusqu'en avril 2028.
 
 Django>=5.2,<6.0
-django-tenants>=3.7
 
 # API
 djangorestframework>=3.15

@@ -22,7 +22,6 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import (
     DUREE_JETON_REINITIALISATION,
@@ -56,66 +55,64 @@ def demander_reinitialisation_super_admin(
     Seuls les comptes de la plateforme (`is_superuser` ou `is_staff`) dans `public` reçoivent un email.
     """
     adresse = (email or "").strip().lower()
-    public_schema = schema_public()
 
-    with contexte_schema(public_schema):
-        candidat = Utilisateur.objects.filter(email__iexact=adresse).first()
+    candidat = Utilisateur.objects.filter(email__iexact=adresse).first()
 
-        super_admin_valide = (
-            candidat is not None
-            and (candidat.is_superuser or candidat.is_staff)
-            and candidat.is_active
-            and not candidat.est_bloque
-        )
+    super_admin_valide = (
+        candidat is not None
+        and (candidat.is_superuser or candidat.is_staff)
+        and candidat.is_active
+        and not candidat.est_bloque
+    )
 
-        if super_admin_valide and candidat is not None:
-            jeton = uuid.uuid4()
-            with transaction.atomic():
-                # Invalider les jetons vivants antérieurs
-                JetonReinitialisation.objects.filter(
-                    utilisateur=candidat,
-                    utilise_le__isnull=True,
-                    invalide_le__isnull=True,
-                ).update(invalide_le=timezone.now())
+    if super_admin_valide and candidat is not None:
+        jeton = uuid.uuid4()
+        with transaction.atomic():
+            # Invalider les jetons vivants antérieurs
+            JetonReinitialisation.objects.filter(
+                utilisateur=candidat,
+                utilise_le__isnull=True,
+                invalide_le__isnull=True,
+            ).update(invalide_le=timezone.now())
 
-                JetonReinitialisation.objects.create(
-                    utilisateur=candidat,
-                    empreinte=JetonReinitialisation.empreinte_de(jeton),
-                    motif=JetonReinitialisation.Motif.OUBLI,
-                    expire_le=timezone.now() + DUREE_JETON_REINITIALISATION,
-                    ip_demande=adresse_ip,
-                )
+            JetonReinitialisation.objects.create(
+                utilisateur=candidat,
+                empreinte=JetonReinitialisation.empreinte_de(jeton),
+                motif=JetonReinitialisation.Motif.OUBLI,
+                expire_le=timezone.now() + DUREE_JETON_REINITIALISATION,
+                ip_demande=adresse_ip,
+            )
 
-                JournalPlateforme.objects.create(
-                    utilisateur_id=candidat.id,
-                    action="DEMANDE_REINITIALISATION_SUPER_ADMIN",
-                    detail={
-                        "email": candidat.email,
-                        "statut": "SUCCES",
-                    },
-                    adresse_ip=adresse_ip,
-                    appareil=appareil[:255] if appareil else "",
-                )
+            JournalPlateforme.objects.create(
+                utilisateur_id=candidat.id,
+                action="DEMANDE_REINITIALISATION_SUPER_ADMIN",
+                detail={
+                    "email": candidat.email,
+                    "statut": "SUCCES",
+                },
+                adresse_ip=adresse_ip,
+                appareil=appareil[:255] if appareil else "",
+            )
 
-            # Envoi de l'email hors transaction
-            transaction.on_commit(lambda: _envoyer_email_reinitialisation(candidat, jeton))
-        else:
-            # Traçabilité d'une tentative sur compte inexistant ou inéligible
-            try:
-                JournalPlateforme.objects.create(
-                    action="DEMANDE_REINITIALISATION_SUPER_ADMIN",
-                    detail={
-                        "email": adresse,
-                        "statut": "IGNORE",
-                        "motif": "compte_inexistant_ou_ineligible",
-                    },
-                    adresse_ip=adresse_ip,
-                    appareil=appareil[:255] if appareil else "",
-                )
-            except Exception:
-                logger.exception(
-                    "Échec d'enregistrement de l'audit pour demande mot de passe admin ignorée."
-                )
+        # Envoi de l'email hors transaction
+        transaction.on_commit(lambda: _envoyer_email_reinitialisation(candidat, jeton))
+    else:
+        # Traçabilité d'une tentative sur compte inexistant ou inéligible
+        try:
+            JournalPlateforme.objects.create(
+                action="DEMANDE_REINITIALISATION_SUPER_ADMIN",
+                detail={
+                    "email": adresse,
+                    "statut": "IGNORE",
+                    "motif": "compte_inexistant_ou_ineligible",
+                },
+                adresse_ip=adresse_ip,
+                appareil=appareil[:255] if appareil else "",
+            )
+        except Exception:
+            logger.exception(
+                "Échec d'enregistrement de l'audit pour demande mot de passe admin ignorée."
+            )
 
     return {
         "message": _(
@@ -141,24 +138,22 @@ def _envoyer_email_reinitialisation(super_admin: Utilisateur, jeton: uuid.UUID) 
 
 def verifier_jeton_super_admin(jeton_clair: str) -> JetonReinitialisation:
     """Vérifie la validité du jeton Super Admin sans le consommer (règle R-32)."""
-    public_schema = schema_public()
     empreinte = JetonReinitialisation.empreinte_de(jeton_clair)
 
-    with contexte_schema(public_schema):
-        jeton = (
-            JetonReinitialisation.objects.select_related("utilisateur")
-            .filter(empreinte=empreinte)
-            .first()
-        )
+    jeton = (
+        JetonReinitialisation.objects.select_related("utilisateur")
+        .filter(empreinte=empreinte)
+        .first()
+    )
 
-        if jeton is None or not jeton.est_utilisable:
-            raise JetonExpire()
+    if jeton is None or not jeton.est_utilisable:
+        raise JetonExpire()
 
-        utilisateur = jeton.utilisateur
-        if not ((utilisateur.is_superuser or utilisateur.is_staff) and utilisateur.is_active):
-            raise JetonExpire()
+    utilisateur = jeton.utilisateur
+    if not ((utilisateur.is_superuser or utilisateur.is_staff) and utilisateur.is_active):
+        raise JetonExpire()
 
-        return jeton
+    return jeton
 
 
 def reinitialiser_mot_de_passe_super_admin(
@@ -169,64 +164,62 @@ def reinitialiser_mot_de_passe_super_admin(
 ) -> Utilisateur:
     """Consomme le jeton, applique le nouveau mot de passe et révoque les sessions existantes."""
     jeton = verifier_jeton_super_admin(jeton_clair)
-    public_schema = schema_public()
 
-    with contexte_schema(public_schema):
-        super_admin = jeton.utilisateur
+    super_admin = jeton.utilisateur
 
-        # Validation de la robustesse du mot de passe selon règles Django
-        validate_password(mot_de_passe, super_admin)
+    # Validation de la robustesse du mot de passe selon règles Django
+    validate_password(mot_de_passe, super_admin)
 
-        with transaction.atomic():
-            super_admin.set_password(mot_de_passe)
-            super_admin.tentatives_echouees = 0
-            super_admin.bloque_le = None
-            if super_admin.doit_changer_mot_de_passe:
-                super_admin.doit_changer_mot_de_passe = False
+    with transaction.atomic():
+        super_admin.set_password(mot_de_passe)
+        super_admin.tentatives_echouees = 0
+        super_admin.bloque_le = None
+        if super_admin.doit_changer_mot_de_passe:
+            super_admin.doit_changer_mot_de_passe = False
 
-            super_admin.save(
-                update_fields=[
-                    "password",
-                    "tentatives_echouees",
-                    "bloque_le",
-                    "doit_changer_mot_de_passe",
-                    "modifie_le",
-                ]
-            )
-
-            jeton.utilise_le = timezone.now()
-            jeton.save(update_fields=["utilise_le", "modifie_le"])
-
-            # Invalider d'autres éventuels jetons en cours
-            JetonReinitialisation.objects.filter(
-                utilisateur=super_admin,
-                utilise_le__isnull=True,
-                invalide_le__isnull=True,
-            ).update(invalide_le=timezone.now())
-
-            # Audit dans JournalPlateforme
-            JournalPlateforme.objects.create(
-                utilisateur_id=super_admin.id,
-                action="REINITIALISATION_MOT_DE_PASSE_SUPER_ADMIN",
-                detail={
-                    "email": super_admin.email,
-                    "statut": "SUCCES",
-                },
-                adresse_ip=adresse_ip,
-                appareil=appareil[:255] if appareil else "",
-            )
-
-        # Révocation de toutes les sessions actives dans Redis
-        revoquer_utilisateur(super_admin.pk, ttl=TTL_REVOCATION)
-
-        # Notification de confirmation par email
-        transaction.on_commit(
-            lambda: envoyer(
-                "mot_de_passe_modifie",
-                "Votre mot de passe d'administration CCD Digital a été modifié",
-                super_admin.email,
-                {},
-            )
+        super_admin.save(
+            update_fields=[
+                "password",
+                "tentatives_echouees",
+                "bloque_le",
+                "doit_changer_mot_de_passe",
+                "modifie_le",
+            ]
         )
 
-        return super_admin
+        jeton.utilise_le = timezone.now()
+        jeton.save(update_fields=["utilise_le", "modifie_le"])
+
+        # Invalider d'autres éventuels jetons en cours
+        JetonReinitialisation.objects.filter(
+            utilisateur=super_admin,
+            utilise_le__isnull=True,
+            invalide_le__isnull=True,
+        ).update(invalide_le=timezone.now())
+
+        # Audit dans JournalPlateforme
+        JournalPlateforme.objects.create(
+            utilisateur_id=super_admin.id,
+            action="REINITIALISATION_MOT_DE_PASSE_SUPER_ADMIN",
+            detail={
+                "email": super_admin.email,
+                "statut": "SUCCES",
+            },
+            adresse_ip=adresse_ip,
+            appareil=appareil[:255] if appareil else "",
+        )
+
+    # Révocation de toutes les sessions actives dans Redis
+    revoquer_utilisateur(super_admin.pk, ttl=TTL_REVOCATION)
+
+    # Notification de confirmation par email
+    transaction.on_commit(
+        lambda: envoyer(
+            "mot_de_passe_modifie",
+            "Votre mot de passe d'administration CCD Digital a été modifié",
+            super_admin.email,
+            {},
+        )
+    )
+
+    return super_admin

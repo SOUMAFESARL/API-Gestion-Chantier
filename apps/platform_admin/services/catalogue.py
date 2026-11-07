@@ -1,9 +1,9 @@
-"""Service de gestion dynamique du catalogue des modules et des permissions avec propagation multi-tenants.
+"""Service de gestion dynamique du catalogue des modules et des permissions avec propagation à toutes les entreprises.
 
 Socle IAM / Super Admin :
 Fournit les opérations de création, modification et suppression logique de Modules et de Permissions
-exécutées au niveau de la plateforme par le Super Admin, avec propagation immédiate dans tous les
-schémas tenants d'entreprises clientes.
+exécutées au niveau de la plateforme par le Super Admin, avec propagation immédiate dans toutes les
+entreprises clientes.
 
 Invariants garantis :
 1. Tout rôle est obligatoirement lié à TOUS les modules actifs.
@@ -20,12 +20,12 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema
 
+from apps.core.contexte import contexte_entreprise
 from apps.accounts.models import Module, Permission, Role, RoleModulePermission
 from apps.catalogue.models import CatalogueModule, CataloguePermission, EntrepriseModule
 from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 __all__ = [
     "propager_affectation_modules_permission",
@@ -37,7 +37,6 @@ __all__ = [
     "propager_roles_systeme",
     "propager_suppression_module",
     "propager_suppression_permission",
-    "synchroniser_modules_et_permissions_nouveau_tenant",
 ]
 
 
@@ -57,39 +56,38 @@ def _permissions_du_catalogue(permissions_input) -> list[CataloguePermission]:
     perms_trouvees = {}
     inconnus = []
 
-    with contexte_schema("public"):
-        for p in permissions_input:
-            p_val = None
-            if isinstance(p, dict):
-                p_val = p.get("code") or p.get("id")
-            elif hasattr(p, "code") and hasattr(p, "id"):
-                perms_trouvees[p.id] = p
-                continue
-            else:
-                p_val = p
+    for p in permissions_input:
+        p_val = None
+        if isinstance(p, dict):
+            p_val = p.get("code") or p.get("id")
+        elif hasattr(p, "code") and hasattr(p, "id"):
+            perms_trouvees[p.id] = p
+            continue
+        else:
+            p_val = p
 
-            if not p_val:
-                continue
+        if not p_val:
+            continue
 
-            p_str = str(p_val).strip()
+        p_str = str(p_val).strip()
+        perm = None
+        try:
+            val_uuid = UUID(p_str)
+            perm = CataloguePermission.objects.filter(
+                id=val_uuid, supprime_le__isnull=True
+            ).first()
+        except (ValueError, AttributeError):
             perm = None
-            try:
-                val_uuid = UUID(p_str)
-                perm = CataloguePermission.objects.filter(
-                    id=val_uuid, supprime_le__isnull=True
-                ).first()
-            except (ValueError, AttributeError):
-                perm = None
 
-            if not perm:
-                perm = CataloguePermission.objects.filter(
-                    code__iexact=p_str, supprime_le__isnull=True
-                ).first()
+        if not perm:
+            perm = CataloguePermission.objects.filter(
+                code__iexact=p_str, supprime_le__isnull=True
+            ).first()
 
-            if perm:
-                perms_trouvees[perm.id] = perm
-            else:
-                inconnus.append(p_str)
+        if perm:
+            perms_trouvees[perm.id] = perm
+        else:
+            inconnus.append(p_str)
 
     if inconnus:
         cites = ", ".join(f"« {c} »" for c in inconnus)
@@ -124,7 +122,7 @@ def propager_creation_module(
     permissions: list | None = None,
     cree_par=None,
 ) -> CatalogueModule:
-    """Crée un module dans le schéma public et le propage immédiatement à tous les tenants."""
+    """Crée un module dans le schéma public et le propage immédiatement à toutes les entreprises."""
     code = code.strip().lower()
     if not code:
         raise ValidationError(_("Le code du module est obligatoire."))
@@ -134,7 +132,7 @@ def propager_creation_module(
     perms_catalogue = _permissions_du_catalogue(permissions)
     _verifier_prefixes(code, perms_catalogue)
 
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         if CatalogueModule.objects.filter(code=code, supprime_le__isnull=True).exists():
             raise ValidationError(_(f"Un module avec le code '{code}' existe déjà."))
 
@@ -180,7 +178,7 @@ def propager_creation_module(
             else:
                 mod_pub.permissions.clear()
 
-        for entreprise in Entreprise.objects.exclude(schema_name="public"):
+        for entreprise in Entreprise.objects.all():
             EntrepriseModule.objects.update_or_create(
                 entreprise=entreprise,
                 module=cat_mod,
@@ -188,9 +186,9 @@ def propager_creation_module(
             )
 
     codes_perms = [p.code for p in perms_catalogue]
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
+        with contexte_entreprise(entreprise), transaction.atomic():
             mod = Module.objects.filter(code=code, supprime_le__isnull=True).first()
             if not mod:
                 mod, _ = Module.objects.update_or_create(
@@ -208,12 +206,12 @@ def propager_creation_module(
                 )
             if mod:
                 if codes_perms:
-                    perms_tenant = list(
+                    perms_entreprise = list(
                         Permission.objects.filter(
                             code__in=codes_perms, supprime_le__isnull=True
                         )
                     )
-                    mod.permissions.set(perms_tenant)
+                    mod.permissions.set(perms_entreprise)
                 else:
                     mod.permissions.clear()
 
@@ -245,10 +243,10 @@ def propager_modification_module(
     permissions: list | None = None,
     modifie_par=None,
 ) -> CatalogueModule:
-    """Met à jour un module dans le schéma public et synchronise les métadonnées et permissions dans tous les tenants."""
+    """Met à jour un module dans le schéma public et synchronise les métadonnées et permissions dans toutes les entreprises."""
     retirees = set()
     nouvelles = None
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(id=module_id, supprime_le__isnull=True).first()
         if not cat_mod:
             mod_old = Module.objects.filter(id=module_id, supprime_le__isnull=True).first()
@@ -312,13 +310,13 @@ def propager_modification_module(
                 module_public.permissions.set(perms_pub)
             module_public.save()
 
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     perms_retirees_objs = (
         list(CataloguePermission.objects.filter(code__in=retirees)) if retirees else []
     )
 
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
+        with contexte_entreprise(entreprise), transaction.atomic():
             mod = Module.objects.filter(code=cat_mod.code, supprime_le__isnull=True).first()
             if not mod:
                 mod = Module.objects.filter(id=cat_mod.id, supprime_le__isnull=True).first()
@@ -337,12 +335,12 @@ def propager_modification_module(
 
                 if nouvelles is not None:
                     codes_perms = [p.code for p in nouvelles]
-                    perms_tenant = list(
+                    perms_entreprise = list(
                         Permission.objects.filter(
                             code__in=codes_perms, supprime_le__isnull=True
                         )
                     )
-                    mod.permissions.set(perms_tenant)
+                    mod.permissions.set(perms_entreprise)
 
             # 1. Révocation des permissions retirées du module sur tous les rôles
             if perms_retirees_objs:
@@ -364,7 +362,7 @@ def propager_affectation_permissions_module(
     permissions: list,
     modifie_par=None,
 ) -> CatalogueModule:
-    """Affecte ou remplace la liste des autorisations autorisées pour un module donné et synchronise les tenants."""
+    """Affecte ou remplace la liste des autorisations autorisées pour un module donné et synchronise les entreprises."""
     return propager_modification_module(
         module_id=module_id,
         permissions=permissions,
@@ -373,10 +371,10 @@ def propager_affectation_permissions_module(
 
 
 def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
-    """Soft-delete un module dans public et dans tous les tenants (supprime_le = now(), est_actif = False)."""
+    """Soft-delete un module dans le catalogue et dans toutes les entreprises (supprime_le = now(), est_actif = False)."""
     maintenant = timezone.now()
     code_supprime = ""
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(id=module_id, supprime_le__isnull=True).first()
         if not cat_mod:
             mod_old = Module.objects.filter(id=module_id, supprime_le__isnull=True).first()
@@ -400,9 +398,9 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
         )
         EntrepriseModule.objects.filter(module=cat_mod).update(est_actif=False)
 
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
+        with contexte_entreprise(entreprise), transaction.atomic():
             Module.objects.filter(code=code_supprime, supprime_le__isnull=True).update(
                 supprime_le=maintenant,
                 supprime_par=None,
@@ -430,25 +428,24 @@ def _resoudre_modules_codes(modules_input) -> list[str]:
     codes = set()
     from uuid import UUID
 
-    with contexte_schema("public"):
-        for m in modules_input:
-            if isinstance(m, dict):
-                m_val = m.get("code") or m.get("id")
-            elif hasattr(m, "code"):
-                codes.add(m.code.lower())
-                continue
-            else:
-                m_val = m
-            if not m_val:
-                continue
-            m_str = str(m_val).strip()
-            try:
-                val_uuid = UUID(m_str)
-                mod = CatalogueModule.objects.filter(id=val_uuid, supprime_le__isnull=True).first()
-                if mod:
-                    codes.add(mod.code.lower())
-            except (ValueError, AttributeError):
-                codes.add(m_str.lower())
+    for m in modules_input:
+        if isinstance(m, dict):
+            m_val = m.get("code") or m.get("id")
+        elif hasattr(m, "code"):
+            codes.add(m.code.lower())
+            continue
+        else:
+            m_val = m
+        if not m_val:
+            continue
+        m_str = str(m_val).strip()
+        try:
+            val_uuid = UUID(m_str)
+            mod = CatalogueModule.objects.filter(id=val_uuid, supprime_le__isnull=True).first()
+            if mod:
+                codes.add(mod.code.lower())
+        except (ValueError, AttributeError):
+            codes.add(m_str.lower())
     return sorted(codes)
 
 
@@ -462,7 +459,7 @@ def propager_creation_permission(
     modules: list | None = None,
     cree_par=None,
 ) -> CataloguePermission:
-    """Crée une permission dans public et la propage de façon ciblée à tous les tenants.
+    """Crée une permission dans public et la propage de façon ciblée à toutes les entreprises.
 
     Invariant métier (Module-Scoped Permissions) :
     - Le module se déduit du préfixe : module_code = code.split('.')[0].
@@ -481,7 +478,7 @@ def propager_creation_permission(
     module_code = code.split(".")[0].strip().lower()
     codes_modules = _resoudre_modules_codes(modules)
 
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(
             code=module_code, supprime_le__isnull=True
         ).first()
@@ -551,10 +548,10 @@ def propager_creation_permission(
         )
         perm_public.modules.set(mods_public)
 
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
-            perm_tenant, _cree = Permission.objects.update_or_create(
+        with contexte_entreprise(entreprise), transaction.atomic():
+            perm_entreprise, _cree = Permission.objects.update_or_create(
                 code=code,
                 defaults={
                     "id": cat_perm.id,
@@ -566,10 +563,10 @@ def propager_creation_permission(
                     "supprime_par": None,
                 },
             )
-            mods_tenant = list(
+            mods_entreprise = list(
                 Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True)
             )
-            perm_tenant.modules.set(mods_tenant)
+            perm_entreprise.modules.set(mods_entreprise)
 
     return cat_perm
 
@@ -580,7 +577,7 @@ def propager_affectation_modules_permission(
     modules: list,
     modifie_par=None,
 ) -> CataloguePermission:
-    """Affecte ou modifie les modules d'une permission et synchronise les tenants.
+    """Affecte ou modifie les modules d'une permission et synchronise les entreprises.
 
     Règles de sécurité :
     - D2 s'applique : seul le module du préfixe est admis ([] ou [module_du_prefixe]).
@@ -593,7 +590,7 @@ def propager_affectation_modules_permission(
     cat_mods_cibles = []
     perm_prefix = ""
 
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
@@ -674,9 +671,9 @@ def propager_affectation_modules_permission(
             else:
                 perm_public.modules.clear()
 
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
+        with contexte_entreprise(entreprise), transaction.atomic():
             # Retrait du module => révocation de la permission de tous les rôles sur ce module
             if modules_retires or not cat_mods_cibles:
                 rmps = RoleModulePermission.objects.filter(supprime_le__isnull=True).filter(
@@ -687,19 +684,19 @@ def propager_affectation_modules_permission(
                     rmp.permissions_catalogue.remove(cat_perm)
 
             # Ancien référentiel au mieux
-            perm_tenant = Permission.objects.filter(
+            perm_entreprise = Permission.objects.filter(
                 code=cat_perm.code, supprime_le__isnull=True
             ).first()
-            if perm_tenant:
+            if perm_entreprise:
                 if cat_mods_cibles:
-                    mods_tenant = list(
+                    mods_entreprise = list(
                         Module.objects.filter(
                             code__in=[m.code for m in cat_mods_cibles], supprime_le__isnull=True
                         )
                     )
-                    perm_tenant.modules.set(mods_tenant)
+                    perm_entreprise.modules.set(mods_entreprise)
                 else:
-                    perm_tenant.modules.clear()
+                    perm_entreprise.modules.clear()
 
     return cat_perm
 
@@ -714,8 +711,8 @@ def propager_modification_permission(
     modules: list | None = None,
     modifie_par=None,
 ) -> CataloguePermission:
-    """Modifie une permission dans public et synchronise ses métadonnées dans tous les tenants."""
-    with contexte_schema("public"), transaction.atomic():
+    """Modifie une permission dans public et synchronise ses métadonnées dans toutes les entreprises."""
+    with transaction.atomic():
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
@@ -757,9 +754,9 @@ def propager_modification_permission(
                 perm_public.est_actif = est_actif
             perm_public.save()
 
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
+        with contexte_entreprise(entreprise), transaction.atomic():
             perm = Permission.objects.filter(
                 code=cat_perm.code, supprime_le__isnull=True
             ).first()
@@ -785,7 +782,7 @@ def propager_modification_permission(
         from apps.platform_admin.services.notifications import (
             SUJET_MODIFICATION_PLATEFORME,
             journaliser_plateforme,
-            journaliser_tenant,
+            journaliser_entreprise,
             notifier_dg_action_plateforme,
         )
 
@@ -797,7 +794,7 @@ def propager_modification_permission(
             f"Super admin acteur : {email_admin}\n"
         )
         for ea in entreprises:
-            journaliser_tenant(
+            journaliser_entreprise(
                 entreprise=ea,
                 action="MODIFICATION",
                 type_entite="CataloguePermission",
@@ -821,10 +818,10 @@ def propager_modification_permission(
 
 
 def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict:
-    """Soft-delete une permission dans public et dans tous les tenants."""
+    """Soft-delete une permission dans le catalogue et dans toutes les entreprises."""
     maintenant = timezone.now()
     code_supprime = ""
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
@@ -851,9 +848,9 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
             est_actif=False,
         )
 
-    entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
-        with contexte_schema(entreprise.schema_name), transaction.atomic():
+        with contexte_entreprise(entreprise), transaction.atomic():
             for rmp in RoleModulePermission.objects.filter(permissions_catalogue=cat_perm):
                 rmp.permissions_catalogue.remove(cat_perm)
 
@@ -866,59 +863,16 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
     return {"permission_supprimee": code_supprime}
 
 
-def synchroniser_modules_et_permissions_nouveau_tenant(schema_name: str) -> None:
-    """Synchronise l'ensemble du catalogue maître de public vers un nouveau tenant à sa création."""
-    if schema_name == "public":
-        return
-
-    with contexte_schema("public"):
-        modules_publics = list(Module.objects.filter(supprime_le__isnull=True))
-        permissions_publiques = list(
-            Permission.objects.filter(supprime_le__isnull=True).prefetch_related("modules")
-        )
-
-    with contexte_schema(schema_name), transaction.atomic():
-        # 1. Synchroniser d'abord les modules
-        for m in modules_publics:
-            Module.objects.update_or_create(
-                code=m.code,
-                defaults={
-                    "id": m.id,
-                    "libelle": m.libelle,
-                    "description": m.description,
-                    "ordre": m.ordre,
-                    "icone": m.icone,
-                    "est_actif": m.est_actif,
-                },
-            )
-
-        # 2. Synchroniser les permissions et leurs rattachements ManyToMany
-        for p in permissions_publiques:
-            perm_t, _cree = Permission.objects.update_or_create(
-                code=p.code,
-                defaults={
-                    "id": p.id,
-                    "libelle": p.libelle,
-                    "description": p.description,
-                    "ordre": p.ordre,
-                    "est_actif": p.est_actif,
-                },
-            )
-            codes_m = list(p.modules.values_list("code", flat=True))
-            mods_t = list(Module.objects.filter(code__in=codes_m, supprime_le__isnull=True))
-            perm_t.modules.set(mods_t)
-
-
 def propager_roles_systeme(acteur=None) -> dict:
     """Propage les modèles de rôles système à l'ensemble des entreprises clientes existantes (A-07, A-08, A-09).
 
     Règles :
     - A-07 : Ne crée QUE les rôles système manquants. Ne modifie JAMAIS un rôle existant.
-    - A-07 : Lignes RoleModulePermission créées UNIQUEMENT pour les modules actifs du tenant.
+    - A-07 : Lignes RoleModulePermission créées UNIQUEMENT pour les modules actifs de l'entreprise.
     - A-09 : Conflit de code ou de nom avec un rôle personnalisé :
              Le rôle personnalisé est renommé '{code}_perso' et '{nom} (personnalisé)'.
              Le rôle système manquant est ensuite créé avec son code et son nom normaux.
-    - A-14 & L9-1 : Audit tenant pour chaque renommage et pour l'entreprise modifiée.
+    - A-14 & L9-1 : Audit de l'entreprise pour chaque renommage et pour l'entreprise modifiée.
     - A-14 : Courriel au DG de chaque entreprise ayant subi des modifications (créations ou renommages).
              Strictement aucun courriel si rien n'a été modifié (idempotence).
     - H-02 : Journalisation dans JournalPlateforme.
@@ -927,30 +881,28 @@ def propager_roles_systeme(acteur=None) -> dict:
     from apps.platform_admin.services.notifications import (
         SUJET_MODIFICATION_PLATEFORME,
         journaliser_plateforme,
-        journaliser_tenant,
+        journaliser_entreprise,
         notifier_dg_action_plateforme,
     )
 
-    with contexte_schema("public"):
-        modeles_actifs = list(
-            ModeleRole.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related(
-                "modules_plafonds"
-            )
+    modeles_actifs = list(
+        ModeleRole.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related(
+            "modules_plafonds"
         )
-        cat_modules_map = {
-            m.code.lower(): m
-            for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-        }
-        entreprises = list(Entreprise.objects.exclude(schema_name="public"))
+    )
+    cat_modules_map = {
+        m.code.lower(): m
+        for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
+    }
+    entreprises = list(Entreprise.objects.all())
 
     entreprises_modifiees_count = 0
 
     for ea in entreprises:
-        with contexte_schema("public"):
-            # Même règle que les droits : le catalogue décide (`apps.core.modules_actifs`).
-            modules_actifs_ea = codes_modules_actifs(ea) - MODULES_SYSTEME
+        # Même règle que les droits : le catalogue décide (`apps.core.modules_actifs`).
+        modules_actifs_ea = codes_modules_actifs(ea) - MODULES_SYSTEME
 
-        with contexte_schema(ea.schema_name):
+        with contexte_entreprise(ea):
             with transaction.atomic():
                 ea_modifiee = False
                 roles_crees = []
@@ -1025,7 +977,7 @@ def propager_roles_systeme(acteur=None) -> dict:
                         msg_r = f"Rôle personnalisé {ancien_code} renommé en {nouveau_code} ({nouveau_libelle})"
                         renommages_details.append(msg_r)
 
-                        journaliser_tenant(
+                        journaliser_entreprise(
                             entreprise=ea,
                             action="MODIFICATION",
                             type_entite="Role",
@@ -1089,7 +1041,7 @@ def propager_roles_systeme(acteur=None) -> dict:
                 if ea_modifiee:
                     entreprises_modifiees_count += 1
 
-                    journaliser_tenant(
+                    journaliser_entreprise(
                         entreprise=ea,
                         action="MODIFICATION",
                         type_entite="Entreprise",

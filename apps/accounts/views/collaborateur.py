@@ -87,7 +87,7 @@ class ParametresCollaborateurListCreateView(APIView):
 
         projets_visibles_ids = None
 
-        # 1. Tous les utilisateurs du tenant
+        # 1. Tous les utilisateurs de l'entreprise
         utilisateurs = list(
             Utilisateur.objects.filter(supprime_le__isnull=True)
             .select_related("role")
@@ -244,7 +244,7 @@ class ParametresCollaborateurListCreateView(APIView):
         role_global = serializer.validated_data.get("role_global")
         role_personnalise_id = serializer.validated_data.get("role_personnalise_id")
 
-        # Règle d'immutabilité absolue du DG : Unique au créateur du tenant
+        # Règle d'immutabilité absolue du DG : Unique au fondateur de l'entreprise
         if role_global in (RoleGlobal.DIRECTEUR_GENERAL, "DG"):
             return Response(
                 {
@@ -575,7 +575,7 @@ class ParametresCollaborateurDetailView(APIView):
         role_instance = serializer.validated_data.get("role_instance")
         role_global = serializer.validated_data.get("role_global")
 
-        # Règle d'immutabilité absolue du DG : Unique au créateur du tenant
+        # Règle d'immutabilité absolue du DG : Unique au fondateur de l'entreprise
         if est_dg(collaborateur):
             if role_global or role_instance:
                 return Response(

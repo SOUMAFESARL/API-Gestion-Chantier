@@ -54,7 +54,7 @@ def _texte(valeur) -> str:
 def _telephone(valeur) -> str:
     if not valeur:
         return ""
-    from apps.tenants.services.telephones import normaliser_telephone
+    from apps.entreprises.services.telephones import normaliser_telephone
 
     return normaliser_telephone(valeur) or _texte(valeur)
 

@@ -2,7 +2,6 @@
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
@@ -10,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.billing.models import Facture
 from apps.billing.serializers.facture import FactureSerializer
 from apps.billing.services.facture import generer_pdf_facture
@@ -51,13 +51,13 @@ class FactureBaseView(GenericAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Facture.objects.none()
-        tenant = getattr(self.request, "tenant", None)
-        if tenant is None or tenant.schema_name == schema_public():
+        entreprise = entreprise_courante()
+        if entreprise is None:
             raise PermissionDenied(
                 "Selectionnez une entreprise cliente pour consulter ses factures."
             )
         return (
-            Facture.objects.filter(entreprise_id=tenant.pk)
+            Facture.objects.filter(entreprise_id=entreprise.pk)
             .prefetch_related("paiements")
             .order_by("-date_emission", "-cree_le", "-pk")
         )
@@ -76,15 +76,14 @@ class FactureListeView(FactureBaseView):
         },
     )
     def get(self, request):
-        with contexte_schema(schema_public()):
-            factures = self.get_queryset()
-            statut = request.query_params.get("statut")
-            if statut:
-                if statut not in Facture.Statut.values:
-                    raise ValidationError({"statut": "Statut de facture inconnu."})
-                factures = factures.filter(statut=statut)
-            page = self.paginate_queryset(factures)
-            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        factures = self.get_queryset()
+        statut = request.query_params.get("statut")
+        if statut:
+            if statut not in Facture.Statut.values:
+                raise ValidationError({"statut": "Statut de facture inconnu."})
+            factures = factures.filter(statut=statut)
+        page = self.paginate_queryset(factures)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
 
 class FactureDetailView(FactureBaseView):
@@ -95,9 +94,8 @@ class FactureDetailView(FactureBaseView):
         responses={200: FactureSerializer, **ERREURS_FACTURE},
     )
     def get(self, request, pk):
-        with contexte_schema(schema_public()):
-            facture = get_object_or_404(self.get_queryset(), pk=pk)
-            return Response(self.get_serializer(facture).data)
+        facture = get_object_or_404(self.get_queryset(), pk=pk)
+        return Response(self.get_serializer(facture).data)
 
 
 class FacturePDFView(FactureBaseView):
@@ -113,9 +111,8 @@ class FacturePDFView(FactureBaseView):
         },
     )
     def get(self, request, pk):
-        with contexte_schema(schema_public()):
-            facture = get_object_or_404(self.get_queryset(), pk=pk)
-            contenu = generer_pdf_facture(self.get_serializer(facture).data)
+        facture = get_object_or_404(self.get_queryset(), pk=pk)
+        contenu = generer_pdf_facture(self.get_serializer(facture).data)
         response = HttpResponse(contenu, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="facture-{facture.pk}.pdf"'
         response["Cache-Control"] = "private, no-store"

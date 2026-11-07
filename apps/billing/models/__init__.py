@@ -113,7 +113,7 @@ class Abonnement(ModeleBase):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     entreprise = models.ForeignKey(
-        "tenants.Entreprise", on_delete=models.RESTRICT, related_name="abonnements"
+        "entreprises.Entreprise", on_delete=models.RESTRICT, related_name="abonnements"
     )
     plan = models.ForeignKey(Plan, on_delete=models.RESTRICT, related_name="abonnements")
 

@@ -2,7 +2,7 @@
 
 Entités : ProgressionConfiguration, EtapeConfiguration  ·  contrat T-024
 
-**`TENANT_APPS`, et l'argument n'est pas la commodité.** La progression est lue
+**Une table d'entreprise, et l'argument n'est pas la commodité.** La progression est lue
 **à chaque affichage du tableau de bord**, par chaque utilisateur, pour décider
 d'afficher ou non « Configuration 67 % — reprendre ». La placer dans `public`
 ferait de la table de la plateforme une dépendance de chaque page de chaque

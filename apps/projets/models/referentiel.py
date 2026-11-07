@@ -1,4 +1,4 @@
-"""Référentiels propres à une entreprise — types de projet et modes d'exécution (schéma tenant).
+"""Référentiels propres à une entreprise — types de projet et modes d'exécution (table d'entreprise).
 
 Ils complètent ceux de la plateforme (`catalogue.ReferentielPlateforme`) :
 l'entreprise ajoute et retire les siens, jamais ceux de la plateforme.

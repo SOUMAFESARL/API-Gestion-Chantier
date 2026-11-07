@@ -3,7 +3,7 @@
 Projets, découpage en arbre (éléments, niveaux, listes et modèles), affectations, équipes et
 registre de main-d'œuvre, historique des dates, indice de santé.
 
-Schéma       : tenant
+Tables       : d'entreprise (`ModeleEntreprise`)
 Module CDC   : 1
 """
 

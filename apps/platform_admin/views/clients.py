@@ -2,7 +2,6 @@
 
 from django.db import models, transaction
 from django.shortcuts import get_object_or_404
-from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -10,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.contexte import contexte_entreprise
 from apps.catalogue.models import CatalogueModule, EntrepriseModule
 from apps.core.exceptions import ErreurConflit
 from apps.core.ip_restriction import extraire_ip_client
@@ -37,10 +37,10 @@ from apps.platform_admin.services.clients import (
 from apps.platform_admin.services.notifications import (
     SUJET_MODIFICATION_PLATEFORME,
     journaliser_plateforme,
-    journaliser_tenant,
+    journaliser_entreprise,
     notifier_dg_action_plateforme,
 )
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 __all__ = [
     "ActiverModuleClientPlateformeView",
@@ -164,7 +164,7 @@ class FicheClientPlateformeView(APIView):
         description=(
             "Renvoie les informations complètes d'une entreprise cliente : identité juridique, "
             "coordonnées, état et historique de son abonnement, ainsi que ses compteurs d'usage "
-            "réels (utilisateurs et chantiers du schéma tenant)."
+            "réels (utilisateurs et chantiers de l'entreprise)."
         ),
         parameters=[PARAM_CLIENT_ID],
         responses={
@@ -480,20 +480,19 @@ class ActiverModuleClientPlateformeView(APIView):
         },
     )
     def post(self, request, client_id, module_id):
-        with contexte_schema("public"):
-            entreprise = get_object_or_404(Entreprise, id=client_id)
-            module = get_object_or_404(CatalogueModule, id=module_id)
+        entreprise = get_object_or_404(Entreprise, id=client_id)
+        module = get_object_or_404(CatalogueModule, id=module_id)
 
-            em, cree = EntrepriseModule.objects.get_or_create(
-                entreprise=entreprise, module=module, defaults={"est_actif": True}
-            )
-            deja_actif = (not cree) and em.est_actif
-            if not deja_actif:
-                em.est_actif = True
-                em.save(update_fields=["est_actif", "modifie_le"])
+        em, cree = EntrepriseModule.objects.get_or_create(
+            entreprise=entreprise, module=module, defaults={"est_actif": True}
+        )
+        deja_actif = (not cree) and em.est_actif
+        if not deja_actif:
+            em.est_actif = True
+            em.save(update_fields=["est_actif", "modifie_le"])
 
-        # Dans le schéma du tenant (A-11) :
-        with contexte_schema(entreprise.schema_name):
+        # Dans l'entreprise (A-11) :
+        with contexte_entreprise(entreprise):
             with transaction.atomic():
                 from apps.accounts.models import Module, Role, RoleModulePermission
                 from apps.catalogue.models import CataloguePermission, ModeleRoleModule
@@ -542,8 +541,8 @@ class ActiverModuleClientPlateformeView(APIView):
         adresse_ip = extraire_ip_client(request)
         appareil = request.headers.get("User-Agent", "")[:255]
 
-        # Audit tenant (L9-1)
-        journaliser_tenant(
+        # Audit de l'entreprise (L9-1)
+        journaliser_entreprise(
             entreprise=entreprise,
             action="MODIFICATION",
             type_entite="EntrepriseModule",
@@ -599,36 +598,35 @@ class DesactiverModuleClientPlateformeView(APIView):
         },
     )
     def post(self, request, client_id, module_id):
-        with contexte_schema("public"):
-            entreprise = get_object_or_404(Entreprise, id=client_id)
-            module = get_object_or_404(CatalogueModule, id=module_id)
+        entreprise = get_object_or_404(Entreprise, id=client_id)
+        module = get_object_or_404(CatalogueModule, id=module_id)
 
-            if module.code.lower() in MODULES_SOCLE:
-                raise ErreurConflit(
-                    detail=(
-                        f"Le module {module.libelle} est le socle de l'espace d'une entreprise : "
-                        "il ne peut pas être désactivé."
-                    )
+        if module.code.lower() in MODULES_SOCLE:
+            raise ErreurConflit(
+                detail=(
+                    f"Le module {module.libelle} est le socle de l'espace d'une entreprise : "
+                    "il ne peut pas être désactivé."
                 )
+            )
 
-            em = EntrepriseModule.objects.filter(
-                entreprise=entreprise, module=module, supprime_le__isnull=True
-            ).first()
-            deja_inactif = (em is not None and not em.est_actif) or (em is None)
+        em = EntrepriseModule.objects.filter(
+            entreprise=entreprise, module=module, supprime_le__isnull=True
+        ).first()
+        deja_inactif = (em is not None and not em.est_actif) or (em is None)
 
-            if em:
-                em.est_actif = False
-                em.save(update_fields=["est_actif", "modifie_le"])
-            else:
-                EntrepriseModule.objects.create(
-                    entreprise=entreprise, module=module, est_actif=False
-                )
+        if em:
+            em.est_actif = False
+            em.save(update_fields=["est_actif", "modifie_le"])
+        else:
+            EntrepriseModule.objects.create(
+                entreprise=entreprise, module=module, est_actif=False
+            )
 
         adresse_ip = extraire_ip_client(request)
         appareil = request.headers.get("User-Agent", "")[:255]
 
-        # Audit tenant (L9-1)
-        journaliser_tenant(
+        # Audit de l'entreprise (L9-1)
+        journaliser_entreprise(
             entreprise=entreprise,
             action="MODIFICATION",
             type_entite="EntrepriseModule",

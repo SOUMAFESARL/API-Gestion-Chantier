@@ -1,7 +1,6 @@
 """Commande CLI pour déclencher la réconciliation automatique des paiements CinetPay."""
 
 from django.core.management.base import BaseCommand
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.billing.services.paiement import PaiementAbonnementService
 
@@ -32,48 +31,47 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        with contexte_schema(schema_public()):
-            tx_id = options.get("transaction_id")
-            delai = options.get("delai_minutes", 0)
-            timeout = options.get("timeout_heures", 48)
+        tx_id = options.get("transaction_id")
+        delai = options.get("delai_minutes", 0)
+        timeout = options.get("timeout_heures", 48)
 
-            if tx_id:
-                self.stdout.write(f"Vérification de la transaction unique : {tx_id}...")
-                res = PaiementAbonnementService.traiter_notification_webhook(transaction_id=tx_id)
-                statut = res.get("statut")
+        if tx_id:
+            self.stdout.write(f"Vérification de la transaction unique : {tx_id}...")
+            res = PaiementAbonnementService.traiter_notification_webhook(transaction_id=tx_id)
+            statut = res.get("statut")
 
-                if statut in ["CONFIRME", "DEJA_CONFIRME"]:
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"Succès ! Transaction {tx_id} confirmée. "
-                            f"Facture : {res.get('facture')}, "
-                            f"Expiration : {res.get('abonnement_expire_le')}"
-                        )
+            if statut in ["CONFIRME", "DEJA_CONFIRME"]:
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"Succès ! Transaction {tx_id} confirmée. "
+                        f"Facture : {res.get('facture')}, "
+                        f"Expiration : {res.get('abonnement_expire_le')}"
                     )
-                elif statut == "EN_ATTENTE":
-                    self.stdout.write(
-                        self.style.NOTICE(f"Paiement {tx_id} toujours en attente chez l'opérateur.")
-                    )
-                else:
-                    self.stdout.write(self.style.WARNING(f"Résultat : {res}"))
-                return
-
-            self.stdout.write(
-                f"Lancement de la réconciliation globale (délai min: {delai} min, "
-                f"expiration: {timeout} h)..."
-            )
-            stats = PaiementAbonnementService.verifier_paiements_en_attente(
-                delai_min_minutes=delai,
-                timeout_heures=timeout,
-            )
-
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"Réconciliation terminée :\n"
-                    f"  - Candidats examinés : {stats['total_candidats']}\n"
-                    f"  - Confirmés : {stats['confirmes']}\n"
-                    f"  - Toujours en attente : {stats['en_attente']}\n"
-                    f"  - Échoués : {stats['echoues']}\n"
-                    f"  - Expirés : {stats['expires']}"
                 )
+            elif statut == "EN_ATTENTE":
+                self.stdout.write(
+                    self.style.NOTICE(f"Paiement {tx_id} toujours en attente chez l'opérateur.")
+                )
+            else:
+                self.stdout.write(self.style.WARNING(f"Résultat : {res}"))
+            return
+
+        self.stdout.write(
+            f"Lancement de la réconciliation globale (délai min: {delai} min, "
+            f"expiration: {timeout} h)..."
+        )
+        stats = PaiementAbonnementService.verifier_paiements_en_attente(
+            delai_min_minutes=delai,
+            timeout_heures=timeout,
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Réconciliation terminée :\n"
+                f"  - Candidats examinés : {stats['total_candidats']}\n"
+                f"  - Confirmés : {stats['confirmes']}\n"
+                f"  - Toujours en attente : {stats['en_attente']}\n"
+                f"  - Échoués : {stats['echoues']}\n"
+                f"  - Expirés : {stats['expires']}"
             )
+        )

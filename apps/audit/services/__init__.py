@@ -39,11 +39,8 @@ def journaliser(
     L'échec est donc **journalisé au niveau `error`** plutôt qu'avalé : il
     remonte à la supervision, qui est l'endroit où l'on peut y répondre.
 
-    **Un cas connu, et c'est l'écart E1.** `apps.audit` vit dans `TENANT_APPS`
-    seul, parce que la table référence `utilisateur`. Or `apps.accounts` est
-    dans les deux listes : une action du personnel de l'éditeur, dans le schéma
-    `public`, ne trouve pas de table où écrire. La même asymétrie avait écarté
-    les tables de liste noire de SimpleJWT. Elle reste ouverte.
+    L'écart E1 est clos par la D9 : une action du personnel de l'éditeur s'écrit dans
+    `journal_audit` avec une entreprise nulle.
 
     **Ne jamais passer de mot de passe, de jeton ou d'empreinte** dans
     `valeur_avant` ou `valeur_apres` : le journal se consulte et s'exporte.

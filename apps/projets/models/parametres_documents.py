@@ -1,6 +1,6 @@
 """Réglage de l'en-tête et du pied de page des documents PDF de l'entreprise.
 
-Schéma : tenant (application « projets »).
+Tables d'entreprise (`ModeleEntreprise`), application « projets ».
 
 Tous les PDF (fiche projet, rapport journalier, synthèse, bons de stock) sont
 dessinés dans le navigateur ; le serveur ne fait que stocker ce que
@@ -43,7 +43,7 @@ def mentions_pied_par_defaut() -> list[str]:
 
 
 class ParametresDocuments(ModeleEntreprise):
-    """Réglage de l'en-tête et du pied des documents (ligne unique par schéma tenant)."""
+    """Réglage de l'en-tête et du pied des documents (ligne unique par entreprise)."""
 
     cle = models.CharField(
         _("clé"),

@@ -271,12 +271,9 @@ jobs:
             "$VENV_PYTHON" manage.py synchroniser_catalogue_permissions 2>&1 || true
 
             echo ""
-            echo "=== Propagation des rôles système multi-tenant ==="
+            echo "=== Propagation des rôles système aux entreprises ==="
             "$VENV_PYTHON" manage.py propager_roles_systeme 2>&1 || true
 
-            echo ""
-            echo "=== Renouvellement abonnement Kouassi Ange Félix (e_3at_btp) ==="
-            "$VENV_PYTHON" manage.py gerer_entreprises --activer-abonnement e_3at_btp --plan MAITRE_OEUVRE --duree-jours 365 2>&1 || true
 
             echo ""
             echo "=== Tâche cron de nuit F3 (00 h 01) ==="

@@ -13,7 +13,7 @@ from django.db import connection, transaction
 from apps.core.contexte import contexte_entreprise, portee_plateforme, reinitialiser_contexte
 from apps.core.rls import diagnostic_isolation, role_plateforme
 from apps.projets.models import MotifReport
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 pytestmark = pytest.mark.django_db
 
@@ -27,7 +27,7 @@ def contexte_vierge():
 
 def creer_entreprise(slug: str) -> Entreprise:
     return Entreprise.objects.create(
-        schema_name=slug, raison_sociale=slug.upper(), email_contact=f"contact@{slug}.test"
+        slug=slug, raison_sociale=slug.upper(), email_contact=f"contact@{slug}.test"
     )
 
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import jwt
 from django.http import JsonResponse
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.core.ip_restriction import extraire_ip_client
 from apps.core.middleware import identifiant_requete_courant
@@ -95,19 +94,18 @@ class LectureSeuleAssistanceMiddleware:
         )
 
         try:
-            with contexte_schema(schema_public()):
-                JournalPlateforme.objects.create(
-                    utilisateur_id=super_admin_id if super_admin_id else None,
-                    action="TENTATIVE_ECRITURE_BLOQUEE",
-                    detail={
-                        "super_admin_id": super_admin_id,
-                        "super_admin_email": super_admin_email,
-                        "methode": request.method,
-                        "chemin": request.path,
-                        "schema_cible": schema,
-                    },
-                    adresse_ip=ip,
-                    appareil=request.headers.get("User-Agent", "")[:255],
-                )
+            JournalPlateforme.objects.create(
+                utilisateur_id=super_admin_id if super_admin_id else None,
+                action="TENTATIVE_ECRITURE_BLOQUEE",
+                detail={
+                    "super_admin_id": super_admin_id,
+                    "super_admin_email": super_admin_email,
+                    "methode": request.method,
+                    "chemin": request.path,
+                    "schema_cible": schema,
+                },
+                adresse_ip=ip,
+                appareil=request.headers.get("User-Agent", "")[:255],
+            )
         except Exception:
             logger.exception("Échec d'enregistrement de la tentative d'écriture bloquée dans l'audit.")

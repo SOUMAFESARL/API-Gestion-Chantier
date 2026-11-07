@@ -20,7 +20,7 @@ Cinq étapes, dans l'ordre. Les deux premières ne modifient aucun fichier. L'ag
 2. **Vérifier ce qui existe déjà.** Une story du backlog est souvent à moitié faite : dire ce qui est
    en place, ce qui manque, ce qui s'écarte.
 3. **Relever les règles métier en jeu** : OHADA, contraintes BTP, flux CinetPay, isolation
-   multi-tenant, Socle Commun.
+   entre entreprises (D9), Socle Commun.
 4. **Restituer le cadrage** en quatre temps — situation, complication, question, orientation —
    suivi du résultat attendu décrit du point de vue de l'utilisateur final (le « film mental » :
    ce qu'il voit et peut faire quand la tâche est finie).

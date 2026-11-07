@@ -1,6 +1,6 @@
 """Vues pour la reprogrammation de dates et l'historique (US-033, RG-11).
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets).
 """
 
@@ -325,7 +325,7 @@ class ProjetJournalReportsConsolideView(APIView, JournalReportsFiltreMixin):
 
 
 class GlobalJournalReportsView(APIView, JournalReportsFiltreMixin):
-    """Journal d'audit global des reports pour la Direction Générale et l'Admin Tenant."""
+    """Journal d'audit global des reports pour la Direction Générale et l'administrateur de l'entreprise."""
 
     pagination_class = PaginationStandard
     permission_classes = [

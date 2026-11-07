@@ -2,7 +2,7 @@
 name: revue-backend
 description: >-
   Relit un changement du backend CCD Digital (diff en cours, branche, commit, PR) contre les règles
-  propres à ce dépôt : isolation multi-tenant, suppression logique, montants, droits, contrats d'API.
+  propres à ce dépôt : isolation entre entreprises, suppression logique, montants, droits, contrats d'API.
   À utiliser quand on demande une revue ou une relecture de code Django de ce dépôt, avant un merge
   dans develop, ou à la question « est-ce que ce code est bon ? ».
 ---
@@ -25,10 +25,13 @@ ligne changée, plus souvent dans ce qu'elle suppose de son appelant.
 ## 2. Chercher, du plus coûteux au moins coûteux
 
 **Isolation des données — bloquant**
-- Nouvelle application : rangée dans `TENANT_APPS` ou `SHARED_APPS` à dessein ?
-- Tâche Celery : reçoit le schéma et ouvre `schema_context` ?
-- Clé de cache portant une donnée d'un client : contient le schéma ?
-- Clé de fichier : préfixée par le schéma ? URL stockée en base au lieu de la clé ?
+- Nouveau modèle : hérite de `ModeleEntreprise` (table d'entreprise) ou non (plateforme), à dessein ?
+  Une table d'entreprise a sa politique RLS dans sa migration (`isolation_entreprise`).
+- `portee_plateforme` ou `_base_manager` : justifiés, et bornés à ce qu'il faut ?
+- Tâche Celery : reçoit `entreprise_id` et se décore de `@avec_entreprise` ?
+- Clé de cache portant une donnée d'un client : contient l'entreprise ?
+- Clé de fichier : préfixée par le slug de l'entreprise ? URL stockée en base au lieu de la clé ?
+- Route nouvelle : connue de la suite d'étanchéité (`tests/etancheite/`) ?
 
 **Droits — bloquant**
 - Chaque vue nouvelle déclare une permission au-delà de `IsAuthenticated`.

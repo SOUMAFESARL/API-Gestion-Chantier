@@ -189,9 +189,9 @@ def emettre_jetons(
     # Le claim `entreprise` est ce que l'authentification compare au compte (D9, R-7). `schema`
     # reste le temps que le frontend passe au nouveau contrat (étape 8 du plan de sortie).
     entreprise = utilisateur.entreprise
-    schema_name = entreprise.schema_name if entreprise is not None else "public"
-    refresh["schema"] = schema_name
-    refresh.access_token["schema"] = schema_name
+    slug = entreprise.slug if entreprise is not None else "public"
+    refresh["schema"] = slug
+    refresh.access_token["schema"] = slug
     if entreprise is not None:
         refresh[CLAIM_ENTREPRISE] = str(entreprise.pk)
         refresh.access_token[CLAIM_ENTREPRISE] = str(entreprise.pk)
@@ -219,7 +219,7 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
     > relit toujours le rôle en base pour décider d'un droit.
     """
     entreprise = utilisateur.entreprise
-    schema_name = entreprise.schema_name if entreprise is not None else "public"
+    slug = entreprise.slug if entreprise is not None else "public"
     profil = {
         "id": str(utilisateur.pk),
         "email": utilisateur.email,
@@ -237,13 +237,13 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
         "is_owner": utilisateur.is_owner,
         "langue": utilisateur.langue,
         "doit_changer_mot_de_passe": utilisateur.doit_changer_mot_de_passe,
-        "schema": schema_name,
+        "schema": slug,
     }
     if entreprise is not None:
         profil["entreprise"] = {
             "id": str(entreprise.pk),
             "raison_sociale": entreprise.raison_sociale,
-            "schema_name": entreprise.schema_name,
+            "schema_name": entreprise.slug,
         }
     return profil
 

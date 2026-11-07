@@ -1,8 +1,8 @@
 """Application « accounts » — comptes et droits.
 
-Présente dans **les deux listes** d'applications (écart E1, voir README) :
-  · schéma `public` : le personnel CCD Digital (super admin, support)
-  · schéma tenant   : les utilisateurs de l'entreprise cliente
+Une seule table `utilisateur` (D9, R-8) :
+  · entreprise nulle : le personnel CCD Digital (super admin, support)
+  · entreprise posée : les utilisateurs de l'entreprise cliente
 
 Entités MCD : Utilisateur, Invitation, Appareil  (MCD §5.1)
 Plus `JetonReinitialisation` — contrat de réinitialisation §2.
@@ -133,7 +133,7 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
     # renseignée pour les collaborateurs d'une entreprise. Le gestionnaire reste **non
     # cloisonné** : l'authentification cherche le compte avant de savoir son entreprise.
     entreprise = models.ForeignKey(
-        "tenants.Entreprise",
+        "entreprises.Entreprise",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -489,7 +489,7 @@ class JetonReinitialisation(ModeleBase):
     invalide_le = models.DateTimeField(_("invalidé le"), null=True, blank=True)
     ip_demande = models.GenericIPAddressField(_("IP de la demande"), null=True, blank=True)
     entreprise = models.ForeignKey(
-        "tenants.Entreprise",
+        "entreprises.Entreprise",
         on_delete=models.PROTECT,
         null=True,
         blank=True,

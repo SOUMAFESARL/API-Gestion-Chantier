@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.parsers import JSONParser
@@ -92,16 +91,15 @@ class CalendrierEntrepriseView(APIView):
         semaine = SemaineType.courante()
         semaine_data = SemaineTypeSerializer(semaine).data
 
-        with contexte_schema(schema_public()):
-            feries_qs = JourFerie.objects.filter(
-                pays="CI",
-                date_ferie__gte=debut,
-                date_ferie__lte=fin,
-            ).order_by("date_ferie")
-            feries_nationaux = [
-                {"date": jf.date_ferie.isoformat(), "libelle": jf.libelle}
-                for jf in feries_qs
-            ]
+        feries_qs = JourFerie.objects.filter(
+            pays="CI",
+            date_ferie__gte=debut,
+            date_ferie__lte=fin,
+        ).order_by("date_ferie")
+        feries_nationaux = [
+            {"date": jf.date_ferie.isoformat(), "libelle": jf.libelle}
+            for jf in feries_qs
+        ]
 
         exceptions_qs = ExceptionCalendrier.objects.filter(
             supprime_le__isnull=True,

@@ -1,6 +1,6 @@
 """Service d'orchestration de la machine à états et d'évaluation quotidienne des chantiers.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets) & 2 (Suivi Technique des Travaux).
 Conformité : SFD F3 §7 (Statuts automatiques de projet).
 
@@ -431,7 +431,7 @@ def retablir_statut_apres_decalage_si_necessaire(
 
 @transaction.atomic
 def executer_evaluation_quotidienne_schema(date_reference: date | None = None) -> dict:
-    """Exécute l'évaluation quotidienne calendaire sur l'ensemble du schéma tenant courant :
+    """Exécute l'évaluation quotidienne calendaire sur l'ensemble de l'entreprise active :
     les cases de chaque arbre, puis les projets."""
     date_ref = date_reference or timezone.now().date()
     nb_cases = 0

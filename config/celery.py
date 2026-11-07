@@ -1,15 +1,14 @@
 """Application Celery — CCD Digital.
 
-Attention multi-tenant : une tâche n'hérite pas du schéma de la requête qui
-l'a déclenchée. Toute tâche qui touche des données métier doit recevoir le
-nom du schéma en argument et l'activer explicitement :
+Une tâche n'hérite pas de l'entreprise de la requête qui l'a déclenchée (D9, R-4). Toute tâche
+qui touche des données métier reçoit l'identifiant de l'entreprise en argument et l'active :
 
-    from apps.core.passerelle_schema import contexte_schema
+    from apps.core.contexte import avec_entreprise
 
     @shared_task
-    def recalculer_avancement(code_schema, projet_id):
-        with contexte_schema(code_schema):
-            ...
+    @avec_entreprise
+    def recalculer_avancement(entreprise_id, projet_id):
+        ...
 """
 
 import os

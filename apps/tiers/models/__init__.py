@@ -2,7 +2,7 @@
 
 Référentiel unique des acteurs externes (décision H3 du MCD).
 
-Schéma       : tenant
+Tables       : d'entreprise (`ModeleEntreprise`)
 Module CDC   : 4 · 9 · 10
 Entités MCD  : Tiers, RoleTiers, ContactTiers
 """

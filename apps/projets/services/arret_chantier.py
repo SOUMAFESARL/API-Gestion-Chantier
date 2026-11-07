@@ -1,6 +1,6 @@
 """Services métier pour la gestion des arrêts de chantier (MLD §6.5, C2, C8).
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Chaque déclaration, fin ou suppression d'arrêt de chantier planifie un recalcul de santé.
 """
 

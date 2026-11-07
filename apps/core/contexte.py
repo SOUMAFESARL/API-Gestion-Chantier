@@ -183,7 +183,7 @@ def avec_entreprise(fonction):
 
     Une tâche Celery n'hérite pas du contexte de la requête qui l'a lancée : elle reçoit
     l'entreprise en argument et l'ouvre elle-même. Sans cela, sa première requête lèverait
-    `HorsContexteEntreprise` — là où, avec django-tenants, elle tournait sur `public` sans rien
+    `HorsContexteEntreprise` — là où, dans l'ancien modèle multi-schéma, elle tournait sur `public` sans rien
     trouver et sans rien dire.
     """
 

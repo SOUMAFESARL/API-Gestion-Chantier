@@ -17,9 +17,9 @@ class Command(BaseCommand):
     help = "Relance par e-mail les rapports journaliers du jour non remis, dans chaque entreprise."
 
     def add_arguments(self, parser):
-        parser.add_argument("--schema", help="Une seule entreprise (nom de schéma).")
+        parser.add_argument("--entreprise", help="Une seule entreprise (slug).")
 
     def handle(self, *args, **options):
-        bilan = relancer_rapports_manquants_partout(options.get("schema"))
+        bilan = relancer_rapports_manquants_partout(options.get("entreprise"))
         for schema, resultat in bilan.items():
             self.stdout.write(f"{schema} : {resultat}")

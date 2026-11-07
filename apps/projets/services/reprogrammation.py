@@ -1,6 +1,6 @@
 """Service métier de reprogrammation des dates prévisionnelles (US-033, RG-11).
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets).
 """
 

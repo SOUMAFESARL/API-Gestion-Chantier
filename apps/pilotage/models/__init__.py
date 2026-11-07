@@ -2,7 +2,7 @@
 
 Pilotage stratégique et BI. Lit tout le monde, n'écrit chez personne.
 
-Schéma       : tenant
+Tables       : d'entreprise (`ModeleEntreprise`)
 Module CDC   : 12
 Entités MCD  : Indicateur, MesureIndicateur, TableauBord, Widget, RapportGenere, Export,
                ScenarioSimulation, PredictionIa

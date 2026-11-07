@@ -23,15 +23,15 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
-from apps.core.passerelle_schema import contexte_schema
 from rest_framework.exceptions import ValidationError
 
+from apps.core.contexte import contexte_entreprise
 from apps.accounts.models import Role
 from apps.catalogue.models import ModeleRole, ModeleRoleModule
 from apps.core.exceptions import ErreurMetier
 from apps.platform_admin.services.catalogue import propager_roles_systeme
-from apps.platform_admin.services.notifications import journaliser_plateforme, journaliser_tenant
-from apps.tenants.models import Entreprise
+from apps.platform_admin.services.notifications import journaliser_plateforme, journaliser_entreprise
+from apps.entreprises.models import Entreprise
 
 __all__ = [
     "creer_role_systeme",
@@ -41,8 +41,7 @@ __all__ = [
 
 
 def _entreprises() -> list[Entreprise]:
-    with contexte_schema("public"):
-        return list(Entreprise.objects.exclude(schema_name="public"))
+    return list(Entreprise.objects.all())
 
 
 def creer_role_systeme(
@@ -54,18 +53,17 @@ def creer_role_systeme(
     acteur=None,
 ) -> ModeleRole:
     code = code.strip().upper()
-    with contexte_schema("public"):
-        if ModeleRole.objects.filter(code__iexact=code, supprime_le__isnull=True).exists():
-            raise ValidationError({"code": "Un rôle système porte déjà ce code."})
-        with transaction.atomic():
-            modele = ModeleRole.objects.create(
-                code=code,
-                libelle=libelle.strip(),
-                description=description.strip(),
-                portee="PROJET",
-                unique_par_projet=unique_par_projet,
-                est_actif=True,
-            )
+    if ModeleRole.objects.filter(code__iexact=code, supprime_le__isnull=True).exists():
+        raise ValidationError({"code": "Un rôle système porte déjà ce code."})
+    with transaction.atomic():
+        modele = ModeleRole.objects.create(
+            code=code,
+            libelle=libelle.strip(),
+            description=description.strip(),
+            portee="PROJET",
+            unique_par_projet=unique_par_projet,
+            est_actif=True,
+        )
 
     resultat = propager_roles_systeme(acteur=acteur)
     journaliser_plateforme(
@@ -83,7 +81,7 @@ def modifier_role_systeme(
     acteur=None,
 ) -> ModeleRole:
     avant = {"libelle": modele.libelle, "description": modele.description}
-    with contexte_schema("public"), transaction.atomic():
+    with transaction.atomic():
         # `unique_par_projet` n'est qu'une valeur de départ : les entreprises existantes gardent
         # le réglage qu'elles ont choisi.
         for champ in ("libelle", "description"):
@@ -96,7 +94,7 @@ def modifier_role_systeme(
     apres = {"libelle": modele.libelle, "description": modele.description}
     if apres != avant:
         for entreprise in _entreprises():
-            with contexte_schema(entreprise.schema_name):
+            with contexte_entreprise(entreprise):
                 roles = Role.objects.filter(
                     code__iexact=modele.code, est_systeme=True, supprime_le__isnull=True
                 )
@@ -104,7 +102,7 @@ def modifier_role_systeme(
                     role.libelle = modele.libelle
                     role.description = modele.description
                     role.save(update_fields=["libelle", "description", "modifie_le"])
-                    journaliser_tenant(
+                    journaliser_entreprise(
                         entreprise=entreprise,
                         action="MODIFICATION",
                         type_entite="Role",
@@ -128,17 +126,16 @@ def supprimer_role_systeme(modele: ModeleRole, *, acteur=None) -> dict:
             "pour son administrateur."
         )
 
-    with contexte_schema("public"):
-        maintenant = timezone.now()
-        with transaction.atomic():
-            ModeleRoleModule.objects.filter(modele_role=modele).update(supprime_le=maintenant)
-            modele.supprime_le = maintenant
-            modele.est_actif = False
-            modele.save(update_fields=["supprime_le", "est_actif", "modifie_le"])
+    maintenant = timezone.now()
+    with transaction.atomic():
+        ModeleRoleModule.objects.filter(modele_role=modele).update(supprime_le=maintenant)
+        modele.supprime_le = maintenant
+        modele.est_actif = False
+        modele.save(update_fields=["supprime_le", "est_actif", "modifie_le"])
 
     convertis = 0
     for entreprise in _entreprises():
-        with contexte_schema(entreprise.schema_name):
+        with contexte_entreprise(entreprise):
             roles = list(
                 Role.objects.filter(
                     code__iexact=modele.code, est_systeme=True, supprime_le__isnull=True
@@ -148,7 +145,7 @@ def supprimer_role_systeme(modele: ModeleRole, *, acteur=None) -> dict:
                 role.est_systeme = False
                 role.save(update_fields=["est_systeme", "modifie_le"])
                 convertis += 1
-                journaliser_tenant(
+                journaliser_entreprise(
                     entreprise=entreprise,
                     action="MODIFICATION",
                     type_entite="Role",

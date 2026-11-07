@@ -12,7 +12,7 @@ class ModeleRole(ModeleBase):
     """Gabarit type de rôle métier BTP souverain.
 
     Défini au niveau plateforme (schéma public). Sert de matrice de référence
-    pour les rôles créés ou instanciés dans les tenants.
+    pour les rôles créés ou instanciés dans les entreprises.
     """
 
     code = models.CharField(

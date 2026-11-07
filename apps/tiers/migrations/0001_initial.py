@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tenants', '0001_initial'),
+        ('entreprises', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
                 ('note_evaluation', models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True, verbose_name="note d'évaluation")),
                 ('est_actif', models.BooleanField(default=True, verbose_name='est actif')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise')),
+                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise')),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
             ],
             options={
@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
                 ('supprime_le', models.DateTimeField(blank=True, db_index=True, help_text='Non nul = ligne supprimée logiquement. Jamais de suppression physique.', null=True, verbose_name='supprimé le')),
                 ('role', models.CharField(choices=[('CLIENT_MOA', "Client / Maître d'ouvrage"), ('MAITRE_OEUVRE', "Maître d'œuvre"), ('FOURNISSEUR', 'Fournisseur'), ('SOUS_TRAITANT', 'Sous-traitant'), ('TACHERON', 'Tâcheron'), ('BUREAU_CONTROLE', 'Bureau de contrôle'), ('ADMINISTRATION', 'Administration'), ('PRESTATAIRE', 'Prestataire')], max_length=30, verbose_name='rôle')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise')),
+                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise')),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
                 ('tiers', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='roles', to='tiers.tiers')),
             ],

@@ -16,6 +16,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.core.droits import APermission
 from apps.onboarding.serializers import ProgressionSerializer
 from apps.onboarding.services import lire_ou_creer, passer, terminer, valider
@@ -158,12 +159,12 @@ class RecapitulatifView(APIView):
         responses={200: None},
     )
     def get(self, request):
-        tenant = getattr(request, "tenant", None)
+        entreprise = entreprise_courante()
         entreprise_data = None
-        if tenant and tenant.schema_name != "public":
-            from apps.tenants.serializers import EntrepriseSerializer
+        if entreprise is not None:
+            from apps.entreprises.serializers import EntrepriseSerializer
 
-            entreprise_data = EntrepriseSerializer(tenant).data
+            entreprise_data = EntrepriseSerializer(entreprise).data
 
         from apps.projets.models import Projet
         from apps.projets.serializers import ProjetSerializer

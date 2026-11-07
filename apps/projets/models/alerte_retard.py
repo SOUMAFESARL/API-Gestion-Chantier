@@ -1,6 +1,6 @@
 """Modèle AlerteRetard — Alertes de retard et criticité du suivi d'avancement.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets) / F3 (Suivi d'Avancement).
 SFD F3 v1.0 §5.4, §10 & Erratum v1.0.1 (E-3).
 """

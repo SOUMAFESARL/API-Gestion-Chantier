@@ -1,6 +1,6 @@
 """Modèle RapportJournalier — MLD §6.7.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 """
 
 from django.db import models

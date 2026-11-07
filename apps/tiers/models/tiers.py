@@ -1,7 +1,7 @@
 """Modèles de l'application tiers — MCD §5.2 et MLD §5.5.
 
 Référentiel unique des acteurs externes (clients, fournisseurs, sous-traitants, tâcherons).
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 """
 
 from django.db import models

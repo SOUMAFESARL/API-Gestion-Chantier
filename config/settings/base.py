@@ -4,7 +4,7 @@ Aucune valeur secrète ni dépendante de l'environnement n'est écrite ici :
 tout passe par le fichier `.env` à la racine du dépôt (voir `.env.example`).
 
 Décisions appliquées, issues du dossier de conception :
-  D1  isolation multi-tenant par schéma PostgreSQL (django-tenants)
+  D9  un seul schéma ; chaque table d'entreprise porte `entreprise_id`, filtré par l'ORM et la RLS
   D5  montants en centimes de FCFA
   D6  stockage des horodatages en UTC, affichage en heure locale
 """
@@ -50,7 +50,6 @@ except UndefinedValueError as exc:  # pragma: no cover
     ) from exc
 
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
-ENABLE_DJANGO_ADMIN = config("ENABLE_DJANGO_ADMIN", default=False, cast=bool)
 
 # Suppression définitive d'une entreprise cliente (espace super admin) : coupée en production
 # tant que la Direction ne l'a pas allumée. Le superviseur seul peut l'utiliser.
@@ -97,12 +96,11 @@ ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="", cast=_liste)
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
-    "django.contrib.admin",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # plateforme
-    "apps.tenants",
+    "apps.entreprises",
     "apps.core",
     "apps.catalogue",
     "apps.billing",
@@ -128,14 +126,6 @@ INSTALLED_APPS = [
     "django_celery_beat",
 ]
 
-# Vestiges de django-tenants : plus d'application, plus de moteur ni de routeur, mais le code
-# d'avant le lot 3 appelle encore ses utilitaires, qui lisent ces réglages. Ils disparaissent au
-# lot 8 avec le paquet.
-TENANT_MODEL = "tenants.Entreprise"
-TENANT_DOMAIN_MODEL = "tenants.Domaine"
-PUBLIC_SCHEMA_NAME = "public"
-PUBLIC_SCHEMA_URLCONF = "config.urls_public"
-
 # --------------------------------------------------------------------------
 # Middleware — le contexte d'entreprise est remis à zéro en tête ; c'est
 # l'authentification qui l'active (D9, R-7). Plus de résolution de schéma.
@@ -153,7 +143,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # Un module que le super admin a fermé n'a plus de route (catalogue du schéma public).
+    # Un module que le super admin a fermé n'a plus de route (catalogue de la plateforme).
     "apps.core.middleware_modules.ModuleFermeMiddleware",
     # Verrou absolu R-128 : refuse toute mutation sous jeton d'assistance Super Admin
     "apps.platform_admin.middleware.LectureSeuleAssistanceMiddleware",
@@ -162,7 +152,7 @@ MIDDLEWARE = [
     "apps.billing.middleware.LectureSeuleAbonnementMiddleware",
 ]
 
-ROOT_URLCONF = "config.urls_tenant"
+ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
 TEMPLATES = [
@@ -473,7 +463,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://127\.0\.0\.1:\d+$",
 ]
 
-# Plus de `x-tenant` : l'entreprise vient du jeton vérifié, jamais d'un en-tête (D9, R-7).
+# L'entreprise vient du jeton vérifié, jamais d'un en-tête (D9, R-7).
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-request-id",
 ]
@@ -533,15 +523,15 @@ CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=Tr
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    "evaluation_f3_nuit_tous_tenants": {
-        "task": "apps.projets.tasks.evaluer_f3_nuit_tous_tenants",
+    "evaluation_f3_nuit_toutes_entreprises": {
+        "task": "apps.projets.tasks.evaluer_f3_nuit_toutes_entreprises",
         "schedule": crontab(hour=0, minute=1),
     },
     # Le journal promet « relance automatique à 17 h 30 » : c'est elle. Heure
     # du chantier (CELERY_TIMEZONE). Sans Celery Beat — sur cPanel —, le cron
     # appelle `manage.py relancer_rapports_manquants` à la même heure.
     "relance_rapports_journaliers_manquants": {
-        "task": "apps.chantier.tasks.relancer_rapports_manquants_tous_tenants",
+        "task": "apps.chantier.tasks.relancer_rapports_manquants_toutes_entreprises",
         "schedule": crontab(hour=17, minute=30, day_of_week="1-5"),
     },
 }

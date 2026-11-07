@@ -32,7 +32,7 @@ TMP="${OUT}.partial"
 trap 'rm -f "$TMP"' EXIT
 
 echo "[backup] pg_dump -> $OUT"
-# -Fc : format custom (restauration sélective possible, tous les schémas tenants inclus)
+# -Fc : format custom (restauration sélective possible)
 pg_dump -Fc --no-owner -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -f "$TMP" "$DB_NAME"
 
 # Vérifications : fichier non vide + archive lisible

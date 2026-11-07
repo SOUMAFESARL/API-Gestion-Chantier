@@ -1,8 +1,8 @@
-"""Documents contractuels : plusieurs fichiers par projet, dans le schema tenant."""
+"""Documents contractuels : plusieurs fichiers par projet, de l'entreprise."""
 
 from pathlib import Path
 
-from apps.core.passerelle_schema import schema_courant
+from apps.entreprises.selectors import slug_courant
 from django.db import connection, models
 
 from apps.core.models import ModeleEntreprise
@@ -14,7 +14,7 @@ def chemin_contrat(instance, filename):
     if extension == ".jepg":
         extension = ".jpeg"
     return (
-        f"{schema_courant()}/projets/{instance.projet_id}/contrats/{instance.pk}{extension}"
+        f"{slug_courant() or 'plateforme'}/projets/{instance.projet_id}/contrats/{instance.pk}{extension}"
     )
 
 

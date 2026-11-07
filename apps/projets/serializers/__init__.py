@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.accounts.models import Utilisateur
 from apps.accounts.serializers.profil import ProfilEntrepriseSerializer
 from apps.accounts.services.invitations import creer_invitation
@@ -218,14 +219,14 @@ class ProjetSerializer(serializers.ModelSerializer):
     @extend_schema_field(ProfilEntrepriseSerializer(allow_null=True))
     def get_entreprise(self, obj):
         request = self.context.get("request")
-        tenant = getattr(request, "tenant", None)
-        if tenant is None or tenant.schema_name == "public":
+        entreprise = entreprise_courante()
+        if entreprise is None:
             return None
-        logo_url = request.build_absolute_uri(tenant.logo.url) if tenant.logo else None
+        logo_url = request.build_absolute_uri(entreprise.logo.url) if entreprise.logo else None
         return {
-            "id": str(tenant.pk),
-            "raison_sociale": tenant.raison_sociale,
-            "schema_name": tenant.schema_name,
+            "id": str(entreprise.pk),
+            "raison_sociale": entreprise.raison_sociale,
+            "schema_name": entreprise.slug,
             "logo_url": logo_url,
         }
 

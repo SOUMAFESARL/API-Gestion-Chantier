@@ -2,9 +2,9 @@
 
 Règles de gouvernance :
 - Déclenchement UNIQUEMENT lors d'une transition vers le badge ROUGE (ancien != ROUGE et nouveau == ROUGE).
-- Destinataires : Chef de Projet du projet + Direction Générale & Administrateurs du tenant.
+- Destinataires : Chef de Projet du projet + Direction Générale & Administrateurs de l'entreprise.
 - Déduplication stricte des adresses emails.
-- Traitement en tâche / fonction exécutée dans le contexte du tenant.
+- Traitement en tâche / fonction exécutée dans le contexte de l'entreprise.
 """
 
 import logging

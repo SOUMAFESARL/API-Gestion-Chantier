@@ -1,4 +1,4 @@
 """Services du module « referentiels ».
 
-Référentiels partagés par tous les tenants.
+Référentiels partagés par toutes les entreprises.
 """

@@ -4,8 +4,8 @@ Règles de sécurité appliquées :
 - R-128 : L'impersonification est en lecture seule stricte et tracée des deux côtés.
 - Durée : Session limitée à 1 heure (3600 s), non renouvelable.
 - Traçabilité double :
-  1. Schéma `public` dans `JournalPlateforme`
-  2. Schéma client `tenant_x` dans `JournalAudit`
+  1. `JournalPlateforme`, côté éditeur
+  2. `JournalAudit` de l'entreprise assistée
 - Garde-fou d'écriture : Interception et rejet de toute mutation en mode assistance.
 """
 
@@ -17,15 +17,15 @@ from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext_lazy as _
 from rest_framework_simplejwt.tokens import AccessToken
 
+from apps.core.contexte import contexte_entreprise
 from apps.accounts.models import Utilisateur
 from apps.accounts.services.authentification import profil_de_connexion
 from apps.audit.services import journaliser
 from apps.core.authentification import CLAIM_ENTREPRISE
 from apps.core.enums import ActionAudit, RoleGlobal, StatutUtilisateur
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from apps.core.exceptions import ErreurMetier
 from apps.platform_admin.models import JournalPlateforme
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ def lister_utilisateurs_entreprise(entreprise_id: uuid.UUID | str) -> list[dict]
         raise ErreurMetier("entreprise_introuvable", _("Entreprise cliente introuvable."))
 
     utilisateurs = []
-    with contexte_schema(entreprise.schema_name):
+    with contexte_entreprise(entreprise):
         qs = Utilisateur.objects.filter(supprime_le__isnull=True).order_by(
             "-is_owner", "nom", "prenom"
         )
@@ -100,7 +100,7 @@ def demarrer_session_assistance(
 
     - Vérifie les droits Super Admin
     - Valide le motif (min 5 caractères)
-    - Sélectionne l'utilisateur cible dans le tenant
+    - Sélectionne l'utilisateur cible dans l'entreprise
     - Émet le jeton JWT d'assistance (1h, non renouvelable, lecture seule)
     - Trace l'accès dans `JournalPlateforme` (schéma public) et `JournalAudit` (schéma client)
     """
@@ -118,7 +118,7 @@ def demarrer_session_assistance(
         raise ErreurMetier("entreprise_introuvable", _("Entreprise cliente introuvable."))
 
     target_user: Utilisateur | None = None
-    with contexte_schema(entreprise.schema_name):
+    with contexte_entreprise(entreprise):
         if utilisateur_id:
             target_user = Utilisateur.objects.filter(
                 pk=utilisateur_id, supprime_le__isnull=True
@@ -147,7 +147,7 @@ def demarrer_session_assistance(
     # Création du jeton JWT d'accès spécifique pour l'assistance (1 heure stricte)
     token = AccessToken.for_user(target_user)
     token.set_exp(lifetime=DUREE_SESSION_ASSISTANCE)
-    token["schema"] = entreprise.schema_name
+    token["schema"] = entreprise.slug
     token[CLAIM_ENTREPRISE] = str(entreprise.pk)
     token["role_global"] = target_user.role_global
     token["is_impersonation"] = True
@@ -162,30 +162,29 @@ def demarrer_session_assistance(
     duree_secondes = int(DUREE_SESSION_ASSISTANCE.total_seconds())
 
     # 1. Écriture dans le Journal de Plateforme (schéma `public` — MLD §4.6)
-    with contexte_schema(schema_public()):
-        JournalPlateforme.objects.create(
-            utilisateur_id=super_admin.id,
-            entreprise_id=entreprise.id,
-            action="CONNEXION_ASSISTANCE",
-            detail={
-                "super_admin_id": str(super_admin.id),
-                "super_admin_email": super_admin.email,
-                "super_admin_nom": f"{super_admin.nom} {super_admin.prenom}".strip(),
-                "cible_utilisateur_id": str(target_user.id),
-                "cible_email": target_user.email,
-                "cible_nom": f"{target_user.nom} {target_user.prenom}".strip(),
-                "entreprise_nom": entreprise.nom_commercial or entreprise.raison_sociale,
-                "entreprise_schema": entreprise.schema_name,
-                "motif": motif_nettoye,
-                "mode": "LECTURE_SEULE",
-                "expire_dans_secondes": duree_secondes,
-            },
-            adresse_ip=adresse_ip,
-            appareil=appareil[:255] if appareil else "",
-        )
+    JournalPlateforme.objects.create(
+        utilisateur_id=super_admin.id,
+        entreprise_id=entreprise.id,
+        action="CONNEXION_ASSISTANCE",
+        detail={
+            "super_admin_id": str(super_admin.id),
+            "super_admin_email": super_admin.email,
+            "super_admin_nom": f"{super_admin.nom} {super_admin.prenom}".strip(),
+            "cible_utilisateur_id": str(target_user.id),
+            "cible_email": target_user.email,
+            "cible_nom": f"{target_user.nom} {target_user.prenom}".strip(),
+            "entreprise_nom": entreprise.nom_commercial or entreprise.raison_sociale,
+            "entreprise_schema": entreprise.slug,
+            "motif": motif_nettoye,
+            "mode": "LECTURE_SEULE",
+            "expire_dans_secondes": duree_secondes,
+        },
+        adresse_ip=adresse_ip,
+        appareil=appareil[:255] if appareil else "",
+    )
 
-    # 2. Écriture dans le Journal d'Audit Client (schéma `tenant_x` — R-128)
-    with contexte_schema(entreprise.schema_name):
+    # 2. Écriture dans le Journal d'Audit Client (de l'entreprise assistée — R-128)
+    with contexte_entreprise(entreprise):
         journaliser(
             action=ActionAudit.ASSISTANCE,
             type_entite="Entreprise",
@@ -226,7 +225,7 @@ def demarrer_session_assistance(
     logger.info(
         "Session d'assistance ouverte : super_admin=%s entreprise=%s cible=%s motif=%s",
         super_admin.email,
-        entreprise.schema_name,
+        entreprise.slug,
         target_user.email,
         motif_nettoye,
     )
@@ -246,7 +245,7 @@ def demarrer_session_assistance(
                 "id": str(entreprise.id),
                 "raison_sociale": entreprise.raison_sociale,
                 "nom_commercial": entreprise.nom_commercial or entreprise.raison_sociale,
-                "schema_name": entreprise.schema_name,
+                "schema_name": entreprise.slug,
             },
             "utilisateur": {
                 "id": str(target_user.id),
@@ -272,25 +271,24 @@ def clore_session_assistance(
 ) -> None:
     """Journalise la fermeture volontaire d'une session d'assistance."""
     # 1. Schéma public
-    with contexte_schema(schema_public()):
-        JournalPlateforme.objects.create(
-            utilisateur_id=super_admin_id if super_admin_id else None,
-            entreprise_id=entreprise_id if entreprise_id else None,
-            action="DECONNEXION_ASSISTANCE",
-            detail={
-                "super_admin_id": str(super_admin_id) if super_admin_id else "",
-                "super_admin_email": super_admin_email,
-                "statut": "TERMINE",
-            },
-            adresse_ip=adresse_ip,
-            appareil=appareil[:255] if appareil else "",
-        )
+    JournalPlateforme.objects.create(
+        utilisateur_id=super_admin_id if super_admin_id else None,
+        entreprise_id=entreprise_id if entreprise_id else None,
+        action="DECONNEXION_ASSISTANCE",
+        detail={
+            "super_admin_id": str(super_admin_id) if super_admin_id else "",
+            "super_admin_email": super_admin_email,
+            "statut": "TERMINE",
+        },
+        adresse_ip=adresse_ip,
+        appareil=appareil[:255] if appareil else "",
+    )
 
     # 2. Schéma client si l'entreprise est connue
     if entreprise_id:
         entreprise = Entreprise.objects.filter(pk=entreprise_id).first()
         if entreprise:
-            with contexte_schema(entreprise.schema_name):
+            with contexte_entreprise(entreprise):
                 journaliser(
                     action=ActionAudit.DECONNEXION,
                     type_entite="SessionAssistance",

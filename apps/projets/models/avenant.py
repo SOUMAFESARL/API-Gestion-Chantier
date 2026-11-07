@@ -12,7 +12,7 @@ n'est plus compté comme un retard.
 
 from pathlib import Path
 
-from apps.core.passerelle_schema import schema_courant
+from apps.entreprises.selectors import slug_courant
 from django.db import connection, models
 from django.utils.translation import gettext_lazy as _
 
@@ -27,7 +27,7 @@ def chemin_avenant(instance, filename):
     if extension == ".jepg":
         extension = ".jpeg"
     return (
-        f"{schema_courant()}/projets/{instance.projet_id}/avenants/{instance.pk}{extension}"
+        f"{slug_courant() or 'plateforme'}/projets/{instance.projet_id}/avenants/{instance.pk}{extension}"
     )
 
 

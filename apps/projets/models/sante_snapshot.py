@@ -1,6 +1,6 @@
 """Modèle SanteProjetSnapshot — Historique immuable des calculs d'indice de santé.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets) & 4 (Pilotage).
 """
 

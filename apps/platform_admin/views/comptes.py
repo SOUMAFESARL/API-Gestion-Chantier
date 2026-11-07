@@ -7,7 +7,6 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
@@ -47,12 +46,11 @@ class ComptesAdministrateursListCreateView(APIView):
         responses={200: CompteAdministrateurSerializer(many=True)},
     )
     def get(self, request):
-        with contexte_schema("public"):
-            comptes = Utilisateur.objects.filter(
-                supprime_le__isnull=True,
-            ).order_by("-cree_le")
-            serializer = CompteAdministrateurSerializer(comptes, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        comptes = Utilisateur.objects.filter(
+            supprime_le__isnull=True,
+        ).order_by("-cree_le")
+        serializer = CompteAdministrateurSerializer(comptes, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Créer ou inviter un agent (Super Admin)",
@@ -69,26 +67,25 @@ class ComptesAdministrateursListCreateView(APIView):
         role = data.get("role", "SUPPORT")
         is_super = (role == "SUPERVISEUR")
 
-        with contexte_schema("public"):
-            # Mot de passe temporaire aléatoire
-            alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-            mot_de_passe_temp = "".join(secrets.choice(alphabet) for _ in range(16))
+        # Mot de passe temporaire aléatoire
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        mot_de_passe_temp = "".join(secrets.choice(alphabet) for _ in range(16))
 
-            nouvel_agent = Utilisateur(
-                email=data["email"],
-                nom=data["nom"],
-                prenom=data["prenom"],
-                role_global=RoleGlobal.ADMIN,
-                is_superuser=is_super,
-                is_staff=True,
-                is_active=True,
-                statut=StatutUtilisateur.ACTIF,
-            )
-            nouvel_agent.set_password(mot_de_passe_temp)
-            nouvel_agent.save()
+        nouvel_agent = Utilisateur(
+            email=data["email"],
+            nom=data["nom"],
+            prenom=data["prenom"],
+            role_global=RoleGlobal.ADMIN,
+            is_superuser=is_super,
+            is_staff=True,
+            is_active=True,
+            statut=StatutUtilisateur.ACTIF,
+        )
+        nouvel_agent.set_password(mot_de_passe_temp)
+        nouvel_agent.save()
 
-            retour = CompteAdministrateurSerializer(nouvel_agent)
-            return Response(retour.data, status=status.HTTP_201_CREATED)
+        retour = CompteAdministrateurSerializer(nouvel_agent)
+        return Response(retour.data, status=status.HTTP_201_CREATED)
 
 
 class SuspendreCompteAdministrateurView(APIView):
@@ -103,19 +100,18 @@ class SuspendreCompteAdministrateurView(APIView):
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with contexte_schema("public"):
-            agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
-            if str(agent.id) == str(request.user.id):
-                return Response(
-                    {"erreur": {"code": "interdiction", "message": _("Vous ne pouvez pas suspendre votre propre compte.")}},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
+        if str(agent.id) == str(request.user.id):
+            return Response(
+                {"erreur": {"code": "interdiction", "message": _("Vous ne pouvez pas suspendre votre propre compte.")}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-            agent.is_active = False
-            agent.statut = StatutUtilisateur.DESACTIVE
-            agent.save(update_fields=["is_active", "statut", "modifie_le"])
+        agent.is_active = False
+        agent.statut = StatutUtilisateur.DESACTIVE
+        agent.save(update_fields=["is_active", "statut", "modifie_le"])
 
-            return Response(CompteAdministrateurSerializer(agent).data, status=status.HTTP_200_OK)
+        return Response(CompteAdministrateurSerializer(agent).data, status=status.HTTP_200_OK)
 
 
 class ReactiverCompteAdministrateurView(APIView):
@@ -130,13 +126,12 @@ class ReactiverCompteAdministrateurView(APIView):
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with contexte_schema("public"):
-            agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
-            agent.is_active = True
-            agent.statut = StatutUtilisateur.ACTIF
-            agent.save(update_fields=["is_active", "statut", "modifie_le"])
+        agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
+        agent.is_active = True
+        agent.statut = StatutUtilisateur.ACTIF
+        agent.save(update_fields=["is_active", "statut", "modifie_le"])
 
-            return Response(CompteAdministrateurSerializer(agent).data, status=status.HTTP_200_OK)
+        return Response(CompteAdministrateurSerializer(agent).data, status=status.HTTP_200_OK)
 
 
 class AdminProfilMoiView(APIView):
@@ -150,9 +145,8 @@ class AdminProfilMoiView(APIView):
         responses={200: ProfilCompletAdminSerializer},
     )
     def get(self, request):
-        with contexte_schema("public"):
-            user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
-            return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
+        user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
+        return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Modifier son profil administrateur",
@@ -163,20 +157,19 @@ class AdminProfilMoiView(APIView):
         serializer = ModifierProfilAdminSerializer(data=request.data, context={"user": request.user})
         serializer.is_valid(raise_exception=True)
 
-        with contexte_schema("public"):
-            user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
-            data = serializer.validated_data
-            if "prenom" in data:
-                user.prenom = data["prenom"]
-            if "nom" in data:
-                user.nom = data["nom"]
-            if "email" in data:
-                user.email = data["email"]
-            if "telephone" in data:
-                user.telephone = data["telephone"]
-            user.save()
+        user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
+        data = serializer.validated_data
+        if "prenom" in data:
+            user.prenom = data["prenom"]
+        if "nom" in data:
+            user.nom = data["nom"]
+        if "email" in data:
+            user.email = data["email"]
+        if "telephone" in data:
+            user.telephone = data["telephone"]
+        user.save()
 
-            return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
+        return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
 
 
 class AdminPhotoMoiView(APIView):
@@ -194,17 +187,16 @@ class AdminPhotoMoiView(APIView):
         responses={200: ProfilCompletAdminSerializer},
     )
     def patch(self, request):
-        with contexte_schema("public"):
-            user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
-            if request.data.get("retirer_photo") in ["true", True, "1"]:
-                if user.avatar:
-                    user.avatar.delete(save=False)
-                    user.avatar = None
-            elif "photo" in request.FILES:
-                user.avatar = request.FILES["photo"]
-            user.save()
+        user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
+        if request.data.get("retirer_photo") in ["true", True, "1"]:
+            if user.avatar:
+                user.avatar.delete(save=False)
+                user.avatar = None
+        elif "photo" in request.FILES:
+            user.avatar = request.FILES["photo"]
+        user.save()
 
-            return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
+        return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
 
 
 class AdminChangerMotDePasseMoiView(APIView):
@@ -230,17 +222,16 @@ class AdminChangerMotDePasseMoiView(APIView):
         if not nouveau:
             raise ValidationError({"nouveau_mot_de_passe": [_("Le nouveau mot de passe est obligatoire.")]})
 
-        with contexte_schema("public"):
-            user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
-            if not user.check_password(ancien):
-                raise ValidationError({"ancien_mot_de_passe": [_("Ancien mot de passe incorrect.")]})
+        user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
+        if not user.check_password(ancien):
+            raise ValidationError({"ancien_mot_de_passe": [_("Ancien mot de passe incorrect.")]})
 
-            try:
-                validate_password(nouveau, user=user)
-            except DjangoValidationError as exc:
-                raise ValidationError({"nouveau_mot_de_passe": list(exc.messages)})
+        try:
+            validate_password(nouveau, user=user)
+        except DjangoValidationError as exc:
+            raise ValidationError({"nouveau_mot_de_passe": list(exc.messages)})
 
-            user.set_password(nouveau)
-            user.save()
+        user.set_password(nouveau)
+        user.save()
 
-            return Response({"message": _("Mot de passe modifié avec succès.")}, status=status.HTTP_200_OK)
+        return Response({"message": _("Mot de passe modifié avec succès.")}, status=status.HTTP_200_OK)

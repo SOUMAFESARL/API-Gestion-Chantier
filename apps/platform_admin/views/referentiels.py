@@ -9,7 +9,6 @@ Les noms de lot se gèrent désormais dans la liste « Lots » du découpage
 
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.parsers import JSONParser
@@ -64,9 +63,8 @@ class ReferentielPlateformeListeView(APIView):
     )
     def get(self, request, categorie):
         cat = _categorie(categorie)
-        with contexte_schema("public"):
-            entrees = ReferentielPlateforme.objects.filter(categorie=cat)
-            return Response(EntreeSerializer(entrees, many=True).data)
+        entrees = ReferentielPlateforme.objects.filter(categorie=cat)
+        return Response(EntreeSerializer(entrees, many=True).data)
 
     @extend_schema(
         summary="Ajouter une entrée, proposée à toutes les entreprises",
@@ -80,25 +78,24 @@ class ReferentielPlateformeListeView(APIView):
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
         exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
-        with contexte_schema("public"):
-            _refuser_doublon(cat, libelle)
-            tous = ReferentielPlateforme.tous_objets.filter(categorie=cat)
-            codes = set(tous.values_list("code", flat=True))
-            base = code_depuis_libelle(libelle)
-            code, rang = base, 2
-            while code in codes:
-                code = f"{base[:56]}_{rang}"
-                rang += 1
-            dernier = ReferentielPlateforme.objects.filter(categorie=cat).order_by("-ordre").first()
-            entree = ReferentielPlateforme.objects.create(
-                categorie=cat,
-                code=code,
-                libelle=libelle,
-                groupe=saisie.validated_data["groupe"].strip(),
-                ordre=(dernier.ordre + 1) if dernier else 0,
-                cree_par=request.user,
-            )
-            donnees = EntreeSerializer(entree).data
+        _refuser_doublon(cat, libelle)
+        tous = ReferentielPlateforme.tous_objets.filter(categorie=cat)
+        codes = set(tous.values_list("code", flat=True))
+        base = code_depuis_libelle(libelle)
+        code, rang = base, 2
+        while code in codes:
+            code = f"{base[:56]}_{rang}"
+            rang += 1
+        dernier = ReferentielPlateforme.objects.filter(categorie=cat).order_by("-ordre").first()
+        entree = ReferentielPlateforme.objects.create(
+            categorie=cat,
+            code=code,
+            libelle=libelle,
+            groupe=saisie.validated_data["groupe"].strip(),
+            ordre=(dernier.ordre + 1) if dernier else 0,
+            cree_par=request.user,
+        )
+        donnees = EntreeSerializer(entree).data
         journaliser_plateforme(
             action="AJOUT_REFERENTIEL",
             acteur=request.user,
@@ -123,14 +120,13 @@ class ReferentielPlateformeDetailView(APIView):
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
         exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
-        with contexte_schema("public"):
-            entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
-            _refuser_doublon(cat, libelle, exclure_id=entree.id)
-            avant = {"libelle": entree.libelle, "groupe": entree.groupe}
-            entree.libelle = libelle
-            entree.groupe = saisie.validated_data["groupe"].strip()
-            entree.save(update_fields=["libelle", "groupe", "modifie_le"])
-            donnees = EntreeSerializer(entree).data
+        entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
+        _refuser_doublon(cat, libelle, exclure_id=entree.id)
+        avant = {"libelle": entree.libelle, "groupe": entree.groupe}
+        entree.libelle = libelle
+        entree.groupe = saisie.validated_data["groupe"].strip()
+        entree.save(update_fields=["libelle", "groupe", "modifie_le"])
+        donnees = EntreeSerializer(entree).data
         journaliser_plateforme(
             action="MODIFICATION_REFERENTIEL",
             acteur=request.user,
@@ -142,9 +138,8 @@ class ReferentielPlateformeDetailView(APIView):
     def delete(self, request, categorie, pk):
         exiger_superviseur(request)
         cat = _categorie(categorie)
-        with contexte_schema("public"):
-            entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
-            entree.delete(utilisateur=request.user)
+        entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
+        entree.delete(utilisateur=request.user)
         journaliser_plateforme(
             action="SUPPRESSION_REFERENTIEL",
             acteur=request.user,

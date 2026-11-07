@@ -1,8 +1,8 @@
-"""Les modules ouverts à une entreprise — une seule source : le catalogue du schéma public.
+"""Les modules ouverts à une entreprise — une seule source : le catalogue de la plateforme.
 
 **Le super admin décide seul.** Un module est ouvert à une entreprise si, et seulement si :
 
-1. il est actif et non supprimé dans le catalogue (`CatalogueModule`, schéma `public`) ;
+1. il est actif et non supprimé dans le catalogue (`CatalogueModule`, table de plateforme) ;
 2. le super admin ne l'a pas fermé pour cette entreprise (`EntrepriseModule.est_actif=False`).
 
 *Ce que cela corrige.* Le calcul précédent ajoutait aux modules actifs du catalogue ceux auxquels
@@ -19,27 +19,27 @@ import uuid
 __all__ = [
     "MODULES_SYSTEME",
     "codes_modules_actifs",
-    "entreprise_courante",
+    "resoudre_entreprise",
     "module_ouvert",
 ]
 
 MODULES_SYSTEME = frozenset({"administration"})
 
 
-def entreprise_courante(tenant=None):
+def resoudre_entreprise(entreprise=None):
     """L'entreprise passée (objet ou identifiant), sinon l'entreprise active ; `None` sans elle."""
-    from apps.tenants.models import Entreprise
+    from apps.entreprises.models import Entreprise
 
-    if isinstance(tenant, Entreprise):
-        return tenant
-    if isinstance(tenant, (uuid.UUID, str)) and tenant:
-        return Entreprise.objects.filter(pk=tenant).first()
-    from apps.core.passerelle_schema import entreprise_courante as active
+    if isinstance(entreprise, Entreprise):
+        return entreprise
+    if isinstance(entreprise, (uuid.UUID, str)) and entreprise:
+        return Entreprise.objects.filter(pk=entreprise).first()
+    from apps.entreprises.selectors import entreprise_courante as active
 
     return active()
 
 
-def codes_modules_actifs(tenant=None) -> set[str]:
+def codes_modules_actifs(entreprise=None) -> set[str]:
     """Codes (en minuscules) des modules ouverts à l'entreprise, « administration » compris."""
     from apps.catalogue.models import CatalogueModule, EntrepriseModule
 
@@ -56,7 +56,7 @@ def codes_modules_actifs(tenant=None) -> set[str]:
 
         actifs = {p.module for p in REGISTRE.values()}
 
-    entreprise = entreprise_courante(tenant)
+    entreprise = resoudre_entreprise(entreprise)
     if entreprise is not None:
         fermes = {
             code.lower()
@@ -69,5 +69,5 @@ def codes_modules_actifs(tenant=None) -> set[str]:
     return actifs | MODULES_SYSTEME
 
 
-def module_ouvert(code_module: str, tenant=None) -> bool:
-    return (code_module or "").lower() in codes_modules_actifs(tenant)
+def module_ouvert(code_module: str, entreprise=None) -> bool:
+    return (code_module or "").lower() in codes_modules_actifs(entreprise)

@@ -20,8 +20,8 @@ class EstSuperAdminPlateforme(BasePermission):
             return False
 
         # D9, R-8 : le personnel de l'éditeur partage la table `utilisateur` avec les comptes des
-        # entreprises. Il se reconnaît à son entreprise nulle — et à rien d'autre : sous
-        # django-tenants, c'était le schéma `public` qui le désignait, et un administrateur
+        # entreprises. Il se reconnaît à son entreprise nulle — et à rien d'autre : dans
+        # l'ancien modèle multi-schéma, c'était le schéma `public` qui le désignait, et un administrateur
         # d'entreprise (`AD`) passerait sinon la condition de rôle ci-dessous.
         if getattr(user, "entreprise_id", None) is not None:
             return False

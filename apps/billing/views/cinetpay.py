@@ -22,7 +22,6 @@ from apps.billing.serializers import (
 )
 from apps.billing.services.cinetpay import CinetPayClient
 from apps.billing.services.paiement import PaiementAbonnementService, PaiementEnCoursError
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +44,13 @@ class PlansCatalogueView(APIView):
         responses={200: PlanCatalogueSerializer(many=True)},
     )
     def get(self, request):
-        with contexte_schema(schema_public()):
-            plans = Plan.objects.filter(est_actif=True).order_by("prix_mensuel_montant")
-            serializer = PlanCatalogueSerializer(plans, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        plans = Plan.objects.filter(est_actif=True).order_by("prix_mensuel_montant")
+        serializer = PlanCatalogueSerializer(plans, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 from apps.core.droits import APermission
-from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
+from apps.entreprises.selectors import entreprise_courante
 
 
 class InitierPaiementView(APIView):
@@ -76,47 +74,46 @@ class InitierPaiementView(APIView):
         cycle = serializer.validated_data["cycle"]
         return_url = serializer.validated_data.get("return_url")
 
-        tenant = _entreprise_active()
+        entreprise = entreprise_courante()
 
-        if tenant is None:
+        if entreprise is None:
             return Response(
                 {"detail": "Aucune entreprise active identifiée pour cette requête."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with contexte_schema(schema_public()):
-            plan = Plan.objects.filter(code=plan_code).first()
-            if not plan:
-                return Response(
-                    {"detail": f"Forfait « {plan_code} » introuvable."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+        plan = Plan.objects.filter(code=plan_code).first()
+        if not plan:
+            return Response(
+                {"detail": f"Forfait « {plan_code} » introuvable."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-            try:
-                resultat = PaiementAbonnementService.initier_paiement(
-                    entreprise=tenant,
-                    plan=plan,
-                    cycle=cycle,
-                    user_email=request.user.email,
-                    user_name=f"{request.user.prenom} {request.user.nom}".strip(),
-                    return_url=return_url,
-                )
-            except PaiementEnCoursError as e:
-                logger.warning(f"Tentative de réinitiation alors qu'un paiement est en cours : {e}")
-                return Response(
-                    {
-                        "detail": str(e),
-                        "code": "PAIEMENT_EN_COURS",
-                        "transaction_en_cours": e.transaction_en_cours,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-            except Exception as e:
-                logger.error(f"Erreur lors de l'initiation du paiement CinetPay : {e}")
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        try:
+            resultat = PaiementAbonnementService.initier_paiement(
+                entreprise=entreprise,
+                plan=plan,
+                cycle=cycle,
+                user_email=request.user.email,
+                user_name=f"{request.user.prenom} {request.user.nom}".strip(),
+                return_url=return_url,
+            )
+        except PaiementEnCoursError as e:
+            logger.warning(f"Tentative de réinitiation alors qu'un paiement est en cours : {e}")
+            return Response(
+                {
+                    "detail": str(e),
+                    "code": "PAIEMENT_EN_COURS",
+                    "transaction_en_cours": e.transaction_en_cours,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de l'initiation du paiement CinetPay : {e}")
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         resp_serializer = InitierPaiementResponseSerializer(resultat)
         return Response(resp_serializer.data, status=status.HTTP_200_OK)
@@ -146,32 +143,31 @@ class AnnulerPaiementView(APIView):
         transaction_id = serializer.validated_data["transaction_id"]
         motif = serializer.validated_data.get("motif", "Annulation demandée par l'utilisateur")
 
-        tenant = _entreprise_active()
+        entreprise = entreprise_courante()
 
-        if tenant is None:
+        if entreprise is None:
             return Response(
                 {"detail": "Aucune entreprise active identifiée pour cette requête."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with contexte_schema(schema_public()):
-            try:
-                resultat = PaiementAbonnementService.annuler_paiement_en_cours(
-                    entreprise=tenant,
-                    transaction_id=transaction_id,
-                    motif=motif,
-                )
-            except ValueError as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except Exception as e:
-                logger.error(f"Erreur lors de l'annulation du paiement {transaction_id} : {e}")
-                return Response(
-                    {"detail": f"Erreur lors de l'annulation : {e}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+        try:
+            resultat = PaiementAbonnementService.annuler_paiement_en_cours(
+                entreprise=entreprise,
+                transaction_id=transaction_id,
+                motif=motif,
+            )
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de l'annulation du paiement {transaction_id} : {e}")
+            return Response(
+                {"detail": f"Erreur lors de l'annulation : {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         resp_serializer = AnnulerPaiementResponseSerializer(resultat)
         return Response(resp_serializer.data, status=status.HTTP_200_OK)
@@ -274,54 +270,53 @@ class StatutPaiementView(APIView):
                 "facture__abonnement__plan", "facture__entreprise"
             ).first()
 
-        with contexte_schema(schema_public()):
-            paiement = chercher(reference_transaction=transaction_id) or chercher(
-                reference_commande=transaction_id
+        paiement = chercher(reference_transaction=transaction_id) or chercher(
+            reference_commande=transaction_id
+        )
+
+        if not paiement:
+            return Response(
+                {"detail": f"Transaction « {transaction_id} » introuvable."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-            if not paiement:
-                return Response(
-                    {"detail": f"Transaction « {transaction_id} » introuvable."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+        # Si le statut est encore INITIE ou EN_ATTENTE_OPERATEUR, tenter une vérification instantanée auprès de CinetPay
+        # afin d'offrir une réactivité immédiate à l'utilisateur qui vient d'être redirigé
+        if paiement.statut in [
+            PaiementAbonnement.Statut.INITIE,
+            PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
+        ]:
+            PaiementAbonnementService.traiter_notification_webhook(transaction_id)
+            paiement.refresh_from_db()
 
-            # Si le statut est encore INITIE ou EN_ATTENTE_OPERATEUR, tenter une vérification instantanée auprès de CinetPay
-            # afin d'offrir une réactivité immédiate à l'utilisateur qui vient d'être redirigé
-            if paiement.statut in [
-                PaiementAbonnement.Statut.INITIE,
-                PaiementAbonnement.Statut.EN_ATTENTE_OPERATEUR,
-            ]:
-                PaiementAbonnementService.traiter_notification_webhook(transaction_id)
-                paiement.refresh_from_db()
+        abonnement = paiement.facture.abonnement
+        est_actif = (
+            abonnement.statut == Abonnement.Statut.ACTIF
+            and paiement.statut == PaiementAbonnement.Statut.CONFIRME
+        )
 
-            abonnement = paiement.facture.abonnement
-            est_actif = (
-                abonnement.statut == Abonnement.Statut.ACTIF
-                and paiement.statut == PaiementAbonnement.Statut.CONFIRME
-            )
+        data = {
+            "transaction_id": transaction_id,
+            "statut": paiement.statut,
+            "statut_affichage": paiement.get_statut_display(),
+            "mode_paiement": paiement.get_mode_display(),
+            "moyen_paiement": paiement.get_mode_display(),
+            "montant_fcfa": paiement.montant_fcfa,
+            "numero_facture": paiement.facture.numero,
+            "reference_facture": paiement.facture.numero,
+            "paye_le": paiement.paye_le,
+            "abonnement_actif": est_actif,
+            "est_valide": est_actif,
+            "date_fin": abonnement.date_fin if est_actif else None,
+            "abonnement_expire_le": (
+                abonnement.date_fin.isoformat() if est_actif and abonnement.date_fin else None
+            ),
+            "entreprise": paiement.facture.entreprise.raison_sociale,
+            "plan": abonnement.plan.libelle,
+        }
 
-            data = {
-                "transaction_id": transaction_id,
-                "statut": paiement.statut,
-                "statut_affichage": paiement.get_statut_display(),
-                "mode_paiement": paiement.get_mode_display(),
-                "moyen_paiement": paiement.get_mode_display(),
-                "montant_fcfa": paiement.montant_fcfa,
-                "numero_facture": paiement.facture.numero,
-                "reference_facture": paiement.facture.numero,
-                "paye_le": paiement.paye_le,
-                "abonnement_actif": est_actif,
-                "est_valide": est_actif,
-                "date_fin": abonnement.date_fin if est_actif else None,
-                "abonnement_expire_le": (
-                    abonnement.date_fin.isoformat() if est_actif and abonnement.date_fin else None
-                ),
-                "entreprise": paiement.facture.entreprise.raison_sociale,
-                "plan": abonnement.plan.libelle,
-            }
-
-            serializer = StatutPaiementResponseSerializer(data)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = StatutPaiementResponseSerializer(data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class AnnulerPaiementView(APIView):
@@ -352,7 +347,7 @@ class AnnulerPaiementView(APIView):
         serializer = AnnulerPaiementRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        entreprise = getattr(request, "tenant", None)
+        entreprise = entreprise_courante()
         if not entreprise or not hasattr(entreprise, "pk"):
             entreprise = getattr(request.user, "entreprise", None)
 

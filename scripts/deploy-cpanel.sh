@@ -31,7 +31,8 @@ export DJANGO_SETTINGS_MODULE=config.settings.cpanel
 "$python_bin" -m pip install -r requirements/production.txt
 "$python_bin" -m pip check
 "$python_bin" manage.py check
-"$python_bin" manage.py migrate_schemas --noinput
+"$python_bin" manage.py migrate --noinput
+"$python_bin" manage.py verifier_isolation
 "$python_bin" manage.py collectstatic --noinput
 mkdir -p tmp
 touch tmp/restart.txt

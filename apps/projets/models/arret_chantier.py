@@ -1,6 +1,6 @@
 """Modèle ArretChantier — Périodes d'arrêt ou de suspension de chantier.
 
-Schéma : tenant.
+Tables d'entreprise (`ModeleEntreprise`).
 Module CDC : 1 (Gestion des Projets).
 """
 

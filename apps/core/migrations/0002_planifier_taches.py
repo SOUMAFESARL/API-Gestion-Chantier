@@ -6,7 +6,7 @@ ne serait jamais lue. La planification est une donnée, et elle s'installe par m
 qu'aucune base ne l'oublie.
 
 Avant la remise à zéro des migrations, ces quatre entrées vivaient dans `billing` 0003, 0005,
-0009 et `tenants` 0015 ; elles sont réunies ici, en un seul tableau. Les heures sont en UTC, qui
+0009 et l'ancienne application des entreprises (0015) ; elles sont réunies ici, en un seul tableau. Les heures sont en UTC, qui
 est aussi l'heure d'Abidjan.
 
 - `projets.evaluer_f3_nuit`, 00 h 01 : SFD F3 §4.6 et §7 (rattrapage, santé, statuts, alertes) ;
@@ -21,7 +21,7 @@ from django.db import migrations
 
 # (nom, tâche, minute, heure)
 PLANIFICATION = [
-    ("projets.evaluer_f3_nuit", "apps.projets.tasks.evaluer_f3_nuit_tous_tenants", "1", "0"),
+    ("projets.evaluer_f3_nuit", "apps.projets.tasks.evaluer_f3_nuit_toutes_entreprises", "1", "0"),
     ("billing.relancer_essais", "apps.billing.tasks.relancer_essais", "0", "6"),
     ("billing.relancer_abonnements", "apps.billing.tasks.relancer_abonnements", "0", "6"),
     (

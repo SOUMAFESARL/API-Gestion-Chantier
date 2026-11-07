@@ -13,9 +13,8 @@ règle derrière.
 
 from __future__ import annotations
 
-from apps.core.passerelle_schema import entreprise_courante
+from apps.entreprises.selectors import entreprise_courante
 from django.db import connection
-from apps.core.passerelle_schema import schema_public
 
 __all__ = [
     "limite_du_plan",

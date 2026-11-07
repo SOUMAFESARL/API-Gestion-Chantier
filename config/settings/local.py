@@ -5,10 +5,7 @@ from .base import DATABASES, INSTALLED_APPS, config
 
 DEBUG = True
 
-# `.localhost` est résolu vers 127.0.0.1 par les navigateurs modernes :
-# c'est ce qui permet de tester les sous-domaines de tenant sans toucher
-# au fichier hosts (soumafe.localhost, demo.localhost, …).
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".localhost"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 INSTALLED_APPS += ["django_extensions"]
 

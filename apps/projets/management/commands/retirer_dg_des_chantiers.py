@@ -13,8 +13,8 @@ désactivées, et chaque DG concerné laisse une trace au journal d'audit.
 """
 
 from django.core.management.base import BaseCommand
-from apps.core.passerelle_schema import contexte_schema
 
+from apps.core.contexte import contexte_entreprise
 from apps.projets.services.affectations import retirer_dg_des_chantiers
 
 
@@ -22,23 +22,23 @@ class Command(BaseCommand):
     help = "Retire le DG des fonctions de chantier qu'il tient encore (sans --appliquer : décrit)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--schema", help="Une seule entreprise (nom de schéma).")
+        parser.add_argument("--entreprise", help="Une seule entreprise (slug).")
         parser.add_argument(
             "--appliquer", action="store_true", help="Applique les changements décrits."
         )
 
     def handle(self, *args, **options):
-        from apps.tenants.models import Entreprise
+        from apps.entreprises.models import Entreprise
 
-        entreprises = Entreprise.objects.exclude(schema_name="public")
-        if options.get("schema"):
-            entreprises = entreprises.filter(schema_name=options["schema"])
+        entreprises = Entreprise.objects.all()
+        if options.get("entreprise"):
+            entreprises = entreprises.filter(slug=options["entreprise"])
         appliquer = options["appliquer"]
-        for entreprise in entreprises.order_by("schema_name"):
-            with contexte_schema(entreprise.schema_name):
+        for entreprise in entreprises.order_by("slug"):
+            with contexte_entreprise(entreprise):
                 constats = retirer_dg_des_chantiers(appliquer=appliquer)
             for constat in constats:
-                self.stdout.write(f"{entreprise.schema_name} — {constat}")
+                self.stdout.write(f"{entreprise.slug} — {constat}")
         if not appliquer:
             self.stdout.write(
                 self.style.WARNING("Rien n'a été modifié : relancez avec --appliquer.")

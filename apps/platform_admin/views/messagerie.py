@@ -1,7 +1,6 @@
 """Messagerie de la plateforme : réglage du serveur SMTP et diagnostic d'envoi (superviseur)."""
 
 from django.db import transaction
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.response import Response
@@ -34,8 +33,7 @@ class TestMessagerieSerializer(serializers.Serializer):
 
 
 def _lire() -> ParametresMessagerie | None:
-    with contexte_schema(schema_public()):
-        return ParametresMessagerie.objects.filter(pk=1).first()
+    return ParametresMessagerie.objects.filter(pk=1).first()
 
 
 class AdminMessagerieView(APIView):
@@ -54,7 +52,7 @@ class AdminMessagerieView(APIView):
         serializer.is_valid(raise_exception=True)
         donnees = serializer.validated_data
 
-        with transaction.atomic(), contexte_schema(schema_public()):
+        with transaction.atomic():
             parametres = ParametresMessagerie.objects.filter(pk=1).first() or ParametresMessagerie(pk=1)
             nouveau_mot_de_passe = (donnees.get("mot_de_passe") or "").strip()
             if not nouveau_mot_de_passe and not parametres.mot_de_passe_chiffre:
@@ -91,8 +89,7 @@ class AdminMessagerieView(APIView):
     @extend_schema(summary="Revenir au réglage du serveur (.env)", responses={200: dict})
     def delete(self, request):
         _exiger_superviseur(request)
-        with contexte_schema(schema_public()):
-            ParametresMessagerie.objects.filter(pk=1).delete()
+        ParametresMessagerie.objects.filter(pk=1).delete()
         _journaliser(request, "REINITIALISATION_MESSAGERIE", {})
         return Response(service.serialiser(None), status=status.HTTP_200_OK)
 

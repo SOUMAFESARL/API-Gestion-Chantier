@@ -27,10 +27,10 @@ from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
 from apps.core.contexte import activer_entreprise, entreprise_courante_id, portee_plateforme
 from apps.core.emails import adresse_frontend, envoyer
-from apps.core.passerelle_schema import entreprise_courante
+from apps.entreprises.selectors import entreprise_courante
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
-from apps.tenants.models import Entreprise
+from apps.entreprises.models import Entreprise
 
 logger = logging.getLogger(__name__)
 

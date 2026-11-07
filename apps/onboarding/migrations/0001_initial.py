@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tenants', '0001_initial'),
+        ('entreprises', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
                 ('demarre_le', models.DateTimeField(auto_now_add=True, verbose_name='démarrée le')),
                 ('terminee_le', models.DateTimeField(blank=True, null=True, verbose_name='terminée le')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise')),
+                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise')),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
             ],
             options={
@@ -49,7 +49,7 @@ class Migration(migrations.Migration):
                 ('mode', models.CharField(choices=[('VALIDEE', 'Validée'), ('PASSEE', 'Passée')], max_length=10, verbose_name='mode')),
                 ('franchie_le', models.DateTimeField(auto_now_add=True, verbose_name='franchie le')),
                 ('cree_par', models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par')),
-                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='tenants.entreprise', verbose_name='entreprise')),
+                ('entreprise', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise')),
                 ('franchie_par', models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='etapes_franchies', to=settings.AUTH_USER_MODEL)),
                 ('supprime_par', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par')),
                 ('progression', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='etapes', to='onboarding.progressionconfiguration')),

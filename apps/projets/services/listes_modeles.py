@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from apps.core.contexte import entreprise_courante_id
 from django.db import connection, transaction
-from apps.core.passerelle_schema import schema_public
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogue.models import (
@@ -67,9 +66,9 @@ PLATEFORME = "PLATEFORME"
 ENTREPRISE = "ENTREPRISE"
 
 
-def _schema_public() -> bool:
+def _hors_entreprise() -> bool:
     """Le back-office travaille sans entreprise active (D9) : les tables d'entreprise lui sont
-    fermées, comme l'était `public` sous django-tenants."""
+    fermées, comme l'était `public` dans l'ancien modèle multi-schéma."""
     return entreprise_courante_id() is None
 
 
@@ -125,7 +124,7 @@ def valeurs_de_liste(liste) -> list[dict]:
             _valeur_en_dict(v, PLATEFORME)
             for v in ValeurListePlateforme.objects.filter(liste=liste).order_by("ordre", "libelle")
         ]
-        if _schema_public():
+        if _hors_entreprise():
             return valeurs
         ajoutees = ValeurListeEntreprise.objects.filter(liste_plateforme=liste)
     else:
@@ -535,7 +534,7 @@ def modele_par_defaut(type_projet: str | None):
     plateforme = list(ModeleDecoupagePlateforme.objects.filter(est_actif=True).order_by("nom"))
     entreprise = (
         []
-        if _schema_public()
+        if _hors_entreprise()
         else list(ModeleDecoupageEntreprise.objects.order_by("nom"))
     )
     if type_projet:
@@ -562,7 +561,7 @@ def modeles_disponibles(type_projet: str | None = None) -> list[dict]:
     plateforme = list(ModeleDecoupagePlateforme.objects.filter(est_actif=True).order_by("nom"))
     entreprise = (
         []
-        if _schema_public()
+        if _hors_entreprise()
         else list(ModeleDecoupageEntreprise.objects.select_related("origine").order_by("nom"))
     )
     noms_plateforme = {cle_comparaison(m.nom) for m in plateforme}

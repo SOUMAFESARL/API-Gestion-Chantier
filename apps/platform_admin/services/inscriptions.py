@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException
 
 from apps.platform_admin.models import JournalPlateforme
-from apps.tenants.models import DemandeInscription
+from apps.entreprises.models import DemandeInscription
 
 
 class DecisionImpossible(APIException):
@@ -49,7 +49,7 @@ def decider_inscription(identifiant, utilisateur, *, approuver, motif="", adress
         detail={"demande_id": str(demande.pk), "motif": demande.motif_refus},
     )
     if approuver:
-        from apps.tenants.services.inscription import provisionner
+        from apps.entreprises.services.inscription import provisionner
 
         provisionner(demande)
     return demande

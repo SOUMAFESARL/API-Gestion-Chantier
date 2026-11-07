@@ -20,7 +20,6 @@ from typing import Any
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.db import transaction
-from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.platform_admin.models.messagerie import ParametresMessagerie
 
@@ -93,7 +92,7 @@ def lire_parametres() -> ParametresMessagerie | None:
     try:
         # Point de sauvegarde : une table absente (avant migration) ne doit pas invalider la
         # transaction de l'appelant — PostgreSQL refuse toute requête après une erreur.
-        with transaction.atomic(), contexte_schema(schema_public()):
+        with transaction.atomic():
             return ParametresMessagerie.objects.filter(pk=1).first()
     except Exception:  # noqa: BLE001
         return None

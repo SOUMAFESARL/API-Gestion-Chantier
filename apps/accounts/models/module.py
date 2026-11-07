@@ -55,7 +55,7 @@ class Module(ModeleEntreprise):
     est_actif = models.BooleanField(
         _("est actif"),
         default=True,
-        help_text=_("Indique si le module est disponible dans ce tenant."),
+        help_text=_("Indique si le module est disponible dans cette entreprise."),
     )
 
     class Meta:

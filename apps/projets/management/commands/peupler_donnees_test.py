@@ -449,13 +449,13 @@ class Command(BaseCommand):
             raise CommandError("Commande de développement : refusée quand DEBUG est faux.")
 
         from apps.core.contexte import contexte_entreprise
-        from apps.tenants.models import Entreprise
+        from apps.entreprises.models import Entreprise
 
         slug = options["entreprise"]
-        entreprise = Entreprise.objects.filter(schema_name=slug).first()
+        entreprise = Entreprise.objects.filter(slug=slug).first()
         if entreprise is None:
             raise CommandError(
-                f"Aucune entreprise « {slug} ». Lancez d'abord `creer_tenant_demo`."
+                f"Aucune entreprise « {slug} ». Lancez d'abord `creer_entreprise_demo`."
             )
 
         self.slug = slug

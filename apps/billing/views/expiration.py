@@ -1,12 +1,12 @@
 """Notification de facturation de l'entreprise authentifiee."""
 
-from apps.core.passerelle_schema import schema_public
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.entreprises.selectors import entreprise_courante
 from apps.billing.serializers.expiration import NotificationExpirationSerializer
 from apps.billing.services.expiration import notifications_expiration
 from apps.core.droits import APermission
@@ -31,11 +31,11 @@ class NotificationsExpirationView(APIView):
         },
     )
     def get(self, request):
-        tenant = getattr(request, "tenant", None)
-        if tenant is None or tenant.schema_name == schema_public():
+        entreprise = entreprise_courante()
+        if entreprise is None:
             raise PermissionDenied("Une entreprise cliente est requise.")
         response = Response(
-            NotificationExpirationSerializer(notifications_expiration(tenant), many=True).data
+            NotificationExpirationSerializer(notifications_expiration(entreprise), many=True).data
         )
         response["Cache-Control"] = "private, no-store"
         return response

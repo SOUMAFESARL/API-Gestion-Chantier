@@ -1,6 +1,6 @@
 """Commande de gestion pour relever les dates hors cadre (règles D4 et D5).
 
-Parcourt les schémas tenants et liste en lecture seule :
+Parcourt les entreprises et liste en lecture seule :
 - Les cases de l'arbre dont les dates prévues dépassent celles de leur parent (case ou projet).
 
 Code de sortie :
@@ -11,10 +11,11 @@ Code de sortie :
 import sys
 
 from django.core.management.base import BaseCommand
-from apps.core.passerelle_schema import contexte_schema
 
 from apps.projets.models import Element
-from apps.tenants.models import Entreprise
+from apps.core.commandes import trouver_entreprise
+from apps.core.contexte import contexte_entreprise
+from apps.entreprises.models import Entreprise
 
 
 class Command(BaseCommand):
@@ -25,28 +26,28 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--schema",
+            "--entreprise",
             type=str,
-            help="Nom de schéma tenant spécifique à inspecter (optionnel).",
+            help="Slug d'une seule entreprise à inspecter (optionnel).",
         )
 
     def handle(self, *args, **options):
-        schema_cible = options.get("schema")
+        schema_cible = options.get("entreprise")
 
         if schema_cible:
             schemas = [schema_cible]
         else:
             schemas = list(
-                Entreprise.objects.exclude(schema_name="public").values_list(
-                    "schema_name", flat=True
+                Entreprise.objects.all().values_list(
+                    "slug", flat=True
                 )
             )
 
         total_anomalies = 0
 
         for schema_nom in schemas:
-            self.stdout.write(self.style.NOTICE(f"=== Vérification du schéma : {schema_nom} ==="))
-            with contexte_schema(schema_nom):
+            self.stdout.write(self.style.NOTICE(f"=== Vérification de l'entreprise : {schema_nom} ==="))
+            with contexte_entreprise(trouver_entreprise(schema_nom)):
                 anomalies_schema = self._verifier_schema()
                 total_anomalies += anomalies_schema
 

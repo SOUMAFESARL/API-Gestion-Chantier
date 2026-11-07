@@ -83,7 +83,7 @@ def routes_du_backend() -> list[str]:
     prefixe = PREFIXE.strip("/") + "/"
     routes = {
         "/" + re.sub(r"<(?:\w+:)?(\w+)>", r"{\1}", chemin[len(prefixe) :])
-        for chemin in parcourir(get_resolver("config.urls_tenant"))
+        for chemin in parcourir(get_resolver("config.urls"))
         if chemin.startswith(prefixe)
     }
     return sorted(routes)

@@ -88,7 +88,7 @@ class Migration(migrations.Migration):
                 ('description', models.TextField(blank=True, default='', help_text='Périmètre fonctionnel et fonctionnalités couvertes par ce module.', verbose_name='description')),
                 ('ordre', models.PositiveSmallIntegerField(default=0, help_text='Position ordonnée dans la navigation et les matrices de permissions.', verbose_name="ordre d'affichage")),
                 ('icone', models.CharField(blank=True, default='box', help_text="Identifiant de l'icône Lucide / frontend associée.", max_length=50, verbose_name='icône')),
-                ('est_actif', models.BooleanField(default=True, help_text='Indique si le module est disponible dans ce tenant.', verbose_name='est actif')),
+                ('est_actif', models.BooleanField(default=True, help_text='Indique si le module est disponible dans cette entreprise.', verbose_name='est actif')),
             ],
             options={
                 'verbose_name': 'module',

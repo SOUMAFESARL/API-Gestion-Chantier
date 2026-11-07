@@ -7,11 +7,15 @@ Règles :
    restreinte aux modules actifs de l'entreprise et aux permissions actives du catalogue (A-04, A-06, A-12).
 """
 
+import logging
+
 from rest_framework import permissions
 
 from apps.core.enums import RoleGlobal
 from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
 from apps.core.registre_permissions import REGISTRE
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "DROITS_ADMIN_AD",
@@ -87,6 +91,25 @@ def peut_voir_montants(utilisateur, request=None) -> bool:
     if est_dg(utilisateur):
         return True
     return a_permission(utilisateur, "projets.voir_montants", request=request)
+
+
+def _permissions_cochees(role) -> list[tuple[str | None, str | None, str]]:
+    """Les permissions actives cochées pour un rôle, avec le module de chaque ligne — en une
+    seule requête (une par ligne rôle-module auparavant).
+
+    Rend des triplets (code du module du catalogue, code de l'ancien module, code de la
+    permission). Une ligne sans permission active ne rend rien : elle n'accordait rien.
+    """
+    from apps.accounts.models import RoleModulePermission
+
+    return list(
+        RoleModulePermission.objects.filter(
+            role=role,
+            supprime_le__isnull=True,
+            permissions_catalogue__est_actif=True,
+            permissions_catalogue__supprime_le__isnull=True,
+        ).values_list("module_catalogue__code", "module__code", "permissions_catalogue__code")
+    )
 
 
 def _obtenir_modules_actifs(entreprise=None) -> set[str]:
@@ -179,49 +202,43 @@ def permissions_effectives(collaborateur, request=None, entreprise=None) -> set[
     try:
         from apps.accounts.models import RoleModulePermission
 
-        rmps = RoleModulePermission.objects.filter(
-            role=role,
-            supprime_le__isnull=True,
-        ).select_related("module", "module_catalogue")
-
-        if not rmps.exists() and (getattr(role, "est_systeme", False) or getattr(role, "code", "") in {"DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"}):
+        lignes = _permissions_cochees(role)
+        # Rôle système jamais initialisé : rattrapage. La vérification ne coûte une requête que
+        # lorsque le rôle ne rend aucune permission cochée.
+        role_systeme = getattr(role, "est_systeme", False) or getattr(role, "code", "") in {
+            "DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"
+        }
+        if (
+            not lignes
+            and role_systeme
+            and not RoleModulePermission.objects.filter(role=role, supprime_le__isnull=True).exists()
+        ):
             from apps.accounts.services.roles import initialiser_roles_par_defaut
+
             initialiser_roles_par_defaut()
-            rmps = RoleModulePermission.objects.filter(
-                role=role,
-                supprime_le__isnull=True,
-            ).select_related("module", "module_catalogue")
+            lignes = _permissions_cochees(role)
 
-        for rmp in rmps:
-            mod_code = None
-            if getattr(rmp, "module_catalogue_id", None) and getattr(rmp, "module_catalogue", None):
-                mod_code = rmp.module_catalogue.code
-            elif getattr(rmp, "module_id", None) and getattr(rmp, "module", None):
-                mod_code = rmp.module.code
-
+        for module_catalogue, module, code in lignes:
+            # Le module du catalogue l'emporte sur l'ancien module.
+            mod_code = module_catalogue or module
             if not mod_code:
                 continue
-
             mod_key = mod_code.lower()
             if mod_key not in modules_actifs or mod_key == "administration":
                 continue
-
-            codes_cochés = set(
-                rmp.permissions_catalogue.filter(
-                    est_actif=True,
-                    supprime_le__isnull=True,
-                ).values_list("code", flat=True)
-            )
-
             # Permissions actives cochées dans le catalogue (A-04, A-06)
-            perms_accordees.update({c.lower() for c in codes_cochés})
+            perms_accordees.add(code.lower())
 
         # AD ou ADMIN : 7 droits d'administration fixes dans le code (Règle B-04)
         if code_role in (RoleGlobal.ADMIN, "AD") or getattr(role, "code", "") in (RoleGlobal.ADMIN, "AD"):
             perms_accordees.update(DROITS_ADMIN_AD)
             perms_accordees.difference_update(DROITS_ADMIN_RESERVES_DG)
     except Exception:
-        pass
+        # On refuse plutôt que d'accorder ; mais une panne ne passe plus pour « aucun droit ».
+        logger.exception(
+            "Calcul des permissions du rôle %s impossible", getattr(role, "code", role)
+        )
+        perms_accordees = set()
 
     if request:
         request._permissions_effectives_cache = perms_accordees

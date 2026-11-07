@@ -1,21 +1,23 @@
-"""Génération de la référence unique séquentielle par projet et par schéma."""
+"""Génération de la référence unique séquentielle des projets, par entreprise."""
 
-from apps.core.passerelle_schema import schema_courant
 from django.db import connection, transaction
 from django.utils import timezone
 
+from apps.core.contexte import exiger_entreprise
 from apps.projets.models import Projet
 
 
 @transaction.atomic
 def generer_reference_projet() -> str:
-    """Génère la référence séquentielle `PRJ-{AAAA}-{n}` pour le schéma courant."""
+    """Génère la référence séquentielle `PRJ-{AAAA}-{n}` de l'entreprise active."""
     annee = timezone.now().year
-    # Le verrou reste détenu jusqu'au commit de la transaction de création.
+    # Un verrou par entreprise et par année : deux entreprises numérotent en parallèle, deux
+    # créations dans la même entreprise se suivent. Il reste détenu jusqu'au commit de la
+    # transaction de création.
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT pg_advisory_xact_lock(hashtext(%s), %s)",
-            [f"projet-reference:{schema_courant()}", annee],
+            [f"projet-reference:{exiger_entreprise()}", annee],
         )
     prefixe = f"PRJ-{annee}-"
     suffixes = Projet.tous_objets.filter(reference__startswith=prefixe).values_list(

@@ -104,7 +104,7 @@ CREATE POLICY isolation_entreprise ON projet
 ```
 
 - Le contexte Python pose `ccd.entreprise_id` sur la connexion `default`, et **le retire en fin de requête et de tâche**. Avec `CONN_MAX_AGE`, une connexion sert plusieurs requêtes : le retrait est obligatoire, et une connexion sans réglage **ne voit rien**.
-- **Trois rôles PostgreSQL** (Q5 : on dispose d'un superutilisateur, hypothèse à confirmer sur le serveur) : `ccd_app`, **non** superutilisateur et sans `BYPASSRLS`, pour l'application ; `ccd_plateforme`, avec `BYPASSRLS`, pour la seule portée plateforme (une seconde connexion Django, `DATABASES["plateforme"]`) ; le superutilisateur, pour les migrations uniquement. Le réglage `ccd.portee` disparaît alors : la portée plateforme ne se pose plus depuis l'application, elle s'obtient par la connexion dédiée.
+- **Trois rôles PostgreSQL** (Q5 : on dispose d'un superutilisateur, hypothèse à confirmer sur le serveur) : `ccd_app`, **non** superutilisateur et sans `BYPASSRLS`, pour l'application ; `ccd_plateforme`, avec `BYPASSRLS`, pour la seule portée plateforme ; le superutilisateur, pour les migrations uniquement. **`ccd_plateforme` se prend par `SET ROLE`** sur la connexion de l'application, le temps de la portée (arbitrage du 07/11/2026, lot 4) : une seconde connexion Django aurait sorti ces requêtes des `transaction.atomic()` et des `select_for_update` ouverts sur la première. Côté sécurité, rien ne change : la RLS par réglage de session protège du filtre oublié, pas de l'injection SQL, qui peut changer le réglage elle-même.
 - **Garde-fou :** un test échoue si `current_user` est superutilisateur ou possède `BYPASSRLS` sur la connexion `default`.
 
 **Couche 3 — les tests d'étanchéité.** Deux entreprises peuplées par `peupler_donnees_test`. Pour **chaque route** de l'URLconf (introspection, pas une liste écrite à la main) :
@@ -283,7 +283,8 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 |---|---|---|
 | 1 | Fait — socle du contexte | `26de87c` |
 | 2 | Fait — modèle de données | `773b9bd`, `a7e14a4` (ensemencement) |
-| 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8` et suivant |
+| 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8`, `801a502` |
+| 4 | Fait le 07/11/2026 — voir ci-dessous | (ce commit) |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 
@@ -299,3 +300,15 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 - **`peupler_donnees_test`** repris de `feature/perf-requetes` (`6e7e31e`) : `--entreprise`, et il crée lui-même les rôles personnalisés `IT`, `MOE`, `MOA` qui n'existaient qu'à la main dans l'ancienne base `demo`. Il passe sur la base neuve.
 
 **Reste hors du lot 3** : le provisionnement de l'inscription et le registre des e-mails (lot 5), le SQL brut de `nettoyage` et de la suppression (lot 4), les copies locales `accounts.Module`/`Permission` encore lues par le catalogue (Q3), la comparaison chiffrée avec l'ancien modèle (lot 6).
+
+### Lot 4 — ce qui a été fait
+
+- **Moteur `apps.core.backends.postgresql`** : le moteur de Django, plus un *execute wrapper* (`apps/core/rls.py`) qui, avant chaque requête, met la session d'accord avec le contexte Python — `ccd.entreprise_id` et le rôle. Une requête de réglage seulement quand le contexte change ; elle passe par le curseur brut, donc hors de `assertNumQueries` et de `mesurer_requetes`. L'état mémorisé est oublié après `ROLLBACK` et `ROLLBACK TO SAVEPOINT`, qui annulent un `set_config` côté serveur.
+- **Migration `core.0001_isolation_rls`** : RLS activée, forcée, et politique `isolation_entreprise` sur les 46 tables d'entreprise. `utilisateur`, `jeton_reinitialisation` et `journal_audit` (entreprise nullable) : une ligne nulle n'est visible que sans entreprise active, comme `RequeteComptes`. Les 9 tables de liaison M2M, sans `entreprise_id`, restent hors RLS. Une nouvelle table d'entreprise ajoute `isolation_entreprise("<table>")` à sa migration.
+- **Rôles** : `scripts/sql/roles_rls.sql`, à jouer en superutilisateur, crée `ccd_plateforme` (`NOLOGIN BYPASSRLS`), l'accorde au rôle de connexion et lui donne les droits sur les lignes. La migration redonne ces droits sur chaque base neuve (base de test comprise).
+- **Contrôle** : `manage.py verifier_isolation` (et `check --database default`, `core.E101`) échoue si le rôle de connexion est superutilisateur ou `BYPASSRLS`, si `ccd_plateforme` manque, ou si une table d'entreprise n'a pas sa politique.
+- **Celery** : contexte remis à zéro avant et après chaque tâche.
+- **SQL brut revu** : le verrou de numérotation des projets est indexé par l'entreprise (et non plus par le schéma) ; le nettoyage et la suppression définitive passent leur SQL en portée plateforme ; la purge « zanf » (route de maintenance et `_purger_tout_zanf`), écrite pour les schémas, est supprimée. `audit_catalogue.py` et la migration `catalogue.0002` lisent des tables de l'ancien modèle : sans effet sur une base neuve, retirés au lot 8.
+- **Critère tenu** : hors contexte, `SELECT count(*) FROM projet` rend 0 ; dans `demo`, 11.
+
+**Reste au lot 5** : la suppression définitive repose encore sur `DROP SCHEMA` ; elle ne peut pas aboutir (les lignes de l'entreprise retiennent `entreprise_cliente`) tant qu'elle n'est pas réécrite par `entreprise_id` — trigger d'immuabilité de `historique_date` compris.

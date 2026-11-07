@@ -181,11 +181,12 @@ TEMPLATES = [
 ]
 
 # --------------------------------------------------------------------------
-# Base de données — le moteur PostgreSQL de Django : un seul schéma (D9).
+# Base de données — un seul schéma (D9). Le moteur est celui de Django, étendu pour accorder
+# chaque session PostgreSQL au contexte d'entreprise (RLS, règle R-5) : apps/core/rls.py.
 # --------------------------------------------------------------------------
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "apps.core.backends.postgresql",
         "NAME": config("POSTGRES_DB", default="ccd_digital"),
         "USER": config("POSTGRES_USER", default="ccd"),
         "PASSWORD": config("POSTGRES_PASSWORD", default=""),
@@ -194,6 +195,10 @@ DATABASES = {
         "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
     }
 }
+
+# Le rôle PostgreSQL de la portée plateforme : `BYPASSRLS`, accordé au rôle de connexion, pris
+# par `SET ROLE` le temps d'une `portee_plateforme(...)`. Créé par scripts/sql/roles_rls.sql.
+CCD_ROLE_PLATEFORME = config("POSTGRES_ROLE_PLATEFORME", default="ccd_plateforme")
 
 # --------------------------------------------------------------------------
 # Compatibilité SGBD : autoriser PostgreSQL >= 13.0 (notamment PostgreSQL 13.23

@@ -21,6 +21,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import connection, transaction
+from apps.core.contexte import portee_plateforme
 from apps.core.passerelle_schema import contexte_schema
 
 from apps.accounts.models import Utilisateur
@@ -183,7 +184,13 @@ def supprimer_entreprise_proprement(identifiant: str) -> dict[str, Any]:
     # seule : une erreur en cours de route (une référence oubliée, par exemple) laissait le
     # schéma détruit et la facturation effacée, mais l'entreprise toujours en base, pointant
     # vers un schéma qui n'existe plus. `DROP SCHEMA` est transactionnel sous PostgreSQL.
-    with transaction.atomic(), connection.cursor() as cursor:
+    # Portée plateforme : ce SQL brut traverse les entreprises (D9). Hors portée, la RLS lui
+    # cacherait les comptes de l'entreprise, et ses `DELETE` ne toucheraient rien, sans erreur.
+    with (
+        portee_plateforme(motif="nettoyage : suppression d'une entreprise"),
+        transaction.atomic(),
+        connection.cursor() as cursor,
+    ):
         # A. DROP SCHEMA CASCADE
         if schema_nom:
             cursor.execute(f'DROP SCHEMA IF EXISTS "{schema_nom}" CASCADE;')

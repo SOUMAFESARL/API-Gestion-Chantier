@@ -29,14 +29,12 @@ from config.urls_public import (  # noqa: E402
     activer_abonnement_prod_vue,
     inspecter_entreprises_prod_vue,
     migrer_bd_vue,
-    purger_zanf_vue,
     supprimer_entreprise_prod_vue,
 )
 
 
 urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
-    path("api/v1/maintenance/purger-zanf/", purger_zanf_vue, name="maintenance-purger-zanf"),
     path(
         "api/v1/maintenance/entreprises/",
         inspecter_entreprises_prod_vue,

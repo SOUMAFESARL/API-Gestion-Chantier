@@ -83,81 +83,6 @@ def migrer_bd_vue(request):
 
 
 @csrf_exempt
-def purger_zanf_vue(request):
-    """Exécute ou inspecte la purge des schémas et références 'zanf' sur commande."""
-    refus = _refuser_destructif(request)
-    if refus is not None:
-        return refus
-
-    if request.method == "GET":
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT id, email, nom, prenom FROM public.utilisateur WHERE email ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
-                ["%zanf%", "%zanf%", "%zanf%"],
-            )
-            users = [{"id": str(r[0]), "email": r[1], "nom": r[2], "prenom": r[3]} for r in cursor.fetchall()]
-            cursor.execute(
-                """
-                SELECT id, schema_name, raison_sociale, email_contact FROM public.entreprise_cliente 
-                WHERE schema_name ILIKE %s OR raison_sociale ILIKE %s OR email_contact ILIKE %s
-                   OR id IN (SELECT entreprise_id FROM public.demande_inscription WHERE email ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s);
-                """,
-                ["%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%"],
-            )
-            ent = [{"id": str(r[0]), "schema_name": r[1], "raison_sociale": r[2], "email_contact": r[3]} for r in cursor.fetchall()]
-            ent_schemas = [e["schema_name"] for e in ent]
-            cursor.execute(
-                "SELECT schema_name FROM information_schema.schemata WHERE (schema_name ILIKE %s OR schema_name = ANY(%s)) AND schema_name NOT IN ('public', 'demo');",
-                ["%zanf%", ent_schemas],
-            )
-            schemas = [r[0] for r in cursor.fetchall()]
-            cursor.execute(
-                "SELECT id, email, slug_reserve, raison_sociale, statut, cree_le, modifie_le FROM public.demande_inscription WHERE email ILIKE %s OR slug_reserve ILIKE %s OR raison_sociale ILIKE %s OR nom ILIKE %s OR prenom ILIKE %s;",
-                ["%zanf%", "%zanf%", "%zanf%", "%zanf%", "%zanf%"],
-            )
-            dem = [
-                {
-                    "id": str(r[0]),
-                    "email": r[1],
-                    "slug_reserve": r[2],
-                    "raison_sociale": r[3],
-                    "statut": r[4],
-                    "cree_le": str(r[5]),
-                    "modifie_le": str(r[6]),
-                }
-                for r in cursor.fetchall()
-            ]
-
-        import sys, os
-        return JsonResponse({
-            "statut": "ok",
-            "sys_executable": sys.executable,
-            "virtual_env": os.environ.get("VIRTUAL_ENV"),
-            "frontend_url": getattr(settings, "FRONTEND_URL", None),
-            "domaine_principal": getattr(settings, "DOMAINE_PRINCIPAL", None),
-            "utilisateurs_public_zanf": users,
-            "schemas_postgre_zanf": schemas,
-            "entreprises_public_zanf": ent,
-            "demandes_inscription_zanf": dem,
-        })
-
-    if request.method != "POST":
-        return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
-
-    out = StringIO()
-    from django.core.management.color import color_style
-    from apps.tenants.management.commands.provisionner_inscriptions import _purger_tout_zanf
-    from django.db import connection
-    try:
-        _purger_tout_zanf(stdout=out, style=color_style())
-        connection.commit()
-        return JsonResponse({"statut": "succes", "output": out.getvalue()})
-    except Exception as exc:
-        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
-
-
-@csrf_exempt
 def inspecter_entreprises_prod_vue(request):
     """Inspection sécurisée des entreprises et directeurs généraux en production."""
     refus = _refuser_maintenance(request)
@@ -259,7 +184,6 @@ def activer_abonnement_prod_vue(request):
 
 urlpatterns = [
     path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
-    path("api/v1/maintenance/purger-zanf/", purger_zanf_vue, name="maintenance-purger-zanf"),
     path(
         "api/v1/maintenance/entreprises/",
         inspecter_entreprises_prod_vue,

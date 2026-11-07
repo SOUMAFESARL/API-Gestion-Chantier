@@ -11,6 +11,7 @@ from typing import Any
 
 from django.core.files.storage import default_storage
 from django.db import connection, transaction
+from apps.core.contexte import portee_plateforme
 from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
@@ -135,7 +136,8 @@ def supprimer_definitivement(entreprise: Entreprise) -> dict[str, Any]:
     lecture = _lire_schema(entreprise)
     adresses = _adresses(entreprise, lecture)
 
-    with transaction.atomic():
+    # Portée plateforme : le SQL brut ci-dessous traverse les entreprises (D9) — voir `nettoyage`.
+    with portee_plateforme(motif="suppression définitive d'une entreprise"), transaction.atomic():
         with connection.cursor() as cursor:
             # PostgreSQL refuse de détruire une table qui a des vérifications de clés étrangères
             # différées en attente (écritures faites plus tôt dans la même transaction).

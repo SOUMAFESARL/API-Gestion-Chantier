@@ -46,11 +46,13 @@ class ModuleFermeMiddleware:
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        tenant = getattr(request, "tenant", None)
-        if tenant is None or getattr(tenant, "schema_name", "public") == "public":
+        from apps.core.authentification import entreprise_du_jeton
+
+        entreprise_id = entreprise_du_jeton(request)
+        if entreprise_id is None:
             return None
         module = module_de_la_vue(view_func)
-        if module is None or module in codes_modules_actifs(tenant):
+        if module is None or module in codes_modules_actifs(entreprise_id):
             return None
         return JsonResponse(
             {

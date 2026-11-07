@@ -29,17 +29,16 @@ authentifiée (§6.5).
 
 import time
 
-from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import schema_public
 from rest_framework import status
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Utilisateur
 from apps.accounts.services import liste_noire
+from apps.core.authentification import CLAIM_ENTREPRISE
+from apps.core.contexte import activer_entreprise
 from apps.core.exceptions import ErreurMetier
-from apps.tenants.models import Entreprise
 
 __all__ = ["FENETRE_GRACE", "JetonInvalide", "JetonRevoque", "renouveler"]
 
@@ -115,11 +114,15 @@ def renouveler(jeton_brut: str) -> dict[str, str]:
         # réécrire la ferait glisser indéfiniment.
 
     # --- Le compte est-il toujours en état de se connecter ? ---------------
-    schema = ancien.get("schema")
-    if schema and schema != schema_public():
-        entreprise = Entreprise.objects.filter(schema_name=schema).first()
-        if entreprise:
-            connection.set_tenant(entreprise)
+    # Le compte se lit dans l'entreprise du claim (D9, R-7) : un claim qui ne correspond pas au
+    # compte ne le trouve pas. Un jeton d'avant le claim n'en porte pas ; il ne retrouve que le
+    # personnel de l'éditeur, et un collaborateur se reconnecte une fois.
+    claim = ancien.get(CLAIM_ENTREPRISE)
+    if claim:
+        try:
+            activer_entreprise(claim)
+        except ValueError as exc:
+            raise JetonInvalide() from exc
 
     utilisateur = Utilisateur.objects.filter(pk=identifiant, is_active=True).first()
     if utilisateur is None:

@@ -3,7 +3,7 @@
 import logging
 
 from celery import shared_task
-from apps.core.passerelle_schema import contexte_schema
+from apps.core.contexte import contexte_entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,10 @@ def relancer_rapports_manquants_partout(schema: str | None = None) -> dict:
         entreprises = entreprises.filter(schema_name=schema)
     bilan = {}
     for entreprise in entreprises:
-        # Une tâche n'hérite pas du schéma de la requête : sans ce contexte, elle
-        # tournerait sur `public`, ne trouverait aucun chantier et ne dirait rien.
+        # Une tâche n'hérite pas du contexte de la requête : sans celui-ci, sa première requête
+        # lèverait `HorsContexteEntreprise` (D9, R-4).
         try:
-            with contexte_schema(entreprise.schema_name):
+            with contexte_entreprise(entreprise):
                 bilan[entreprise.schema_name] = relancer_rapports_manquants()
         except Exception:
             logger.exception("Relance automatique en échec pour %s", entreprise.schema_name)

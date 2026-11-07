@@ -11,13 +11,13 @@ Plus `JetonReinitialisation` — contrat de réinitialisation §2.
 import hashlib
 from datetime import timedelta
 
-from apps.core.passerelle_schema import schema_courant
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import RoleGlobal, StatutUtilisateur
+from apps.core.managers import ManagerComptesActif, ManagerComptesComplet, RequeteComptes
 from apps.core.models import ModeleBase, ModeleEntreprise
 
 from .module import Module
@@ -58,10 +58,15 @@ class GestionnaireUtilisateur(BaseUserManager):
 
     Un compte supprimé logiquement ne peut plus s'authentifier : c'est le
     filtrage de ce manager qui le garantit, pas un contrôle dans la vue.
+
+    Il est aussi **cloisonné** (D9, R-8) : les comptes de l'entreprise active, ou le
+    personnel de l'éditeur sans entreprise active (`RequeteComptes`).
     """
 
     def get_queryset(self):
-        return super().get_queryset().filter(supprime_le__isnull=True)
+        return RequeteComptes.cloisonnee(self.model, using=self._db).filter(
+            supprime_le__isnull=True
+        )
 
     def _creer(self, email, mot_de_passe, **extra):
         if not email:
@@ -170,6 +175,7 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(_("actif"), default=True)
 
     objects = GestionnaireUtilisateur()
+    tous_objets = ManagerComptesComplet()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["nom"]
@@ -216,6 +222,10 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
     def get_role_global_display(self) -> str:
         if self.role_id and self.role:
             return self.role.libelle
+        if self.entreprise_id is None:
+            # Le personnel de l'éditeur n'a pas de rôles d'entreprise (D9, R-8) : le libellé
+            # vient de l'énumération.
+            return dict(RoleGlobal.choices).get(self.role_global, self.role_global or "")
         from apps.accounts.models import Role
         r = Role.objects.filter(code=self.role_global, supprime_le__isnull=True).first()
         if r:
@@ -318,7 +328,7 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
                     self.role_global = self.role.code
             except Exception:
                 pass
-        elif getattr(self, "role_global", None):
+        elif getattr(self, "role_global", None) and self.entreprise_id is not None:
             try:
                 mapped = "BAI" if self.role_global == "MOA" else ("VI" if self.role_global == "MOE" else self.role_global)
                 from apps.accounts.models import Role
@@ -331,28 +341,16 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         self.clean()
         super().save(*args, **kwargs)
 
-        # Règle C-03 (Q4) : Alimentation du registre global dans le schéma public
-        if self.email and not self.email.endswith("@depart.invalide"):
-            from django.db import connection
-            from apps.core.passerelle_schema import contexte_schema, schema_public
-            schema_actuel = schema_courant()
-            public_name = schema_public()
-            if schema_actuel != public_name:
-                try:
-                    with contexte_schema(public_name):
-                        from apps.tenants.models import Entreprise, RegistreEmail
-                        ent = Entreprise.objects.filter(schema_name=schema_actuel).first()
-                        if ent:
-                            clean_mail = self.email.strip().lower()
-                            reg, created = RegistreEmail.objects.get_or_create(
-                                email=clean_mail,
-                                defaults={"entreprise": ent},
-                            )
-                            if reg.entreprise_id != ent.pk:
-                                reg.entreprise = ent
-                                reg.save(update_fields=["entreprise"])
-                except Exception:
-                    pass
+        # Règle C-03 (Q4) : le registre global suit les comptes d'entreprise. Il est redondant
+        # depuis que tous les comptes partagent `utilisateur` (D9), et disparaît au lot 5 ; d'ici
+        # là, il reste juste.
+        if self.entreprise_id and self.email and not self.email.endswith("@depart.invalide"):
+            from apps.tenants.models import RegistreEmail
+
+            RegistreEmail.objects.update_or_create(
+                email=self.email.strip().lower(),
+                defaults={"entreprise_id": self.entreprise_id},
+            )
 
     def enregistrer_echec_connexion(self) -> None:
         """Socle Commun §2.1 — blocage après 5 échecs consécutifs.
@@ -467,7 +465,7 @@ class Appareil(ModeleEntreprise):
         return f"{self.get_type_appareil_display()} — {self.utilisateur}"
 
 
-class JetonReinitialisation(ModeleEntreprise):
+class JetonReinitialisation(ModeleBase):
     """Un lien de réinitialisation de mot de passe — contrat §2.
 
     **Ce qui est stocké est l'empreinte, jamais le jeton** (décision J2). Un
@@ -481,10 +479,11 @@ class JetonReinitialisation(ModeleEntreprise):
     précédent quand M6 propose « Renvoyer l'email », ni alimenter le journal
     d'audit qu'impose le Socle §2.4.
 
-    **La table vit dans le schéma du client** (décision J3) : elle porte une clé
-    étrangère vers `utilisateur`, qui n'existe pas dans `public` pour les
-    comptes d'un tenant. C'est la raison qui avait déjà écarté les tables de
-    liste noire de SimpleJWT.
+    **La table suit le compte** (D9, R-8) : son entreprise est celle de
+    l'utilisateur, **nulle pour le personnel de l'éditeur**, qui réinitialise
+    aussi son mot de passe par ce jeton (`platform_admin.services.reinitialisation`).
+    C'est pourquoi elle n'hérite pas de `ModeleEntreprise`, dont l'entreprise est
+    obligatoire : elle est cloisonnée comme `utilisateur` (`RequeteComptes`).
     """
 
     class Motif(models.TextChoices):
@@ -500,6 +499,18 @@ class JetonReinitialisation(ModeleEntreprise):
     utilise_le = models.DateTimeField(_("utilisé le"), null=True, blank=True)
     invalide_le = models.DateTimeField(_("invalidé le"), null=True, blank=True)
     ip_demande = models.GenericIPAddressField(_("IP de la demande"), null=True, blank=True)
+    entreprise = models.ForeignKey(
+        "tenants.Entreprise",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        editable=False,
+        verbose_name=_("entreprise"),
+    )
+
+    objects = ManagerComptesActif()
+    tous_objets = ManagerComptesComplet()
 
     class Meta:
         db_table = "jeton_reinitialisation"
@@ -509,6 +520,21 @@ class JetonReinitialisation(ModeleEntreprise):
 
     def __str__(self) -> str:
         return f"{self.utilisateur.email} — {self.get_motif_display()}"
+
+    def save(self, *args, **kwargs):
+        """L'entreprise du jeton est celle de son compte, et jamais une autre que l'active."""
+        from apps.core.contexte import entreprise_courante_id
+        from apps.core.models import ErreurIsolation
+
+        if self.entreprise_id is None:
+            self.entreprise_id = self.utilisateur.entreprise_id
+        active = entreprise_courante_id()
+        if active is not None and str(self.entreprise_id) != str(active):
+            raise ErreurIsolation(
+                f"Jeton du compte de l'entreprise {self.entreprise_id} écrit pendant que "
+                f"l'entreprise {active} est active."
+            )
+        super().save(*args, **kwargs)
 
     @property
     def est_utilisable(self) -> bool:

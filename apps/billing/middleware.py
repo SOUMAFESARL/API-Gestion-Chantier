@@ -26,7 +26,6 @@ import logging
 
 from django.http import JsonResponse
 from django.utils import timezone
-from apps.core.passerelle_schema import schema_public
 
 logger = logging.getLogger(__name__)
 
@@ -87,12 +86,14 @@ class LectureSeuleAbonnementMiddleware:
         if not request.META.get("HTTP_AUTHORIZATION"):
             return False
 
-        tenant = getattr(request, "tenant", None)
-        if tenant is None or tenant.schema_name == schema_public():
+        from apps.core.authentification import entreprise_du_jeton
+
+        entreprise_id = entreprise_du_jeton(request)
+        if entreprise_id is None:
             # Les endpoints de la plateforme ont leurs propres règles.
             return False
 
-        return self.en_lecture_seule(tenant)
+        return self.en_lecture_seule(entreprise_id)
 
     @staticmethod
     def en_lecture_seule(entreprise) -> bool:
@@ -111,7 +112,7 @@ class LectureSeuleAbonnementMiddleware:
             # Pas d'abonnement du tout : on ne bloque pas. Une entreprise sans
             # abonnement est une anomalie de provisionnement, et la sanctionner
             # ici la rendrait inutilisable sans rien expliquer.
-            logger.warning("Aucun abonnement pour le schéma %s", entreprise.schema_name)
+            logger.warning("Aucun abonnement pour l'entreprise %s", getattr(entreprise, "pk", entreprise))
             return False
 
         if abonnement.lecture_seule_depuis is not None:

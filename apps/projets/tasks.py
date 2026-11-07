@@ -3,7 +3,7 @@
 import logging
 
 from celery import shared_task
-from apps.core.passerelle_schema import contexte_schema
+from apps.core.contexte import contexte_entreprise
 
 from apps.core.emails import envoyer
 from apps.core.enums import RoleGlobal, StatutProjet
@@ -23,7 +23,7 @@ __all__ = [
 
 @shared_task
 def notifier_dg_derive_delai(
-    schema_name: str | None,
+    entreprise_id: str | None,
     type_objet: str,
     objet_id: str,
     jours_derive: int,
@@ -65,7 +65,9 @@ def notifier_dg_derive_delai(
         )
         destinataires = [u.email for u in dgs if u.email]
         if not destinataires:
-            logger.info("Aucun destinataire DG trouvé pour l'alerte dérive (schéma: %s).", schema_name)
+            logger.info(
+                "Aucun destinataire DG trouvé pour l'alerte dérive (entreprise %s).", entreprise_id
+            )
             return 0
 
         contexte = {
@@ -95,8 +97,10 @@ def notifier_dg_derive_delai(
         from django.db.models import Q
         return Q(role_global=RoleGlobal.DIRECTEUR_GENERAL) | Q(role_global=RoleGlobal.ADMIN)
 
-    if schema_name:
-        with contexte_schema(schema_name):
+    # Une tâche n'hérite pas du contexte de la requête : sans entreprise, `_traiter` lève
+    # `HorsContexteEntreprise` au lieu de chercher le projet partout (D9, R-4).
+    if entreprise_id:
+        with contexte_entreprise(entreprise_id):
             return _traiter()
     return _traiter()
 
@@ -105,7 +109,7 @@ def notifier_dg_derive_delai(
 def evaluer_f3_nuit_tous_tenants() -> dict:
     """Tâche Celery Beat quotidienne de nuit à 00h01 (SFD F3 §4.6, §7).
 
-    Pour chaque entreprise cliente sous son schema_context :
+    Pour chaque entreprise cliente, dans son contexte d'entreprise :
     1. Synchronise d'abord les rapports APPROUVE dont f3_sync_done est faux
        via synchroniser_rapport_approuve (rattrapage de coupure serveur).
     2. Recalcule l'indice de chaque projet suivi (appel direct de recalculer_sante_projet_task).
@@ -133,7 +137,7 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
         if not ent.schema_name:
             continue
         try:
-            with contexte_schema(ent.schema_name):
+            with contexte_entreprise(ent):
                 # 1. Rattrapage des rapports approuvés non synchronisés
                 rapports_a_rattraper = list(
                     RapportJournalier.objects.filter(
@@ -198,7 +202,7 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
                 for pid in projets_suivis:
                     try:
                         recalculer_sante_projet_task(
-                            schema_name=ent.schema_name,
+                            entreprise_id=str(ent.pk),
                             projet_id=str(pid),
                             declencheur_type="JOB_NUIT_F3_00H01",
                         )
@@ -271,7 +275,7 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
 
 @shared_task
 def recalculer_sante_projet_task(
-    schema_name: str,
+    entreprise_id: str,
     projet_id: str,
     declencheur_type: str = "",
     declencheur_id: str | None = None,
@@ -280,7 +284,7 @@ def recalculer_sante_projet_task(
 
     Conforme C8 :
     1. Efface la clé Redis 'en attente' au tout début de la tâche avant lecture DB.
-    2. Exécute le calcul dans contexte_schema(schema_name).
+    2. Exécute le calcul dans le contexte de l'entreprise `entreprise_id`.
     3. Verrouille le projet via select_for_update() dans une transaction atomique.
     4. Persiste l'avancement physique, l'avancement théorique, le score et le badge final.
     5. Enregistre un SanteProjetSnapshot d'audit.
@@ -300,7 +304,7 @@ def recalculer_sante_projet_task(
     from apps.projets.services.sante_declencheur import obtenir_cle_recalcul_en_attente
 
     # 1. Effacement immédiat de la clé Redis en début d'exécution (C8)
-    cle = obtenir_cle_recalcul_en_attente(schema_name, projet_id)
+    cle = obtenir_cle_recalcul_en_attente(entreprise_id, projet_id)
     cache.delete(cle)
 
     def _executer():
@@ -312,9 +316,9 @@ def recalculer_sante_projet_task(
             )
             if not projet:
                 logger.warning(
-                    "Recalcul santé ignoré : projet %s introuvable sur le schéma %s.",
+                    "Recalcul santé ignoré : projet %s introuvable dans l'entreprise %s.",
                     projet_id,
-                    schema_name,
+                    entreprise_id,
                 )
                 return None
 
@@ -412,7 +416,7 @@ def recalculer_sante_projet_task(
 
                 alerte_rouge = True
                 transaction.on_commit(
-                    lambda: envoyer_alerte_sante_rouge(schema_name, str(projet.id), str(snapshot.id))
+                    lambda: envoyer_alerte_sante_rouge(entreprise_id, str(projet.id), str(snapshot.id))
                 )
 
             return {
@@ -424,8 +428,8 @@ def recalculer_sante_projet_task(
                 "snapshot_id": str(snapshot.id),
             }
 
-    if schema_name:
-        with contexte_schema(schema_name):
+    if entreprise_id:
+        with contexte_entreprise(entreprise_id):
             return _executer()
     return _executer()
 

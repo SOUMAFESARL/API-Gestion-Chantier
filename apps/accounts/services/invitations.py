@@ -4,10 +4,9 @@ import logging
 import uuid
 from datetime import timedelta
 
-from apps.core.passerelle_schema import schema_courant
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
@@ -16,7 +15,9 @@ from apps.accounts.models import Invitation, Utilisateur
 from apps.accounts.services.authentification import emettre_jetons, profil_de_connexion
 from apps.audit.services import journaliser
 from apps.billing.services.quota import verifier_quota_avant_invitation
+from apps.core.contexte import activer_entreprise, entreprise_courante_id, portee_plateforme
 from apps.core.emails import adresse_frontend, envoyer
+from apps.core.passerelle_schema import entreprise_courante
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.core.exceptions import ErreurConflit, ErreurMetier
 
@@ -89,10 +90,9 @@ def creer_invitation(
     else:
         lien = f"{base_url}/invitation#jeton={jeton}"
 
-    # Le nom de l'entreprise vient du tenant courant : l'invitation est créée
-    # dans son schéma, et `connection.tenant` est ce que le middleware y a posé.
-    tenant = getattr(connection, "tenant", None)
-    raison_sociale = getattr(tenant, "raison_sociale", "") if tenant else ""
+    # Le nom de l'entreprise est celui de l'entreprise active : l'invitation y est créée.
+    entreprise = entreprise_courante()
+    raison_sociale = getattr(entreprise, "raison_sociale", "") if entreprise else ""
 
     if nom_projet:
         sujet = f"Invitation au chantier {nom_projet} sur CCD Digital"
@@ -196,28 +196,10 @@ def accepter_invitation(
     Supporte l'appel unitaire simple (avec seulement l'instance `Invitation`)
     et l'appel complet d'activation (avec `mot_de_passe` et données d'identité).
     """
-    schema_courant = schema_courant()
-    from apps.core.passerelle_schema import contexte_schema, schema_public
-    public_schema = schema_public()
-
     if isinstance(cible, Invitation):
         invitation = cible
     else:
-        empreinte = Invitation.empreinte_de(cible)
-        invitation = Invitation.objects.select_for_update().filter(empreinte=empreinte).first()
-        if invitation is None and schema_courant == public_schema:
-            from apps.tenants.models import Entreprise
-
-            for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
-                connection.set_tenant(entreprise)
-                candidat = (
-                    Invitation.objects.select_for_update().filter(empreinte=empreinte).first()
-                )
-                if candidat is not None:
-                    invitation = candidat
-                    break
-            else:
-                connection.set_schema_to_public()
+        invitation = _trouver_par_empreinte(Invitation.empreinte_de(cible), verrouiller=True)
 
     if invitation is None or not invitation.est_utilisable:
         if invitation and invitation.est_expiree:
@@ -325,21 +307,26 @@ def accepter_invitation(
 
 def obtenir_invitation_par_jeton(jeton: str | uuid.UUID) -> Invitation | None:
     """Recherche une invitation via l'empreinte de son jeton en clair."""
-    empreinte = Invitation.empreinte_de(jeton)
-    schema_courant = schema_courant()
-    from apps.core.passerelle_schema import contexte_schema, schema_public
+    return _trouver_par_empreinte(Invitation.empreinte_de(jeton))
 
-    public_schema = schema_public()
 
-    invitation = Invitation.objects.filter(empreinte=empreinte).first()
-    if invitation is None and schema_courant == public_schema:
-        from apps.tenants.models import Entreprise
+def _trouver_par_empreinte(empreinte: str, *, verrouiller: bool = False) -> Invitation | None:
+    """L'invitation d'une empreinte, et son entreprise activée pour le reste de la requête.
 
-        for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
-            connection.set_tenant(entreprise)
-            candidat = Invitation.objects.filter(empreinte=empreinte).first()
-            if candidat is not None:
-                candidat._schema_name = entreprise.schema_name
-                return candidat
-        connection.set_schema_to_public()
-    return invitation
+    Le lien d'invitation arrive sans jeton de connexion, donc sans entreprise active : on lit
+    l'entreprise de l'invitation en portée plateforme, puis on l'active — l'acceptation crée le
+    compte et ses jetons **dans cette entreprise**. C'est le `set_tenant` d'hier, sans balayer
+    les schémas un par un.
+    """
+    if entreprise_courante_id() is None:
+        with portee_plateforme(motif="invitation : retrouver l'entreprise d'un lien"):
+            entreprise_id = (
+                Invitation.objects.filter(empreinte=empreinte)
+                .values_list("entreprise_id", flat=True)
+                .first()
+            )
+        if entreprise_id is None:
+            return None
+        activer_entreprise(entreprise_id)
+    requete = Invitation.objects.select_for_update() if verrouiller else Invitation.objects
+    return requete.filter(empreinte=empreinte).first()

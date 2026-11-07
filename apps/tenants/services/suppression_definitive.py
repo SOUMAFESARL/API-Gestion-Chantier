@@ -39,16 +39,20 @@ def _lire_schema(entreprise: Entreprise) -> dict[str, Any]:
         "nb_utilisateurs": 0, "nb_projets": 0,
     }
     try:
+        # `_base_manager` ne filtre rien (D9) : sans le filtre explicite, il lirait les comptes
+        # et les contrats de **toutes** les entreprises, et la purge emporterait leurs fichiers.
         with contexte_schema(entreprise.schema_name):
             lignes = list(
-                Utilisateur._base_manager.values(
+                Utilisateur._base_manager.filter(entreprise=entreprise).values(
                     "email", "nom", "prenom", "is_owner", "avatar", "role__code"
                 )
             )
             resultat["nb_utilisateurs"] = Utilisateur.objects.count()
             resultat["nb_projets"] = Projet.objects.filter(supprime_le__isnull=True).count()
             resultat["contrats"] = [
-                c for c in ProjetContrat._base_manager.values_list("fichier", flat=True) if c
+                c for c in ProjetContrat._base_manager.filter(entreprise=entreprise).values_list(
+                    "fichier", flat=True
+                ) if c
             ]
     except Exception:  # noqa: BLE001 — un schéma orphelin ou illisible n'empêche pas la purge
         logger.warning("Schéma illisible : %s", entreprise.schema_name, exc_info=True)

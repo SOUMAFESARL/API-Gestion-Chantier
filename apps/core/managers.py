@@ -155,3 +155,55 @@ class ManagerEntrepriseComplet(ManagerComplet):
 
     def get_queryset(self):
         return _classe_requete(self).cloisonnee(self.model, using=self._db)
+
+
+# --------------------------------------------------------------------------
+# La table des comptes — décision D9, règle R-8
+# --------------------------------------------------------------------------
+class RequeteComptes(RequeteEntreprise):
+    """La table `utilisateur` : les comptes de l'entreprise active, ou le personnel de l'éditeur.
+
+    Elle partage tout de `RequeteEntreprise`, sauf ce qu'elle fait **sans entreprise active** :
+    elle ne refuse pas, elle rend le **personnel de CCD Digital** (`entreprise` nulle). C'est ce
+    que rendait la table `utilisateur` du schéma `public` sous django-tenants, et ce qu'attend le
+    code de l'administration de la plateforme, qui tourne sans entreprise.
+
+    | Contexte | Comptes visibles |
+    |---|---|
+    | une entreprise active | ses collaborateurs |
+    | aucun | le personnel de l'éditeur |
+    | portée plateforme | tous |
+
+    Retrouver un compte **avant** de connaître son entreprise (connexion, lien de
+    réinitialisation) passe donc par une portée plateforme nommée, jamais par un filtre oublié.
+    """
+
+    def _cloisonner(self) -> None:
+        if not self._cloisonnement_a_appliquer:
+            return
+        from apps.core.contexte import en_portee_plateforme, entreprise_courante_id
+
+        if not en_portee_plateforme():
+            identifiant = entreprise_courante_id()
+            self.query.add_q(
+                models.Q(entreprise_id=identifiant)
+                if identifiant is not None
+                else models.Q(entreprise__isnull=True)
+            )
+        self._cloisonnement_a_appliquer = False
+
+
+class ManagerComptesComplet(ManagerComplet):
+    """`tous_objets` de la table des comptes : cloisonné comme `objects`, supprimés compris."""
+
+    def get_queryset(self):
+        return RequeteComptes.cloisonnee(self.model, using=self._db)
+
+
+class ManagerComptesActif(ManagerActif):
+    """`objects` d'une table rattachée à un compte (jetons…) : cloisonnée comme `utilisateur`."""
+
+    def get_queryset(self):
+        return RequeteComptes.cloisonnee(self.model, using=self._db).filter(
+            supprime_le__isnull=True
+        )

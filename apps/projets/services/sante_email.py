@@ -10,7 +10,7 @@ Règles de gouvernance :
 import logging
 from uuid import UUID
 
-from apps.core.passerelle_schema import contexte_schema
+from apps.core.contexte import contexte_entreprise
 
 from apps.accounts.models import Utilisateur
 from apps.core.emails import envoyer
@@ -46,7 +46,7 @@ def obtenir_destinataires_alerte_rouge(projet: Projet) -> list[str]:
 
 
 def envoyer_alerte_sante_rouge(
-    schema_name: str,
+    entreprise_id: UUID | str | None,
     projet_id: UUID | str,
     snapshot_id: UUID | str | None = None,
 ) -> int:
@@ -68,7 +68,7 @@ def envoyer_alerte_sante_rouge(
             logger.info(
                 "Aucun destinataire trouvé pour l'alerte santé rouge du projet %s (%s).",
                 projet.reference,
-                schema_name,
+                entreprise_id,
             )
             return 0
 
@@ -113,7 +113,7 @@ def envoyer_alerte_sante_rouge(
             return len(destinataires)
         return 0
 
-    if schema_name:
-        with contexte_schema(schema_name):
+    if entreprise_id:
+        with contexte_entreprise(entreprise_id):
             return _envoyer()
     return _envoyer()

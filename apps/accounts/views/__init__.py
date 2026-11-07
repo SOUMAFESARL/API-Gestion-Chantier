@@ -452,11 +452,7 @@ class InvitationVerifierView(APIView):
 
         reste = max(0, int((invitation.expire_le - timezone.now()).total_seconds()))
 
-        from django.db import connection
-
-        nom_entreprise = "CCD Digital"
-        if hasattr(connection, "tenant") and getattr(connection.tenant, "raison_sociale", None):
-            nom_entreprise = connection.tenant.raison_sociale
+        nom_entreprise = getattr(invitation.entreprise, "raison_sociale", "") or "CCD Digital"
 
         data = {
             "email": invitation.email,

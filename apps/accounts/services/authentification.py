@@ -24,17 +24,17 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import connection, models, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema, schema_public, schema_courant
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Utilisateur
-from apps.core.enums import StatutEntreprise, StatutUtilisateur
+from apps.core.authentification import CLAIM_ENTREPRISE
+from apps.core.contexte import activer_entreprise, entreprise_courante_id, portee_plateforme
+from apps.core.enums import StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
-from apps.tenants.models import RegistreEmail
 
 __all__ = [
     "IdentifiantsInvalides",
@@ -94,33 +94,23 @@ def authentifier(email: str, mot_de_passe: str) -> Utilisateur:
     echec: ErreurMetier | None = None
     utilisateur = None
 
-    schema_courant = schema_courant()
-    public_schema = schema_public()
-
-    # C-03 : Résolution directe via le registre global RegistreEmail (schéma public) sans boucle
-    ligne_registre = None
-    with contexte_schema(public_schema):
-        ligne_registre = (
-            RegistreEmail.objects.filter(email__iexact=email)
-            .select_related("entreprise")
-            .first()
-        )
-
-    if schema_courant == public_schema:
-        candidat_public = Utilisateur.objects.filter(email__iexact=email).first()
-        if candidat_public is None:
-            if ligne_registre is not None:
-                connection.set_tenant(ligne_registre.entreprise)
-            else:
-                echec = IdentifiantsInvalides()
-    else:
-        # Sur un schéma tenant : l'utilisateur doit impérativement figurer dans le registre global
-        if ligne_registre is None or ligne_registre.entreprise.schema_name != schema_courant:
-            echec = IdentifiantsInvalides()
-
-    if echec is not None:
-        Utilisateur().set_password(mot_de_passe)
-        raise echec
+    # D9 : l'adresse est unique sur toute la plateforme, et désigne donc à elle seule le compte
+    # et son entreprise. On ne lit que l'entreprise, en portée plateforme, puis on l'active pour
+    # le reste de la requête — tout ce qui suit (compteur d'échecs, email de blocage, jetons,
+    # journal) s'écrit dans cette entreprise. Le personnel de l'éditeur n'en a pas : aucune
+    # entreprise n'est activée, et le compte se lit dans le personnel.
+    if entreprise_courante_id() is None:
+        with portee_plateforme(motif="connexion : retrouver l'entreprise d'une adresse"):
+            ligne = (
+                Utilisateur.objects.filter(email__iexact=email)
+                .values_list("pk", "entreprise_id")
+                .first()
+            )
+        if ligne is None:
+            Utilisateur().set_password(mot_de_passe)
+            raise IdentifiantsInvalides()
+        if ligne[1] is not None:
+            activer_entreprise(ligne[1])
 
     with transaction.atomic():
         utilisateur = Utilisateur.objects.select_for_update().filter(email__iexact=email).first()
@@ -196,9 +186,15 @@ def emettre_jetons(
     refresh = RefreshToken.for_user(utilisateur)
     refresh.set_exp(lifetime=DUREE_RENOUVELLEMENT.get(origine, DUREE_RENOUVELLEMENT["WEB"]))
 
-    schema_name = schema_courant()
+    # Le claim `entreprise` est ce que l'authentification compare au compte (D9, R-7). `schema`
+    # reste le temps que le frontend passe au nouveau contrat (étape 8 du plan de sortie).
+    entreprise = utilisateur.entreprise
+    schema_name = entreprise.schema_name if entreprise is not None else "public"
     refresh["schema"] = schema_name
     refresh.access_token["schema"] = schema_name
+    if entreprise is not None:
+        refresh[CLAIM_ENTREPRISE] = str(entreprise.pk)
+        refresh.access_token[CLAIM_ENTREPRISE] = str(entreprise.pk)
 
     refresh["role_global"] = utilisateur.role_global
     refresh["origine"] = origine
@@ -222,7 +218,8 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
     > `role_global` sert à l'affichage, **jamais** à l'autorisation. Le serveur
     > relit toujours le rôle en base pour décider d'un droit.
     """
-    schema_name = schema_courant()
+    entreprise = utilisateur.entreprise
+    schema_name = entreprise.schema_name if entreprise is not None else "public"
     profil = {
         "id": str(utilisateur.pk),
         "email": utilisateur.email,
@@ -242,15 +239,12 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
         "doit_changer_mot_de_passe": utilisateur.doit_changer_mot_de_passe,
         "schema": schema_name,
     }
-    tenant = getattr(connection, "tenant", None)
-    if tenant and getattr(tenant, "schema_name", "") != schema_public():
-        entreprise = tenant if hasattr(tenant, "pk") else None
-        if entreprise:
-            profil["entreprise"] = {
-                "id": str(entreprise.pk),
-                "raison_sociale": getattr(entreprise, "raison_sociale", ""),
-                "schema_name": entreprise.schema_name,
-            }
+    if entreprise is not None:
+        profil["entreprise"] = {
+            "id": str(entreprise.pk),
+            "raison_sociale": entreprise.raison_sociale,
+            "schema_name": entreprise.schema_name,
+        }
     return profil
 
 

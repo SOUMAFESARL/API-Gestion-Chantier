@@ -14,8 +14,7 @@ de l'entreprise, que rien ne tient à jour. Désormais, aucune copie locale n'en
 « Administration » n'est pas un module qu'on souscrit : il reste toujours ouvert.
 """
 
-from apps.core.passerelle_schema import schema_courant
-from django.db import connection
+import uuid
 
 __all__ = [
     "MODULES_SYSTEME",
@@ -28,15 +27,16 @@ MODULES_SYSTEME = frozenset({"administration"})
 
 
 def entreprise_courante(tenant=None):
-    """L'entreprise passée, sinon celle du schéma courant ; `None` dans le schéma public."""
+    """L'entreprise passée (objet ou identifiant), sinon l'entreprise active ; `None` sans elle."""
     from apps.tenants.models import Entreprise
 
     if isinstance(tenant, Entreprise):
-        return None if tenant.schema_name == "public" else tenant
-    schema = schema_courant()
-    if not schema or schema == "public":
-        return None
-    return Entreprise.objects.filter(schema_name=schema).first()
+        return tenant
+    if isinstance(tenant, (uuid.UUID, str)) and tenant:
+        return Entreprise.objects.filter(pk=tenant).first()
+    from apps.core.passerelle_schema import entreprise_courante as active
+
+    return active()
 
 
 def codes_modules_actifs(tenant=None) -> set[str]:

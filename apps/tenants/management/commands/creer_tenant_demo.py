@@ -114,10 +114,12 @@ class Command(BaseCommand):
                 self._retirer_privileges_techniques(utilisateur)
                 self._promouvoir_fondateur(utilisateur)
 
-            if options["acces_django"]:
-                self._creer_compte_technique()
-
             self._creer_donnees_metier_demo(options["motdepasse"])
+
+        # Hors du contexte de l'entreprise : le compte technique appartient à l'éditeur, et un
+        # compte créé dans le contexte de `demo` y serait rattaché (D9, R-8).
+        if options["acces_django"]:
+            self._creer_compte_technique()
 
         self.stdout.write("")
         self.stdout.write(self.style.WARNING(f"  Ouvrir  http://{DOMAINE}:8000/api/health/"))

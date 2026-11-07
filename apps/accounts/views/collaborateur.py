@@ -295,13 +295,10 @@ class ParametresCollaborateurListCreateView(APIView):
 
         email_clean = email.strip().lower()
 
-        # Règle C-03 & L8-1 : Vérification globale dans le Registre Global
-        from apps.core.passerelle_schema import contexte_schema
-        from apps.tenants.models import Entreprise, RegistreEmail
+        # Règle C-03 & L8-1 : l'adresse est unique sur toute la plateforme (D9).
+        from apps.accounts.selectors import adresse_prise_sur_la_plateforme
 
-        email_pris = False
-        with contexte_schema("public"):
-            email_pris = RegistreEmail.objects.filter(email=email_clean).exists()
+        email_pris = adresse_prise_sur_la_plateforme(email_clean)
 
         existant = Utilisateur.objects.filter(
             email__iexact=email_clean,
@@ -358,14 +355,6 @@ class ParametresCollaborateurListCreateView(APIView):
                 hote=request.get_host(),
                 verifier_quota=False,
             )
-
-            with contexte_schema("public"):
-                entreprise_obj = Entreprise.objects.filter(schema_name=request.tenant.schema_name).first()
-                if entreprise_obj:
-                    RegistreEmail.objects.get_or_create(
-                        email=email_clean,
-                        defaults={"entreprise": entreprise_obj},
-                    )
 
         jeton = getattr(invitation, "jeton_clair", None)
         lien_activation = f"/invitation#jeton={jeton}" if jeton else None

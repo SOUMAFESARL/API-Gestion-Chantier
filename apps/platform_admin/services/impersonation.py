@@ -14,15 +14,15 @@ import uuid
 from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied
-from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema, schema_public, schema_courant
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import Utilisateur
 from apps.accounts.services.authentification import profil_de_connexion
 from apps.audit.services import journaliser
+from apps.core.authentification import CLAIM_ENTREPRISE
 from apps.core.enums import ActionAudit, RoleGlobal, StatutUtilisateur
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from apps.core.exceptions import ErreurMetier
 from apps.platform_admin.models import JournalPlateforme
 from apps.tenants.models import Entreprise
@@ -47,13 +47,8 @@ def verifier_super_admin(utilisateur: Utilisateur) -> None:
     if not utilisateur or not utilisateur.is_authenticated:
         raise PermissionDenied(_("Authentification requise."))
 
-    # Le super admin doit vivre dans le schéma public
-    schema_courant = schema_courant()
-    public_schema = schema_public()
-
-    est_super_admin = (
-        schema_courant == public_schema or getattr(utilisateur, "is_staff", False)
-    ) and (
+    # Le super admin est du personnel de l'éditeur : un compte sans entreprise (D9, R-8).
+    est_super_admin = getattr(utilisateur, "entreprise_id", None) is None and (
         utilisateur.role_global == RoleGlobal.ADMIN
         or getattr(utilisateur, "is_superuser", False)
         or getattr(utilisateur, "is_staff", False)
@@ -153,6 +148,7 @@ def demarrer_session_assistance(
     token = AccessToken.for_user(target_user)
     token.set_exp(lifetime=DUREE_SESSION_ASSISTANCE)
     token["schema"] = entreprise.schema_name
+    token[CLAIM_ENTREPRISE] = str(entreprise.pk)
     token["role_global"] = target_user.role_global
     token["is_impersonation"] = True
     token["read_only"] = True

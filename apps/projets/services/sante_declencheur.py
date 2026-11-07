@@ -10,9 +10,10 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from apps.core.passerelle_schema import schema_courant
 from django.core.cache import cache
-from django.db import connection, transaction
+from django.db import transaction
+
+from apps.core.contexte import exiger_entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,13 @@ CLE_PREFIX_ATTENTE = "sante:recalcul_en_attente"
 TTL_CLE_ATTENTE_SECONDES = 300  # 5 minutes de TTL de sécurité
 
 
-def obtenir_cle_recalcul_en_attente(schema_name: str, projet_id: Any) -> str:
-    """Construit la clé Redis identifiant un recalcul en attente pour un projet."""
-    return f"{CLE_PREFIX_ATTENTE}:{schema_name}:{str(projet_id)}"
+def obtenir_cle_recalcul_en_attente(entreprise_id: Any, projet_id: Any) -> str:
+    """Construit la clé Redis identifiant un recalcul en attente pour un projet.
+
+    Indexée par l'entreprise et non plus par le schéma (D9) : un slug peut être réattribué, un
+    identifiant d'entreprise jamais.
+    """
+    return f"{CLE_PREFIX_ATTENTE}:{entreprise_id}:{str(projet_id)}"
 
 
 def declencher_recalcul_sante(
@@ -41,8 +46,8 @@ def declencher_recalcul_sante(
     """
     from apps.projets.tasks import recalculer_sante_projet_task
 
-    schema_name = schema_courant()
-    cle = obtenir_cle_recalcul_en_attente(schema_name, projet_id)
+    entreprise_id = str(exiger_entreprise())
+    cle = obtenir_cle_recalcul_en_attente(entreprise_id, projet_id)
     declencheur_id_str = str(declencheur_id) if declencheur_id is not None else None
     projet_id_str = str(projet_id)
 
@@ -51,7 +56,7 @@ def declencher_recalcul_sante(
         if cle_posee:
             recalculer_sante_projet_task.apply_async(
                 kwargs={
-                    "schema_name": schema_name,
+                    "entreprise_id": entreprise_id,
                     "projet_id": projet_id_str,
                     "declencheur_type": declencheur_type,
                     "declencheur_id": declencheur_id_str,
@@ -61,14 +66,14 @@ def declencher_recalcul_sante(
             logger.debug(
                 "Tâche de recalcul santé planifiée pour le projet %s (%s, déclencheur %s, countdown 10s).",
                 projet_id_str,
-                schema_name,
+                entreprise_id,
                 declencheur_type,
             )
         else:
             logger.debug(
                 "Recalcul santé déjà en attente pour le projet %s (%s). Déclencheur %s absorbé.",
                 projet_id_str,
-                schema_name,
+                entreprise_id,
                 declencheur_type,
             )
 

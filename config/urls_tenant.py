@@ -1,12 +1,15 @@
-"""Routage des schémas de tenant — tout le métier BTP.
+"""Routage de l'API — une seule table de routes pour toute la plateforme (D9).
 
-Le middleware `TenantResolutionMiddleware` a déjà déterminé le schéma du tenant
-(via le claim `schema` du token JWT Bearer, ou l'en-tête `X-Tenant`) avant que
-ces vues soient atteintes. Une route déclarée ici ne peut voir que les données
-de l'entreprise appelante.
+Sous django-tenants, deux URLconf coexistaient : celle-ci pour les schémas d'entreprise, et
+`config.urls_public` pour le schéma `public`. Il n'y a plus de schéma à résoudre : toutes les
+routes vivent ici, et l'entreprise d'une requête est celle que désigne son jeton vérifié
+(`apps.core.authentification`). Les routes de maintenance de `urls_public` y sont reprises ;
+le fichier disparaît au lot 8.
 
 Convention d'API : tout est préfixé `/api/v1/` (tâche T-005).
 """
+
+import contextlib
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -17,24 +20,40 @@ from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
-def sante(request):
-    """Sonde de supervision — renvoie le schéma effectivement résolu."""
-    return JsonResponse(
-        {
-            "statut": "ok",
-            "portee": "tenant",
-            "schema": getattr(request.tenant, "schema_name", None),
-        }
-    )
+def sante(_request):
+    """Sonde de supervision. Elle ne dit rien de l'entreprise : elle ne lit aucun jeton."""
+    return JsonResponse({"statut": "ok"})
 
 
-from config.urls_public import migrer_bd_vue
+from config.urls_public import (  # noqa: E402
+    activer_abonnement_prod_vue,
+    inspecter_entreprises_prod_vue,
+    migrer_bd_vue,
+    purger_zanf_vue,
+    supprimer_entreprise_prod_vue,
+)
 
 
 urlpatterns = [
-    path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd-tenant"),
+    path("api/v1/maintenance/migrer-bd/", migrer_bd_vue, name="maintenance-migrer-bd"),
+    path("api/v1/maintenance/purger-zanf/", purger_zanf_vue, name="maintenance-purger-zanf"),
+    path(
+        "api/v1/maintenance/entreprises/",
+        inspecter_entreprises_prod_vue,
+        name="maintenance-inspecter-entreprises",
+    ),
+    path(
+        "api/v1/maintenance/entreprises/supprimer/",
+        supprimer_entreprise_prod_vue,
+        name="maintenance-supprimer-entreprise",
+    ),
+    path(
+        "api/v1/maintenance/abonnements/activer/",
+        activer_abonnement_prod_vue,
+        name="maintenance-activer-abonnement",
+    ),
     path("", RedirectView.as_view(url="/api/v1/docs/", permanent=False), name="accueil"),
-    path("api/health/", sante, name="sante-tenant"),
+    path("api/health/", sante, name="sante"),
     path("api/v1/schema/", SpectacularAPIView.as_view(urlconf="config.urls_tenant"), name="schema"),
     path("api/v1/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
     path("api/v1/", include("apps.accounts.urls")),
@@ -53,6 +72,13 @@ urlpatterns = [
 ]
 
 
+# Outils de développement, s'ils sont présents : `config/urls_dev.py` n'est pas versionné, et
+# le garde `DEBUG` l'empêche d'être monté en production même s'il y arrivait par mégarde.
+if settings.DEBUG:
+    with contextlib.suppress(ImportError):
+        from config.urls_dev import urlpatterns as routes_dev
+
+        urlpatterns += routes_dev
 
 # En développement ou sur cPanel sans bucket S3 (FileSystemStorage), servir les fichiers médias
 _stockage_defaut = settings.STORAGES.get("default", {}).get("BACKEND", "")

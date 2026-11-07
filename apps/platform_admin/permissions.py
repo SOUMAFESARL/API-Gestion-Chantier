@@ -1,8 +1,6 @@
 """Permissions DRF pour le module platform_admin."""
 
-from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import schema_public, schema_courant
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
@@ -21,12 +19,11 @@ class EstSuperAdminPlateforme(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        schema_courant = schema_courant()
-        public_schema = schema_public()
-
-        # Doit être authentifié dans le schéma public ou avoir un statut staff
-        est_schema_autorise = (schema_courant == public_schema) or getattr(user, "is_staff", False)
-        if not est_schema_autorise:
+        # D9, R-8 : le personnel de l'éditeur partage la table `utilisateur` avec les comptes des
+        # entreprises. Il se reconnaît à son entreprise nulle — et à rien d'autre : sous
+        # django-tenants, c'était le schéma `public` qui le désignait, et un administrateur
+        # d'entreprise (`AD`) passerait sinon la condition de rôle ci-dessous.
+        if getattr(user, "entreprise_id", None) is not None:
             return False
 
         return bool(

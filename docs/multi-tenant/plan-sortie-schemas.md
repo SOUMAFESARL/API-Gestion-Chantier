@@ -274,3 +274,28 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 - **Le chantier frontend du découpage continue en parallèle** : il consomme des routes dont le contrat ne change pas.
 - **Gel des nouveaux modèles backend sur `develop`** pendant les étapes 3 à 7 : un modèle ajouté sur l'ancienne structure serait à refaire. Les corrections urgentes passent sur `develop` et sont reportées dans `feature/schema-unique` chaque semaine.
 - **Les modules métier (A1) démarrent après la bascule** : les écrire avant, c'est les écrire deux fois.
+
+---
+
+## 12. Avancement
+
+| Lot | État | Commits |
+|---|---|---|
+| 1 | Fait — socle du contexte | `26de87c` |
+| 2 | Fait — modèle de données | `773b9bd`, `a7e14a4` (ensemencement) |
+| 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8` et suivant |
+
+### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
+
+- **Passerelle** `apps/core/passerelle_schema.py` : l'ancien vocabulaire (`contexte_schema`, `schema_courant`…) traduit vers le contexte d'entreprise, en un seul endroit. 66 fichiers ne dépendent plus de django-tenants. Retirée au lot 8.
+- **La table `utilisateur` est cloisonnée** (`RequeteComptes`) : les comptes de l'entreprise active ; **sans entreprise active, le personnel de l'éditeur** — ce que rendait `public` ; tout, en portée plateforme. Sans cela, la liste des collaborateurs d'une entreprise montrait les comptes de toutes les autres.
+- **Connexion, invitation, réinitialisation** : l'entreprise se lit en portée plateforme (adresse ou empreinte du lien), puis s'active pour la requête — le `set_tenant` d'hier, sans balayer les schémas.
+- **Le jeton porte le claim `entreprise`** ; l'authentification cherche le compte **dans** cette entreprise, puis compare (§5.2). `schema` reste dans le jeton et le profil jusqu'à l'étape 8 du §11 (frontend).
+- **Personnel de l'éditeur** : `EstSuperAdminPlateforme` et l'emprunt d'identité exigent un compte **sans entreprise** — sans cela, tout administrateur d'entreprise (`AD`) passait la condition de rôle. `JetonReinitialisation` suit le compte (entreprise nulle pour le personnel) : la réinitialisation du personnel levait `HorsContexteEntreprise`.
+- **Middlewares** (lecture seule d'abonnement, modules fermés) : plus de `request.tenant` ; ils lisent l'entreprise du **jeton vérifié** (`entreprise_du_jeton`), et ne s'en servent que pour restreindre.
+- **Une seule URLconf** : `urls_tenant` reprend les routes de maintenance de `urls_public`.
+- **Tâches Celery** : `recalculer_sante_projet_task`, `notifier_dg_derive_delai` et l'alerte rouge reçoivent un `entreprise_id` ; la clé de cache du recalcul est indexée par l'entreprise.
+- **Suppression définitive** : deux `_base_manager` lisaient les comptes et les contrats de **toutes** les entreprises — l'aperçu aurait listé les dirigeants des autres clients, la purge emporté leurs fichiers. Bornés à l'entreprise.
+- **`peupler_donnees_test`** repris de `feature/perf-requetes` (`6e7e31e`) : `--entreprise`, et il crée lui-même les rôles personnalisés `IT`, `MOE`, `MOA` qui n'existaient qu'à la main dans l'ancienne base `demo`. Il passe sur la base neuve.
+
+**Reste hors du lot 3** : le provisionnement de l'inscription et le registre des e-mails (lot 5), le SQL brut de `nettoyage` et de la suppression (lot 4), les copies locales `accounts.Module`/`Permission` encore lues par le catalogue (Q3), la comparaison chiffrée avec l'ancien modèle (lot 6).

@@ -13,10 +13,9 @@ import uuid
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ValidationDjango
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema, schema_public, schema_courant
 from rest_framework import status
 
 from apps.accounts.models import (
@@ -26,7 +25,9 @@ from apps.accounts.models import (
 )
 from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
+from apps.core.contexte import activer_entreprise, entreprise_courante_id, portee_plateforme
 from apps.core.emails import adresse_frontend, envoyer
+from apps.core.passerelle_schema import entreprise_courante
 from apps.core.enums import ActionAudit, StatutUtilisateur
 from apps.core.exceptions import ErreurMetier
 from apps.tenants.models import Entreprise
@@ -81,26 +82,23 @@ def demander(
     situation que ce parcours doit dénouer.
     """
     adresse = (email or "").strip().lower()
-    schema_courant = schema_courant()
-    public_schema = schema_public()
+    # D9 : l'adresse désigne à elle seule le compte et son entreprise. Sans entreprise active (la
+    # demande arrive d'un formulaire public), on lit l'entreprise en portée plateforme et on
+    # l'active. Le personnel de l'éditeur n'en a pas : il a son propre parcours
+    # (`platform_admin.services.reinitialisation`), et rien ne part d'ici.
+    if entreprise_courante_id() is None:
+        with portee_plateforme(motif="réinitialisation : retrouver l'entreprise d'une adresse"):
+            entreprise_id = (
+                Utilisateur.objects.filter(email__iexact=adresse)
+                .values_list("entreprise_id", flat=True)
+                .first()
+            )
+        if entreprise_id is None:
+            return
+        activer_entreprise(entreprise_id)
 
-    cible_schema = schema_courant
     cible_utilisateur = Utilisateur.objects.filter(email__iexact=adresse).first()
-    cible_entreprise: Entreprise | None = None
-
-    # Si l'utilisateur n'est pas dans le schéma courant (ex. requête sur public),
-    # rechercher parmi les schémas des entreprises clientes actives.
-    if cible_utilisateur is None and schema_courant == public_schema:
-        for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
-            with contexte_schema(entreprise.schema_name):
-                candidat = Utilisateur.objects.filter(email__iexact=adresse).first()
-                if candidat is not None:
-                    cible_schema = entreprise.schema_name
-                    cible_utilisateur = candidat
-                    cible_entreprise = entreprise
-                    break
-    elif cible_schema != public_schema:
-        cible_entreprise = Entreprise.objects.filter(schema_name=cible_schema).first()
+    cible_entreprise: Entreprise | None = entreprise_courante()
 
     if cible_utilisateur is None or cible_utilisateur.statut == StatutUtilisateur.INVITE:
         return
@@ -110,27 +108,26 @@ def demander(
 
     jeton = uuid.uuid4()
 
-    with contexte_schema(cible_schema):
-        with transaction.atomic():
-            # Une demande plus récente invalide les précédentes : sans cela, deux
-            # liens vivants circulent après un clic sur « Renvoyer l'email ».
-            JetonReinitialisation.objects.filter(
-                utilisateur=cible_utilisateur, utilise_le__isnull=True, invalide_le__isnull=True
-            ).update(invalide_le=timezone.now())
+    with transaction.atomic():
+        # Une demande plus récente invalide les précédentes : sans cela, deux
+        # liens vivants circulent après un clic sur « Renvoyer l'email ».
+        JetonReinitialisation.objects.filter(
+            utilisateur=cible_utilisateur, utilise_le__isnull=True, invalide_le__isnull=True
+        ).update(invalide_le=timezone.now())
 
-            JetonReinitialisation.objects.create(
-                utilisateur=cible_utilisateur,
-                empreinte=JetonReinitialisation.empreinte_de(jeton),
-                motif=motif,
-                expire_le=timezone.now() + DUREE_JETON_REINITIALISATION,
-                ip_demande=ip,
-            )
-
-        # Hors transaction : un email ne se rejoue pas, et en planifier un dans une
-        # transaction ferait partir le message même en cas d'annulation.
-        transaction.on_commit(
-            lambda: _envoyer_lien(cible_utilisateur, jeton, motif, entreprise=cible_entreprise)
+        JetonReinitialisation.objects.create(
+            utilisateur=cible_utilisateur,
+            empreinte=JetonReinitialisation.empreinte_de(jeton),
+            motif=motif,
+            expire_le=timezone.now() + DUREE_JETON_REINITIALISATION,
+            ip_demande=ip,
         )
+
+    # Hors transaction : un email ne se rejoue pas, et en planifier un dans une
+    # transaction ferait partir le message même en cas d'annulation.
+    transaction.on_commit(
+        lambda: _envoyer_lien(cible_utilisateur, jeton, motif, entreprise=cible_entreprise)
+    )
 
 
 def _envoyer_lien(
@@ -182,32 +179,26 @@ def verifier(jeton_clair: str) -> JetonReinitialisation:
     client qui en est équipé.
     """
     empreinte = JetonReinitialisation.empreinte_de(jeton_clair)
+    # Le lien arrive sans jeton de connexion : l'entreprise du jeton se lit en portée
+    # plateforme, puis s'active pour le reste de la requête (D9).
+    if entreprise_courante_id() is None:
+        with portee_plateforme(motif="réinitialisation : retrouver l'entreprise d'un lien"):
+            entreprise_id = (
+                JetonReinitialisation.objects.filter(empreinte=empreinte)
+                .values_list("entreprise_id", flat=True)
+                .first()
+            )
+        if entreprise_id is None:
+            raise JetonExpire()
+        activer_entreprise(entreprise_id)
+
     jeton = (
         JetonReinitialisation.objects.select_related("utilisateur")
         .filter(empreinte=empreinte)
         .first()
     )
-    schema_trouve = schema_courant()
-    public_schema = schema_public()
-
-    if (jeton is None or not jeton.est_utilisable) and schema_trouve == public_schema:
-        # Recherche multi-tenant si la requête a atteint le domaine public
-        for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
-            with contexte_schema(entreprise.schema_name):
-                candidat = (
-                    JetonReinitialisation.objects.select_related("utilisateur")
-                    .filter(empreinte=empreinte)
-                    .first()
-                )
-                if candidat is not None and candidat.est_utilisable:
-                    jeton = candidat
-                    schema_trouve = entreprise.schema_name
-                    break
-
     if jeton is None or not jeton.est_utilisable:
         raise JetonExpire()
-
-    jeton._schema_name = schema_trouve
     return jeton
 
 
@@ -235,65 +226,63 @@ def reinitialiser(
          lieu.
     """
     jeton = verifier(jeton_clair)
-    schema_cible = getattr(jeton, "_schema_name", schema_courant())
 
-    with contexte_schema(schema_cible):
-        utilisateur = jeton.utilisateur
+    utilisateur = jeton.utilisateur
 
-        # Le serveur reste seul juge de la complexité — les coches de l'écran sont
-        # un confort (§6.3). `validate_password` porte les trois validateurs du
-        # défaut D-4, en plus de ceux de Django.
-        try:
-            validate_password(mot_de_passe, utilisateur)
-        except ValidationDjango as erreur:
-            raise erreur
+    # Le serveur reste seul juge de la complexité — les coches de l'écran sont
+    # un confort (§6.3). `validate_password` porte les trois validateurs du
+    # défaut D-4, en plus de ceux de Django.
+    try:
+        validate_password(mot_de_passe, utilisateur)
+    except ValidationDjango as erreur:
+        raise erreur
 
-        etait_bloque = utilisateur.est_bloque
+    etait_bloque = utilisateur.est_bloque
 
-        with transaction.atomic():
-            utilisateur.set_password(mot_de_passe)
+    with transaction.atomic():
+        utilisateur.set_password(mot_de_passe)
 
-            champs = ["password", "tentatives_echouees", "bloque_le", "modifie_le"]
-            # Le blocage se lève ici, et nulle part ailleurs.
-            utilisateur.tentatives_echouees = 0
-            utilisateur.bloque_le = None
+        champs = ["password", "tentatives_echouees", "bloque_le", "modifie_le"]
+        # Le blocage se lève ici, et nulle part ailleurs.
+        utilisateur.tentatives_echouees = 0
+        utilisateur.bloque_le = None
 
-            if utilisateur.statut == StatutUtilisateur.INVITE:
-                utilisateur.statut = StatutUtilisateur.ACTIF
-                champs.append("statut")
+        if utilisateur.statut == StatutUtilisateur.INVITE:
+            utilisateur.statut = StatutUtilisateur.ACTIF
+            champs.append("statut")
 
-            # Le mot de passe est désormais celui de son titulaire : plus rien à
-            # imposer au prochain écran de connexion.
-            if utilisateur.doit_changer_mot_de_passe:
-                utilisateur.doit_changer_mot_de_passe = False
-                champs.append("doit_changer_mot_de_passe")
+        # Le mot de passe est désormais celui de son titulaire : plus rien à
+        # imposer au prochain écran de connexion.
+        if utilisateur.doit_changer_mot_de_passe:
+            utilisateur.doit_changer_mot_de_passe = False
+            champs.append("doit_changer_mot_de_passe")
 
-            utilisateur.save(update_fields=champs)
+        utilisateur.save(update_fields=champs)
 
-            jeton.utilise_le = timezone.now()
-            jeton.save(update_fields=["utilise_le", "modifie_le"])
+        jeton.utilise_le = timezone.now()
+        jeton.save(update_fields=["utilise_le", "modifie_le"])
 
-            # Révocation totale des sessions — c'est ce que M6 promet à l'écran 4 :
-            # « toutes vos sessions actives ont été invalidées sur tous vos appareils ».
-            revoquer_utilisateur(utilisateur.pk, ttl=TTL_REVOCATION)
+        # Révocation totale des sessions — c'est ce que M6 promet à l'écran 4 :
+        # « toutes vos sessions actives ont été invalidées sur tous vos appareils ».
+        revoquer_utilisateur(utilisateur.pk, ttl=TTL_REVOCATION)
 
-            # Effet 6 — Socle §2.4. **Ni le mot de passe, ni le jeton, ni son
-            # empreinte** n'entrent dans le journal : il se consulte et s'exporte.
-            # Ce qui compte ici est qu'un changement a eu lieu, par quelle porte,
-            # et depuis où.
-            journaliser(
-                action=ActionAudit.MODIFICATION,
-                type_entite="utilisateur",
-                entite_id=utilisateur.pk,
-                utilisateur_id=utilisateur.pk,
-                valeur_avant={"motif": jeton.motif, "etait_bloque": etait_bloque},
-                valeur_apres={"mot_de_passe": "modifie", "sessions": "revoquees"},
-                adresse_ip=ip,
-                appareil=appareil,
-            )
+        # Effet 6 — Socle §2.4. **Ni le mot de passe, ni le jeton, ni son
+        # empreinte** n'entrent dans le journal : il se consulte et s'exporte.
+        # Ce qui compte ici est qu'un changement a eu lieu, par quelle porte,
+        # et depuis où.
+        journaliser(
+            action=ActionAudit.MODIFICATION,
+            type_entite="utilisateur",
+            entite_id=utilisateur.pk,
+            utilisateur_id=utilisateur.pk,
+            valeur_avant={"motif": jeton.motif, "etait_bloque": etait_bloque},
+            valeur_apres={"mot_de_passe": "modifie", "sessions": "revoquees"},
+            adresse_ip=ip,
+            appareil=appareil,
+        )
 
-        transaction.on_commit(lambda: _confirmer(utilisateur))
-        return utilisateur
+    transaction.on_commit(lambda: _confirmer(utilisateur))
+    return utilisateur
 
 
 def _confirmer(utilisateur: Utilisateur) -> None:

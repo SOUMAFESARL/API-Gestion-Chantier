@@ -5,7 +5,8 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
-from apps.core.passerelle_schema import contexte_schema
+
+from apps.core.contexte import contexte_entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,10 @@ def relancer_abonnements():
 def relancer_essais() -> int:
     """Les quatre relances de l'essai — parcours §2, US-016.
 
-    **Elle tourne dans `public`** : c'est là que vivent les abonnements. Puis
-    elle **entre dans le schéma de chaque client** pour compter ce qui y a été
-    construit. Sans cette bascule, elle compterait les projets de `public` —
-    c'est-à-dire aucun — et annoncerait à chaque client qu'il n'a rien fait.
-    *La tâche ne lèverait aucune erreur : elle trouve zéro, et zéro est un
-    nombre valide.* C'est la règle 3 du `CLAUDE.md`, et c'est ici qu'elle se paie.
+    **Elle tourne sans entreprise** : les abonnements sont des tables de la
+    plateforme. Puis elle **ouvre le contexte de chaque client** pour compter ce
+    qui y a été construit. Sans lui, le compte lèverait `HorsContexteEntreprise`
+    (D9, R-4) — là où, sous django-tenants, il trouvait zéro sans rien dire.
 
     **Elle ne décide de rien.** Le passage en lecture seule est évalué à la
     requête, pas ici : une tâche qui coupe l'accès à 06 h 00 UTC couperait
@@ -56,7 +55,7 @@ def relancer_essais() -> int:
             schema = abonnement.entreprise.schema_name
 
             try:
-                with contexte_schema(schema):
+                with contexte_entreprise(abonnement.entreprise_id):
                     bilan = bilan_du_schema()
                     adresses = destinataires_relance()
             except Exception:

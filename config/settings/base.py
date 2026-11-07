@@ -157,7 +157,7 @@ MIDDLEWARE = [
     "apps.core.middleware_modules.ModuleFermeMiddleware",
     # Verrou absolu R-128 : refuse toute mutation sous jeton d'assistance Super Admin
     "apps.platform_admin.middleware.LectureSeuleAssistanceMiddleware",
-    # En dernier : il a besoin de `request.tenant`, et il ne doit refuser
+    # En dernier : il lit l'entreprise du jeton vérifié, et il ne doit refuser
     # l'écriture qu'après que tout le reste a laissé passer la requête.
     "apps.billing.middleware.LectureSeuleAbonnementMiddleware",
 ]

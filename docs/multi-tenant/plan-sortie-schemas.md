@@ -288,7 +288,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 5 | Fait le 07/11/2026 — voir ci-dessous | `1132ff3` |
 | 6 | Fait le 07/11/2026 — voir ci-dessous ; reste le report de `feature/perf-requetes` (§11, étape 6) | `29157a2` |
 | 7 | Fait le 07/11/2026 — voir ci-dessous | `6f83185` |
-| 8 | Fait le 07/11/2026 — voir ci-dessous | à venir |
+| 8 | Fait le 07/11/2026 — voir ci-dessous | `13dd34d` |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 

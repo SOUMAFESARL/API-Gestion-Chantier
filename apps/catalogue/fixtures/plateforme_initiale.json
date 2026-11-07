@@ -1,0 +1,5711 @@
+[
+ {
+  "model": "catalogue.cataloguemodule",
+  "pk": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+  "fields": {
+   "cree_le": "2026-09-30T09:37:38.162Z",
+   "modifie_le": "2026-09-30T09:37:38.162Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "tiers",
+   "libelle": "Parties Prenantes / Tiers",
+   "description": "Clients, maîtres d'ouvrage, sous-traitants, fournisseurs et partenaires.",
+   "ordre": 5,
+   "icone": "users",
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.cataloguemodule",
+  "pk": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+  "fields": {
+   "cree_le": "2026-09-30T09:37:38.158Z",
+   "modifie_le": "2026-09-30T09:37:38.158Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "pilotage",
+   "libelle": "Tableaux de bord & Pilotage",
+   "description": "Indicateurs d'avancement, indice de santé global, météo et aide à la décision.",
+   "ordre": 4,
+   "icone": "bar-chart-3",
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.cataloguemodule",
+  "pk": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+  "fields": {
+   "cree_le": "2026-09-30T09:37:38.153Z",
+   "modifie_le": "2026-09-30T09:37:38.153Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged",
+   "libelle": "Gestion Documentaire (GED)",
+   "description": "Classeurs, plans d'exécution, procès-verbaux et traçabilité des pièces jointes.",
+   "ordre": 3,
+   "icone": "file-text",
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.cataloguemodule",
+  "pk": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+  "fields": {
+   "cree_le": "2026-09-30T09:37:38.147Z",
+   "modifie_le": "2026-10-16T17:05:10.391Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier",
+   "libelle": "Journal chantier",
+   "description": "Rapports journaliers, avancement des travaux, blocages terrain et pointages.",
+   "ordre": 2,
+   "icone": "hard-hat",
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.cataloguemodule",
+  "pk": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+  "fields": {
+   "cree_le": "2026-09-30T09:37:38.142Z",
+   "modifie_le": "2026-10-16T17:00:14.257Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets",
+   "libelle": "Projet",
+   "description": "Fiches projets, lots, activités et planification des chantiers.",
+   "ordre": 1,
+   "icone": "folder-kanban",
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.cataloguemodule",
+  "pk": "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.198Z",
+   "modifie_le": "2026-10-05T15:20:45.198Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration",
+   "libelle": "Administration",
+   "description": "",
+   "ordre": 1,
+   "icone": "box",
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "0034d600-8f4d-49df-95e7-7f2e77b69618",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.081Z",
+   "modifie_le": "2026-10-05T15:20:45.081Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.changer_statut",
+   "libelle": "Suspendre / terminer un projet",
+   "description": "Suspendre / terminer un projet",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "0d0db0e1-7dd3-4d51-9a86-8fbac8ca901e",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.121Z",
+   "modifie_le": "2026-10-05T15:20:45.121Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.voir_montants",
+   "libelle": "Voir les montants financiers du projet",
+   "description": "Voir les montants financiers du projet",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "1bb1dc03-a242-4c8c-8d25-2ab265a6356b",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.192Z",
+   "modifie_le": "2026-10-05T15:20:45.192Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "pilotage.voir_montants",
+   "libelle": "Voir les montants financiers",
+   "description": "Voir les montants financiers",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "a78d93a0-617f-47b4-8805-c945c5cd42ec"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "1c8eddad-e486-46a1-8e39-a544b57c35ab",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.185Z",
+   "modifie_le": "2026-10-05T15:20:45.185Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "pilotage.lire",
+   "libelle": "Tableaux de bord",
+   "description": "Tableaux de bord",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "a78d93a0-617f-47b4-8805-c945c5cd42ec"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "1e94729d-8a00-4c26-b463-6e27734031ec",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.858Z",
+   "modifie_le": "2026-10-31T04:20:43.858Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.planifier",
+   "libelle": "Planifier et reprogrammer les dates",
+   "description": "Planifier et reprogrammer les dates",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "2031a9fc-fc14-499c-ae7c-90ef0f6c9c49",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.091Z",
+   "modifie_le": "2026-10-05T15:20:45.091Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.resilier_archiver",
+   "libelle": "Résilier ou archiver un projet",
+   "description": "Résilier ou archiver un projet",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "209039f8-ac23-4ccb-b715-437c32e08c25",
+  "fields": {
+   "cree_le": "2026-09-30T11:09:31.406Z",
+   "modifie_le": "2026-10-05T15:20:45.272Z",
+   "cree_par": null,
+   "supprime_le": "2026-10-05T15:42:05.524Z",
+   "supprime_par": null,
+   "code": "SUPPRESSION",
+   "libelle": "Suppression / Archivage",
+   "description": "Permet de supprimer ou archiver les éléments du module.",
+   "ordre": 4,
+   "est_actif": false,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+    "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+    "22a0a822-62e3-451d-a38b-a64d456a26bd"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "342d8302-e8cc-4b4b-9752-ac36710713de",
+  "fields": {
+   "cree_le": "2026-09-30T11:09:31.402Z",
+   "modifie_le": "2026-10-05T15:20:45.271Z",
+   "cree_par": null,
+   "supprime_le": "2026-10-05T15:42:05.524Z",
+   "supprime_par": null,
+   "code": "VALIDATION",
+   "libelle": "Validation / Approbation",
+   "description": "Permet de valider, approuver, signer ou rejeter les éléments du module.",
+   "ordre": 3,
+   "est_actif": false,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+    "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+    "22a0a822-62e3-451d-a38b-a64d456a26bd"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "369d0e08-6616-421a-b896-e1dbaeb039bd",
+  "fields": {
+   "cree_le": "2026-09-30T11:09:31.395Z",
+   "modifie_le": "2026-10-05T15:20:45.269Z",
+   "cree_par": null,
+   "supprime_le": "2026-10-05T15:42:05.524Z",
+   "supprime_par": null,
+   "code": "ECRITURE",
+   "libelle": "Écriture / Saisie",
+   "description": "Permet de créer, éditer et modifier les données du module.",
+   "ordre": 2,
+   "est_actif": false,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+    "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+    "22a0a822-62e3-451d-a38b-a64d456a26bd"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "3cfa0740-016b-47dc-9f1f-6de7f4ec8505",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.222Z",
+   "modifie_le": "2026-10-05T15:20:45.222Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.roles_gerer",
+   "libelle": "Gérer les rôles et la matrice",
+   "description": "Gérer les rôles et la matrice",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "3d650201-dc22-4e4c-bc97-5b746fde6f87",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.070Z",
+   "modifie_le": "2026-10-05T15:20:45.070Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.creer",
+   "libelle": "Créer un projet",
+   "description": "Créer un projet",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "465cb29e-68a1-4b18-a8f3-8867f226a441",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.862Z",
+   "modifie_le": "2026-10-31T04:20:43.862Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.prolonger",
+   "libelle": "Prolonger le projet ou une case déjà commencée",
+   "description": "Prolonger le projet ou une case déjà commencée",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "46be54ec-fbaf-4ba9-9afc-b37a8ef19b0f",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.238Z",
+   "modifie_le": "2026-10-16T17:01:47.592Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.abonnement_voir",
+   "libelle": "Consulter l'abonnement",
+   "description": "Consulter l'abonnement",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "471e5bb8-20ee-4cdc-b7bc-0b445336b68e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.359Z",
+   "modifie_le": "2026-10-31T04:20:44.359Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.avenants_gerer",
+   "libelle": "Enregistrer et retirer les avenants au contrat",
+   "description": "Enregistrer et retirer les avenants au contrat",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "48ce4bf9-aee7-4c1f-ad27-6c2f56767dda",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.213Z",
+   "modifie_le": "2026-10-31T04:20:44.213Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier.synthese_rediger",
+   "libelle": "Rédiger la synthèse de la semaine",
+   "description": "Rédiger la synthèse de la semaine",
+   "ordre": 5,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "4c01c23f-ed2b-4658-9e40-e9a8daf6cb7f",
+  "fields": {
+   "cree_le": "2026-10-22T12:40:10.934Z",
+   "modifie_le": "2026-10-22T12:40:10.934Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.referentiels_ajouter",
+   "libelle": "Ajouter des types, groupes et listes de l'entreprise",
+   "description": "Ajouter des types, groupes et listes de l'entreprise",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "523e3e0e-112e-4146-9432-9f859369d66d",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.868Z",
+   "modifie_le": "2026-10-31T04:20:43.868Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.retirer_membres",
+   "libelle": "Retirer un membre du projet",
+   "description": "Retirer un membre du projet",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "53d09b45-60ed-45ad-baac-b28a84064afd",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.168Z",
+   "modifie_le": "2026-10-05T15:20:45.168Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "tiers.lire",
+   "libelle": "Consulter les tiers",
+   "description": "Consulter les tiers",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "22a0a822-62e3-451d-a38b-a64d456a26bd"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "5c867930-fd2c-4229-bc15-bdafdbcd0a3e",
+  "fields": {
+   "cree_le": "2026-09-30T11:09:31.388Z",
+   "modifie_le": "2026-10-05T15:20:45.267Z",
+   "cree_par": null,
+   "supprime_le": "2026-10-05T15:42:05.524Z",
+   "supprime_par": null,
+   "code": "LECTURE",
+   "libelle": "Lecture / Consultation",
+   "description": "Permet de consulter et visualiser les données du module.",
+   "ordre": 1,
+   "est_actif": false,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+    "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+    "22a0a822-62e3-451d-a38b-a64d456a26bd"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "5fa7b835-8a72-499f-9be8-1b2676ffea2a",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.007Z",
+   "modifie_le": "2026-10-05T15:20:45.007Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.lire",
+   "libelle": "Consulter les projets",
+   "description": "Consulter les projets",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "614b3d77-3651-4444-9ce3-0e0f5749cf15",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.141Z",
+   "modifie_le": "2026-10-05T15:20:45.141Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier.lire",
+   "libelle": "Consulter les rapports",
+   "description": "Consulter les rapports",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "69eac83e-a271-42ed-a6fd-e5a3d1129ac6",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.246Z",
+   "modifie_le": "2026-10-05T15:20:45.246Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.abonnement_gerer",
+   "libelle": "Gérer l'abonnement et paiements",
+   "description": "Gérer l'abonnement et paiements",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "6fb9b37b-faf4-4ac3-83c0-ab2513d34ed9",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.061Z",
+   "modifie_le": "2026-10-05T15:20:45.061Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.ecrire",
+   "libelle": "Modifier les projets",
+   "description": "Modifier les projets",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "7056debc-923f-4576-8495-7cc8e70529dc",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.850Z",
+   "modifie_le": "2026-10-31T04:20:43.850Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.decouper",
+   "libelle": "Découper le projet (ajouter, déplacer, détailler, insérer un niveau, désactiver)",
+   "description": "Découper le projet (ajouter, déplacer, détailler, insérer un niveau, désactiver)",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "733f71c3-68ae-4b9f-8cba-f3d98bee5219",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.131Z",
+   "modifie_le": "2026-10-05T15:20:45.131Z",
+   "cree_par": null,
+   "supprime_le": "2026-10-06T11:51:37.727Z",
+   "supprime_par": null,
+   "code": "projets.voir_tous",
+   "libelle": "Voir tous les projets de l'entreprise",
+   "description": "Voir tous les projets de l'entreprise",
+   "ordre": 3,
+   "est_actif": false,
+   "reservee_administration": false,
+   "modules": []
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "8cc9db93-b10e-40fc-9053-da5dfc9dd92e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.872Z",
+   "modifie_le": "2026-10-31T04:20:43.872Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.main_oeuvre_gerer",
+   "libelle": "Gérer le registre de main-d'œuvre",
+   "description": "Gérer le registre de main-d'œuvre",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "940d8ba1-abc4-49e8-8525-9f8afa73f277",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.214Z",
+   "modifie_le": "2026-10-05T15:20:45.214Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.collaborateurs_gerer",
+   "libelle": "Inviter / suspendre / changer de rôle",
+   "description": "Inviter / suspendre / changer de rôle",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "9522319b-0e18-4e62-a2e8-0309ebddc4fb",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.207Z",
+   "modifie_le": "2026-10-31T04:20:44.207Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier.approuver",
+   "libelle": "Approuver un rapport",
+   "description": "Approuver un rapport",
+   "ordre": 4,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "adae14cf-44cd-4f66-84bd-cd039dc3a2ea",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.218Z",
+   "modifie_le": "2026-10-31T04:20:44.218Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier.synthese_approuver",
+   "libelle": "Approuver la synthèse de la semaine",
+   "description": "Approuver la synthèse de la semaine",
+   "ordre": 6,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b3741d24-8135-4eba-a501-869434420632",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.152Z",
+   "modifie_le": "2026-10-05T15:20:45.152Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier.rediger",
+   "libelle": "Rédiger et soumettre un rapport",
+   "description": "Rédiger et soumettre un rapport",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b3ab4a88-7a55-447f-b08e-d26b691a2fc8",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.252Z",
+   "modifie_le": "2026-10-05T15:20:45.252Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.factures_voir",
+   "libelle": "Consulter les factures",
+   "description": "Consulter les factures",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b674d05b-f15e-4ac2-a517-579b975f8141",
+  "fields": {
+   "cree_le": "2026-10-25T16:47:24.641Z",
+   "modifie_le": "2026-10-25T16:47:24.641Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.calendrier_gerer",
+   "libelle": "Gérer le calendrier des jours ouvrés",
+   "description": "Gérer le calendrier des jours ouvrés",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b809427a-39b2-4d36-830a-987d2f37065f",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.205Z",
+   "modifie_le": "2026-10-05T15:20:45.205Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.collaborateurs_voir",
+   "libelle": "Voir l'annuaire",
+   "description": "Voir l'annuaire",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b8fa3f23-17a9-47d7-bc92-20a1717dc3df",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.230Z",
+   "modifie_le": "2026-10-05T15:20:45.230Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.entreprise_modifier",
+   "libelle": "Modifier l'entreprise",
+   "description": "Modifier l'entreprise",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "bcc3708d-46c8-46d2-a028-0d2da8404d21",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.854Z",
+   "modifie_le": "2026-10-31T04:20:43.854Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.chiffrer",
+   "libelle": "Fixer les montants et les quantités prévues",
+   "description": "Fixer les montants et les quantités prévues",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "bd147e98-de5c-4da4-90bd-7e065d046b8e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.865Z",
+   "modifie_le": "2026-10-31T04:20:43.865Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.mesurer",
+   "libelle": "Mesurer l'avancement hors du journal",
+   "description": "Mesurer l'avancement hors du journal",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "bfd133cb-e655-42e8-bb9f-f075b8e5e558",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.224Z",
+   "modifie_le": "2026-10-31T04:20:44.224Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.alertes_moderees",
+   "libelle": "Recevoir les alertes de retard modérées",
+   "description": "Recevoir les alertes de retard modérées",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "c991ebc2-0509-4fd6-bb29-6310aa416b0e",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.160Z",
+   "modifie_le": "2026-10-05T15:20:45.161Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "chantier.valider",
+   "libelle": "Valider / rejeter un rapport",
+   "description": "Valider / rejeter un rapport",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d1086db5-0ff4-4d71-b63a-36edb9ec8c43"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "d31b5255-e460-4693-9e48-84a5454828cd",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.261Z",
+   "modifie_le": "2026-10-05T15:20:45.261Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.onboarding_suivre",
+   "libelle": "Suivre l'onboarding",
+   "description": "Suivre l'onboarding",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "d33f47eb-61e7-4a96-9e3b-74293d3a866c",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.111Z",
+   "modifie_le": "2026-10-05T15:20:45.111Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.gerer_equipes",
+   "libelle": "Gérer les équipes de chantier",
+   "description": "Gérer les équipes de chantier",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "d36cd891-2fba-4532-8ddc-3896c506d0f2",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.235Z",
+   "modifie_le": "2026-10-31T04:20:44.235Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.alertes_critiques",
+   "libelle": "Recevoir les alertes de retard critiques",
+   "description": "Recevoir les alertes de retard critiques",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "d4a6c7a1-f04a-4be8-a113-c11c94dcc983",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.101Z",
+   "modifie_le": "2026-10-05T15:20:45.101Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.affecter_membres",
+   "libelle": "Affecter des membres aux projets",
+   "description": "Affecter des membres aux projets",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "d605d36e-33c9-4a7a-959c-15365d71ac73",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.875Z",
+   "modifie_le": "2026-10-31T04:20:43.875Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.modeles_gerer",
+   "libelle": "Gérer les listes et les modèles de découpage de l'entreprise",
+   "description": "Gérer les listes et les modèles de découpage de l'entreprise",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "dfb820fc-3ff0-4b8f-9cf2-c04e9c314e83",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.826Z",
+   "modifie_le": "2026-10-31T04:20:43.826Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.voir_tout",
+   "libelle": "Voir tout le projet, hors de son périmètre",
+   "description": "Voir tout le projet, hors de son périmètre",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "e387a925-a93e-4a22-a726-17e35a037e43",
+  "fields": {
+   "cree_le": "2026-10-05T15:20:45.176Z",
+   "modifie_le": "2026-10-05T15:20:45.176Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "tiers.ecrire",
+   "libelle": "Créer / modifier les tiers",
+   "description": "Créer / modifier les tiers",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "22a0a822-62e3-451d-a38b-a64d456a26bd"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "e7e792a3-284d-4bee-a131-477e5894cf58",
+  "fields": {
+   "cree_le": "2026-10-25T16:47:24.661Z",
+   "modifie_le": "2026-10-25T16:47:24.661Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "administration.documents_gerer",
+   "libelle": "Configurer l'en-tête et le pied des documents",
+   "description": "Configurer l'en-tête et le pied des documents",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": true,
+   "modules": [
+    "d5466e3c-5bc2-4da4-a516-bbbe07e1e81c"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "eee332bf-4488-4b70-b744-ce818bd087cf",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:44.229Z",
+   "modifie_le": "2026-10-31T04:20:44.229Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "projets.alertes_elevees",
+   "libelle": "Recevoir les alertes de retard élevées",
+   "description": "Recevoir les alertes de retard élevées",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.027Z",
+   "modifie_le": "2026-10-04T17:21:34.027Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "CC",
+   "libelle": "Chef de Chantier",
+   "description": "Saisie terrain : avancement, incidents, photos, pointage",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": true
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.125Z",
+   "modifie_le": "2026-10-04T17:21:34.125Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "VI",
+   "libelle": "Visiteur / Auditeur",
+   "description": "Consultation de l'avancement et des données du chantier en lecture seule",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.891Z",
+   "modifie_le": "2026-10-04T17:21:33.891Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "DO",
+   "libelle": "Directeur des Opérations",
+   "description": "Pilotage opérationnel multi-chantiers et coordination des équipes techniques",
+   "est_actif": true,
+   "portee": "ENTREPRISE",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.856Z",
+   "modifie_le": "2026-10-04T17:21:33.856Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "AD",
+   "libelle": "Administrateur",
+   "description": "Paramétrage de l'organisation, administration technique et gestion des utilisateurs",
+   "est_actif": true,
+   "portee": "ENTREPRISE",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.961Z",
+   "modifie_le": "2026-10-04T17:21:33.961Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "CP",
+   "libelle": "Chef de Projet",
+   "description": "Pilotage opérationnel des projets qui lui sont confiés et accès complet à ses chantiers",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": true
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.927Z",
+   "modifie_le": "2026-10-04T17:21:33.927Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "DF",
+   "libelle": "Directeur Financier / DAF",
+   "description": "Suivi budgétaire, rentabilité, facturation et vision financière consolidée",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.090Z",
+   "modifie_le": "2026-10-04T17:21:34.090Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "BAI",
+   "libelle": "Bailleur / Client / MOA",
+   "description": "Suivi de l'avancement global du chantier et consultation des rapports d'activité",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "a2a7eb6d-a73c-43bc-9ad0-d08eb6c697be",
+  "fields": {
+   "cree_le": "2026-10-16T17:04:41.861Z",
+   "modifie_le": "2026-10-16T17:04:41.861Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "QSE",
+   "libelle": "Responsable QSE",
+   "description": "",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "b56b0377-7a55-4687-8049-a0a7595ef378",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.815Z",
+   "modifie_le": "2026-10-04T17:21:33.815Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "DG",
+   "libelle": "Directeur Général / PDG",
+   "description": "Supervision globale, décisions stratégiques et vision consolidée de tous les projets",
+   "est_actif": true,
+   "portee": "ENTREPRISE",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.059Z",
+   "modifie_le": "2026-10-04T17:21:34.059Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "MAG",
+   "libelle": "Magasinier / Gestionnaire de Stock",
+   "description": "Gestion des approvisionnements, réceptions de matériaux et sorties de stock",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerole",
+  "pk": "e91deff7-029d-425b-8a01-75681a12348e",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.994Z",
+   "modifie_le": "2026-10-04T17:21:33.994Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "CT",
+   "libelle": "Conducteur de Travaux",
+   "description": "Supervision quotidienne, coordination des équipes terrain et validation technique",
+   "est_actif": true,
+   "portee": "PROJET",
+   "unique_par_projet": false
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "02619f30-06d1-41ef-915d-a5477662044c",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.956Z",
+   "modifie_le": "2026-10-04T17:21:33.956Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "048cfffc-9400-49cc-b56e-7c1dafa64abf",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.008Z",
+   "modifie_le": "2026-10-04T17:21:34.008Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "06e2283b-9b42-498c-b65b-ecf771448b52",
+  "fields": {
+   "cree_le": "2026-10-16T17:04:41.881Z",
+   "modifie_le": "2026-10-16T17:04:41.881Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "a2a7eb6d-a73c-43bc-9ad0-d08eb6c697be",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "06e81831-9d78-46e8-aca6-5c56b2122173",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.129Z",
+   "modifie_le": "2026-10-04T17:21:34.130Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "11d02f4a-d134-41e6-ba99-0c254c80e378",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.836Z",
+   "modifie_le": "2026-10-04T17:21:33.836Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "170f7312-ddf1-4cd9-9679-521ed565804d",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.895Z",
+   "modifie_le": "2026-10-04T17:21:33.895Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "1ea8b810-d810-4dda-a921-6d5ede27f23b",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.041Z",
+   "modifie_le": "2026-10-04T17:21:34.041Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "1f5b0838-4a90-4f3b-9c0c-f802f76014a2",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.115Z",
+   "modifie_le": "2026-10-04T17:21:34.115Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "22e17d59-7561-4fde-9a78-5a0b31589c9b",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.134Z",
+   "modifie_le": "2026-10-04T17:21:34.134Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "378387ab-fa72-4a69-9973-ae0df8f071f2",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.900Z",
+   "modifie_le": "2026-10-04T17:21:33.900Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "399a591f-b738-42ad-95af-a2fed6ae2bc6",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.905Z",
+   "modifie_le": "2026-10-04T17:21:33.905Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "46752195-c57b-42d8-839a-38e0cde793a3",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.951Z",
+   "modifie_le": "2026-10-04T17:21:33.951Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "4f0b7943-f17e-4a60-b18a-9acd6473fa48",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.831Z",
+   "modifie_le": "2026-10-04T17:21:33.831Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "4f990b64-eb47-4fb0-b3f7-fe304fc9f776",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.871Z",
+   "modifie_le": "2026-10-04T17:21:33.871Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "4fb580ec-2721-4218-a5fa-d9ab06549704",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.076Z",
+   "modifie_le": "2026-10-04T17:21:34.076Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "52573904-cc6b-4ee4-bc3a-a4f9e94c5f7a",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.019Z",
+   "modifie_le": "2026-10-04T17:21:34.019Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "550e94fd-18bb-4893-b024-cbbdd44b5588",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.876Z",
+   "modifie_le": "2026-10-04T17:21:33.876Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "558efc15-a3c8-470d-9310-96ee1ac59f3c",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.063Z",
+   "modifie_le": "2026-10-04T17:21:34.063Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "560734ad-42bd-4aa7-a467-6ae6512080dc",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.110Z",
+   "modifie_le": "2026-10-04T17:21:34.110Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "5a2a6804-0283-426d-aabc-2c31b3cb406c",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.037Z",
+   "modifie_le": "2026-10-04T17:21:34.037Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "60c00a10-cb44-448a-bd6c-0551f757d1c5",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.050Z",
+   "modifie_le": "2026-10-04T17:21:34.050Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "62b96cfe-9023-4074-9aa5-eb4fca302ccb",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.105Z",
+   "modifie_le": "2026-10-04T17:21:34.105Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "6597d999-4f67-4b8d-b066-602f879c2b1e",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.023Z",
+   "modifie_le": "2026-10-04T17:21:34.023Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "65b2fc8b-ca14-4586-bb0f-0c7df3c28087",
+  "fields": {
+   "cree_le": "2026-10-16T17:04:41.875Z",
+   "modifie_le": "2026-10-16T17:04:41.875Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "a2a7eb6d-a73c-43bc-9ad0-d08eb6c697be",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "66fe1990-df18-4b18-a56b-d23fec01b3d6",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.920Z",
+   "modifie_le": "2026-10-04T17:21:33.920Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "6bdec45a-86cb-4bf9-b16e-a9e5098e7a86",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.946Z",
+   "modifie_le": "2026-10-04T17:21:33.946Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "6da6c42d-9936-4045-b1ae-0bbfa1ccf6e3",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.014Z",
+   "modifie_le": "2026-10-04T17:21:34.014Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "71a46191-f879-4cda-afa2-fb8289a34def",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.861Z",
+   "modifie_le": "2026-10-04T17:21:33.861Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "7832dab4-4e43-4a2c-9b0e-de50caa48e14",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.032Z",
+   "modifie_le": "2026-10-04T17:21:34.032Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "795351b8-2013-4c82-89cf-c8d6dbf1ba62",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.099Z",
+   "modifie_le": "2026-10-04T17:21:34.099Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "7eb5da59-f807-4b8d-8f96-7bd31907e956",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.094Z",
+   "modifie_le": "2026-10-04T17:21:34.094Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "82c519a3-630a-48af-876a-1960fe85aba1",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.910Z",
+   "modifie_le": "2026-10-04T17:21:33.910Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "8a3d0417-946c-4bf0-b14f-d85eb9a2627e",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.941Z",
+   "modifie_le": "2026-10-04T17:21:33.941Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "8df188ea-8402-4a2d-82a5-579ef6f2c5d2",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.072Z",
+   "modifie_le": "2026-10-04T17:21:34.072Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "8e884e5c-04ae-479e-b00a-4184c5e6d05f",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.081Z",
+   "modifie_le": "2026-10-04T17:21:34.081Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "90183bc3-5216-42c7-b4fd-dd7ecd25309f",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.003Z",
+   "modifie_le": "2026-10-04T17:21:34.003Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "90308220-5a31-4e7e-9ff8-2b54b96dbc03",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.841Z",
+   "modifie_le": "2026-10-04T17:21:33.841Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "9535820c-1433-4cc8-b59f-7f34b5957f43",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.915Z",
+   "modifie_le": "2026-10-04T17:21:33.915Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "9a722a17-8e8f-4120-925e-fe0739b2ce59",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.881Z",
+   "modifie_le": "2026-10-04T17:21:33.881Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "a2980862-760f-4df5-9bec-e0bed4f8acaa",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.937Z",
+   "modifie_le": "2026-10-04T17:21:33.937Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "a7957f52-a828-4aef-b6e4-d41d1bfa0448",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.986Z",
+   "modifie_le": "2026-10-04T17:21:33.986Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "a810dd9a-997f-408b-ad87-0f3239143068",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.932Z",
+   "modifie_le": "2026-10-04T17:21:33.932Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "a8783c3e-e7f3-4359-ad6d-f8edef62b9b2",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.120Z",
+   "modifie_le": "2026-10-04T17:21:34.120Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "ad5ee007-828c-4b72-abcc-a77692553697",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.866Z",
+   "modifie_le": "2026-10-04T17:21:33.866Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "ae53d34d-b82a-4728-a058-005b56592034",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.143Z",
+   "modifie_le": "2026-10-04T17:21:34.143Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "b3def503-6bbd-4d7c-ad59-941fe72d9eec",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.965Z",
+   "modifie_le": "2026-10-04T17:21:33.965Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "b508e966-88de-480e-8ac5-53d8cb8405b0",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.886Z",
+   "modifie_le": "2026-10-04T17:21:33.886Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "bbf26546-e2db-4076-b961-a013c8bcc8e6",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.055Z",
+   "modifie_le": "2026-10-04T17:21:34.055Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "be04fe8d-3d57-4d30-bc2d-0c21c8be1ab8",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.153Z",
+   "modifie_le": "2026-10-04T17:21:34.153Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "be109cce-18bc-46cd-bf26-4379cffb9868",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.975Z",
+   "modifie_le": "2026-10-04T17:21:33.975Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "c4ebf164-3780-4213-a9bc-2fec0feac3fa",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.045Z",
+   "modifie_le": "2026-10-04T17:21:34.046Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "c7a51d62-71b5-4b2a-a39e-4d7c72b195ea",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.824Z",
+   "modifie_le": "2026-10-04T17:21:33.824Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "c8089e63-c692-4a08-aed1-b70d9b509598",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.990Z",
+   "modifie_le": "2026-10-04T17:21:33.990Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "c9a0eb44-f84e-4591-848f-9b9b607500a1",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.970Z",
+   "modifie_le": "2026-10-04T17:21:33.970Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "ccb403bb-5264-4613-bbc3-efcf00ec61a7",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.851Z",
+   "modifie_le": "2026-10-04T17:21:33.851Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "ce0f0670-abb7-4eec-99ea-4bd7e4672026",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.139Z",
+   "modifie_le": "2026-10-04T17:21:34.139Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": "d07b763c-4bd4-45a0-95cf-b5831cbc50de",
+   "module_code": "ged"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "d04e0b0f-f571-48b2-a535-2072e722b9a7",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.846Z",
+   "modifie_le": "2026-10-04T17:21:33.846Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "d3c0048c-1060-42ef-a708-a4a02cbddffe",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.148Z",
+   "modifie_le": "2026-10-04T17:21:34.148Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": "22a0a822-62e3-451d-a38b-a64d456a26bd",
+   "module_code": "tiers"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "da92430f-2647-461e-8cd4-83ae7ea45592",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.999Z",
+   "modifie_le": "2026-10-04T17:21:33.999Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": "d31d1558-4ea3-44a5-9be3-a31eaf144bfb",
+   "module_code": "projets"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "e1470a95-4ecd-4bfd-b3ad-5ff68063c326",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.085Z",
+   "modifie_le": "2026-10-04T17:21:34.085Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": null,
+   "module_code": "administration"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "e29ddcc2-0b49-4b07-a29e-158ce43121d0",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:33.980Z",
+   "modifie_le": "2026-10-04T17:21:33.980Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": "a78d93a0-617f-47b4-8805-c945c5cd42ec",
+   "module_code": "pilotage"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "e8b9cf30-ab70-4cf0-95d0-49e2ab66dfca",
+  "fields": {
+   "cree_le": "2026-10-04T17:21:34.068Z",
+   "modifie_le": "2026-10-04T17:21:34.068Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
+   "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "015acea9-b905-43b6-9530-8d3ce0bfd9ab",
+  "fields": {
+   "cree_le": "2026-10-22T12:40:08.902Z",
+   "modifie_le": "2026-10-22T12:40:08.902Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "MODE_EXECUTION",
+   "code": "REGIE",
+   "libelle": "Régie",
+   "groupe": "REGIE",
+   "ordre": 0
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "076ea54b-a7ac-449e-87fa-962c0f9d5edc",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.374Z",
+   "modifie_le": "2026-10-16T16:52:04.374Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "ANTI_INTRUSION",
+   "libelle": "Anti-intrusion",
+   "groupe": "Sécurité d’accès",
+   "ordre": 39
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "08f5cc00-2d4a-4e6a-9e70-7d1aba0603db",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.225Z",
+   "modifie_le": "2026-10-16T16:52:04.225Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "INFRASTRUCTURE_INDUSTRIELLE",
+   "libelle": "Infrastructure industrielle",
+   "groupe": "",
+   "ordre": 5
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "0a885512-53eb-4ac2-93a0-049dba8f9d7a",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.422Z",
+   "modifie_le": "2026-10-16T16:52:04.422Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_3_EQUIPEMENTS_DE_CUISINE_ET_VAISSELLERIE",
+   "libelle": "EQU.3 Équipements de cuisine et vaissellerie",
+   "groupe": "Équipements",
+   "ordre": 52
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "0be25ad8-a1d2-4c8f-8cf7-5ee069a0afc3",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.383Z",
+   "modifie_le": "2026-10-16T16:52:04.383Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "DECORATION_MOBILIER_SALLE_DE_CONFERENCE_SIEGES",
+   "libelle": "Décoration mobilier salle de conférence (sièges)",
+   "groupe": "Décoration",
+   "ordre": 42
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "0d5304a1-7957-4aaa-a7f7-18d85e3a66a7",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.322Z",
+   "modifie_le": "2026-10-16T16:52:04.322Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "ELECTRICITE_COURANT_FORT",
+   "libelle": "Électricité courant fort",
+   "groupe": "Lots techniques",
+   "ordre": 25
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "0e647153-4ad6-4567-bd64-1605c4f31dab",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.278Z",
+   "modifie_le": "2026-10-16T16:52:04.278Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MENUISERIE_ALUMINIUM",
+   "libelle": "Menuiserie aluminium",
+   "groupe": "Lots architecturaux",
+   "ordre": 13
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "0fa4b4a2-e582-4c8e-93fa-3ee3fed66caf",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.397Z",
+   "modifie_le": "2026-10-16T16:52:04.397Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MOB_1_MOBILIER_BUREAUX_ACADEMIQUE",
+   "libelle": "MOB.1 Mobilier bureaux, académique",
+   "groupe": "Mobilier",
+   "ordre": 45
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "11f3f53e-598f-44a6-ab6a-192215eddd74",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.380Z",
+   "modifie_le": "2026-10-16T16:52:04.380Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "DECORATION_HABILLAGE_MURAUX_SALLE_DE_CONFERENCE_BIBLIOTHEQUE",
+   "libelle": "Décoration habillage muraux (salle de conférence, bibliothèque)",
+   "groupe": "Décoration",
+   "ordre": 41
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "12145821-f4bb-4ea1-bc76-cffb3f347adc",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.282Z",
+   "modifie_le": "2026-10-16T16:52:04.282Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VITRERIE",
+   "libelle": "Vitrerie",
+   "groupe": "Lots architecturaux",
+   "ordre": 14
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "1c7d8165-12b3-41a5-b20b-1de3577d72e0",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.251Z",
+   "modifie_le": "2026-10-16T16:52:04.251Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD7_JARDINS_PLANTATIONS_D_ARBRES_D_ARBUSTES_ET_ENGAZONNEMEN",
+   "libelle": "VRD7 - Jardins, plantations d’arbres, d’arbustes et engazonnement",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 6
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "27977a84-955b-4ef4-992a-32ca7b6a3271",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.214Z",
+   "modifie_le": "2026-10-16T16:52:04.214Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "TP_ROUTE",
+   "libelle": "TP — Route",
+   "groupe": "",
+   "ordre": 2
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "29cd6bd8-be29-43c4-a2f1-6df5b63da704",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.441Z",
+   "modifie_le": "2026-10-16T16:52:04.441Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_8_EQUIPEMENTS_MEDICAUX",
+   "libelle": "EQU.8 Équipements médicaux",
+   "groupe": "Équipements",
+   "ordre": 57
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "2c23a154-b0a3-406f-b1ba-993b8c268153",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.436Z",
+   "modifie_le": "2026-10-16T16:52:04.437Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_7_EQUIPEMENTS_SPORTIFS",
+   "libelle": "EQU.7 Équipements sportifs",
+   "groupe": "Équipements",
+   "ordre": 56
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "2d43b952-ea0b-4d58-9059-b22e0a351327",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.209Z",
+   "modifie_le": "2026-10-16T16:52:04.209Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "BATIMENT_COMMERCIAL",
+   "libelle": "Bâtiment — Commercial",
+   "groupe": "",
+   "ordre": 1
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "2fd70ba4-460f-4f08-b561-b5e81a91640f",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.315Z",
+   "modifie_le": "2026-10-16T16:52:04.315Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "PLOMBERIE_SANITAIRE_VENTILATION_MECANIQUE_CONTROLEE",
+   "libelle": "Plomberie sanitaire, ventilation mécanique contrôlée",
+   "groupe": "Lots techniques",
+   "ordre": 23
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "3059b6f5-7e05-4868-a0f1-821cf5ceac3a",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.400Z",
+   "modifie_le": "2026-10-16T16:52:04.400Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MOB_2_MOBILIER_LOGEMENT_ETUDIANTS_ET_ENSEIGNANTS_LOGEMENTS_D",
+   "libelle": "MOB.2 Mobilier logement étudiants et enseignants, logements de fonction et astreintes",
+   "groupe": "Mobilier",
+   "ordre": 46
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "338a5b2a-3421-4e7b-a7c9-92269e519f9e",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.410Z",
+   "modifie_le": "2026-10-16T16:52:04.410Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MOB_5_MOBILIER_BIBLIOTHEQUE",
+   "libelle": "MOB.5 Mobilier bibliothèque",
+   "groupe": "Mobilier",
+   "ordre": 49
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "377d43b9-cc69-4379-b8e8-240936cc8ee8",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.367Z",
+   "modifie_le": "2026-10-16T16:52:04.367Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "SYSTEME_DE_SECURITE_D_ACCES_PAR_LECTEUR_BIOMETRIQUE_DIGICODE",
+   "libelle": "Système de sécurité d’accès par lecteur biométrique, digicode",
+   "groupe": "Sécurité d’accès",
+   "ordre": 37
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "3890c5b7-04a1-4a02-9c5d-76b493577049",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.344Z",
+   "modifie_le": "2026-10-16T16:52:04.344Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "SECURITE_INCENDIE",
+   "libelle": "Sécurité incendie",
+   "groupe": "Lots techniques",
+   "ordre": 31
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "40e5df84-6af2-4a65-ae68-f70f86ba3e8a",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.263Z",
+   "modifie_le": "2026-10-16T16:52:04.263Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "FONDATIONS_PROFONDES",
+   "libelle": "Fondations profondes",
+   "groupe": "Lots architecturaux",
+   "ordre": 9
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "48ed985d-987e-4935-ba94-0a046a5200d2",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.245Z",
+   "modifie_le": "2026-10-16T16:52:04.245Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD5_ALIMENTATION_ELECTRICITE_LOCAUX_TRANSFO_GROUPES_ELECTRO",
+   "libelle": "VRD5 - Alimentation électricité, locaux transfo, groupes électrogènes, éclairage public",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 4
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "523783a0-7f48-4105-8f70-6fff13180d76",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.355Z",
+   "modifie_le": "2026-10-16T16:52:04.355Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "RESEAU_INFORMATIQUE",
+   "libelle": "Réseau informatique",
+   "groupe": "Télécommunication et informatique",
+   "ordre": 34
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "550dc6fb-1ef1-4c71-aaa6-3d965a8d6ff3",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.370Z",
+   "modifie_le": "2026-10-16T16:52:04.370Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "SYSTEME_DE_CAMERAS_DE_SURVEILLANCE",
+   "libelle": "Système de caméras de surveillance",
+   "groupe": "Sécurité d’accès",
+   "ordre": 38
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "565cda3d-bd4c-4b96-93e2-866695d4b35b",
+  "fields": {
+   "cree_le": "2026-10-22T12:40:08.916Z",
+   "modifie_le": "2026-10-22T12:40:08.916Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "MODE_EXECUTION",
+   "code": "SOUS_TRAITANCE_INFORMELLE",
+   "libelle": "Sous-traitance informelle",
+   "groupe": "SOUS_TRAITANCE_INFORMELLE",
+   "ordre": 2
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "57c8aec6-8031-4408-9197-76de18ab739b",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.294Z",
+   "modifie_le": "2026-10-16T16:52:04.294Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "REVETEMENTS_DURS",
+   "libelle": "Revêtements durs",
+   "groupe": "Lots architecturaux",
+   "ordre": 17
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "57f74698-cc92-4369-9d9d-f20db2b7c139",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.433Z",
+   "modifie_le": "2026-10-16T16:52:04.433Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_6_EQUIPEMENTS_DIDACTIQUES_DIVERS_TABLEAUX",
+   "libelle": "EQU.6 Équipements didactiques divers (tableaux)",
+   "groupe": "Équipements",
+   "ordre": 55
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "6104b1b6-e245-492b-8e80-869ed52afee8",
+  "fields": {
+   "cree_le": "2026-10-22T12:40:08.911Z",
+   "modifie_le": "2026-10-22T12:40:08.912Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "MODE_EXECUTION",
+   "code": "SOUS_TRAITANCE_STRUCTUREE",
+   "libelle": "Sous-traitance structurée",
+   "groupe": "SOUS_TRAITANCE_STRUCTUREE",
+   "ordre": 1
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "71b4098e-4aef-4149-a400-b73ca3c99557",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.268Z",
+   "modifie_le": "2026-10-16T16:52:04.268Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "GROS_OEUVRE",
+   "libelle": "Gros œuvre",
+   "groupe": "Lots architecturaux",
+   "ordre": 10
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7483b24a-5a92-4240-9c5e-63cc14b00882",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.329Z",
+   "modifie_le": "2026-10-16T16:52:04.329Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "DETECTION_EXTINCTION_REPORT_D_ALARMES_TECHNIQUES",
+   "libelle": "Détection, extinction, report d’alarmes techniques",
+   "groupe": "Lots techniques",
+   "ordre": 27
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7917ba3b-82a4-4843-a256-c7ef2552ba0d",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.232Z",
+   "modifie_le": "2026-10-16T16:52:04.232Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD2_DRAINAGE_GENERAL_MURS_DE_SOUTENEMENT_TRAITEMENT_DES_DEC",
+   "libelle": "VRD2 - Drainage général, murs de soutènement, traitement des déchets",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 1
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7a437dfa-7015-41cf-a87c-5a174738e2e4",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.203Z",
+   "modifie_le": "2026-10-16T16:52:04.203Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "BATIMENT_RESIDENTIEL",
+   "libelle": "Bâtiment — Résidentiel",
+   "groupe": "",
+   "ordre": 0
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7cf1a166-3183-4fb2-a21a-0aad36bd722c",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.332Z",
+   "modifie_le": "2026-10-16T16:52:04.332Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "SONORISATION_DES_SALLES_DE_LANGUE_CONFERENCE_PROJECTION",
+   "libelle": "Sonorisation des salles de langue, conférence, projection",
+   "groupe": "Lots techniques",
+   "ordre": 28
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7e281feb-9ca5-4c99-83ea-ffadd1cad6a2",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.403Z",
+   "modifie_le": "2026-10-16T16:52:04.403Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MOB_3_MOBILIER_RESTAURATION_ET_CENTRE_MEDICAL",
+   "libelle": "MOB.3 Mobilier restauration et centre médical",
+   "groupe": "Mobilier",
+   "ordre": 47
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7ea0055d-5d2a-4c55-ba16-0eea4d313fba",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.297Z",
+   "modifie_le": "2026-10-16T16:52:04.297Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "REVETEMENTS_SOUPLES",
+   "libelle": "Revêtements souples",
+   "groupe": "Lots architecturaux",
+   "ordre": 18
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "7f752ae7-1169-421c-85d6-0ffebc13f2aa",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.407Z",
+   "modifie_le": "2026-10-16T16:52:04.407Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MOB_4_MOBILIER_URBAIN_DE_JARDIN",
+   "libelle": "MOB.4 Mobilier urbain de jardin",
+   "groupe": "Mobilier",
+   "ordre": 48
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "8482542f-08d5-4e24-bb67-9a552a66cebb",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.444Z",
+   "modifie_le": "2026-10-16T16:52:04.444Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_9_EQUIPEMENTS_TELEENSEIGNEMENT_VISIOCONFERENCE",
+   "libelle": "EQU.9 Équipements téléenseignement, visioconférence",
+   "groupe": "Équipements",
+   "ordre": 58
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "920c6d3a-1106-4aee-a25d-2133b525f8d3",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.259Z",
+   "modifie_le": "2026-10-16T16:52:04.259Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD9_TERRAINS_DE_SPORTS",
+   "libelle": "VRD9 - Terrains de sports",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 8
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "96f90498-0de5-410f-889f-fca94f6fcc55",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.388Z",
+   "modifie_le": "2026-10-16T16:52:04.388Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "DECORATION_PLAFOND_SALLE_DE_CONFERENCE",
+   "libelle": "Décoration plafond salle de conférence",
+   "groupe": "Décoration",
+   "ordre": 43
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "99ef4077-8284-4f7a-b0eb-69024529e03e",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.393Z",
+   "modifie_le": "2026-10-16T16:52:04.393Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "RIDEAUX_DECORATIFS_SALLE_DE_CONFERENCE",
+   "libelle": "Rideaux décoratifs salle de conférence",
+   "groupe": "Décoration",
+   "ordre": 44
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "9a13d3ba-2861-484a-973f-7dd82a0db1af",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.319Z",
+   "modifie_le": "2026-10-16T16:52:04.319Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "CLIMATISATION",
+   "libelle": "Climatisation",
+   "groupe": "Lots techniques",
+   "ordre": 24
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "a5f76026-3977-4672-b931-e771ca1a0068",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.272Z",
+   "modifie_le": "2026-10-16T16:52:04.272Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "ETANCHEITE_DES_TOITURES_TERRASSES_ET_AUTRES",
+   "libelle": "Étanchéité des toitures terrasses et autres",
+   "groupe": "Lots architecturaux",
+   "ordre": 11
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "a8bc4577-e313-4c31-8c57-88f3a152cf21",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.248Z",
+   "modifie_le": "2026-10-16T16:52:04.248Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD6_ALIMENTATION_TELECOMMUNICATIONS",
+   "libelle": "VRD6 - Alimentation télécommunications",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 5
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "ab52b059-6147-4c18-a463-37e5963b8ade",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.290Z",
+   "modifie_le": "2026-10-16T16:52:04.290Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "REVETEMENTS_DURS_DECORATIFS",
+   "libelle": "Revêtements durs décoratifs",
+   "groupe": "Lots architecturaux",
+   "ordre": 16
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "aed1da65-7eaf-4b12-9c8f-18004f554371",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.310Z",
+   "modifie_le": "2026-10-16T16:52:04.310Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "SIGNALETIQUE",
+   "libelle": "Signalétique",
+   "groupe": "Lots architecturaux",
+   "ordre": 22
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "baf9dba7-a883-4af6-9624-55a219a4248b",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.348Z",
+   "modifie_le": "2026-10-16T16:52:04.348Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "NACELLE_DE_NETTOYAGE_DES_FACADES",
+   "libelle": "Nacelle de nettoyage des façades",
+   "groupe": "Lots techniques",
+   "ordre": 32
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "c15fe80b-bcdd-49e6-956a-b4e8416ff645",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.241Z",
+   "modifie_le": "2026-10-16T16:52:04.241Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD4_ALIMENTATION_EN_EAU_POTABLE_ARROSAGE_BACHES_A_EAU_SANIT",
+   "libelle": "VRD4 - Alimentation en eau potable, arrosage, bâches à eau (sanitaire et sécurité incendie)",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 3
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "c1a174d2-b2b4-4382-91e6-e5082acd49bf",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.304Z",
+   "modifie_le": "2026-10-16T16:52:04.304Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "PEINTURE",
+   "libelle": "Peinture",
+   "groupe": "Lots architecturaux",
+   "ordre": 20
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "c23cdd86-3544-4a8a-a68c-3fe38c2047cb",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.358Z",
+   "modifie_le": "2026-10-16T16:52:04.358Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "TELEPHONIE_INTERPHONIE",
+   "libelle": "Téléphonie, interphonie",
+   "groupe": "Télécommunication et informatique",
+   "ordre": 35
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "c7e41afc-36d4-45a6-9770-8de30b8e090e",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.218Z",
+   "modifie_le": "2026-10-16T16:52:04.218Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "TP_GENIE_CIVIL",
+   "libelle": "TP — Génie civil",
+   "groupe": "",
+   "ordre": 3
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "c816fed7-e993-4964-88ae-874a2faab8b1",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.236Z",
+   "modifie_le": "2026-10-16T16:52:04.236Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD3_ASSAINISSEMENT_EAUX_PLUVIALES_EAUX_USEES_EAUX_VANNES_ST",
+   "libelle": "VRD3 - Assainissement eaux pluviales, eaux usées, eaux vannes, station d’épuration",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 2
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "c8cdc65b-b671-492e-85dc-4d63412905e7",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.415Z",
+   "modifie_le": "2026-10-16T16:52:04.415Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_1_EQUIPEMENTS_SCIENTIFIQUES_DE_LABORATOIRES_SPECIALISES_",
+   "libelle": "EQU.1 Équipements scientifiques de laboratoires spécialisés et ateliers",
+   "groupe": "Équipements",
+   "ordre": 50
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "cc15da42-7e0d-484b-9c56-27ec01265071",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.275Z",
+   "modifie_le": "2026-10-16T16:52:04.275Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MENUISERIE_INTERIEURE_EN_BOIS",
+   "libelle": "Menuiserie intérieure en bois",
+   "groupe": "Lots architecturaux",
+   "ordre": 12
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "cd8f5afe-f440-4596-a254-dbf6f4de67ec",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.419Z",
+   "modifie_le": "2026-10-16T16:52:04.419Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_2_EQUIPEMENTS_DE_LABORATOIRES_DE_LANGUE_ET_MULTIMEDIA",
+   "libelle": "EQU.2 Équipements de laboratoires de langue et multimédia",
+   "groupe": "Équipements",
+   "ordre": 51
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "cdcc5d0b-f34c-4d4f-9105-571593c5bd76",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.229Z",
+   "modifie_le": "2026-10-16T16:52:04.229Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD1_TERRASSEMENTS_GENERAUX_VOIRIE_PARKINGS_CLOTURE",
+   "libelle": "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 0
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "d1850b36-b87b-421c-a3f6-1982c1f0f567",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.326Z",
+   "modifie_le": "2026-10-16T16:52:04.326Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "DISTRIBUTION_DU_COURANT_REGULE",
+   "libelle": "Distribution du courant régulé",
+   "groupe": "Lots techniques",
+   "ordre": 26
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "d5e6135a-b40d-4a79-a7e8-92a2d3fe2001",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.429Z",
+   "modifie_le": "2026-10-16T16:52:04.429Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_5_EQUIPEMENTS_DE_REPROGRAPHIE_CENTRALE_ET_PHOTOCOPIE_EN_",
+   "libelle": "EQU.5 Équipements de reprographie centrale et photocopie en bureaux",
+   "groupe": "Équipements",
+   "ordre": 54
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "da4f8ce9-90d8-4e73-b416-fab44019bdff",
+  "fields": {
+   "cree_le": "2026-10-16T18:08:10.504Z",
+   "modifie_le": "2026-10-16T18:08:10.504Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "PONT",
+   "libelle": "Pont",
+   "groupe": "",
+   "ordre": 6
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "dad56c1e-5a06-4775-a196-c6653adc493f",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.222Z",
+   "modifie_le": "2026-10-16T16:52:04.222Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "TYPE_PROJET",
+   "code": "VRD",
+   "libelle": "VRD",
+   "groupe": "",
+   "ordre": 4
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "db21375f-817e-45f5-a4be-4d923d28426d",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.352Z",
+   "modifie_le": "2026-10-16T16:52:04.352Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "PARATONNERRE",
+   "libelle": "Paratonnerre",
+   "groupe": "Lots techniques",
+   "ordre": 33
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "de1fda53-289b-4520-b8b4-21b50444da09",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.286Z",
+   "modifie_le": "2026-10-16T16:52:04.286Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "MENUISERIE_METALLIQUE",
+   "libelle": "Menuiserie métallique",
+   "groupe": "Lots architecturaux",
+   "ordre": 15
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "de319965-1294-4bfb-8bb4-4d9a5bad7c79",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.255Z",
+   "modifie_le": "2026-10-16T16:52:04.255Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "VRD8_MOBILIER_URBAIN_ET_SIGNALETIQUE_EXTERIEURE",
+   "libelle": "VRD8 - Mobilier urbain et signalétique extérieure",
+   "groupe": "Voiries et réseaux divers",
+   "ordre": 7
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "dec25d2a-b02d-4b8b-ad51-11da126d60ca",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.363Z",
+   "modifie_le": "2026-10-16T16:52:04.363Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "INSTALLATION_TV",
+   "libelle": "Installation TV",
+   "groupe": "Télécommunication et informatique",
+   "ordre": 36
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "eb876157-f193-4fa8-b81d-2b231aaa2697",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.336Z",
+   "modifie_le": "2026-10-16T16:52:04.336Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "ASCENSEURS",
+   "libelle": "Ascenseurs",
+   "groupe": "Lots techniques",
+   "ordre": 29
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "ed2bb9a6-58aa-4c02-bed2-ddd4b5cfc759",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.377Z",
+   "modifie_le": "2026-10-16T16:52:04.377Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "GTB_GTC",
+   "libelle": "GTB/GTC",
+   "groupe": "Sécurité d’accès",
+   "ordre": 40
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "f137f12a-e145-4065-9919-50848eb0155f",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.341Z",
+   "modifie_le": "2026-10-16T16:52:04.341Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "PORTES_COUPE_FEU",
+   "libelle": "Portes coupe-feu",
+   "groupe": "Lots techniques",
+   "ordre": 30
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "f42e6f89-5838-467e-ae6e-6c820c3db2f5",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.426Z",
+   "modifie_le": "2026-10-16T16:52:04.426Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "EQU_4_EQUIPEMENTS_INFORMATIQUES_POUR_L_ADMINISTRATION",
+   "libelle": "EQU.4 Équipements informatiques pour l’administration",
+   "groupe": "Équipements",
+   "ordre": 53
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "f52da626-01d2-4829-a610-06ddc9132b9f",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.307Z",
+   "modifie_le": "2026-10-16T16:52:04.307Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "TEINTURES_RIDEAUX_STORES",
+   "libelle": "Teintures, rideaux, stores",
+   "groupe": "Lots architecturaux",
+   "ordre": 21
+  }
+ },
+ {
+  "model": "catalogue.referentielplateforme",
+  "pk": "fd4ae0cb-0237-42ac-84b0-22277e49dd7c",
+  "fields": {
+   "cree_le": "2026-10-16T16:52:04.300Z",
+   "modifie_le": "2026-10-16T16:52:04.300Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "categorie": "LOT",
+   "code": "FAUX_PLAFONDS_STAFF_ACOUSTIQUE_OU_DIFFUSANT",
+   "libelle": "Faux plafonds (staff, acoustique ou diffusant)",
+   "groupe": "Lots architecturaux",
+   "ordre": 19
+  }
+ },
+ {
+  "model": "catalogue.listevaleursplateforme",
+  "pk": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.328Z",
+   "modifie_le": "2026-10-31T04:20:43.328Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "libelle": "Phases",
+   "description": "Les grandes étapes d'un chantier.",
+   "ordre": 1
+  }
+ },
+ {
+  "model": "catalogue.listevaleursplateforme",
+  "pk": "be72a2eb-635b-444d-9f72-edfa85127a53",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.380Z",
+   "modifie_le": "2026-10-31T04:20:43.380Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "libelle": "Lots",
+   "description": "Les lots de travaux, par corps d'état.",
+   "ordre": 2
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "08571f96-8fd3-4c40-bdad-9b2528964b6d",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.431Z",
+   "modifie_le": "2026-10-31T04:20:43.431Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD6 - Alimentation télécommunications",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd6 - alimentation telecommunications",
+   "ordre": 5
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "10145434-e8e0-4bbe-8245-01350c819631",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.344Z",
+   "modifie_le": "2026-10-31T04:20:43.344Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Terrassements",
+   "groupe": "",
+   "cle_comparaison": "terrassements",
+   "ordre": 2
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "13ff9f6f-cf1f-4400-b8df-09296379eb4b",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.612Z",
+   "modifie_le": "2026-10-31T04:20:43.612Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.6 Équipements didactiques divers (tableaux)",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.6 equipements didactiques divers (tableaux)",
+   "ordre": 55
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "175c056f-63d2-4bae-8c00-284faff53eae",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.499Z",
+   "modifie_le": "2026-10-31T04:20:43.499Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Électricité courant fort",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "electricite courant fort",
+   "ordre": 25
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "1add90b9-65d5-48e9-b76f-4078f2fa38a0",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.462Z",
+   "modifie_le": "2026-10-31T04:20:43.462Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Vitrerie",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "vitrerie",
+   "ordre": 14
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "1bfbbc58-e674-45fa-bd70-31dcd841a80b",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.489Z",
+   "modifie_le": "2026-10-31T04:20:43.489Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Signalétique",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "signaletique",
+   "ordre": 22
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "1d722dc8-ddfa-484a-990b-e111ec02e3c9",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.422Z",
+   "modifie_le": "2026-10-31T04:20:43.422Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD4 - Alimentation en eau potable, arrosage, bâches à eau (sanitaire et sécurité incendie)",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd4 - alimentation en eau potable, arrosage, baches a eau (sanitaire et securite incendie)",
+   "ordre": 3
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "1e7a8c86-d381-47f8-b4e9-00d80f0f3820",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.335Z",
+   "modifie_le": "2026-10-31T04:20:43.335Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Installation de chantier",
+   "groupe": "",
+   "cle_comparaison": "installation de chantier",
+   "ordre": 0
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "20146488-897a-49c0-8895-2ffb9a5a68d7",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.573Z",
+   "modifie_le": "2026-10-31T04:20:43.573Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Rideaux décoratifs salle de conférence",
+   "groupe": "Décoration",
+   "cle_comparaison": "rideaux decoratifs salle de conference",
+   "ordre": 44
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "253c57ea-377f-44c2-aa76-83aeaf62ed57",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.356Z",
+   "modifie_le": "2026-10-31T04:20:43.356Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Second œuvre",
+   "groupe": "",
+   "cle_comparaison": "second oeuvre",
+   "ordre": 5
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "26c14906-1543-4c59-9ea9-04d2d1ce15ff",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.359Z",
+   "modifie_le": "2026-10-31T04:20:43.359Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Finitions",
+   "groupe": "",
+   "cle_comparaison": "finitions",
+   "ordre": 6
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "28e9553e-d4fa-4728-82f1-a4ba9cc85b3f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.580Z",
+   "modifie_le": "2026-10-31T04:20:43.580Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "MOB.2 Mobilier logement étudiants et enseignants, logements de fonction et astreintes",
+   "groupe": "Mobilier",
+   "cle_comparaison": "mob.2 mobilier logement etudiants et enseignants, logements de fonction et astreintes",
+   "ordre": 46
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "298cb2db-407f-4581-bc91-28ffa8a36bcc",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.348Z",
+   "modifie_le": "2026-10-31T04:20:43.348Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Infrastructure",
+   "groupe": "",
+   "cle_comparaison": "infrastructure",
+   "ordre": 3
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "2bdc0aa0-ffeb-4b02-938e-049c8ece671d",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.377Z",
+   "modifie_le": "2026-10-31T04:20:43.377Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Réception et levée des réserves",
+   "groupe": "",
+   "cle_comparaison": "reception et levee des reserves",
+   "ordre": 11
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "2e9aae0f-3136-4c2e-88d5-91278877e6eb",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.583Z",
+   "modifie_le": "2026-10-31T04:20:43.583Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "MOB.3 Mobilier restauration et centre médical",
+   "groupe": "Mobilier",
+   "cle_comparaison": "mob.3 mobilier restauration et centre medical",
+   "ordre": 47
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "32311cc4-07e4-4b79-9717-e700d5dfb620",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.473Z",
+   "modifie_le": "2026-10-31T04:20:43.473Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Revêtements durs",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "revetements durs",
+   "ordre": 17
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "32a12a78-7ecc-4f4d-9070-d64dd60983b8",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.427Z",
+   "modifie_le": "2026-10-31T04:20:43.427Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD5 - Alimentation électricité, locaux transfo, groupes électrogènes, éclairage public",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd5 - alimentation electricite, locaux transfo, groupes electrogenes, eclairage public",
+   "ordre": 4
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "33222867-e975-425d-a530-48b6cf9c6392",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.445Z",
+   "modifie_le": "2026-10-31T04:20:43.445Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Fondations profondes",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "fondations profondes",
+   "ordre": 9
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "332c6a46-8f14-4317-8a12-953dcb6b5b63",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.619Z",
+   "modifie_le": "2026-10-31T04:20:43.619Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.8 Équipements médicaux",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.8 equipements medicaux",
+   "ordre": 57
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "36e75b04-6331-4a5e-aee6-d62b81796bb9",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.523Z",
+   "modifie_le": "2026-10-31T04:20:43.523Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Nacelle de nettoyage des façades",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "nacelle de nettoyage des facades",
+   "ordre": 32
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "389db7ea-272b-4518-b761-0b8cc03dd19b",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.517Z",
+   "modifie_le": "2026-10-31T04:20:43.517Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Portes coupe-feu",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "portes coupe-feu",
+   "ordre": 30
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "3b46413d-330a-4f70-a714-bfa969fc44fd",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.476Z",
+   "modifie_le": "2026-10-31T04:20:43.476Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Revêtements souples",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "revetements souples",
+   "ordre": 18
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "3dcf534a-e33f-462d-8f4d-ee08dd7f53ce",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.608Z",
+   "modifie_le": "2026-10-31T04:20:43.608Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.5 Équipements de reprographie centrale et photocopie en bureaux",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.5 equipements de reprographie centrale et photocopie en bureaux",
+   "ordre": 54
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "3e3cc2d5-a4d8-4861-b6c6-aba734ac4191",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.545Z",
+   "modifie_le": "2026-10-31T04:20:43.545Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Système de sécurité d’accès par lecteur biométrique, digicode",
+   "groupe": "Sécurité d’accès",
+   "cle_comparaison": "systeme de securite d’acces par lecteur biometrique, digicode",
+   "ordre": 37
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "3fa11a77-0ac7-4195-8874-f5438984128e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.590Z",
+   "modifie_le": "2026-10-31T04:20:43.590Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "MOB.5 Mobilier bibliothèque",
+   "groupe": "Mobilier",
+   "cle_comparaison": "mob.5 mobilier bibliotheque",
+   "ordre": 49
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "438038d9-7be2-4de9-9b48-cedf2ffaabed",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.552Z",
+   "modifie_le": "2026-10-31T04:20:43.552Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Anti-intrusion",
+   "groupe": "Sécurité d’accès",
+   "cle_comparaison": "anti-intrusion",
+   "ordre": 39
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "4cfce8f7-ce3e-431b-a83c-7203e3eeb108",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.576Z",
+   "modifie_le": "2026-10-31T04:20:43.576Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "MOB.1 Mobilier bureaux, académique",
+   "groupe": "Mobilier",
+   "cle_comparaison": "mob.1 mobilier bureaux, academique",
+   "ordre": 45
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "4e65f7e5-80d4-4f7a-a11b-d5c481d7826e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.601Z",
+   "modifie_le": "2026-10-31T04:20:43.601Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.3 Équipements de cuisine et vaissellerie",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.3 equipements de cuisine et vaissellerie",
+   "ordre": 52
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "4e963c4a-ed25-4ffe-a2f5-bab17e84e361",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.569Z",
+   "modifie_le": "2026-10-31T04:20:43.569Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Décoration plafond salle de conférence",
+   "groupe": "Décoration",
+   "cle_comparaison": "decoration plafond salle de conference",
+   "ordre": 43
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "4f18ff26-6823-406d-8305-772db1630d8a",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.493Z",
+   "modifie_le": "2026-10-31T04:20:43.493Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Plomberie sanitaire, ventilation mécanique contrôlée",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "plomberie sanitaire, ventilation mecanique controlee",
+   "ordre": 23
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "50c18a64-4be3-4c6a-90d8-82beee13d686",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.448Z",
+   "modifie_le": "2026-10-31T04:20:43.448Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Gros œuvre",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "gros oeuvre",
+   "ordre": 10
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "51166eec-cd15-41eb-8708-345fbeefd47a",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.352Z",
+   "modifie_le": "2026-10-31T04:20:43.352Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Superstructure",
+   "groupe": "",
+   "cle_comparaison": "superstructure",
+   "ordre": 4
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "561bb2e6-10f7-45f6-afcd-819598016187",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.513Z",
+   "modifie_le": "2026-10-31T04:20:43.513Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Ascenseurs",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "ascenseurs",
+   "ordre": 29
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "561fcc7c-c8d3-48a8-9386-f7da69d9dfdf",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.455Z",
+   "modifie_le": "2026-10-31T04:20:43.455Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Menuiserie intérieure en bois",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "menuiserie interieure en bois",
+   "ordre": 12
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "5cb31f9b-b07b-48a1-a312-1d83a09a8697",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.459Z",
+   "modifie_le": "2026-10-31T04:20:43.459Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Menuiserie aluminium",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "menuiserie aluminium",
+   "ordre": 13
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "5f896480-caa5-4541-9eb4-5ff6ae712f9e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.530Z",
+   "modifie_le": "2026-10-31T04:20:43.530Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Réseau informatique",
+   "groupe": "Télécommunication et informatique",
+   "cle_comparaison": "reseau informatique",
+   "ordre": 34
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "6a636d99-d232-4066-8213-4d7e8dbc5e02",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.540Z",
+   "modifie_le": "2026-10-31T04:20:43.541Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Installation TV",
+   "groupe": "Télécommunication et informatique",
+   "cle_comparaison": "installation tv",
+   "ordre": 36
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "70069e74-b1d0-47fe-bdb7-408450c740bc",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.469Z",
+   "modifie_le": "2026-10-31T04:20:43.469Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Revêtements durs décoratifs",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "revetements durs decoratifs",
+   "ordre": 16
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "7086e028-06b7-4115-9ad9-c79afeebf485",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.417Z",
+   "modifie_le": "2026-10-31T04:20:43.417Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD3 - Assainissement eaux pluviales, eaux usées, eaux vannes, station d’épuration",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd3 - assainissement eaux pluviales, eaux usees, eaux vannes, station d’epuration",
+   "ordre": 2
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "7152b60c-67eb-432f-b01b-b0a63f9e553c",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.466Z",
+   "modifie_le": "2026-10-31T04:20:43.466Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Menuiserie métallique",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "menuiserie metallique",
+   "ordre": 15
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "7a1cd22e-8cb7-44e5-8ad0-795f5ec49401",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.366Z",
+   "modifie_le": "2026-10-31T04:20:43.366Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Assainissement et drainage",
+   "groupe": "",
+   "cle_comparaison": "assainissement et drainage",
+   "ordre": 8
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "7bac6abb-e94f-4d67-ba0c-f1749f39ee86",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.510Z",
+   "modifie_le": "2026-10-31T04:20:43.510Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Sonorisation des salles de langue, conférence, projection",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "sonorisation des salles de langue, conference, projection",
+   "ordre": 28
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "807eba9f-5dbb-4edb-a6ef-cbacc361aacd",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.408Z",
+   "modifie_le": "2026-10-31T04:20:43.408Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd1 - terrassements generaux, voirie, parkings, cloture",
+   "ordre": 0
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "85f0a073-65cc-4697-b69b-bbd5d95d7bc3",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.597Z",
+   "modifie_le": "2026-10-31T04:20:43.597Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.2 Équipements de laboratoires de langue et multimédia",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.2 equipements de laboratoires de langue et multimedia",
+   "ordre": 51
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "89104980-460b-4573-b953-7e9da3ffa144",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.557Z",
+   "modifie_le": "2026-10-31T04:20:43.557Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "GTB/GTC",
+   "groupe": "Sécurité d’accès",
+   "cle_comparaison": "gtb/gtc",
+   "ordre": 40
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "8a1312d1-62a5-4817-a724-ad3f0e354fb4",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.527Z",
+   "modifie_le": "2026-10-31T04:20:43.527Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Paratonnerre",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "paratonnerre",
+   "ordre": 33
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "8f55695d-d5ab-490e-a550-7a1fdaa332f0",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.593Z",
+   "modifie_le": "2026-10-31T04:20:43.593Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.1 Équipements scientifiques de laboratoires spécialisés et ateliers",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.1 equipements scientifiques de laboratoires specialises et ateliers",
+   "ordre": 50
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "90d203f1-ddd7-4ee8-90ad-47ef74d59e22",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.483Z",
+   "modifie_le": "2026-10-31T04:20:43.483Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Peinture",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "peinture",
+   "ordre": 20
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "94eaf675-60fb-452e-b6f4-9fceba021eb1",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.506Z",
+   "modifie_le": "2026-10-31T04:20:43.506Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Détection, extinction, report d’alarmes techniques",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "detection, extinction, report d’alarmes techniques",
+   "ordre": 27
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "9544a456-0102-4e89-9162-3d17954b0490",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.534Z",
+   "modifie_le": "2026-10-31T04:20:43.534Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Téléphonie, interphonie",
+   "groupe": "Télécommunication et informatique",
+   "cle_comparaison": "telephonie, interphonie",
+   "ordre": 35
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "985e9b9a-cf2c-44a5-b69e-e9d753f1b368",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.442Z",
+   "modifie_le": "2026-10-31T04:20:43.442Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD9 - Terrains de sports",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd9 - terrains de sports",
+   "ordre": 8
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "9fb303d1-6c99-4bd9-a02b-f86da3867684",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.520Z",
+   "modifie_le": "2026-10-31T04:20:43.520Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Sécurité incendie",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "securite incendie",
+   "ordre": 31
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "a448279b-ac6a-45eb-825b-a53c4d9bd059",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.615Z",
+   "modifie_le": "2026-10-31T04:20:43.615Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.7 Équipements sportifs",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.7 equipements sportifs",
+   "ordre": 56
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "a4b7d440-6472-4752-9ebe-9419b4f80129",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.452Z",
+   "modifie_le": "2026-10-31T04:20:43.452Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Étanchéité des toitures terrasses et autres",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "etancheite des toitures terrasses et autres",
+   "ordre": 11
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "ac4268b8-76f6-4de7-bac0-523e90122405",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.503Z",
+   "modifie_le": "2026-10-31T04:20:43.503Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Distribution du courant régulé",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "distribution du courant regule",
+   "ordre": 26
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "ac76e88e-8b4f-4e49-aed1-125b13c8fad4",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.561Z",
+   "modifie_le": "2026-10-31T04:20:43.561Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Décoration habillage muraux (salle de conférence, bibliothèque)",
+   "groupe": "Décoration",
+   "cle_comparaison": "decoration habillage muraux (salle de conference, bibliotheque)",
+   "ordre": 41
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "b1a86eeb-8f5f-4e0c-a615-8cef64a09951",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.370Z",
+   "modifie_le": "2026-10-31T04:20:43.370Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Signalisation et équipements",
+   "groupe": "",
+   "cle_comparaison": "signalisation et equipements",
+   "ordre": 9
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "b536d48f-d41d-4a8d-ab64-81fc5c570cf2",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.587Z",
+   "modifie_le": "2026-10-31T04:20:43.587Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "MOB.4 Mobilier urbain de jardin",
+   "groupe": "Mobilier",
+   "cle_comparaison": "mob.4 mobilier urbain de jardin",
+   "ordre": 48
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "c1b8f62d-6389-45c4-b262-79af55f692cd",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.549Z",
+   "modifie_le": "2026-10-31T04:20:43.549Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Système de caméras de surveillance",
+   "groupe": "Sécurité d’accès",
+   "cle_comparaison": "systeme de cameras de surveillance",
+   "ordre": 38
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "c258691b-0721-48d6-b87b-81d7b31a48b8",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.413Z",
+   "modifie_le": "2026-10-31T04:20:43.413Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD2 - Drainage général, murs de soutènement, traitement des déchets",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd2 - drainage general, murs de soutenement, traitement des dechets",
+   "ordre": 1
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "c83d6761-0e2a-4760-87c5-c39f05091474",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.435Z",
+   "modifie_le": "2026-10-31T04:20:43.435Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD7 - Jardins, plantations d’arbres, d’arbustes et engazonnement",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd7 - jardins, plantations d’arbres, d’arbustes et engazonnement",
+   "ordre": 6
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "c93e35e8-3e0d-4719-9a9a-b64cc06f5479",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.605Z",
+   "modifie_le": "2026-10-31T04:20:43.605Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.4 Équipements informatiques pour l’administration",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.4 equipements informatiques pour l’administration",
+   "ordre": 53
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "cd90477a-8702-428f-9ba3-c59687026809",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.479Z",
+   "modifie_le": "2026-10-31T04:20:43.479Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Faux plafonds (staff, acoustique ou diffusant)",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "faux plafonds (staff, acoustique ou diffusant)",
+   "ordre": 19
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "cf68cff4-c8f6-4c93-a111-0499f52ffe2e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.496Z",
+   "modifie_le": "2026-10-31T04:20:43.496Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Climatisation",
+   "groupe": "Lots techniques",
+   "cle_comparaison": "climatisation",
+   "ordre": 24
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "d9c35710-f3cf-41ef-9f9a-997aa8be68f5",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.341Z",
+   "modifie_le": "2026-10-31T04:20:43.341Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Études et préparation",
+   "groupe": "",
+   "cle_comparaison": "etudes et preparation",
+   "ordre": 1
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "e541097c-8c77-45cd-b301-69e6a3b8ba22",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.565Z",
+   "modifie_le": "2026-10-31T04:20:43.565Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Décoration mobilier salle de conférence (sièges)",
+   "groupe": "Décoration",
+   "cle_comparaison": "decoration mobilier salle de conference (sieges)",
+   "ordre": 42
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "f0a21bc2-63a5-4030-9d51-051b64cf2cc8",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.373Z",
+   "modifie_le": "2026-10-31T04:20:43.373Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "VRD et aménagements extérieurs",
+   "groupe": "",
+   "cle_comparaison": "vrd et amenagements exterieurs",
+   "ordre": 10
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "f14243f6-3aef-4d48-aabe-87cce1d5a5bd",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.438Z",
+   "modifie_le": "2026-10-31T04:20:43.438Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "VRD8 - Mobilier urbain et signalétique extérieure",
+   "groupe": "Voiries et réseaux divers",
+   "cle_comparaison": "vrd8 - mobilier urbain et signaletique exterieure",
+   "ordre": 7
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "f8c16281-69ce-4959-b4f4-022ffa51322f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.486Z",
+   "modifie_le": "2026-10-31T04:20:43.486Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "Teintures, rideaux, stores",
+   "groupe": "Lots architecturaux",
+   "cle_comparaison": "teintures, rideaux, stores",
+   "ordre": 21
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "f95d6d2b-0786-45b9-a5e2-a57446f99d34",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.362Z",
+   "modifie_le": "2026-10-31T04:20:43.362Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "libelle": "Chaussée",
+   "groupe": "",
+   "cle_comparaison": "chaussee",
+   "ordre": 7
+  }
+ },
+ {
+  "model": "catalogue.valeurlisteplateforme",
+  "pk": "fb72d72f-aa23-4763-8325-802bf8144e19",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.622Z",
+   "modifie_le": "2026-10-31T04:20:43.622Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "libelle": "EQU.9 Équipements téléenseignement, visioconférence",
+   "groupe": "Équipements",
+   "cle_comparaison": "equ.9 equipements teleenseignement, visioconference",
+   "ordre": 58
+  }
+ },
+ {
+  "model": "catalogue.modeledecoupageplateforme",
+  "pk": "198a3426-b118-43ff-899d-656c5d103a3f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.684Z",
+   "modifie_le": "2026-10-31T04:20:43.684Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "nom": "Industriel — Phase, installation, lot, activité",
+   "description": "Une infrastructure industrielle découpée en installations (hangar, unité de production, local technique).",
+   "types_projet": [
+    "INFRASTRUCTURE_INDUSTRIELLE"
+   ],
+   "par_defaut_pour": [
+    "INFRASTRUCTURE_INDUSTRIELLE"
+   ],
+   "version": 1,
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.modeledecoupageplateforme",
+  "pk": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.673Z",
+   "modifie_le": "2026-10-31T04:20:43.673Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "nom": "VRD — Phase, tronçon, lot, activité",
+   "description": "Voiries et réseaux divers découpés en tronçons.",
+   "types_projet": [
+    "VRD"
+   ],
+   "par_defaut_pour": [
+    "VRD"
+   ],
+   "version": 1,
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.modeledecoupageplateforme",
+  "pk": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.650Z",
+   "modifie_le": "2026-10-31T04:20:43.650Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "nom": "Route — Phase, section, lot, activité",
+   "description": "Une route découpée en sections repérées par leurs points kilométriques (PK).",
+   "types_projet": [
+    "TP_ROUTE"
+   ],
+   "par_defaut_pour": [
+    "TP_ROUTE"
+   ],
+   "version": 1,
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.modeledecoupageplateforme",
+  "pk": "b2445205-888c-4be5-889d-66c013e9d7ba",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.694Z",
+   "modifie_le": "2026-10-31T04:20:43.694Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "nom": "Villa — Lot, activité",
+   "description": "Deux niveaux, lot et activité : le découpage d'un petit chantier.",
+   "types_projet": [
+    "BATIMENT_RESIDENTIEL"
+   ],
+   "par_defaut_pour": [],
+   "version": 1,
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.modeledecoupageplateforme",
+  "pk": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.662Z",
+   "modifie_le": "2026-10-31T04:20:43.662Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "nom": "Génie civil — Partie, élément, lot, activité",
+   "description": "Un ouvrage d'art (pont, barrage) découpé en parties puis en éléments, par exemple les appuis puis la pile n° 2.",
+   "types_projet": [
+    "TP_GENIE_CIVIL"
+   ],
+   "par_defaut_pour": [
+    "TP_GENIE_CIVIL"
+   ],
+   "version": 1,
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.modeledecoupageplateforme",
+  "pk": "ff529777-aab0-46f9-b97e-16805e44d46e",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.626Z",
+   "modifie_le": "2026-10-31T04:20:43.626Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "nom": "Bâtiment — Phase, ouvrage, lot, activité",
+   "description": "Le découpage d'un immeuble ou d'un bâtiment : chaque phase en bâtiments, chaque bâtiment en lots, chaque lot en activités.",
+   "types_projet": [
+    "BATIMENT_RESIDENTIEL",
+    "BATIMENT_COMMERCIAL"
+   ],
+   "par_defaut_pour": [
+    "BATIMENT_RESIDENTIEL",
+    "BATIMENT_COMMERCIAL"
+   ],
+   "version": 1,
+   "est_actif": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "11b0251e-1fad-42a8-9976-4eab19479da1",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.664Z",
+   "modifie_le": "2026-10-31T04:20:43.664Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 2,
+   "libelle": "Élément",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "300266bd-5879-4033-86cc-794c9d48e3e0",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.695Z",
+   "modifie_le": "2026-10-31T04:20:43.695Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 1,
+   "libelle": "Lot",
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "alerter": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "4f578a96-04f2-46e5-872c-1f9f1cd9c975",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.687Z",
+   "modifie_le": "2026-10-31T04:20:43.687Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 3,
+   "libelle": "Lot",
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "alerter": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "549073f1-8e35-49aa-bdaf-52344358d13d",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.634Z",
+   "modifie_le": "2026-10-31T04:20:43.634Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 2,
+   "libelle": "Ouvrage",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "5a05f76c-2d12-45a1-8e7f-63ea0355ae06",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.674Z",
+   "modifie_le": "2026-10-31T04:20:43.674Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 1,
+   "libelle": "Phase",
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "71452008-c64c-4163-afd5-5b55e65e393b",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.686Z",
+   "modifie_le": "2026-10-31T04:20:43.686Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 2,
+   "libelle": "Installation",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "71687bcd-35ad-4b7a-b5d7-b3bab700e06d",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.651Z",
+   "modifie_le": "2026-10-31T04:20:43.651Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 1,
+   "libelle": "Phase",
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "7448bcf5-fb38-48bb-85fa-5d555250a570",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.635Z",
+   "modifie_le": "2026-10-31T04:20:43.635Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 3,
+   "libelle": "Lot",
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "alerter": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "753a04ad-73d0-42d7-b421-ab041221b714",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.696Z",
+   "modifie_le": "2026-10-31T04:20:43.696Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 2,
+   "libelle": "Activité",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "7680eedd-b3fa-47e4-97c3-e57a944e5986",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.629Z",
+   "modifie_le": "2026-10-31T04:20:43.629Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 1,
+   "libelle": "Phase",
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "7ba889b0-1c1f-4f1d-8bed-1030e2324ddf",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.636Z",
+   "modifie_le": "2026-10-31T04:20:43.636Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 4,
+   "libelle": "Activité",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "80f306ac-f854-4c0d-9495-6ae802f9966c",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.663Z",
+   "modifie_le": "2026-10-31T04:20:43.663Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 1,
+   "libelle": "Partie",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "83c2d3a0-21da-4423-84e4-dbb9ea568db2",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.653Z",
+   "modifie_le": "2026-10-31T04:20:43.653Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 3,
+   "libelle": "Lot",
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "alerter": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "91c80e2d-09e9-4add-9428-73594ff955b7",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.677Z",
+   "modifie_le": "2026-10-31T04:20:43.677Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 4,
+   "libelle": "Activité",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "95610c1f-18ca-4cf6-9c81-afa49c39edbb",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.666Z",
+   "modifie_le": "2026-10-31T04:20:43.666Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 4,
+   "libelle": "Activité",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "989e1dba-6ccd-4d97-8468-d6c37fe34103",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.675Z",
+   "modifie_le": "2026-10-31T04:20:43.675Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 2,
+   "libelle": "Tronçon",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "b1d0f3ef-88d6-4c77-a276-772ef0498b55",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.665Z",
+   "modifie_le": "2026-10-31T04:20:43.665Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 3,
+   "libelle": "Lot",
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "alerter": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "d21f4aa5-0d99-45f6-a035-f8f92c4ab23f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.676Z",
+   "modifie_le": "2026-10-31T04:20:43.676Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 3,
+   "libelle": "Lot",
+   "liste": "be72a2eb-635b-444d-9f72-edfa85127a53",
+   "alerter": true
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "d8fb684b-9a1b-42ad-9d4b-9c662f3e5bbe",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.652Z",
+   "modifie_le": "2026-10-31T04:20:43.652Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 2,
+   "libelle": "Section",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "e16d3a8f-80be-4d32-89ab-e98740e9db9d",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.687Z",
+   "modifie_le": "2026-10-31T04:20:43.687Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 4,
+   "libelle": "Activité",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "f06e00e2-38dd-49fc-97d6-6124e768a8a9",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.685Z",
+   "modifie_le": "2026-10-31T04:20:43.685Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 1,
+   "libelle": "Phase",
+   "liste": "2d3404f3-db1c-4283-92b9-0681f31d0114",
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.niveaumodeleplateforme",
+  "pk": "ff24a9b3-cd65-4431-9b64-3f7b5d2da3c8",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.654Z",
+   "modifie_le": "2026-10-31T04:20:43.654Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 4,
+   "libelle": "Activité",
+   "liste": null,
+   "alerter": false
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "0697acf7-218c-487b-9aa6-d40d9d3f9f63",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.691Z",
+   "modifie_le": "2026-10-31T04:20:43.691Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 3,
+   "valeurs": [
+    "Superstructure",
+    "Hangar principal",
+    "Menuiserie métallique",
+    "Bardage et couverture"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "0747bc59-8b3c-4b27-832c-0bb1a5f63fa3",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.668Z",
+   "modifie_le": "2026-10-31T04:20:43.668Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 1,
+   "valeurs": [
+    "Appuis",
+    "Pile n° 2",
+    "Fondations profondes",
+    "Forage des pieux"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "138a9bde-0901-4ba2-9a10-d04d12d8fbae",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.697Z",
+   "modifie_le": "2026-10-31T04:20:43.697Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 0,
+   "valeurs": [
+    "Gros œuvre",
+    "Fondations"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "13d80eda-bc7a-41ec-8b3e-025f25933f77",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.637Z",
+   "modifie_le": "2026-10-31T04:20:43.637Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 0,
+   "valeurs": [
+    "Installation de chantier",
+    "Site",
+    "Gros œuvre",
+    "Clôture et installations de chantier"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "14494373-f77a-42b5-ab7c-a39147ed16e5",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.656Z",
+   "modifie_le": "2026-10-31T04:20:43.656Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 1,
+   "valeurs": [
+    "Terrassements",
+    "PK 0 – PK 5",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Décapage de la terre végétale"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "200eae65-f2e0-46e8-a269-e56c66dd81ce",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.688Z",
+   "modifie_le": "2026-10-31T04:20:43.688Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 0,
+   "valeurs": [
+    "Infrastructure",
+    "Hangar principal",
+    "Gros œuvre",
+    "Massifs des poteaux"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "24125d67-fd18-4bc9-9b12-73b67fcbde5b",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.648Z",
+   "modifie_le": "2026-10-31T04:20:43.648Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 9,
+   "valeurs": [
+    "Finitions",
+    "Bâtiment A",
+    "Peinture",
+    "Peinture intérieure"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "29e5c45b-fd96-4ae0-86c8-8fa264bc9659",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.682Z",
+   "modifie_le": "2026-10-31T04:20:43.682Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 4,
+   "valeurs": [
+    "Chaussée",
+    "Tronçon 1",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Couche de roulement"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "2d61df59-02c2-49f3-ab45-b170b5b01175",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.657Z",
+   "modifie_le": "2026-10-31T04:20:43.657Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 3,
+   "valeurs": [
+    "Chaussée",
+    "PK 0 – PK 5",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Couche de fondation"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "2de94076-9999-4873-b5f3-e49aedb0a975",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.671Z",
+   "modifie_le": "2026-10-31T04:20:43.671Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 5,
+   "valeurs": [
+    "Équipements",
+    "Garde-corps",
+    "Menuiserie métallique",
+    "Pose des garde-corps"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "38f12fa9-394d-41a6-a5b5-db372833ccbd",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.647Z",
+   "modifie_le": "2026-10-31T04:20:43.647Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 8,
+   "valeurs": [
+    "Finitions",
+    "Bâtiment A",
+    "Revêtements durs",
+    "Carrelage"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "46d78a4c-d945-42a3-a15c-e55208f75a51",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.644Z",
+   "modifie_le": "2026-10-31T04:20:43.644Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 5,
+   "valeurs": [
+    "Superstructure",
+    "Bâtiment A",
+    "Gros œuvre",
+    "Dalle haute"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "48180d5b-2594-4a51-9f1b-b80fb37d307a",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.700Z",
+   "modifie_le": "2026-10-31T04:20:43.700Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 3,
+   "valeurs": [
+    "Plomberie sanitaire, ventilation mécanique contrôlée",
+    "Plomberie"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "539f6747-60c3-491a-8f51-51516680ec93",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.701Z",
+   "modifie_le": "2026-10-31T04:20:43.701Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 4,
+   "valeurs": [
+    "Peinture",
+    "Peinture"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "605f510a-694d-4c6b-94e6-e6352d3e7001",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.671Z",
+   "modifie_le": "2026-10-31T04:20:43.671Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 4,
+   "valeurs": [
+    "Tablier",
+    "Travée 1",
+    "Gros œuvre",
+    "Hourdis"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "624ace3f-e4d4-45fb-b14b-bfca342bfa50",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.641Z",
+   "modifie_le": "2026-10-31T04:20:43.641Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 1,
+   "valeurs": [
+    "Infrastructure",
+    "Bâtiment A",
+    "Gros œuvre",
+    "Fouilles en rigoles"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "687b8d93-2c99-4820-b189-fe3f079e33db",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.690Z",
+   "modifie_le": "2026-10-31T04:20:43.690Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 2,
+   "valeurs": [
+    "Superstructure",
+    "Hangar principal",
+    "Menuiserie métallique",
+    "Charpente métallique"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "6cbecc7b-c0a7-427b-8a77-589d0c77ade6",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.660Z",
+   "modifie_le": "2026-10-31T04:20:43.660Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 6,
+   "valeurs": [
+    "Signalisation et équipements",
+    "PK 0 – PK 5",
+    "VRD8 - Mobilier urbain et signalétique extérieure",
+    "Signalisation verticale"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "6f478911-2c80-477f-a69d-03f4b523935a",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.658Z",
+   "modifie_le": "2026-10-31T04:20:43.658Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 4,
+   "valeurs": [
+    "Chaussée",
+    "PK 0 – PK 5",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Revêtement bitumineux"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "7398cb6f-07b7-49a8-b555-be9ddd954fe8",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.669Z",
+   "modifie_le": "2026-10-31T04:20:43.669Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 2,
+   "valeurs": [
+    "Appuis",
+    "Pile n° 2",
+    "Gros œuvre",
+    "Ferraillage et coffrage du fût"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "a164958f-149a-403b-9b92-9436a47f8d88",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.646Z",
+   "modifie_le": "2026-10-31T04:20:43.646Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 7,
+   "valeurs": [
+    "Second œuvre",
+    "Bâtiment A",
+    "Plomberie sanitaire, ventilation mécanique contrôlée",
+    "Réseaux d'alimentation"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "ac821a11-0d89-4668-8d3b-fb129ba61a99",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.699Z",
+   "modifie_le": "2026-10-31T04:20:43.699Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 2,
+   "valeurs": [
+    "Électricité courant fort",
+    "Installation électrique"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "b92c6267-eed3-4f7e-a100-7dbf57945336",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.655Z",
+   "modifie_le": "2026-10-31T04:20:43.655Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 0,
+   "valeurs": [
+    "Installation de chantier",
+    "Base vie",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Installation de la base vie"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "bb19e119-a5c0-4f20-95c0-5bd1c6c21733",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.670Z",
+   "modifie_le": "2026-10-31T04:20:43.670Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 3,
+   "valeurs": [
+    "Tablier",
+    "Travée 1",
+    "Gros œuvre",
+    "Pose des poutres"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "bf16e8be-2151-4c75-b1fc-a00bcb3a8f8f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.692Z",
+   "modifie_le": "2026-10-31T04:20:43.692Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 4,
+   "valeurs": [
+    "Second œuvre",
+    "Hangar principal",
+    "Électricité courant fort",
+    "Éclairage"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "bf76c8b3-9b74-45fa-97bd-8fc620e24ecb",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.689Z",
+   "modifie_le": "2026-10-31T04:20:43.689Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "198a3426-b118-43ff-899d-656c5d103a3f",
+   "ordre": 1,
+   "valeurs": [
+    "Infrastructure",
+    "Hangar principal",
+    "Gros œuvre",
+    "Dallage industriel"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "ca6be8d6-4aa6-4eb8-aa10-776f5015a1c2",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.679Z",
+   "modifie_le": "2026-10-31T04:20:43.679Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 1,
+   "valeurs": [
+    "Terrassements",
+    "Tronçon 1",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Mise en forme de la plateforme"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "cac264ac-967b-4e78-a3a5-c696a39104eb",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.667Z",
+   "modifie_le": "2026-10-31T04:20:43.667Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "da9e1b1a-2441-4a6f-b67f-7ce9c342753a",
+   "ordre": 0,
+   "valeurs": [
+    "Appuis",
+    "Culée C0",
+    "Fondations profondes",
+    "Forage des pieux"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "d58d1b78-c31d-4343-b81f-4af7704543c7",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.678Z",
+   "modifie_le": "2026-10-31T04:20:43.678Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 0,
+   "valeurs": [
+    "Terrassements",
+    "Tronçon 1",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Décapage"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "d9999c5a-c0c3-479f-b178-ec4abc1f5a53",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.645Z",
+   "modifie_le": "2026-10-31T04:20:43.645Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 6,
+   "valeurs": [
+    "Second œuvre",
+    "Bâtiment A",
+    "Électricité courant fort",
+    "Gaines et boîtiers"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "db548b75-1259-4b81-aa25-4eb521b6918b",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.642Z",
+   "modifie_le": "2026-10-31T04:20:43.642Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 2,
+   "valeurs": [
+    "Infrastructure",
+    "Bâtiment A",
+    "Gros œuvre",
+    "Béton de propreté"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "de45e4ce-ba27-46cb-a7b5-c5ef4410292f",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.659Z",
+   "modifie_le": "2026-10-31T04:20:43.659Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 5,
+   "valeurs": [
+    "Assainissement et drainage",
+    "PK 0 – PK 5",
+    "VRD3 - Assainissement eaux pluviales, eaux usées, eaux vannes, station d’épuration",
+    "Caniveaux"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "e20b4366-f0ca-43bd-a4d9-0c54b6b001fa",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.698Z",
+   "modifie_le": "2026-10-31T04:20:43.698Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "b2445205-888c-4be5-889d-66c013e9d7ba",
+   "ordre": 1,
+   "valeurs": [
+    "Gros œuvre",
+    "Élévation des murs"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "e4050ba0-357d-44b6-b939-3198d00ceff7",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.644Z",
+   "modifie_le": "2026-10-31T04:20:43.644Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 4,
+   "valeurs": [
+    "Superstructure",
+    "Bâtiment A",
+    "Gros œuvre",
+    "Élévation des murs"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "e667a266-faca-4790-b56f-5a569f4babe1",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.643Z",
+   "modifie_le": "2026-10-31T04:20:43.643Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "ff529777-aab0-46f9-b97e-16805e44d46e",
+   "ordre": 3,
+   "valeurs": [
+    "Infrastructure",
+    "Bâtiment A",
+    "Gros œuvre",
+    "Semelles et longrines"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "e6c05edd-90c1-491f-a4ae-5356b278a539",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.681Z",
+   "modifie_le": "2026-10-31T04:20:43.681Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 3,
+   "valeurs": [
+    "Assainissement et drainage",
+    "Tronçon 1",
+    "VRD3 - Assainissement eaux pluviales, eaux usées, eaux vannes, station d’épuration",
+    "Regards de visite"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "f50628b0-7d4f-4225-8836-dc243ca037ae",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.680Z",
+   "modifie_le": "2026-10-31T04:20:43.680Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "99a07805-953f-4c82-9c9a-26e027fd5b4f",
+   "ordre": 2,
+   "valeurs": [
+    "Assainissement et drainage",
+    "Tronçon 1",
+    "VRD3 - Assainissement eaux pluviales, eaux usées, eaux vannes, station d’épuration",
+    "Pose des canalisations"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.lignemodeleplateforme",
+  "pk": "fc25eefd-5e4d-4e01-88b0-8e4dcf352640",
+  "fields": {
+   "cree_le": "2026-10-31T04:20:43.657Z",
+   "modifie_le": "2026-10-31T04:20:43.657Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele": "9da4d36e-daf1-474d-adb0-efe4e1578d43",
+   "ordre": 2,
+   "valeurs": [
+    "Terrassements",
+    "PK 0 – PK 5",
+    "VRD1 - Terrassements généraux, voirie, parkings, clôture",
+    "Déblais et remblais"
+   ]
+  }
+ },
+ {
+  "model": "billing.plan",
+  "pk": "19c40069-e5ec-4695-a385-9646c702cfb1",
+  "fields": {
+   "cree_le": "2026-09-03T09:54:59.982Z",
+   "modifie_le": "2026-09-03T09:54:59.982Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "STARTER",
+   "libelle": "Starter",
+   "prix_mensuel_montant": null,
+   "prix_annuel_montant": null,
+   "limite_projets": 3,
+   "limite_utilisateurs": 5,
+   "limite_stockage_mo": 2000,
+   "acces_ia": false,
+   "limites_avancees": {},
+   "est_actif": false
+  }
+ },
+ {
+  "model": "billing.plan",
+  "pk": "55571fe7-52cb-497e-b744-34d98a765911",
+  "fields": {
+   "cree_le": "2026-09-11T11:58:33.300Z",
+   "modifie_le": "2026-10-16T13:08:03.512Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "PROMOTEUR",
+   "libelle": "Promoteur",
+   "prix_mensuel_montant": 11900000,
+   "prix_annuel_montant": 142800000,
+   "limite_projets": null,
+   "limite_utilisateurs": 100,
+   "limite_stockage_mo": 20480,
+   "acces_ia": true,
+   "limites_avancees": {
+    "avantages": [],
+    "remise_annuelle_pourcent": 0
+   },
+   "est_actif": true
+  }
+ },
+ {
+  "model": "billing.plan",
+  "pk": "8f7490d2-25d3-4d41-a0ad-0f42fcb17f55",
+  "fields": {
+   "cree_le": "2026-09-03T09:55:00.024Z",
+   "modifie_le": "2026-09-03T09:55:00.024Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ENTERPRISE",
+   "libelle": "Enterprise",
+   "prix_mensuel_montant": null,
+   "prix_annuel_montant": null,
+   "limite_projets": null,
+   "limite_utilisateurs": null,
+   "limite_stockage_mo": null,
+   "acces_ia": true,
+   "limites_avancees": {},
+   "est_actif": false
+  }
+ },
+ {
+  "model": "billing.plan",
+  "pk": "b4e7bcaa-e83b-47ae-b42b-94b3203668ef",
+  "fields": {
+   "cree_le": "2026-09-11T11:58:33.296Z",
+   "modifie_le": "2026-10-16T13:08:03.511Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "MAITRE_OEUVRE",
+   "libelle": "Maître d'Œuvre",
+   "prix_mensuel_montant": 4900000,
+   "prix_annuel_montant": 58800000,
+   "limite_projets": 50,
+   "limite_utilisateurs": 25,
+   "limite_stockage_mo": 10240,
+   "acces_ia": true,
+   "limites_avancees": {
+    "avantages": [],
+    "remise_annuelle_pourcent": 0
+   },
+   "est_actif": true
+  }
+ },
+ {
+  "model": "billing.plan",
+  "pk": "ca2b95d4-bdf5-4372-8a13-b8dcfad35a55",
+  "fields": {
+   "cree_le": "2026-09-11T11:58:33.289Z",
+   "modifie_le": "2026-10-16T13:08:03.508Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "BATISSEUR",
+   "libelle": "Bâtisseur",
+   "prix_mensuel_montant": 1900000,
+   "prix_annuel_montant": 22800000,
+   "limite_projets": 3,
+   "limite_utilisateurs": 5,
+   "limite_stockage_mo": 2048,
+   "acces_ia": false,
+   "limites_avancees": {
+    "avantages": [],
+    "remise_annuelle_pourcent": 0
+   },
+   "est_actif": true
+  }
+ },
+ {
+  "model": "billing.plan",
+  "pk": "eb9e9dda-5346-40f6-ae8a-f1b1cb50ba6a",
+  "fields": {
+   "cree_le": "2026-09-03T09:55:00.019Z",
+   "modifie_le": "2026-09-03T09:55:00.019Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "PRO",
+   "libelle": "Pro",
+   "prix_mensuel_montant": null,
+   "prix_annuel_montant": null,
+   "limite_projets": 50,
+   "limite_utilisateurs": 25,
+   "limite_stockage_mo": 10000,
+   "acces_ia": true,
+   "limites_avancees": {},
+   "est_actif": false
+  }
+ },
+ {
+  "model": "platform_admin.identiteplateforme",
+  "pk": 1,
+  "fields": {
+   "nom": "CCD Digitale",
+   "logo": "",
+   "modifie_le": "2026-10-16T18:17:08.131Z"
+  }
+ }
+]

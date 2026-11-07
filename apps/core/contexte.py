@@ -117,6 +117,30 @@ def portee_plateforme(motif: str):
         _portee.reset(jeton)
 
 
+@contextmanager
+def verification_plateforme(motif: str):
+    """Une portée plateforme **le temps d'un test d'existence**, même sous une entreprise active.
+
+    La seule exception à la règle de `portee_plateforme`, et elle est étroite : une règle qui vaut
+    sur toute la plateforme (l'adresse e-mail est unique, R-8) se vérifie aussi pendant une
+    requête d'entreprise — inviter un collaborateur, par exemple. Sous la RLS, l'entreprise active
+    ne voit que ses comptes : le doublon d'une autre entreprise passerait le contrôle et
+    échouerait sur la contrainte, en erreur 500.
+
+    **Le bloc ne doit rendre qu'un booléen** (`.exists()`), jamais une ligne ni un identifiant.
+    L'entreprise active est restaurée à la sortie.
+    """
+    if not (motif or "").strip():
+        raise ValueError("Une vérification plateforme exige un motif.")
+    jeton_entreprise = _entreprise.set(None)
+    jeton_portee = _portee.set(motif.strip())
+    try:
+        yield
+    finally:
+        _portee.reset(jeton_portee)
+        _entreprise.reset(jeton_entreprise)
+
+
 def activer_entreprise(entreprise) -> None:
     """Active une entreprise **jusqu'à la fin de la requête** — réservé à l'authentification.
 
@@ -125,6 +149,23 @@ def activer_entreprise(entreprise) -> None:
     """
     _entreprise.set(_en_uuid(entreprise))
     _portee.set(None)
+
+
+def suspendre_contexte():
+    """Vide le contexte et rend de quoi le restaurer (`restaurer_contexte`) — tâches Celery.
+
+    Une tâche part toujours sans entreprise ni portée. Mais en mode *eager* (développement,
+    cPanel), elle tourne **dans le fil de son appelant** : la vider sans restaurer laisserait la
+    suite de la requête sans entreprise, et la prochaine lecture lèverait `HorsContexteEntreprise`.
+    """
+    return _entreprise.set(None), _portee.set(None)
+
+
+def restaurer_contexte(jeton) -> None:
+    """Rend le contexte que `suspendre_contexte` avait mis de côté."""
+    jeton_entreprise, jeton_portee = jeton
+    _portee.reset(jeton_portee)
+    _entreprise.reset(jeton_entreprise)
 
 
 def reinitialiser_contexte() -> None:

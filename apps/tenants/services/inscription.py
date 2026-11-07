@@ -1,9 +1,13 @@
-"""Inscription d'une entreprise — contrat T-021, provisionnement T-020.
+"""Inscription d'une entreprise — contrat T-021, MLD v2.0 §7.5 (D9, R-12).
 
 **Rien n'existe avant l'activation.** Entre le formulaire public et le clic sur
-le lien reçu par email, la seule trace est une ligne de `demande_inscription`
-dans `public` : ni schéma, ni compte, ni entreprise. C'est ce que l'écran du
-lien expiré promet, et c'est ce qui permet de recommencer avec la même adresse.
+le lien reçu par email, la seule trace est une ligne de `demande_inscription` :
+ni compte, ni entreprise. C'est ce que l'écran du lien expiré promet, et c'est
+ce qui permet de recommencer avec la même adresse.
+
+**L'activation crée l'espace dans sa propre transaction** : entreprise, compte
+du dirigeant, matrice des rôles, abonnement d'essai. Plus de schéma, plus de
+tâche de provisionnement, plus de compensation.
 """
 
 import logging
@@ -12,21 +16,20 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.formats import localize
 from django.utils.timezone import localtime
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import contexte_schema
 from rest_framework import status
 
+from apps.core.contexte import contexte_entreprise
 from apps.core.emails import envoyer
 from apps.core.enums import StatutEntreprise
 from apps.core.exceptions import ErreurMetier
 from apps.tenants.models import (
     DUREE_LIEN_ACTIVATION,
     DemandeInscription,
-    Domaine,
     Entreprise,
 )
 from apps.tenants.services import deriver_slug
@@ -157,7 +160,11 @@ def deposer(
     entreprise_existante = Entreprise.objects.filter(
         email_contact__iexact=adresse,
     ).first()
-    if entreprise_existante is not None:
+    from apps.accounts.selectors import adresse_prise_sur_la_plateforme
+
+    # L'adresse d'un collaborateur, dans n'importe quelle entreprise, compte aussi (R-8) : sans
+    # ce test, l'inscription échouerait à l'activation, sur l'unicité du compte.
+    if entreprise_existante is not None or adresse_prise_sur_la_plateforme(adresse):
         raise EmailDejaUtilise()
 
     # Cas 3 — Demande déjà en attente d'activation pour cet email
@@ -251,7 +258,7 @@ def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
     )
 
 
-def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str, fin_essai) -> None:
+def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str) -> None:
     """Branche 6 — « l'adresse de l'espace, les identifiants, les 14 jours ».
 
     Aucun mot de passe n'y figure : il a été choisi par la personne elle-même à
@@ -334,75 +341,6 @@ def verifier(jeton_clair: str) -> DemandeInscription:
     return demande
 
 
-def lancer_provisionnement(demande_id: str) -> None:
-    """Déclenche la tâche de provisionnement du tenant de façon asynchrone et non-bloquante.
-
-    1. En environnement de test ou si Celery Eager est actif :
-       Un thread d'arrière-plan exécute la tâche sans bloquer les tests unitaires.
-    2. En production (cPanel / serveur web sous Passenger) :
-       Un processus CLI autonome est détaché via subprocess.Popen (start_new_session=True)
-       pour exécuter `manage.py provisionner_inscriptions --demande-id <id>`.
-       Cela évite tout blocage HTTP, ne dépend d'aucun worker Celery fantôme,
-       et empêche Passenger de geler le thread lors de la fin de la requête HTTP.
-    """
-    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
-        import threading
-        from django.db import connection
-        from apps.tenants.tasks import provisionner_entreprise
-
-        def _executer():
-            try:
-                provisionner_entreprise(demande_id)
-            finally:
-                connection.close()
-
-        thread = threading.Thread(
-            target=_executer, name=f"provisionner-{demande_id}", daemon=True
-        )
-        thread.start()
-    else:
-        import os
-        import subprocess
-        import sys
-
-        manage_py = settings.BASE_DIR / "manage.py"
-        cmd = [
-            sys.executable,
-            str(manage_py),
-            "provisionner_inscriptions",
-            "--demande-id",
-            str(demande_id),
-        ]
-        env = os.environ.copy()
-        settings_module = getattr(settings, "SETTINGS_MODULE", None) or os.environ.get("DJANGO_SETTINGS_MODULE")
-        if settings_module:
-            env["DJANGO_SETTINGS_MODULE"] = settings_module
-
-        try:
-            if os.name == "nt":
-                subprocess.Popen(
-                    cmd,
-                    env=env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                )
-            else:
-                subprocess.Popen(
-                    cmd,
-                    env=env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True,
-                )
-        except Exception:
-            logger.exception(
-                "Échec du lancement du sous-processus de provisionnement pour la demande %s",
-                demande_id,
-            )
-            from apps.tenants.tasks import provisionner_entreprise
-
-            provisionner_entreprise.delay(demande_id)
 
 
 # ---------------------------------------------------------------------------
@@ -410,7 +348,13 @@ def lancer_provisionnement(demande_id: str) -> None:
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> DemandeInscription:
-    """Vérifie l'email, définit le mot de passe et lance le provisionnement automatique du tenant."""
+    """Consomme le jeton et crée l'espace, **dans la même transaction** (D9, R-12).
+
+    Sous le multi-schéma, l'espace se construisait après coup — un schéma, 193 migrations, puis
+    trois transactions et une compensation (T-020). Sans schéma à créer, l'inscription n'est plus
+    qu'une suite d'insertions : elle réussit entière, ou ne laisse rien. Un échec annule aussi la
+    consommation du jeton : le lien reste valable, et la personne peut réessayer.
+    """
     demande = DemandeInscription.objects.select_for_update().filter(
         empreinte=DemandeInscription.empreinte_de(jeton_clair)
     ).first()
@@ -422,186 +366,128 @@ def activer(jeton_clair: str, *, nom: str, prenom: str, mot_de_passe: str) -> De
         DemandeInscription.Statut.PROVISIONNEMENT,
         DemandeInscription.Statut.ACTIVEE,
     }:
-        # §6 — rejeu d'une activation. L'espace existe ou se construit.
+        # §6 — rejeu d'une activation. L'espace existe déjà.
         raise InscriptionDejaActivee()
 
     if not demande.est_utilisable:
         raise JetonInscriptionExpire()
 
-    with transaction.atomic():
-        demande.utilise_le = timezone.now()
-        demande.nom = nom.strip()
-        demande.prenom = prenom.strip()
-        # Haché avant de toucher la base : la colonne vit dans `public`, et le
-        # compte qui portera ce mot de passe n'existe pas encore — MLD §4.8.
-        demande.mot_de_passe_transitoire = make_password(mot_de_passe)
-        demande.statut = DemandeInscription.Statut.PROVISIONNEMENT
-        demande.save(
-            update_fields=[
-                "utilise_le",
-                "nom",
-                "prenom",
-                "mot_de_passe_transitoire",
-                "statut",
-                "modifie_le",
-            ]
-        )
+    demande.utilise_le = timezone.now()
+    demande.nom = nom.strip()
+    demande.prenom = prenom.strip()
+    # Haché avant toute écriture : la demande le porte jusqu'à la création du compte, quelques
+    # lignes plus bas — et `provisionner` le vide dans la même transaction.
+    demande.mot_de_passe_transitoire = make_password(mot_de_passe)
+    demande.statut = DemandeInscription.Statut.PROVISIONNEMENT
+    demande.save(
+        update_fields=[
+            "utilise_le",
+            "nom",
+            "prenom",
+            "mot_de_passe_transitoire",
+            "statut",
+            "modifie_le",
+        ]
+    )
 
-    # Après commit de la transaction : lancement non-bloquant du provisionnement
-    transaction.on_commit(lambda: lancer_provisionnement(str(demande.pk)))
+    provisionner(demande)
     return demande
 
 
 # ---------------------------------------------------------------------------
-# T-020 §4.3 — le provisionnement lui-même
+# Le provisionnement : entreprise, rôles, administrateur, abonnement d'essai
 # ---------------------------------------------------------------------------
-def provisionner(identifiant) -> None:
-    """Crée le schéma, l'administrateur et le domaine — T2 puis T3.
+def provisionner(demande: DemandeInscription) -> Entreprise:
+    """Crée l'espace d'une demande au statut `PROVISIONNEMENT` — MLD v2.0 §7.5.
 
-    **Hors de toute transaction englobante**, et c'est le défaut D-7 qui
-    l'impose : `TenantMixin.save()` rattrape un échec de `create_schema` par
-    `self.delete(force_drop=True)`. Si l'échec est une erreur de base, la
-    transaction est déjà avortée, le rattrapage lève `InFailedSqlTransaction`,
-    **et c'est cette exception-là qui remonte** — l'erreur d'origine, la seule
-    qui dise ce qui n'a pas marché, est perdue.
-
-    En cas d'échec, la demande passe à `ECHEC` : c'est la compensation qui
-    remplace la transaction unique du MLD §7.5.
+    **Doit tourner dans la transaction de l'appelant** (`activer`, ou la décision du super admin) :
+    c'est elle qui garantit le « tout ou rien ». L'e-mail « espace prêt » ne part qu'après sa
+    validation.
     """
-    demande = DemandeInscription.objects.filter(pk=identifiant).first()
-    if demande is None or demande.statut != DemandeInscription.Statut.PROVISIONNEMENT:
-        return
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError("Le provisionnement doit tourner dans une transaction.")
 
+    from apps.accounts.models import Utilisateur
+    from apps.accounts.selectors import adresse_prise_sur_la_plateforme
+    from apps.accounts.services.roles import initialiser_roles_par_defaut
+    from apps.billing.models import JOURS_ESSAI, Abonnement, Plan
+    from apps.core.enums import RoleGlobal, StatutUtilisateur
+
+    # L'adresse est unique sur toute la plateforme (R-8) : déjà prise par un collaborateur d'une
+    # autre entreprise, l'insertion du compte échouerait sur la contrainte, plus bas.
+    if adresse_prise_sur_la_plateforme(demande.email):
+        raise EmailDejaUtilise()
+
+    # Une base sans plans est une base incomplète : `peupler_plans` n'a pas été passée. On le dit
+    # avant d'écrire quoi que ce soit, plutôt que de laisser une entreprise sans abonnement.
+    plan = (
+        Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
+        or Plan.objects.filter(code=Plan.Code.PRO).first()
+    )
+    if plan is None:
+        raise RuntimeError(
+            "Aucun plan d'essai (Maître d'Œuvre / Pro) en base — "
+            "passer `manage.py peupler_plans` avant d'activer une inscription."
+        )
+
+    entreprise = Entreprise.objects.create(
+        schema_name=demande.slug_reserve,
+        raison_sociale=demande.raison_sociale,
+        pays=demande.pays,
+        email_contact=demande.email,
+        statut=StatutEntreprise.ESSAI,
+    )
+
+    with contexte_entreprise(entreprise):
+        # D-DEMO-01 / T-S1-01 : le premier inscrit est Directeur Général et propriétaire
+        # immuable de l'entreprise. Le mot de passe est déjà haché : `create_user` le hacherait
+        # une seconde fois, il est donc posé tel quel.
+        administrateur = Utilisateur.objects.create_user(
+            email=demande.email,
+            password=None,
+            nom=demande.nom or demande.email.split("@")[0],
+            prenom=demande.prenom,
+            role_global=RoleGlobal.DIRECTEUR_GENERAL,
+            statut=StatutUtilisateur.ACTIF,
+        )
+        administrateur.is_owner = True
+        administrateur.password = demande.mot_de_passe_transitoire
+        administrateur.save(update_fields=["is_owner", "password", "modifie_le"])
+
+        # La matrice des rôles, dès la création de l'entreprise. Semée paresseusement, au premier
+        # affichage de l'écran des rôles, elle manquait aux invités du fondateur : refusés
+        # partout, sans message (le fondateur, lui, court-circuite la matrice).
+        initialiser_roles_par_defaut()
+
+    # L'abonnement d'essai — 14 jours. Son tarif reste inconnu tant que l'arbitrage A7 n'est pas
+    # rendu, ce qui n'empêche pas d'essayer, seulement de facturer.
+    debut = timezone.localdate()
+    fin_essai = debut + timedelta(days=JOURS_ESSAI)
+    Abonnement.objects.create(
+        entreprise=entreprise,
+        plan=plan,
+        statut=Abonnement.Statut.ESSAI,
+        date_debut=debut,
+        # L'abonnement d'essai s'arrête avec l'essai : ce qui suit se décide à la souscription.
+        date_fin=fin_essai,
+        fin_essai=fin_essai,
+        renouvellement_auto=False,
+    )
+
+    demande.statut = DemandeInscription.Statut.ACTIVEE
+    demande.entreprise = entreprise
+    demande.mot_de_passe_transitoire = ""
+    demande.save(update_fields=["statut", "entreprise", "mot_de_passe_transitoire", "modifie_le"])
+
+    # Branche 6 du §2.4 — l'espace est prêt, et il faut le dire : c'est la seule fois où l'adresse
+    # de l'espace est communiquée par écrit (T-018 §11.1). Après validation seulement.
+    transaction.on_commit(lambda: _annoncer_espace_pret(entreprise, demande.email))
+    return entreprise
+
+
+def _annoncer_espace_pret(entreprise: Entreprise, email_admin: str) -> None:
+    """Un incident SMTP n'annule pas une inscription déjà validée."""
     try:
-        # --- T2 : l'entreprise, et son schéma avec ses migrations ------------
-        entreprise = Entreprise.objects.filter(schema_name=demande.slug_reserve).first()
-        if entreprise is None:
-            entreprise = Entreprise.objects.create(
-                schema_name=demande.slug_reserve,
-                raison_sociale=demande.raison_sociale,
-                pays=demande.pays,
-                email_contact=demande.email,
-                statut=StatutEntreprise.ESSAI,
-            )
-
-        Domaine.objects.get_or_create(
-            domain=f"{demande.slug_reserve.replace('_', '-')}.{settings.DOMAINE_PRINCIPAL}",
-            defaults={"tenant": entreprise, "is_primary": True},
-        )
-
-        # **Après `create`, la connexion pointe sur `public`.** `migrate_schemas`
-        # se termine par `set_schema_to_public()` : sans `schema_context`,
-        # l'administrateur serait écrit dans `public.utilisateur`, chez
-        # l'éditeur. La table existe, les colonnes aussi, l'insertion réussit,
-        # **aucune erreur n'est levée**.
-        with contexte_schema(entreprise.schema_name):
-            from apps.accounts.models import Utilisateur
-            from apps.core.enums import RoleGlobal, StatutUtilisateur
-
-            # D-DEMO-01 / T-S1-01 : Le premier inscrit est Directeur Général
-            # et Propriétaire immuable du tenant.
-            administrateur = Utilisateur.objects.filter(email=demande.email).first()
-            if administrateur is None:
-                administrateur = Utilisateur.objects.create_user(
-                    email=demande.email,
-                    password=None,
-                    nom=demande.nom or demande.email.split("@")[0],
-                    prenom=demande.prenom,
-                    role_global=RoleGlobal.DIRECTEUR_GENERAL,
-                    statut=StatutUtilisateur.ACTIF,
-                )
-            administrateur.is_owner = True
-            # Le mot de passe est déjà haché : le repasser par `set_password`
-            # le hacherait deux fois.
-            if demande.mot_de_passe_transitoire:
-                administrateur.password = demande.mot_de_passe_transitoire
-            administrateur.save(update_fields=["is_owner", "password", "modifie_le"])
-
-            # --- La matrice des rôles, dès la création de l'entreprise -------
-            #
-            # **Elle était semée paresseusement, au premier affichage de l'écran
-            # des rôles.** Tant que personne n'y allait, le schéma n'avait aucun
-            # rôle — et le contrôle d'accès refuse tout à qui n'a pas le sien.
-            # Le fondateur ne s'en apercevait pas : `AD`, `DG` et le propriétaire
-            # court-circuitent la matrice. **Ses invités, eux, étaient refusés
-            # partout** — un conducteur de travaux sans un seul module, sans
-            # message, et sans que rien ne relie la cause à l'effet.
-            #
-            # Une entreprise n'existe donc plus sans sa matrice.
-            from apps.accounts.services.roles import initialiser_roles_par_defaut
-
-            initialiser_roles_par_defaut()
-
-        # --- L'abonnement d'essai — 14 jours en plan Pro ---------------------
-        # Sans lui, aucun compteur de jours restants ne peut s'afficher : c'est
-        # la dépendance que DEV-12 attendait. Le plan Pro est celui de l'essai,
-        # et son **tarif reste inconnu** tant que l'arbitrage A7 n'est pas rendu
-        # — ce qui n'empêche pas d'essayer, seulement de facturer.
-        from apps.billing.models import JOURS_ESSAI, Abonnement, Plan
-
-        plan = (
-            Plan.objects.filter(code=Plan.Code.MAITRE_OEUVRE).first()
-            or Plan.objects.filter(code=Plan.Code.PRO).first()
-        )
-        if plan is None:
-            # Une base sans plans est une base incomplète : `peupler_plans` n'a
-            # pas été passée. On le dit plutôt que de laisser l'entreprise sans
-            # abonnement, ce qui se verrait bien plus tard et bien plus mal.
-            raise RuntimeError(
-                "Aucun plan d'essai (Maître d'Œuvre / Pro) en base — "
-                "passer `manage.py peupler_plans` avant de provisionner une entreprise."
-            )
-
-        debut = timezone.localdate()
-        fin_essai = debut + timedelta(days=JOURS_ESSAI)
-        Abonnement.objects.get_or_create(
-            entreprise=entreprise,
-            statut=Abonnement.Statut.ESSAI,
-            defaults={
-                "plan": plan,
-                "date_debut": debut,
-                # L'abonnement d'essai s'arrête avec l'essai : ce qui suit se
-                # décide à la souscription, pas ici.
-                "date_fin": fin_essai,
-                "fin_essai": fin_essai,
-                "renouvellement_auto": False,
-            },
-        )
-
-        # --- T3 : la demande est close, et la colonne transitoire vidée ------
-        with transaction.atomic():
-            demande.statut = DemandeInscription.Statut.ACTIVEE
-            demande.entreprise = entreprise
-            demande.mot_de_passe_transitoire = ""
-            demande.save(
-                update_fields=["statut", "entreprise", "mot_de_passe_transitoire", "modifie_le"]
-            )
-
-        from django.db import connection
-        if not connection.in_atomic_block:
-            connection.commit()
-
-        # Branche 6 du §2.4 — l'espace est prêt, et il faut le dire.
-        #
-        # **C'est la seule fois où l'adresse du client lui est communiquée par
-        # écrit** (T-018 §11.1). Il la retrouvera dans cet email six mois plus
-        # tard. La branche existait au parcours et n'avait aucun code : le
-        # client apprenait l'adresse de son espace par l'écran, et l'oubliait
-        # en fermant l'onglet.
-        try:
-            _envoyer_espace_pret(entreprise, demande.email, fin_essai)
-        except Exception:
-            # L'espace est déjà prêt : un incident SMTP ne doit pas annuler
-            # l'activation ni empêcher le suivi de renvoyer PRET.
-            logger.exception(
-                "Email espace prêt non envoyé — demande %s, entreprise %s",
-                identifiant,
-                entreprise.pk,
-            )
-
+        _envoyer_espace_pret(entreprise, email_admin)
     except Exception:
-        logger.exception("Provisionnement en échec — demande %s", identifiant)
-        DemandeInscription.objects.filter(pk=identifiant).update(
-            statut=DemandeInscription.Statut.ECHEC, modifie_le=timezone.now()
-        )
-        raise
+        logger.exception("Email « espace prêt » non envoyé — entreprise %s", entreprise.pk)

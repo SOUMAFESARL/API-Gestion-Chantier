@@ -285,6 +285,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 2 | Fait — modèle de données | `773b9bd`, `a7e14a4` (ensemencement) |
 | 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8`, `801a502` |
 | 4 | Fait le 07/11/2026 — voir ci-dessous | `27b9ccd` |
+| 5 | Fait le 07/11/2026 — voir ci-dessous | voir l'historique de la branche |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 
@@ -312,3 +313,18 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 - **Critère tenu** : hors contexte, `SELECT count(*) FROM projet` rend 0 ; dans `demo`, 11.
 
 **Reste au lot 5** : la suppression définitive repose encore sur `DROP SCHEMA` ; elle ne peut pas aboutir (les lignes de l'entreprise retiennent `entreprise_cliente`) tant qu'elle n'est pas réécrite par `entreprise_id` — trigger d'immuabilité de `historique_date` compris.
+
+### Lot 5 — ce qui a été fait, et ce qu'il a fait apparaître
+
+- **Inscription en une transaction** (`tenants/services/inscription.py`) : `activer` consomme le jeton et crée, dans la même transaction, l'entreprise, le compte du dirigeant, la matrice des rôles et l'abonnement d'essai. Un échec annule tout, consommation du jeton comprise : le lien reste valable. Plus de tâche `provisionner_entreprise`, de sous-processus, de commande `provisionner_inscriptions` ni de relance par la sonde ; plus de `Domaine` écrit. La décision du super admin (`A_VALIDER`) provisionne de même, dans sa transaction. Le contrat ne change pas : `activer` répond toujours `202` avec `suivi` (`statut` vaut `PRET`), et la sonde répond `PRET` dès son premier appel.
+- **Critère tenu** : dépôt → activation → sonde → connexion → profil en **3,1 à 3,5 s** en local (console d'e-mails comprise).
+- **`registre_email` retiré** (modèle, migration `tenants.0017`, alimentation dans `Utilisateur.save`, purge au départ, commande `remplir_registre_global`, étapes du déploiement et de `migrer-bd`). L'unicité de l'adresse se vérifie sur `utilisateur`, à l'inscription comme à l'invitation.
+- **Ce qu'il a fait apparaître : la RLS cachait les doublons.** `adresse_prise_sur_la_plateforme` passait par `_base_manager`, mais sous une entreprise active la RLS ne montre que ses comptes : l'adresse d'un collaborateur d'une autre entreprise passait le contrôle, puis l'invitation échouait en 500 sur la contrainte. Nouvelle exception, étroite et nommée : `verification_plateforme(motif=…)`, qui s'ouvre sous une entreprise pour un test qui ne rend qu'un booléen (D9 R-4 complétée).
+- **`X-Tenant` retiré** des en-têtes CORS et de la description de l'API.
+- **Suppression définitive par `entreprise_id`** (`suppression_definitive.py`) : le périmètre se **calcule** à partir des modèles — porteurs d'une clé vers `Entreprise`, leurs dépendants (tables M2M, paiements, rappels), mise à nul des `cree_par` de la plateforme, journal d'audit de l'entreprise — et se supprime dans une transaction terminée par `SET CONSTRAINTS ALL IMMEDIATE`. `nettoyage.supprimer_entreprise_proprement` (commande `gerer_entreprises`, route de maintenance) y délègue : une seule purge. Essai sur une entreprise peuplée par `peupler_donnees_test` : 5 608 lignes dans 25 tables, supprimées en 0,8 s, aucune ne reste.
+- **Déclencheur de `historique_date`** (`projets.0004`) : il laisse passer la seule purge de l'entreprise de la ligne (`ccd.purge_entreprise`, local à la transaction, sous `ccd_plateforme`). Suppression et mise à jour ordinaires restent refusées — vérifié.
+- **Sauvegarde avant suppression** (`sauvegarde_entreprise.py`, remplace `sauvegarde_schema.py`) : les lignes du même périmètre au format `jsonl` des fixtures (`loaddata`, en superutilisateur), plus un `.apercu.json`. 5 609 lignes en 1,9 s.
+- **Ce qu'il a fait apparaître : Celery eager vidait le contexte de la requête.** La remise à zéro du lot 4 (`task_postrun`) s'appliquait aussi en mode *eager* — celui de cPanel —, où la tâche tourne dans le fil de la requête : après le premier `.delay()`, la suite levait `HorsContexteEntreprise`. Le contexte est désormais **suspendu puis rendu** autour de chaque tâche (`suspendre_contexte` / `restaurer_contexte`).
+- **Restes du lot 3 corrigés** : quatre lectures de `connection.tenant`, que plus rien ne pose — le profil (`/utilisateurs/moi/`) sans entreprise, l'écran d'abonnement en 400 pour tous, CinetPay (sauvé par un repli), le pays de l'import de main-d'œuvre (toujours CI).
+
+**Reste hors du lot 5** : `peupler_donnees_test` n'écrit que des adresses `@demo.ci` et ne peut donc peupler qu'une entreprise par base (lot 6) ; `Domaine`, `schema_name` et le claim `schema` (lots 8 et étape 8 du frontend) ; le type `AccuseActivation.statut` du frontend, qui annonce `PROVISIONNEMENT` (étape 8) ; les copies locales `module` / `permission`, encore copiées à l'inscription (Q3).

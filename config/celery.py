@@ -24,18 +24,34 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 
+_contextes_suspendus: dict[str, object] = {}
+
+
 @task_prerun.connect
+def _contexte_vierge(task_id=None, **_kwargs):
+    """Chaque tâche part sans entreprise ni portée plateforme (D9)…"""
+    from apps.core.contexte import suspendre_contexte
+
+    _contextes_suspendus[task_id] = suspendre_contexte()
+
+
 @task_postrun.connect
-def _contexte_vierge(**_kwargs):
-    """Chaque tâche part sans entreprise ni portée plateforme, et n'en laisse aucune (D9).
+def _contexte_rendu(task_id=None, **_kwargs):
+    """… et rend en partant celui qu'elle a trouvé.
 
-    Un travailleur Celery enchaîne les tâches sur le même fil : sans cette remise à zéro, une
-    tâche qui aurait activé une entreprise sans bloc à refermer la léguerait à la suivante. La
-    session PostgreSQL suit d'elle-même, à la première requête (`apps.core.rls`).
+    Sur un travailleur, c'est un contexte vide : une tâche qui aurait activé une entreprise sans
+    bloc à refermer ne la lègue pas à la suivante. **En mode *eager*** (développement, cPanel), la
+    tâche tourne dans le fil de la requête qui l'a lancée : la requête retrouve son entreprise.
+    Une simple remise à zéro la lui retirait, et sa lecture suivante levait
+    `HorsContexteEntreprise`. La session PostgreSQL suit d'elle-même (`apps.core.rls`).
     """
-    from apps.core.contexte import reinitialiser_contexte
+    from apps.core.contexte import reinitialiser_contexte, restaurer_contexte
 
-    reinitialiser_contexte()
+    jeton = _contextes_suspendus.pop(task_id, None)
+    if jeton is None:
+        reinitialiser_contexte()
+    else:
+        restaurer_contexte(jeton)
 
 
 @app.task(bind=True, ignore_result=True)

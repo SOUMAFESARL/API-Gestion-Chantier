@@ -389,15 +389,14 @@ SPECTACULAR_SETTINGS = {
         "3. Lire, modifier ou supprimer le brouillon : `/api/v1/chantier/rapports/{id}/`.\n"
         "4. Soumettre, valider CT et approuver CP via les actions dédiées.\n"
         "La base métier doit être migrée avant d'exécuter ces opérations.\n\n"
-        "### 1. Architecture Multi-Tenancy à Domaine Unique (Option A)\n"
-        "- **Point d'accès unifié** : Toutes les requêtes (publiques et tenant) "
-        "sont adressées au même domaine d'API (ex: `https://api.ccd-digital.ci` ou `http://localhost:8000`).\n"
-        "- **Résolution automatique par JWT** : Pour les routes protégées des tenants "
-        "(chantiers, finances, tiers, utilisateurs, etc.), le middleware résout automatiquement le schéma PostgreSQL "
-        "de l'entreprise à partir du claim `schema` dans le jeton JWT Bearer, ou via l'en-tête `X-Tenant`.\n"
-        "- **Routes Publiques** : L'inscription (`/api/v1/inscription/`), l'authentification "
+        "### 1. Un seul point d'accès, l'entreprise portée par le jeton\n"
+        "- **Point d'accès unique** : toutes les requêtes sont adressées au même domaine d'API "
+        "(ex : `https://api.ccd-digital.ci` ou `http://localhost:8000`).\n"
+        "- **L'entreprise vient du jeton vérifié** : le claim `entreprise` du jeton JWT Bearer, "
+        "comparé à l'entreprise du compte. Aucun en-tête ni sous-domaine ne la désigne (D9, R-7).\n"
+        "- **Routes publiques** : l'inscription (`/api/v1/inscription/`), l'authentification "
         "(`/api/v1/auth/token/`), la santé (`/api/health/`) et les forfaits (`/api/v1/plans/`) "
-        "s'exécutent sur le schéma public sans sous-domaine.\n\n"
+        "ne demandent pas de jeton.\n\n"
         "### 2. Authentification JWT\n"
         "- Pour les routes protégées, transmettre le jeton d'accès dans l'en-tête HTTP : "
         "`Authorization: Bearer <access_token>`.\n"
@@ -474,9 +473,9 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://127\.0\.0\.1:\d+$",
 ]
 
+# Plus de `x-tenant` : l'entreprise vient du jeton vérifié, jamais d'un en-tête (D9, R-7).
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-request-id",
-    "x-tenant",
 ]
 CORS_EXPOSE_HEADERS = [
     "x-request-id",

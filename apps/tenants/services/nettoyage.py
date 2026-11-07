@@ -1,31 +1,23 @@
-"""Services d'inspection et de nettoyage souverain des entreprises et de leurs schémas.
+"""Services d'inspection et de nettoyage des entreprises.
 
-Garantit la suppression propre et atomique d'une entreprise :
-1. Suppression physique du schéma PostgreSQL (DROP SCHEMA IF EXISTS ... CASCADE).
-2. Nettoyage exhaustif et ordonné de toutes les références dans le schéma public :
-   - Paiements et factures (paiement_abonnement, facture)
-   - Abonnements et rappels / relances (rappel_expiration_abonnement, relance_essai, abonnement)
-   - Modules catalogue souscrits (catalogue_entreprise_module)
-   - Registre global des adresses e-mail (registre_email) — il protège l'entreprise
-     (`on_delete=PROTECT`) : tant qu'une adresse y pointe, elle ne se supprime pas
-   - Demandes d'inscription associées (demande_inscription)
-   - Domaines rattachés (domaine)
-   - Entrée principale dans entreprise_cliente
-   - Comptes utilisateurs résiduels dans public.utilisateur rattachés à ce contact (hors staff)
-3. Protection absolue : 'public' et 'demo' sont sanctuarisés et ne peuvent jamais être supprimés.
+- `lister_entreprises_avec_directeurs` : l'inventaire des entreprises et de leurs dirigeants ;
+- `supprimer_entreprise_proprement` : la suppression définitive, par UUID ou slug — elle délègue
+  à `suppression_definitive`, seule purge de la plateforme (D9) ;
+- `activer_ou_renouveler_abonnement` : la remise en service d'un abonnement.
+
+`demo` est protégée : elle ne se supprime jamais.
 """
 
+import contextlib
 import logging
 import uuid
 from typing import Any
 
 from django.conf import settings
-from django.db import connection, transaction
-from apps.core.contexte import portee_plateforme
-from apps.core.passerelle_schema import contexte_schema
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal
+from apps.core.passerelle_schema import contexte_schema
 from apps.tenants.models import DemandeInscription, Entreprise
 
 logger = logging.getLogger(__name__)
@@ -114,220 +106,42 @@ def lister_entreprises_avec_directeurs() -> dict[str, Any]:
 
 
 def supprimer_entreprise_proprement(identifiant: str) -> dict[str, Any]:
-    """Supprime une entreprise de manière propre et atomique (schéma + dépendances public).
+    """Supprime une entreprise désignée par son UUID ou son slug — commande et maintenance.
 
-    Arguments:
-        identifiant: Nom du schéma (schema_name) ou UUID de l'entreprise (id).
+    Une seule purge sur la plateforme : celle de `suppression_definitive` (par `entreprise_id`,
+    dans une transaction, D9). Il n'y a plus de schéma orphelin à détruire.
 
     Lève:
-        ValueError: Si le schéma fait partie des schémas protégés (public, demo) ou si introuvable.
+        ValueError: si l'entreprise est protégée (`demo`) ou introuvable.
     """
-    identifiant_str = str(identifiant).strip().lower()
+    from apps.tenants.services.suppression_definitive import supprimer_definitivement
 
+    identifiant_str = str(identifiant).strip().lower()
     if identifiant_str in SCHEMAS_PROTEGES:
         raise ValueError(
-            f"Suppression interdite : le schéma « {identifiant_str} » fait partie "
-            "des schémas système protégés (public, demo)."
+            f"Suppression interdite : « {identifiant_str} » est une entreprise protégée."
         )
 
-    # 1. Identifier l'entreprise et son schéma
     entreprise = None
-    schema_nom = None
-
-    # Tenter par UUID
-    try:
-        val_uuid = uuid.UUID(identifiant_str)
-        entreprise = Entreprise.objects.filter(id=val_uuid).first()
-    except (ValueError, AttributeError):
-        pass
-
-    # Tenter par schema_name si pas trouvé par UUID
-    if not entreprise:
+    with contextlib.suppress(ValueError, AttributeError):
+        entreprise = Entreprise.objects.filter(id=uuid.UUID(identifiant_str)).first()
+    if entreprise is None:
         entreprise = Entreprise.objects.filter(schema_name__iexact=identifiant_str).first()
-
-    # Si l'entreprise existe en base
-    if entreprise:
-        schema_nom = entreprise.schema_name
-    else:
-        # Vérifier si c'est un schéma orphelin existant directement dans PostgreSQL
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT schema_name FROM information_schema.schemata WHERE schema_name = %s;",
-                [identifiant_str],
-            )
-            row = cursor.fetchone()
-            if row:
-                schema_nom = row[0]
-
-    if not entreprise and not schema_nom:
+    if entreprise is None:
+        raise ValueError(f"Aucune entreprise trouvée avec l'identifiant « {identifiant} ».")
+    if entreprise.schema_name.lower() in SCHEMAS_PROTEGES:
         raise ValueError(
-            f"Aucune entreprise ni schéma trouvé avec l'identifiant « {identifiant} »."
+            f"Suppression interdite : « {entreprise.schema_name} » est une entreprise protégée."
         )
 
-    if schema_nom in SCHEMAS_PROTEGES:
-        raise ValueError(
-            f"Suppression interdite : le schéma « {schema_nom} » fait partie "
-            "des schémas système protégés (public, demo)."
-        )
-
-    rapport: dict[str, Any] = {
+    rapport = supprimer_definitivement(entreprise)
+    return {
         "identifiant_demande": identifiant,
-        "schema_supprime": schema_nom,
-        "entreprise_trouvee": bool(entreprise),
-        "tables_nettoyees": {},
+        "schema_supprime": entreprise.schema_name,
+        "entreprise_trouvee": True,
+        "tables_nettoyees": rapport["tables_nettoyees"],
+        "adresses_liberees": rapport["adresses_liberees"],
     }
-
-    ent_id_str = str(entreprise.id) if entreprise else None
-    ent_email = entreprise.email_contact if entreprise else None
-
-    # 2. Exécution atomique — tout ou rien. Sans transaction, chaque instruction était validée
-    # seule : une erreur en cours de route (une référence oubliée, par exemple) laissait le
-    # schéma détruit et la facturation effacée, mais l'entreprise toujours en base, pointant
-    # vers un schéma qui n'existe plus. `DROP SCHEMA` est transactionnel sous PostgreSQL.
-    # Portée plateforme : ce SQL brut traverse les entreprises (D9). Hors portée, la RLS lui
-    # cacherait les comptes de l'entreprise, et ses `DELETE` ne toucheraient rien, sans erreur.
-    with (
-        portee_plateforme(motif="nettoyage : suppression d'une entreprise"),
-        transaction.atomic(),
-        connection.cursor() as cursor,
-    ):
-        # A. DROP SCHEMA CASCADE
-        if schema_nom:
-            cursor.execute(f'DROP SCHEMA IF EXISTS "{schema_nom}" CASCADE;')
-            rapport["schema_drop"] = True
-
-        # B. Nettoyage dans public
-        ent_ids = [ent_id_str] if ent_id_str else []
-
-        # Retrouver aussi d'éventuels IDs orphelins liés au schema_name
-        if schema_nom and not ent_ids:
-            cursor.execute(
-                "SELECT id FROM public.entreprise_cliente WHERE schema_name = %s;",
-                [schema_nom],
-            )
-            for r in cursor.fetchall():
-                ent_ids.append(str(r[0]))
-
-        if ent_ids:
-            # catalogue_entreprise_module
-            cursor.execute(
-                "DELETE FROM public.catalogue_entreprise_module WHERE entreprise_id = ANY(%s);",
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["catalogue_entreprise_module"] = cursor.rowcount
-
-            # factures & paiements
-            cursor.execute(
-                """
-                DELETE FROM public.paiement_abonnement
-                WHERE facture_id IN (
-                    SELECT id FROM public.facture WHERE entreprise_id = ANY(%s)
-                );
-            """,
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["paiement_abonnement"] = cursor.rowcount
-
-            cursor.execute("DELETE FROM public.facture WHERE entreprise_id = ANY(%s);", [ent_ids])
-            rapport["tables_nettoyees"]["facture"] = cursor.rowcount
-
-            # abonnements & rappels / relances
-            cursor.execute(
-                """
-                DELETE FROM public.rappel_expiration_abonnement
-                WHERE abonnement_id IN (
-                    SELECT id FROM public.abonnement WHERE entreprise_id = ANY(%s)
-                );
-            """,
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["rappel_expiration_abonnement"] = cursor.rowcount
-
-            cursor.execute(
-                """
-                DELETE FROM public.relance_essai
-                WHERE abonnement_id IN (
-                    SELECT id FROM public.abonnement WHERE entreprise_id = ANY(%s)
-                );
-            """,
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["relance_essai"] = cursor.rowcount
-
-            cursor.execute(
-                "DELETE FROM public.abonnement WHERE entreprise_id = ANY(%s);", [ent_ids]
-            )
-            rapport["tables_nettoyees"]["abonnement"] = cursor.rowcount
-
-            # domaines
-            cursor.execute("DELETE FROM public.domaine WHERE tenant_id = ANY(%s);", [ent_ids])
-            rapport["tables_nettoyees"]["domaine"] = cursor.rowcount
-
-            # demandes_inscription liées
-            cursor.execute(
-                "DELETE FROM public.demande_inscription WHERE entreprise_id = ANY(%s);",
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["demande_inscription_par_entreprise"] = cursor.rowcount
-
-            # registre_email : les adresses des collaborateurs, libérées avec l'entreprise
-            cursor.execute(
-                "DELETE FROM public.registre_email WHERE entreprise_id = ANY(%s);",
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["registre_email"] = cursor.rowcount
-
-            # telephone_entreprise
-            cursor.execute(
-                "DELETE FROM public.telephone_entreprise WHERE entreprise_id = ANY(%s);",
-                [ent_ids],
-            )
-            rapport["tables_nettoyees"]["telephone_entreprise"] = cursor.rowcount
-
-            # entreprise_cliente
-            cursor.execute("DELETE FROM public.entreprise_cliente WHERE id = ANY(%s);", [ent_ids])
-            rapport["tables_nettoyees"]["entreprise_cliente"] = cursor.rowcount
-
-        # C. Nettoyage complémentaire des demandes par slug_reserve
-        if schema_nom:
-            cursor.execute(
-                "DELETE FROM public.demande_inscription WHERE slug_reserve = %s;",
-                [schema_nom],
-            )
-            nb_dem = cursor.rowcount
-            if nb_dem > 0:
-                rapport["tables_nettoyees"]["demande_inscription_par_slug"] = nb_dem
-
-            # Domaines orphelins portant le nom du schéma (ex: schema.localhost)
-            cursor.execute(
-                "DELETE FROM public.domaine WHERE domain ILIKE %s;",
-                [f"{schema_nom}.%"],
-            )
-            nb_dom = cursor.rowcount
-            if nb_dom > 0:
-                rapport["tables_nettoyees"]["domaine_par_nom"] = nb_dom
-
-        # D. Nettoyage éventuel des comptes temporaires de public.utilisateur non-staff
-        if ent_email:
-            cursor.execute(
-                """
-                DELETE FROM public.utilisateur
-                WHERE email = %s
-                  AND is_staff = FALSE
-                  AND is_superuser = FALSE;
-            """,
-                [ent_email],
-            )
-            if cursor.rowcount > 0:
-                rapport["tables_nettoyees"]["utilisateur_public"] = cursor.rowcount
-
-    logger.info(
-        "Entreprise « %s » (schéma: %s) purgée avec succès : %s",
-        identifiant,
-        schema_nom,
-        rapport["tables_nettoyees"],
-    )
-    return rapport
 
 
 def activer_ou_renouveler_abonnement(

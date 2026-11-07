@@ -2,10 +2,8 @@
 
 import logging
 
-from django.db import connection
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -24,6 +22,7 @@ from apps.billing.serializers import (
 )
 from apps.billing.services.cinetpay import CinetPayClient
 from apps.billing.services.paiement import PaiementAbonnementService, PaiementEnCoursError
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +52,7 @@ class PlansCatalogueView(APIView):
 
 
 from apps.core.droits import APermission
+from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
 
 
 class InitierPaiementView(APIView):
@@ -76,10 +76,7 @@ class InitierPaiementView(APIView):
         cycle = serializer.validated_data["cycle"]
         return_url = serializer.validated_data.get("return_url")
 
-        tenant = getattr(connection, "tenant", None)
-        if tenant is None:
-            # Fallback vers l'entreprise de l'utilisateur si disponible
-            tenant = getattr(request.user, "entreprise", None)
+        tenant = _entreprise_active()
 
         if tenant is None:
             return Response(
@@ -149,9 +146,7 @@ class AnnulerPaiementView(APIView):
         transaction_id = serializer.validated_data["transaction_id"]
         motif = serializer.validated_data.get("motif", "Annulation demandée par l'utilisateur")
 
-        tenant = getattr(connection, "tenant", None)
-        if tenant is None:
-            tenant = getattr(request.user, "entreprise", None)
+        tenant = _entreprise_active()
 
         if tenant is None:
             return Response(

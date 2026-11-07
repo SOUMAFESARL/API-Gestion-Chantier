@@ -2,9 +2,7 @@
 
 from datetime import timedelta
 
-from django.db import connection
 from django.utils import timezone
-from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -13,6 +11,8 @@ from rest_framework.views import APIView
 
 from apps.billing.models import JOURS_ESSAI, Abonnement, Plan
 from apps.billing.serializers import AbonnementSerializer
+from apps.core.passerelle_schema import contexte_schema, schema_public
+from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
 
 __all__ = ["AbonnementView"]
 
@@ -27,7 +27,7 @@ class AbonnementView(APIView):
         responses={200: AbonnementSerializer},
     )
     def get(self, request):
-        tenant = getattr(connection, "tenant", None)
+        tenant = _entreprise_active()
         if tenant is None:
             return Response(
                 {"detail": "Aucun tenant actif."},

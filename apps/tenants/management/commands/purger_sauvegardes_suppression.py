@@ -37,7 +37,7 @@ class Command(BaseCommand):
         limite = time.time() - (jours * 86400)
         fichiers_candidats = []
 
-        for motif in ("*.dump", "*.json"):
+        for motif in ("*.dump", "*.json", "*.jsonl"):
             for chemin in dossier.glob(motif):
                 if chemin.is_file():
                     try:

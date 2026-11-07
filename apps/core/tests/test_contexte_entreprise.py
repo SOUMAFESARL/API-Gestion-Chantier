@@ -16,6 +16,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from apps.core.authentification import verifier_et_activer
 from apps.core.contexte import (
     HorsContexteEntreprise,
+    activer_entreprise,
     avec_entreprise,
     contexte_entreprise,
     en_portee_plateforme,
@@ -23,6 +24,7 @@ from apps.core.contexte import (
     exiger_entreprise,
     portee_plateforme,
     reinitialiser_contexte,
+    verification_plateforme,
 )
 from apps.core.middleware_contexte import ContexteEntrepriseMiddleware
 from apps.core.models import ErreurIsolation, ModeleBase, ModeleEntreprise
@@ -104,6 +106,39 @@ class TestContexte:
 
         assert tache(str(A), 21) == 42
         assert vu["entreprise"] == A
+        assert entreprise_courante_id() is None
+
+    def test_verification_plateforme_sous_une_entreprise(self):
+        # Lot 5 : l'unicité d'une adresse se vérifie sur toute la plateforme, même pendant une
+        # requête d'entreprise — puis l'entreprise est rendue.
+        with contexte_entreprise(A):
+            with verification_plateforme(motif="essai"):
+                assert entreprise_courante_id() is None
+                assert en_portee_plateforme()
+            assert entreprise_courante_id() == A
+            assert not en_portee_plateforme()
+
+    def test_verification_plateforme_exige_un_motif(self):
+        with pytest.raises(ValueError):
+            verification_plateforme(motif=" ").__enter__()
+
+    def test_tache_eager_rend_le_contexte_de_la_requete(self):
+        # Lot 5 : en mode eager, la tâche tourne dans le fil de la requête. Elle part sans
+        # entreprise, et la requête retrouve la sienne ensuite.
+        from config.celery import _contexte_rendu, _contexte_vierge
+
+        with contexte_entreprise(A):
+            _contexte_vierge(task_id="t1")
+            assert entreprise_courante_id() is None
+            _contexte_rendu(task_id="t1")
+            assert entreprise_courante_id() == A
+
+    def test_tache_sur_un_travailleur_laisse_un_contexte_vide(self):
+        from config.celery import _contexte_rendu, _contexte_vierge
+
+        _contexte_vierge(task_id="t2")
+        activer_entreprise(B)  # une tâche qui active sans refermer
+        _contexte_rendu(task_id="t2")
         assert entreprise_courante_id() is None
 
 

@@ -247,13 +247,7 @@ jobs:
               echo "=== Migration ignorée (run_migrate=false) ==="
             fi
 
-            echo ""
-            echo "=== Rattrapage des inscriptions en attente ==="
-            "$VENV_PYTHON" manage.py provisionner_inscriptions 2>&1 || true
 
-            echo ""
-            echo "=== Synchronisation du registre global des emails ==="
-            "$VENV_PYTHON" manage.py remplir_registre_global 2>&1 || true
 
             echo ""
             echo "=== Synchronisation du catalogue des permissions ==="

@@ -13,20 +13,20 @@ import uuid
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.files.base import ContentFile
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from apps.core.passerelle_schema import schema_public, schema_courant
 from PIL import Image
 from rest_framework import status
 
-from apps.accounts.models import Role, Utilisateur
+from apps.accounts.models import Utilisateur
 from apps.accounts.services.authentification import duree_acces_en_secondes, emettre_jetons
 from apps.accounts.services.liste_noire import revoquer_utilisateur
 from apps.audit.services import journaliser
-from apps.core.enums import ActionAudit, ModuleChoix, RoleGlobal
+from apps.core.enums import ActionAudit
 from apps.core.exceptions import ErreurMetier
+from apps.core.passerelle_schema import entreprise_courante as _entreprise_active
+from apps.core.passerelle_schema import schema_courant
 from apps.core.permissions import obtenir_portee_role
-from apps.tenants.models import Entreprise
 
 __all__ = [
     "AncienMotDePasseInvalide",
@@ -90,15 +90,13 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
         except Exception:
             avatar_url = utilisateur.avatar.url
 
-    # 2. Informations de l'entreprise (tenant)
+    # 2. Informations de l'entreprise — l'entreprise active, posée par le jeton vérifié (D9).
+    # `connection.tenant` venait de django-tenants : plus rien ne le pose, le profil perdait
+    # l'entreprise.
     entreprise_info = None
-    tenant = getattr(connection, "tenant", None)
-    if tenant and getattr(tenant, "schema_name", "") != schema_public():
-        entreprise = (
-            tenant
-            if hasattr(tenant, "pk")
-            else Entreprise.objects.filter(schema_name=tenant.schema_name).first()
-        )
+    tenant = _entreprise_active()
+    if tenant is not None:
+        entreprise = tenant
         if entreprise:
             logo_url = None
             if getattr(entreprise, "logo", None) and hasattr(entreprise.logo, "url"):

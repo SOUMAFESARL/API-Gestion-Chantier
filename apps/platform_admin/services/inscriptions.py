@@ -1,4 +1,5 @@
-"""Decision administrative atomique avant le provisionnement du tenant."""
+"""Décision du super admin sur une inscription — et, si elle est approuvée, l'espace dans la même
+transaction (D9, R-12)."""
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -48,7 +49,7 @@ def decider_inscription(identifiant, utilisateur, *, approuver, motif="", adress
         detail={"demande_id": str(demande.pk), "motif": demande.motif_refus},
     )
     if approuver:
-        from apps.tenants.tasks import provisionner_entreprise
+        from apps.tenants.services.inscription import provisionner
 
-        transaction.on_commit(lambda: provisionner_entreprise.delay(str(demande.pk)))
+        provisionner(demande)
     return demande

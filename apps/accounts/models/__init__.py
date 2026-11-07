@@ -341,17 +341,6 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         self.clean()
         super().save(*args, **kwargs)
 
-        # Règle C-03 (Q4) : le registre global suit les comptes d'entreprise. Il est redondant
-        # depuis que tous les comptes partagent `utilisateur` (D9), et disparaît au lot 5 ; d'ici
-        # là, il reste juste.
-        if self.entreprise_id and self.email and not self.email.endswith("@depart.invalide"):
-            from apps.tenants.models import RegistreEmail
-
-            RegistreEmail.objects.update_or_create(
-                email=self.email.strip().lower(),
-                defaults={"entreprise_id": self.entreprise_id},
-            )
-
     def enregistrer_echec_connexion(self) -> None:
         """Socle Commun §2.1 — blocage après 5 échecs consécutifs.
 

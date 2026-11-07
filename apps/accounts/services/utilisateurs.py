@@ -115,17 +115,7 @@ def desactiver_collaborateur_plateforme(
             exc,
         )
 
-    # 2. Purge de la table RegistreEmail (schéma public)
-    try:
-        from apps.core.passerelle_schema import contexte_schema
-        from apps.tenants.models import RegistreEmail
-
-        with contexte_schema("public"):
-            RegistreEmail.objects.filter(email__iexact=email_original.strip().lower()).delete()
-    except Exception as exc:
-        logger.warning("Erreur lors de la purge de RegistreEmail: %s", exc)
-
-    # 3. Révocation des invitations en attente pour cet email
+    # 2. Révocation des invitations en attente pour cet email
     Invitation.objects.filter(
         email__in=[email_original.lower(), collaborateur.email.lower()],
         statut=Invitation.Statut.ENVOYEE,
@@ -134,7 +124,7 @@ def desactiver_collaborateur_plateforme(
         modifie_le=timezone.now(),
     )
 
-    # 4. Révocation de toutes ses sessions actives (liste noire des jetons JWT)
+    # 3. Révocation de toutes ses sessions actives (liste noire des jetons JWT)
     try:
         from apps.accounts.services.liste_noire import revoquer_utilisateur
 
@@ -146,7 +136,7 @@ def desactiver_collaborateur_plateforme(
             exc,
         )
 
-    # 5. Alerte par e-mail au DG si des projets sont devenus orphelins (on_commit)
+    # 4. Alerte par e-mail au DG si des projets sont devenus orphelins (on_commit)
     if projets_touches:
         dg = (
             Utilisateur.objects.filter(

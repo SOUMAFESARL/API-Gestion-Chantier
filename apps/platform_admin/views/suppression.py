@@ -20,9 +20,9 @@ from apps.platform_admin.services.notifications import (
     trouver_dg_actif_entreprise,
 )
 from apps.tenants.models import Entreprise
-from apps.tenants.services.sauvegarde_schema import (
+from apps.tenants.services.sauvegarde_entreprise import (
     SauvegardeImpossible,
-    sauvegarder_schema,
+    sauvegarder_entreprise,
 )
 from apps.tenants.services.suppression_definitive import (
     apercu_suppression,
@@ -114,7 +114,7 @@ class SupprimerClientDefinitivementView(APIView):
     5. entreprise suspendue (409)
     6. motif >= 20 caractères (400)
     7. confirmation == slug (400)
-    8. sauvegarde du schéma (503)
+    8. sauvegarde des lignes de l'entreprise (503)
     """
 
     permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
@@ -171,10 +171,10 @@ class SupprimerClientDefinitivementView(APIView):
                 status.HTTP_400_BAD_REQUEST,
             )
 
-        # 8. Sauvegarde du schéma
+        # 8. Sauvegarde des lignes que la suppression va emporter
         apercu = apercu_suppression(entreprise)
         try:
-            sauvegarde = sauvegarder_schema(entreprise, complement=apercu)
+            sauvegarde = sauvegarder_entreprise(entreprise, complement=apercu)
         except SauvegardeImpossible:
             return _erreur(
                 request,
@@ -184,7 +184,7 @@ class SupprimerClientDefinitivementView(APIView):
                 status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # Notification au DG avant suppression du schéma
+        # Notification au DG avant la suppression
         _prevenir_dg_avant_suppression(entreprise)
 
         identifiant = str(entreprise.id)

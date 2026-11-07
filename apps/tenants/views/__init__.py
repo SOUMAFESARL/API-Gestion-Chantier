@@ -9,8 +9,6 @@ répondent. Les issues d'échec remontent en exceptions, mises en forme par le
 gestionnaire d'erreurs commun.
 """
 
-from datetime import timedelta
-
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ValidationDjango
 from django.db import transaction
@@ -57,7 +55,6 @@ __all__ = [
     "VerificationJetonInscriptionView",
 ]
 
-SEUIL_RELANCE_PROVISIONNEMENT_SECONDES = 180
 
 
 def _reste(demande: DemandeInscription) -> int:
@@ -182,8 +179,9 @@ class ActivationView(APIView):
     @extend_schema(
         summary="Activer un espace et lancer le provisionnement",
         description=(
-            "Consomme le jeton, hache le mot de passe et déclenche la création "
-            "asynchrone du schéma tenant et du compte administrateur."
+            "Consomme le jeton et crée l'espace dans la même transaction : entreprise, "
+            "compte du dirigeant, rôles, abonnement d'essai. `statut` vaut `PRET` ; la sonde "
+            "`etat/{suivi}/` le confirme dès son premier appel."
         ),
         request=ActivationSerializer,
         responses={202: AccuseActivationSerializer, 400: dict},
@@ -207,8 +205,10 @@ class ActivationView(APIView):
             mot_de_passe=donnees["mot_de_passe"],
         )
 
+        # 202 et `suivi` restent ceux du contrat : l'écran d'attente sonde `etat/{suivi}/`, qui
+        # répond `PRET` dès le premier appel.
         return Response(
-            {"suivi": str(demande.pk), "statut": demande.statut},
+            {"suivi": str(demande.pk), "statut": "PRET"},
             status=status.HTTP_202_ACCEPTED,
         )
 
@@ -242,15 +242,10 @@ class EtatProvisionnementView(APIView):
 
     @extend_schema(
         summary="Suivre le provisionnement",
-        description="Sonde de vérification de l'état d'avancement du déploiement du schéma tenant de l'entreprise.",
+        description="État de la demande d'inscription après activation.",
         responses={200: EtatProvisionnementResponseSerializer, 404: dict},
     )
     def get(self, request, suivi):
-        from django.db import connection
-
-        if not connection.in_atomic_block:
-            connection.commit()
-
         demande = DemandeInscription.objects.filter(pk=suivi).first()
         if demande is None:
             return Response(
@@ -287,25 +282,8 @@ class EtatProvisionnementView(APIView):
         }:
             return Response({"statut": demande.statut})
 
-        # Filet de sécurité en cas de panne ou mort prématurée du sous-processus initial :
-        # Ne relancer que si la demande stagne en PROVISIONNEMENT depuis plus de 180 secondes.
-        # Prise de verrou atomique en base de données (PostgreSQL RowExclusiveLock) :
-        # seule la requête qui met à jour modifie_le (lignes_affectees == 1) déclenche la relance.
-        if demande.statut == DemandeInscription.Statut.PROVISIONNEMENT:
-            maintenant = timezone.now()
-            seuil_inactivite = maintenant - timedelta(seconds=SEUIL_RELANCE_PROVISIONNEMENT_SECONDES)
-
-            lignes_affectees = DemandeInscription.objects.filter(
-                pk=demande.pk,
-                statut=DemandeInscription.Statut.PROVISIONNEMENT,
-                modifie_le__lte=seuil_inactivite,
-            ).update(modifie_le=maintenant)
-
-            if lignes_affectees == 1:
-                from apps.tenants.services.inscription import lancer_provisionnement
-
-                lancer_provisionnement(str(demande.pk))
-
+        # `PROVISIONNEMENT` ne dure plus que le temps de la transaction d'activation (D9, R-12) :
+        # une demande qui y resterait viendrait d'avant la bascule, sans espace à construire.
         return Response({"statut": "PROVISIONNEMENT"})
 
 

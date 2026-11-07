@@ -296,11 +296,11 @@ class ParametresCollaborateurListCreateView(APIView):
         email_clean = email.strip().lower()
 
         # Règle C-03 & L8-1 : Vérification globale dans le Registre Global
-        from django_tenants.utils import schema_context
+        from apps.core.passerelle_schema import contexte_schema
         from apps.tenants.models import Entreprise, RegistreEmail
 
         email_pris = False
-        with schema_context("public"):
+        with contexte_schema("public"):
             email_pris = RegistreEmail.objects.filter(email=email_clean).exists()
 
         existant = Utilisateur.objects.filter(
@@ -359,7 +359,7 @@ class ParametresCollaborateurListCreateView(APIView):
                 verifier_quota=False,
             )
 
-            with schema_context("public"):
+            with contexte_schema("public"):
                 entreprise_obj = Entreprise.objects.filter(schema_name=request.tenant.schema_name).first()
                 if entreprise_obj:
                     RegistreEmail.objects.get_or_create(

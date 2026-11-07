@@ -1,6 +1,6 @@
 """Notification de facturation de l'entreprise authentifiee."""
 
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -32,7 +32,7 @@ class NotificationsExpirationView(APIView):
     )
     def get(self, request):
         tenant = getattr(request, "tenant", None)
-        if tenant is None or tenant.schema_name == get_public_schema_name():
+        if tenant is None or tenant.schema_name == schema_public():
             raise PermissionDenied("Une entreprise cliente est requise.")
         response = Response(
             NotificationExpirationSerializer(notifications_expiration(tenant), many=True).data

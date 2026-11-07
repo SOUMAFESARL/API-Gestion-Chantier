@@ -14,6 +14,7 @@ de l'entreprise, que rien ne tient à jour. Désormais, aucune copie locale n'en
 « Administration » n'est pas un module qu'on souscrit : il reste toujours ouvert.
 """
 
+from apps.core.passerelle_schema import schema_courant
 from django.db import connection
 
 __all__ = [
@@ -32,7 +33,7 @@ def entreprise_courante(tenant=None):
 
     if isinstance(tenant, Entreprise):
         return None if tenant.schema_name == "public" else tenant
-    schema = getattr(connection, "schema_name", "public")
+    schema = schema_courant()
     if not schema or schema == "public":
         return None
     return Entreprise.objects.filter(schema_name=schema).first()

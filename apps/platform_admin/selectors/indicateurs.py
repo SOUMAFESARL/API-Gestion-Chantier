@@ -5,7 +5,7 @@ from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 
 from apps.billing.models import Abonnement, PaiementAbonnement
 from apps.core.enums import StatutEntreprise
@@ -14,7 +14,7 @@ from apps.tenants.models import Entreprise
 
 def obtenir_indicateurs_plateforme() -> dict:
     """Calcule les métriques clés globales consolidées du parc de clients."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     qs_clients = Entreprise.objects.exclude(schema_name=public_schema)
 
     total_clients = qs_clients.count()
@@ -44,7 +44,7 @@ def obtenir_indicateurs_plateforme() -> dict:
 
 def obtenir_tendances_indicateurs() -> list[dict]:
     """Génère la série de sparkline (5 points) et la variation relative en % d'un mois à l'autre."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     qs_clients = Entreprise.objects.exclude(schema_name=public_schema)
 
     maintenant = timezone.now()
@@ -126,7 +126,7 @@ def obtenir_tendances_indicateurs() -> list[dict]:
 
 def obtenir_evolution_abonnements(nb_jours: int = 90) -> list[dict]:
     """Génère la série chronologique sur nb_jours des abonnements renouvelés vs non renouvelés."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     qs_clients = Entreprise.objects.exclude(schema_name=public_schema)
 
     aujourdhui = timezone.localdate()

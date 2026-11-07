@@ -10,7 +10,7 @@ Règles de gouvernance :
 import logging
 from uuid import UUID
 
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.accounts.models import Utilisateur
 from apps.core.emails import envoyer
@@ -114,6 +114,6 @@ def envoyer_alerte_sante_rouge(
         return 0
 
     if schema_name:
-        with schema_context(schema_name):
+        with contexte_schema(schema_name):
             return _envoyer()
     return _envoyer()

@@ -16,7 +16,7 @@ from datetime import timedelta
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public, schema_courant
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import Utilisateur
@@ -48,8 +48,8 @@ def verifier_super_admin(utilisateur: Utilisateur) -> None:
         raise PermissionDenied(_("Authentification requise."))
 
     # Le super admin doit vivre dans le schéma public
-    schema_courant = getattr(connection, "schema_name", "public")
-    public_schema = get_public_schema_name()
+    schema_courant = schema_courant()
+    public_schema = schema_public()
 
     est_super_admin = (
         schema_courant == public_schema or getattr(utilisateur, "is_staff", False)
@@ -72,7 +72,7 @@ def lister_utilisateurs_entreprise(entreprise_id: uuid.UUID | str) -> list[dict]
         raise ErreurMetier("entreprise_introuvable", _("Entreprise cliente introuvable."))
 
     utilisateurs = []
-    with schema_context(entreprise.schema_name):
+    with contexte_schema(entreprise.schema_name):
         qs = Utilisateur.objects.filter(supprime_le__isnull=True).order_by(
             "-is_owner", "nom", "prenom"
         )
@@ -123,7 +123,7 @@ def demarrer_session_assistance(
         raise ErreurMetier("entreprise_introuvable", _("Entreprise cliente introuvable."))
 
     target_user: Utilisateur | None = None
-    with schema_context(entreprise.schema_name):
+    with contexte_schema(entreprise.schema_name):
         if utilisateur_id:
             target_user = Utilisateur.objects.filter(
                 pk=utilisateur_id, supprime_le__isnull=True
@@ -166,7 +166,7 @@ def demarrer_session_assistance(
     duree_secondes = int(DUREE_SESSION_ASSISTANCE.total_seconds())
 
     # 1. Écriture dans le Journal de Plateforme (schéma `public` — MLD §4.6)
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         JournalPlateforme.objects.create(
             utilisateur_id=super_admin.id,
             entreprise_id=entreprise.id,
@@ -189,7 +189,7 @@ def demarrer_session_assistance(
         )
 
     # 2. Écriture dans le Journal d'Audit Client (schéma `tenant_x` — R-128)
-    with schema_context(entreprise.schema_name):
+    with contexte_schema(entreprise.schema_name):
         journaliser(
             action=ActionAudit.ASSISTANCE,
             type_entite="Entreprise",
@@ -276,7 +276,7 @@ def clore_session_assistance(
 ) -> None:
     """Journalise la fermeture volontaire d'une session d'assistance."""
     # 1. Schéma public
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         JournalPlateforme.objects.create(
             utilisateur_id=super_admin_id if super_admin_id else None,
             entreprise_id=entreprise_id if entreprise_id else None,
@@ -294,7 +294,7 @@ def clore_session_assistance(
     if entreprise_id:
         entreprise = Entreprise.objects.filter(pk=entreprise_id).first()
         if entreprise:
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 journaliser(
                     action=ActionAudit.DECONNEXION,
                     type_entite="SessionAssistance",

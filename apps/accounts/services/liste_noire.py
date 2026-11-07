@@ -20,6 +20,7 @@ révoqué d'un client refuserait le jeton d'un autre.
 
 import time
 
+from apps.core.passerelle_schema import schema_courant
 from django.core.cache import cache
 from django.db import connection
 from django.utils.translation import gettext_lazy as _
@@ -69,7 +70,7 @@ class ServiceIndisponible(ErreurMetier):
 
 def _schema() -> str:
     """Le schéma courant, résolu par django-tenants avant la vue."""
-    return getattr(connection, "schema_name", "public")
+    return schema_courant()
 
 
 def _cle_revoque(jti: str) -> str:

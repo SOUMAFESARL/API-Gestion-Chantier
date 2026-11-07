@@ -21,7 +21,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import connection, transaction
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal
@@ -42,7 +42,7 @@ def lister_entreprises_avec_directeurs() -> dict[str, Any]:
     ):
         directeurs = []
         try:
-            with schema_context(ent.schema_name):
+            with contexte_schema(ent.schema_name):
                 # Récupérer les directeurs généraux
                 dgs = Utilisateur.objects.filter(role_global=RoleGlobal.DIRECTEUR_GENERAL)
                 for dg in dgs:
@@ -368,7 +368,7 @@ def activer_ou_renouveler_abonnement(
     if not ent:
         for candidate in Entreprise.objects.exclude(schema_name=settings.PUBLIC_SCHEMA_NAME):
             try:
-                with schema_context(candidate.schema_name):
+                with contexte_schema(candidate.schema_name):
                     if Utilisateur.objects.filter(email__iexact=str(identifiant).strip()).exists():
                         ent = candidate
                         break

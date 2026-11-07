@@ -9,7 +9,7 @@ from typing import Any
 from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.audit.services import journaliser
 from apps.billing.models import Abonnement, Facture, PaiementAbonnement, Plan
@@ -67,7 +67,7 @@ class PaiementAbonnementService:
 
         Exécuté dans le schéma `public` (tables billing).
         """
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             # 0. Vérification du verrou d'initiation (Protection anti-double débit - Option A2)
             limite_active = timezone.now() - timedelta(minutes=PaiementAbonnement.DELAI_VERROU_MINUTES)
             paiement_actif = (
@@ -292,7 +292,7 @@ class PaiementAbonnementService:
         motif: str = "Annulation demandée par l'utilisateur",
     ) -> dict[str, Any]:
         """Permet à l'utilisateur d'abandonner explicitement une transaction en attente (Option A2)."""
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             with transaction.atomic():
                 paiement = (
                     PaiementAbonnement.objects.select_for_update()
@@ -347,7 +347,7 @@ class PaiementAbonnementService:
     @classmethod
     def recuperer_paiement_en_cours(cls, entreprise) -> dict[str, Any] | None:
         """Retourne les informations du paiement actuellement en cours s'il existe."""
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             limite_active = timezone.now() - timedelta(minutes=PaiementAbonnement.DELAI_VERROU_MINUTES)
             paiement = (
                 PaiementAbonnement.objects.filter(
@@ -396,7 +396,7 @@ class PaiementAbonnementService:
            - Entreprise -> ACTIF (Règle R-113)
            - Envoi email confirmation & journalisation audit
         """
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             paiement = (
                 PaiementAbonnement.objects.filter(reference_transaction=transaction_id)
                 .select_related("facture__abonnement__plan", "facture__entreprise")
@@ -646,7 +646,7 @@ class PaiementAbonnementService:
         - Si une transaction a plus de `timeout_heures` (si configuré), elle est marquée comme `EXPIRE`.
         - Pour les autres, interroge l'API CinetPay (check_payment) et applique les transitions.
         """
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             maintenant = timezone.now()
             seuil_reconciliation = maintenant - timedelta(minutes=delai_min_minutes)
 

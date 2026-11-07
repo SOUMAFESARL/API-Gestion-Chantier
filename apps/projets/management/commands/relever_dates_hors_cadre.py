@@ -11,7 +11,7 @@ Code de sortie :
 import sys
 
 from django.core.management.base import BaseCommand
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.projets.models import Element
 from apps.tenants.models import Entreprise
@@ -46,7 +46,7 @@ class Command(BaseCommand):
 
         for schema_nom in schemas:
             self.stdout.write(self.style.NOTICE(f"=== Vérification du schéma : {schema_nom} ==="))
-            with schema_context(schema_nom):
+            with contexte_schema(schema_nom):
                 anomalies_schema = self._verifier_schema()
                 total_anomalies += anomalies_schema
 

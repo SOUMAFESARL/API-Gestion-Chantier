@@ -27,7 +27,7 @@ from django.conf import settings
 from django.db import connection, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public, schema_courant
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -94,12 +94,12 @@ def authentifier(email: str, mot_de_passe: str) -> Utilisateur:
     echec: ErreurMetier | None = None
     utilisateur = None
 
-    schema_courant = getattr(connection, "schema_name", "public")
-    public_schema = get_public_schema_name()
+    schema_courant = schema_courant()
+    public_schema = schema_public()
 
     # C-03 : Résolution directe via le registre global RegistreEmail (schéma public) sans boucle
     ligne_registre = None
-    with schema_context(public_schema):
+    with contexte_schema(public_schema):
         ligne_registre = (
             RegistreEmail.objects.filter(email__iexact=email)
             .select_related("entreprise")
@@ -196,7 +196,7 @@ def emettre_jetons(
     refresh = RefreshToken.for_user(utilisateur)
     refresh.set_exp(lifetime=DUREE_RENOUVELLEMENT.get(origine, DUREE_RENOUVELLEMENT["WEB"]))
 
-    schema_name = getattr(connection, "schema_name", "public")
+    schema_name = schema_courant()
     refresh["schema"] = schema_name
     refresh.access_token["schema"] = schema_name
 
@@ -222,7 +222,7 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
     > `role_global` sert à l'affichage, **jamais** à l'autorisation. Le serveur
     > relit toujours le rôle en base pour décider d'un droit.
     """
-    schema_name = getattr(connection, "schema_name", "public")
+    schema_name = schema_courant()
     profil = {
         "id": str(utilisateur.pk),
         "email": utilisateur.email,
@@ -243,7 +243,7 @@ def profil_de_connexion(utilisateur: Utilisateur) -> dict[str, object]:
         "schema": schema_name,
     }
     tenant = getattr(connection, "tenant", None)
-    if tenant and getattr(tenant, "schema_name", "") != get_public_schema_name():
+    if tenant and getattr(tenant, "schema_name", "") != schema_public():
         entreprise = tenant if hasattr(tenant, "pk") else None
         if entreprise:
             profil["entreprise"] = {

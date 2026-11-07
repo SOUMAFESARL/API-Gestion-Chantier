@@ -3,7 +3,7 @@
 import logging
 
 from celery import shared_task
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.core.emails import envoyer
 from apps.core.enums import RoleGlobal, StatutProjet
@@ -96,7 +96,7 @@ def notifier_dg_derive_delai(
         return Q(role_global=RoleGlobal.DIRECTEUR_GENERAL) | Q(role_global=RoleGlobal.ADMIN)
 
     if schema_name:
-        with schema_context(schema_name):
+        with contexte_schema(schema_name):
             return _traiter()
     return _traiter()
 
@@ -133,7 +133,7 @@ def evaluer_f3_nuit_tous_tenants() -> dict:
         if not ent.schema_name:
             continue
         try:
-            with schema_context(ent.schema_name):
+            with contexte_schema(ent.schema_name):
                 # 1. Rattrapage des rapports approuvés non synchronisés
                 rapports_a_rattraper = list(
                     RapportJournalier.objects.filter(
@@ -280,7 +280,7 @@ def recalculer_sante_projet_task(
 
     Conforme C8 :
     1. Efface la clé Redis 'en attente' au tout début de la tâche avant lecture DB.
-    2. Exécute le calcul dans schema_context(schema_name).
+    2. Exécute le calcul dans contexte_schema(schema_name).
     3. Verrouille le projet via select_for_update() dans une transaction atomique.
     4. Persiste l'avancement physique, l'avancement théorique, le score et le badge final.
     5. Enregistre un SanteProjetSnapshot d'audit.
@@ -425,7 +425,7 @@ def recalculer_sante_projet_task(
             }
 
     if schema_name:
-        with schema_context(schema_name):
+        with contexte_schema(schema_name):
             return _executer()
     return _executer()
 

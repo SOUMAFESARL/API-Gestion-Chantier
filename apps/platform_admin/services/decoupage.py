@@ -21,7 +21,7 @@ dans les vues).
 from __future__ import annotations
 
 from django.db import transaction
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogue.models import (
@@ -53,7 +53,7 @@ __all__ = [
 
 
 def _public():
-    return schema_context(get_public_schema_name())
+    return contexte_schema(schema_public())
 
 
 # --------------------------------------------------------------------------

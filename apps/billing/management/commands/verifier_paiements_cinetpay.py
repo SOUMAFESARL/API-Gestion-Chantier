@@ -1,7 +1,7 @@
 """Commande CLI pour déclencher la réconciliation automatique des paiements CinetPay."""
 
 from django.core.management.base import BaseCommand
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.billing.services.paiement import PaiementAbonnementService
 
@@ -32,7 +32,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             tx_id = options.get("transaction_id")
             delai = options.get("delai_minutes", 0)
             timeout = options.get("timeout_heures", 48)

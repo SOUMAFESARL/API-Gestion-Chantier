@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -55,7 +55,7 @@ class AdminModuleListCreateView(APIView):
         responses={200: AdminModuleListSerializer(many=True)},
     )
     def get(self, request):
-        with schema_context("public"):
+        with contexte_schema("public"):
             modules = (
                 Module.objects.filter(supprime_le__isnull=True)
                 .prefetch_related(PREFETCH_PERMISSIONS_ACTIVES)
@@ -72,7 +72,7 @@ class AdminModuleListCreateView(APIView):
     )
     def post(self, request):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             serializer = AdminModuleCreateSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
@@ -91,7 +91,7 @@ class AdminModuleListCreateView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
                 id=module.id
             )
@@ -111,7 +111,7 @@ class AdminModuleDetailUpdateDeleteView(APIView):
         responses={200: AdminModuleDetailSerializer},
     )
     def get(self, request, pk):
-        with schema_context("public"):
+        with contexte_schema("public"):
             module = get_object_or_404(
                 Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES),
                 pk=pk,
@@ -146,7 +146,7 @@ class AdminModuleDetailUpdateDeleteView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
                 id=module_maj.id
             )
@@ -205,7 +205,7 @@ class AdminModuleAffecterPermissionsView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             mod_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
                 id=mod.id
             )
@@ -234,7 +234,7 @@ class AdminModuleDesactiverView(APIView):
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
             if not module.est_actif:
                 return Response(
@@ -244,7 +244,7 @@ class AdminModuleDesactiverView(APIView):
         mod_maj = propager_modification_module(
             module_id=pk, est_actif=False, modifie_par=request.user
         )
-        with schema_context("public"):
+        with contexte_schema("public"):
             module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
                 id=mod_maj.id
             )
@@ -266,7 +266,7 @@ class AdminModuleReactiverView(APIView):
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             module = get_object_or_404(Module, pk=pk, supprime_le__isnull=True)
             if module.est_actif:
                 return Response(
@@ -276,7 +276,7 @@ class AdminModuleReactiverView(APIView):
         mod_maj = propager_modification_module(
             module_id=pk, est_actif=True, modifie_par=request.user
         )
-        with schema_context("public"):
+        with contexte_schema("public"):
             module_complet = Module.objects.prefetch_related(PREFETCH_PERMISSIONS_ACTIVES).get(
                 id=mod_maj.id
             )

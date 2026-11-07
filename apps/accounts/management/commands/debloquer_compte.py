@@ -14,7 +14,7 @@ Un compte désactivé se réactive depuis l'administration (workflow T5).
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.core.enums import StatutUtilisateur
 
@@ -57,15 +57,15 @@ class Command(BaseCommand):
     def _schemas_clients(self) -> list[str]:
         from apps.tenants.models import Entreprise
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             return list(
-                Entreprise.objects.exclude(schema_name=get_public_schema_name())
+                Entreprise.objects.exclude(schema_name=schema_public())
                 .order_by("schema_name")
                 .values_list("schema_name", flat=True)
             )
 
     def _traiter(self, code_schema: str, email: str, *, simulation: bool) -> bool:
-        with schema_context(code_schema):
+        with contexte_schema(code_schema):
             from apps.accounts.models import Utilisateur
 
             utilisateur = Utilisateur.objects.filter(email__iexact=email).first()

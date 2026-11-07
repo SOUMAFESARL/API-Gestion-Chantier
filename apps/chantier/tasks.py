@@ -3,7 +3,7 @@
 import logging
 
 from celery import shared_task
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def relancer_rapports_manquants_partout(schema: str | None = None) -> dict:
         # Une tâche n'hérite pas du schéma de la requête : sans ce contexte, elle
         # tournerait sur `public`, ne trouverait aucun chantier et ne dirait rien.
         try:
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 bilan[entreprise.schema_name] = relancer_rapports_manquants()
         except Exception:
             logger.exception("Relance automatique en échec pour %s", entreprise.schema_name)

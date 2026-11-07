@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.referentiels.models import JourFerie
 
@@ -65,7 +65,7 @@ class Command(BaseCommand):
                 self.stderr.write(f"Avertissement : lecture impossible de {fichier_mobiles} : {e}")
 
         total_charges = 0
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             for annee in annees:
                 jours_ci: list[tuple[date, str]] = []
 

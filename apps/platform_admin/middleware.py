@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import jwt
 from django.http import JsonResponse
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.core.ip_restriction import extraire_ip_client
 from apps.core.middleware import identifiant_requete_courant
@@ -95,7 +95,7 @@ class LectureSeuleAssistanceMiddleware:
         )
 
         try:
-            with schema_context(get_public_schema_name()):
+            with contexte_schema(schema_public()):
                 JournalPlateforme.objects.create(
                     utilisateur_id=super_admin_id if super_admin_id else None,
                     action="TENTATIVE_ECRITURE_BLOQUEE",

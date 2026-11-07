@@ -18,8 +18,9 @@ plateforme, et un modèle plateforme ne puise que dans des listes plateforme (§
 
 from __future__ import annotations
 
+from apps.core.contexte import entreprise_courante_id
 from django.db import connection, transaction
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogue.models import (
@@ -67,8 +68,9 @@ ENTREPRISE = "ENTREPRISE"
 
 
 def _schema_public() -> bool:
-    """Le back-office travaille dans `public`, où les tables des entreprises n'existent pas."""
-    return getattr(connection, "schema_name", None) == get_public_schema_name()
+    """Le back-office travaille sans entreprise active (D9) : les tables d'entreprise lui sont
+    fermées, comme l'était `public` sous django-tenants."""
+    return entreprise_courante_id() is None
 
 
 def nom_propre(texte: str) -> str:

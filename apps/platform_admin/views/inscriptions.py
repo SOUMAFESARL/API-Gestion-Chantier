@@ -2,7 +2,7 @@
 
 from django.db import connection
 from django.shortcuts import get_object_or_404
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public, schema_courant
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import GenericAPIView
@@ -21,7 +21,7 @@ from apps.tenants.models import DemandeInscription
 class SuperAdminPublic(BasePermission):
     def has_permission(self, request, view):
         return (
-            connection.schema_name == get_public_schema_name()
+            schema_courant() == schema_public()
             and request.user.is_authenticated
             and request.user.is_active
             and request.user.is_superuser

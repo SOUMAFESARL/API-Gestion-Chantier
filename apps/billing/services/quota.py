@@ -13,8 +13,9 @@ règle derrière.
 
 from __future__ import annotations
 
+from apps.core.passerelle_schema import entreprise_courante
 from django.db import connection
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 
 __all__ = [
     "limite_du_plan",
@@ -102,13 +103,8 @@ def verifier_quota_avant_invitation(entreprise=None) -> None:
 
 
 def _entreprise_courante():
-    """L'entreprise du schéma courant, ou `None` sur `public`."""
-    from apps.tenants.models import Entreprise
-
-    schema = getattr(connection, "schema_name", None)
-    if not schema or schema == get_public_schema_name():
-        return None
-    return Entreprise.objects.filter(schema_name=schema).first()
+    """L'entreprise active, ou `None` sans entreprise active (D9)."""
+    return entreprise_courante()
 
 
 def limite_projets_du_plan(entreprise=None) -> int | None:

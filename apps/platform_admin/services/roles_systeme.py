@@ -23,7 +23,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import Role
@@ -41,7 +41,7 @@ __all__ = [
 
 
 def _entreprises() -> list[Entreprise]:
-    with schema_context("public"):
+    with contexte_schema("public"):
         return list(Entreprise.objects.exclude(schema_name="public"))
 
 
@@ -54,7 +54,7 @@ def creer_role_systeme(
     acteur=None,
 ) -> ModeleRole:
     code = code.strip().upper()
-    with schema_context("public"):
+    with contexte_schema("public"):
         if ModeleRole.objects.filter(code__iexact=code, supprime_le__isnull=True).exists():
             raise ValidationError({"code": "Un rôle système porte déjà ce code."})
         with transaction.atomic():
@@ -83,7 +83,7 @@ def modifier_role_systeme(
     acteur=None,
 ) -> ModeleRole:
     avant = {"libelle": modele.libelle, "description": modele.description}
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         # `unique_par_projet` n'est qu'une valeur de départ : les entreprises existantes gardent
         # le réglage qu'elles ont choisi.
         for champ in ("libelle", "description"):
@@ -96,7 +96,7 @@ def modifier_role_systeme(
     apres = {"libelle": modele.libelle, "description": modele.description}
     if apres != avant:
         for entreprise in _entreprises():
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 roles = Role.objects.filter(
                     code__iexact=modele.code, est_systeme=True, supprime_le__isnull=True
                 )
@@ -128,7 +128,7 @@ def supprimer_role_systeme(modele: ModeleRole, *, acteur=None) -> dict:
             "pour son administrateur."
         )
 
-    with schema_context("public"):
+    with contexte_schema("public"):
         maintenant = timezone.now()
         with transaction.atomic():
             ModeleRoleModule.objects.filter(modele_role=modele).update(supprime_le=maintenant)
@@ -138,7 +138,7 @@ def supprimer_role_systeme(modele: ModeleRole, *, acteur=None) -> dict:
 
     convertis = 0
     for entreprise in _entreprises():
-        with schema_context(entreprise.schema_name):
+        with contexte_schema(entreprise.schema_name):
             roles = list(
                 Role.objects.filter(
                     code__iexact=modele.code, est_systeme=True, supprime_le__isnull=True

@@ -15,7 +15,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.files.base import ContentFile
 from django.db import connection, transaction
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public, schema_courant
 from PIL import Image
 from rest_framework import status
 
@@ -71,7 +71,7 @@ class FormatFichierInvalide(ErreurMetier):
 
 def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
     """Construit la représentation complète et sécurisée du profil utilisateur."""
-    schema_name = getattr(connection, "schema_name", "public")
+    schema_name = schema_courant()
 
     if getattr(utilisateur, "pk", None):
         user_frais = Utilisateur.objects.filter(pk=utilisateur.pk).select_related("role").first()
@@ -93,7 +93,7 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
     # 2. Informations de l'entreprise (tenant)
     entreprise_info = None
     tenant = getattr(connection, "tenant", None)
-    if tenant and getattr(tenant, "schema_name", "") != get_public_schema_name():
+    if tenant and getattr(tenant, "schema_name", "") != schema_public():
         entreprise = (
             tenant
             if hasattr(tenant, "pk")

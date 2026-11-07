@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError as ValidationDjango
 from django.db import connection, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public, schema_courant
 from rest_framework import status
 
 from apps.accounts.models import (
@@ -81,8 +81,8 @@ def demander(
     situation que ce parcours doit dénouer.
     """
     adresse = (email or "").strip().lower()
-    schema_courant = getattr(connection, "schema_name", "public")
-    public_schema = get_public_schema_name()
+    schema_courant = schema_courant()
+    public_schema = schema_public()
 
     cible_schema = schema_courant
     cible_utilisateur = Utilisateur.objects.filter(email__iexact=adresse).first()
@@ -92,7 +92,7 @@ def demander(
     # rechercher parmi les schémas des entreprises clientes actives.
     if cible_utilisateur is None and schema_courant == public_schema:
         for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 candidat = Utilisateur.objects.filter(email__iexact=adresse).first()
                 if candidat is not None:
                     cible_schema = entreprise.schema_name
@@ -110,7 +110,7 @@ def demander(
 
     jeton = uuid.uuid4()
 
-    with schema_context(cible_schema):
+    with contexte_schema(cible_schema):
         with transaction.atomic():
             # Une demande plus récente invalide les précédentes : sans cela, deux
             # liens vivants circulent après un clic sur « Renvoyer l'email ».
@@ -187,13 +187,13 @@ def verifier(jeton_clair: str) -> JetonReinitialisation:
         .filter(empreinte=empreinte)
         .first()
     )
-    schema_trouve = getattr(connection, "schema_name", "public")
-    public_schema = get_public_schema_name()
+    schema_trouve = schema_courant()
+    public_schema = schema_public()
 
     if (jeton is None or not jeton.est_utilisable) and schema_trouve == public_schema:
         # Recherche multi-tenant si la requête a atteint le domaine public
         for entreprise in Entreprise.objects.exclude(schema_name=public_schema):
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 candidat = (
                     JetonReinitialisation.objects.select_related("utilisateur")
                     .filter(empreinte=empreinte)
@@ -235,9 +235,9 @@ def reinitialiser(
          lieu.
     """
     jeton = verifier(jeton_clair)
-    schema_cible = getattr(jeton, "_schema_name", getattr(connection, "schema_name", "public"))
+    schema_cible = getattr(jeton, "_schema_name", schema_courant())
 
-    with schema_context(schema_cible):
+    with contexte_schema(schema_cible):
         utilisateur = jeton.utilisateur
 
         # Le serveur reste seul juge de la complexité — les coches de l'écran sont

@@ -10,6 +10,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from apps.core.passerelle_schema import schema_courant
 from django.core.cache import cache
 from django.db import connection, transaction
 
@@ -40,7 +41,7 @@ def declencher_recalcul_sante(
     """
     from apps.projets.tasks import recalculer_sante_projet_task
 
-    schema_name = getattr(connection, "schema_name", "public")
+    schema_name = schema_courant()
     cle = obtenir_cle_recalcul_en_attente(schema_name, projet_id)
     declencheur_id_str = str(declencheur_id) if declencheur_id is not None else None
     projet_id_str = str(projet_id)

@@ -2,7 +2,7 @@
 
 from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public, schema_courant
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
@@ -21,8 +21,8 @@ class EstSuperAdminPlateforme(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        schema_courant = getattr(connection, "schema_name", "public")
-        public_schema = get_public_schema_name()
+        schema_courant = schema_courant()
+        public_schema = schema_public()
 
         # Doit être authentifié dans le schéma public ou avoir un statut staff
         est_schema_autorise = (schema_courant == public_schema) or getattr(user, "is_staff", False)

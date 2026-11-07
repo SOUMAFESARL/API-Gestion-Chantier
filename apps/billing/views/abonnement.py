@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.db import connection
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -34,7 +34,7 @@ class AbonnementView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Le droit se lit dans le schéma de l'entreprise : sous `schema_context(public)`, le rôle
+        # Le droit se lit dans le schéma de l'entreprise : sous `contexte_schema(public)`, le rôle
         # de l'utilisateur y était cherché en vain et la vue répondait 500 à tout le monde.
         from apps.core.droits import a_permission
 
@@ -42,7 +42,7 @@ class AbonnementView(APIView):
             request.user, "administration.abonnement_voir", request=request
         )
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             abonnement = Abonnement.objects.filter(entreprise=tenant).select_related("plan").first()
 
             # Auto-provisionnement de l'essai si manquant (ex: compte créé avant la migration)

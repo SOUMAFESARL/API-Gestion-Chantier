@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def relancer_essais() -> int:
             schema = abonnement.entreprise.schema_name
 
             try:
-                with schema_context(schema):
+                with contexte_schema(schema):
                     bilan = bilan_du_schema()
                     adresses = destinataires_relance()
             except Exception:

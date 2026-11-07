@@ -2,7 +2,7 @@
 
 import logging
 
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
@@ -255,7 +255,7 @@ class JournalPlateformeListView(APIView):
         filtres = FiltresJournalPlateformeSerializer(data=request.query_params)
         filtres.is_valid(raise_exception=True)
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             qs = journal_plateforme(**filtres.validated_data)
             pagination = PaginationStandard()
             page = pagination.paginate_queryset(qs, request, view=self)
@@ -299,7 +299,7 @@ class ActionsJournalPlateformeView(APIView):
     )
     def get(self, request):
         verifier_super_admin(request.user)
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             return Response(
                 {"actions": codes_actions_journal()},
                 status=status.HTTP_200_OK,

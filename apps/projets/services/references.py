@@ -1,5 +1,6 @@
 """Génération de la référence unique séquentielle par projet et par schéma."""
 
+from apps.core.passerelle_schema import schema_courant
 from django.db import connection, transaction
 from django.utils import timezone
 
@@ -14,7 +15,7 @@ def generer_reference_projet() -> str:
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT pg_advisory_xact_lock(hashtext(%s), %s)",
-            [f"projet-reference:{connection.schema_name}", annee],
+            [f"projet-reference:{schema_courant()}", annee],
         )
     prefixe = f"PRJ-{annee}-"
     suffixes = Projet.tous_objets.filter(reference__startswith=prefixe).values_list(

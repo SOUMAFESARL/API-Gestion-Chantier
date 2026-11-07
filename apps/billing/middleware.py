@@ -26,7 +26,7 @@ import logging
 
 from django.http import JsonResponse
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class LectureSeuleAbonnementMiddleware:
             return False
 
         tenant = getattr(request, "tenant", None)
-        if tenant is None or tenant.schema_name == get_public_schema_name():
+        if tenant is None or tenant.schema_name == schema_public():
             # Les endpoints de la plateforme ont leurs propres règles.
             return False
 

@@ -7,7 +7,7 @@ Exécutée dans le schéma public, strictement idempotente.
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.catalogue.models import CatalogueModule, CataloguePermission
 from apps.core.registre_permissions import REGISTRE
@@ -17,7 +17,7 @@ class Command(BaseCommand):
     help = "Synchronise CataloguePermission depuis le REGISTRE officiel (idempotent)."
 
     def handle(self, *args, **options):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             with transaction.atomic():
                 self._synchroniser()
 

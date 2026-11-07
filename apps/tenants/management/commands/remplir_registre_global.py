@@ -5,7 +5,7 @@ actifs et existants dans chaque schéma tenant. Idempotente.
 """
 
 from django.core.management.base import BaseCommand
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.tenants.models import Entreprise, RegistreEmail
 
@@ -19,7 +19,7 @@ class Command(BaseCommand):
         total_existants = 0
 
         for entreprise in entreprises:
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 from apps.accounts.models import Utilisateur
 
                 utilisateurs = (
@@ -32,7 +32,7 @@ class Command(BaseCommand):
                     if not email_brut:
                         continue
                     email_norm = email_brut.strip().lower()
-                    with schema_context("public"):
+                    with contexte_schema("public"):
                         obj, cree = RegistreEmail.objects.get_or_create(
                             email=email_norm,
                             defaults={"entreprise": entreprise},

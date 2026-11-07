@@ -2,7 +2,7 @@
 
 from django.db import models, transaction
 from django.shortcuts import get_object_or_404
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -480,7 +480,7 @@ class ActiverModuleClientPlateformeView(APIView):
         },
     )
     def post(self, request, client_id, module_id):
-        with schema_context("public"):
+        with contexte_schema("public"):
             entreprise = get_object_or_404(Entreprise, id=client_id)
             module = get_object_or_404(CatalogueModule, id=module_id)
 
@@ -493,7 +493,7 @@ class ActiverModuleClientPlateformeView(APIView):
                 em.save(update_fields=["est_actif", "modifie_le"])
 
         # Dans le schéma du tenant (A-11) :
-        with schema_context(entreprise.schema_name):
+        with contexte_schema(entreprise.schema_name):
             with transaction.atomic():
                 from apps.accounts.models import Module, Role, RoleModulePermission
                 from apps.catalogue.models import CataloguePermission, ModeleRoleModule
@@ -599,7 +599,7 @@ class DesactiverModuleClientPlateformeView(APIView):
         },
     )
     def post(self, request, client_id, module_id):
-        with schema_context("public"):
+        with contexte_schema("public"):
             entreprise = get_object_or_404(Entreprise, id=client_id)
             module = get_object_or_404(CatalogueModule, id=module_id)
 

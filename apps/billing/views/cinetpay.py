@@ -5,7 +5,7 @@ import logging
 from django.db import connection
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -46,7 +46,7 @@ class PlansCatalogueView(APIView):
         responses={200: PlanCatalogueSerializer(many=True)},
     )
     def get(self, request):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             plans = Plan.objects.filter(est_actif=True).order_by("prix_mensuel_montant")
             serializer = PlanCatalogueSerializer(plans, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -87,7 +87,7 @@ class InitierPaiementView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             plan = Plan.objects.filter(code=plan_code).first()
             if not plan:
                 return Response(
@@ -159,7 +159,7 @@ class AnnulerPaiementView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             try:
                 resultat = PaiementAbonnementService.annuler_paiement_en_cours(
                     entreprise=tenant,
@@ -264,7 +264,7 @@ class StatutPaiementView(APIView):
         responses={200: StatutPaiementResponseSerializer},
     )
     def get(self, request, transaction_id: str):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             paiement = (
                 PaiementAbonnement.objects.filter(reference_transaction=transaction_id)
                 .select_related("facture__abonnement__plan", "facture__entreprise")

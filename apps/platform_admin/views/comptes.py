@@ -7,7 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
@@ -47,7 +47,7 @@ class ComptesAdministrateursListCreateView(APIView):
         responses={200: CompteAdministrateurSerializer(many=True)},
     )
     def get(self, request):
-        with schema_context("public"):
+        with contexte_schema("public"):
             comptes = Utilisateur.objects.filter(
                 supprime_le__isnull=True,
             ).order_by("-cree_le")
@@ -69,7 +69,7 @@ class ComptesAdministrateursListCreateView(APIView):
         role = data.get("role", "SUPPORT")
         is_super = (role == "SUPERVISEUR")
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             # Mot de passe temporaire aléatoire
             alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
             mot_de_passe_temp = "".join(secrets.choice(alphabet) for _ in range(16))
@@ -103,7 +103,7 @@ class SuspendreCompteAdministrateurView(APIView):
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
             if str(agent.id) == str(request.user.id):
                 return Response(
@@ -130,7 +130,7 @@ class ReactiverCompteAdministrateurView(APIView):
     )
     def post(self, request, pk):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             agent = get_object_or_404(Utilisateur, pk=pk, supprime_le__isnull=True)
             agent.is_active = True
             agent.statut = StatutUtilisateur.ACTIF
@@ -150,7 +150,7 @@ class AdminProfilMoiView(APIView):
         responses={200: ProfilCompletAdminSerializer},
     )
     def get(self, request):
-        with schema_context("public"):
+        with contexte_schema("public"):
             user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
             return Response(ProfilCompletAdminSerializer(user).data, status=status.HTTP_200_OK)
 
@@ -163,7 +163,7 @@ class AdminProfilMoiView(APIView):
         serializer = ModifierProfilAdminSerializer(data=request.data, context={"user": request.user})
         serializer.is_valid(raise_exception=True)
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
             data = serializer.validated_data
             if "prenom" in data:
@@ -194,7 +194,7 @@ class AdminPhotoMoiView(APIView):
         responses={200: ProfilCompletAdminSerializer},
     )
     def patch(self, request):
-        with schema_context("public"):
+        with contexte_schema("public"):
             user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
             if request.data.get("retirer_photo") in ["true", True, "1"]:
                 if user.avatar:
@@ -230,7 +230,7 @@ class AdminChangerMotDePasseMoiView(APIView):
         if not nouveau:
             raise ValidationError({"nouveau_mot_de_passe": [_("Le nouveau mot de passe est obligatoire.")]})
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             user = get_object_or_404(Utilisateur, pk=request.user.pk, supprime_le__isnull=True)
             if not user.check_password(ancien):
                 raise ValidationError({"ancien_mot_de_passe": [_("Ancien mot de passe incorrect.")]})

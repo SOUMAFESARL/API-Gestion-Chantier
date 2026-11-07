@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import timedelta
 
+from apps.core.passerelle_schema import schema_courant
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.db import connection, transaction
@@ -195,9 +196,9 @@ def accepter_invitation(
     Supporte l'appel unitaire simple (avec seulement l'instance `Invitation`)
     et l'appel complet d'activation (avec `mot_de_passe` et données d'identité).
     """
-    schema_courant = getattr(connection, "schema_name", "public")
-    from django_tenants.utils import get_public_schema_name, schema_context
-    public_schema = get_public_schema_name()
+    schema_courant = schema_courant()
+    from apps.core.passerelle_schema import contexte_schema, schema_public
+    public_schema = schema_public()
 
     if isinstance(cible, Invitation):
         invitation = cible
@@ -325,10 +326,10 @@ def accepter_invitation(
 def obtenir_invitation_par_jeton(jeton: str | uuid.UUID) -> Invitation | None:
     """Recherche une invitation via l'empreinte de son jeton en clair."""
     empreinte = Invitation.empreinte_de(jeton)
-    schema_courant = getattr(connection, "schema_name", "public")
-    from django_tenants.utils import get_public_schema_name, schema_context
+    schema_courant = schema_courant()
+    from apps.core.passerelle_schema import contexte_schema, schema_public
 
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
 
     invitation = Invitation.objects.filter(empreinte=empreinte).first()
     if invitation is None and schema_courant == public_schema:

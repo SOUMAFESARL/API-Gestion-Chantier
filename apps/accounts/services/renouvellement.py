@@ -31,7 +31,7 @@ import time
 
 from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 from rest_framework import status
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -116,7 +116,7 @@ def renouveler(jeton_brut: str) -> dict[str, str]:
 
     # --- Le compte est-il toujours en état de se connecter ? ---------------
     schema = ancien.get("schema")
-    if schema and schema != get_public_schema_name():
+    if schema and schema != schema_public():
         entreprise = Entreprise.objects.filter(schema_name=schema).first()
         if entreprise:
             connection.set_tenant(entreprise)

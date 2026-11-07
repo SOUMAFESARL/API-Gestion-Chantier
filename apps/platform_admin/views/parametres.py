@@ -2,7 +2,7 @@
 
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.exceptions import ValidationError
@@ -26,7 +26,7 @@ _exiger_superviseur = exiger_superviseur
 
 
 def _journaliser(request, action: str, detail: dict) -> None:
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         JournalPlateforme.objects.create(
             utilisateur_id=request.user.id,
             action=action,
@@ -50,7 +50,7 @@ class TarifsPublicsView(APIView):
 
     @extend_schema(summary="Tarifs publics des forfaits", responses={200: dict})
     def get(self, request):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             plans = Plan.objects.filter(
                 est_actif=True,
                 code__in=[c.value for c in CODES_FORFAITS],
@@ -67,7 +67,7 @@ class IdentitePublicView(APIView):
 
     @extend_schema(summary="Identité publique de la plateforme", responses={200: dict})
     def get(self, request):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             return Response(_identite_publique(request), status=status.HTTP_200_OK)
 
 
@@ -84,7 +84,7 @@ class AdminTarifsView(APIView):
         serializer.is_valid(raise_exception=True)
         demandes = serializer.validated_data["tarifs"]
 
-        with schema_context(get_public_schema_name()), transaction.atomic():
+        with contexte_schema(schema_public()), transaction.atomic():
             plans = {p.code: p for p in Plan.objects.select_for_update().filter(
                 code__in=[d["plan_code"] for d in demandes]
             )}
@@ -106,7 +106,7 @@ class AdminTarifsView(APIView):
                 plan.save()
 
         _journaliser(request, "MODIFICATION_TARIFS", {"forfaits": sorted(plans)})
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             lus = Plan.objects.filter(code__in=list(plans)).order_by("prix_mensuel_montant")
             return Response([tarif_public(p) for p in lus], status=status.HTTP_200_OK)
 
@@ -138,7 +138,7 @@ class AdminIdentiteView(APIView):
             if fichier.size > OCTETS_LOGO_MAX:
                 raise ValidationError({"logo": [_("Le logo ne peut pas dépasser 2 Mo.")]})
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             identite = IdentitePlateforme.obtenir()
             if nom is not None:
                 identite.nom = str(nom).strip()

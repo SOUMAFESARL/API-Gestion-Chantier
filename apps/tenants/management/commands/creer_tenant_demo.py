@@ -8,7 +8,7 @@ résolvent `*.localhost` vers 127.0.0.1 sans toucher au fichier hosts.
 """
 
 from django.core.management.base import BaseCommand
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.core.enums import RoleGlobal, StatutEntreprise, StatutUtilisateur
 from apps.tenants.models import Domaine, Entreprise
@@ -76,7 +76,7 @@ class Command(BaseCommand):
         )
 
         # L'utilisateur vit dans le schéma du tenant, pas dans `public`.
-        with schema_context(CODE_SCHEMA):
+        with contexte_schema(CODE_SCHEMA):
             from apps.accounts.models import Utilisateur
 
             utilisateur = Utilisateur.objects.filter(email=options["email"]).first()

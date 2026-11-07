@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.core.enums import BadgeSante, StatutActivite
 from apps.projets.services.calendrier_ouvre import (
@@ -62,7 +62,7 @@ def obtenir_jours_feries_ci(annee_min: int, annee_max: int) -> tuple[set[date], 
     est_incomplet vaut True si au moins une année de l'intervalle est totalement absente.
     """
     annees_demandees = set(range(annee_min, annee_max + 1))
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         qs = JourFerie.objects.filter(
             pays="CI",
             date_ferie__year__gte=annee_min,

@@ -3,7 +3,7 @@
 import pytest
 from django.core.cache import cache
 from django.core.management import call_command
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 SCHEMA_TEST = "demo"
 HOTE_TEST = "demo.localhost"
@@ -15,9 +15,9 @@ def django_db_setup(django_db_setup, django_db_blocker):
         from apps.core.enums import StatutEntreprise
         from apps.tenants.models import Domaine, Entreprise
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             public, _ = Entreprise.objects.get_or_create(
-                schema_name=get_public_schema_name(),
+                schema_name=schema_public(),
                 defaults={
                     "raison_sociale": "CCD Digital",
                     "email_contact": "contact@ccd-digital.ci",
@@ -50,7 +50,7 @@ def django_db_setup(django_db_setup, django_db_blocker):
 
 @pytest.fixture
 def schema_demo():
-    with schema_context(SCHEMA_TEST):
+    with contexte_schema(SCHEMA_TEST):
         yield SCHEMA_TEST
 
 

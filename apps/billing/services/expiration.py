@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.billing.models import Abonnement, RappelExpiration
@@ -54,7 +54,7 @@ def alerte_expiration(abonnement, aujourd_hui=None):
 
 
 def notifications_expiration(entreprise):
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         abonnement = (
             Abonnement.objects.filter(entreprise=entreprise)
             .order_by("-date_debut", "-cree_le", "-pk")
@@ -68,13 +68,13 @@ def envoyer_rappels_expiration():
     """Rejouable le meme jour ; les echecs SMTP restent eligibles a une reprise."""
     aujourd_hui = timezone.localdate()
     envoyes = 0
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         candidats = list(
             Abonnement.objects.filter(
                 statut=Abonnement.Statut.ACTIF,
                 date_fin__in=[aujourd_hui + timedelta(days=j) for j in SEUILS_EXPIRATION],
             )
-            .exclude(entreprise__schema_name=get_public_schema_name())
+            .exclude(entreprise__schema_name=schema_public())
             .values_list("pk", flat=True)
         )
         for abonnement_id in candidats:
@@ -92,7 +92,7 @@ def envoyer_rappels_expiration():
                         or seuil not in SEUILS_EXPIRATION
                     ):
                         continue
-                    with schema_context(abonnement.entreprise.schema_name):
+                    with contexte_schema(abonnement.entreprise.schema_name):
                         destinataires = list(
                             Utilisateur.objects.filter(
                                 role_global__in=(RoleGlobal.ADMIN, RoleGlobal.DIRECTEUR_GENERAL),

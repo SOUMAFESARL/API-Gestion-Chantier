@@ -10,7 +10,7 @@ strictes sur les Activités, les Lots et les Projets :
 from datetime import date
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.projets.services.machine_etats import executer_evaluation_quotidienne_schema
 from apps.tenants.models import Entreprise
@@ -65,7 +65,7 @@ class Command(BaseCommand):
 
         for schema_name in schemas:
             try:
-                with schema_context(schema_name):
+                with contexte_schema(schema_name):
                     rapport = executer_evaluation_quotidienne_schema(date_reference=date_ref)
                     total_activites += rapport["activites_modifiees"]
                     total_lots += rapport["lots_modifies"]

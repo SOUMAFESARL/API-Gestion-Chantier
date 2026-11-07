@@ -9,7 +9,7 @@ et ses privilèges superuser sont activés.
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.core.enums import RoleGlobal, StatutUtilisateur
@@ -36,7 +36,7 @@ class Command(BaseCommand):
         except ValidationError as erreur:
             raise CommandError(" ".join(erreur.messages)) from erreur
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             existant = Utilisateur.objects.filter(email__iexact=email).first()
             if existant is not None:
                 existant.is_superuser = True

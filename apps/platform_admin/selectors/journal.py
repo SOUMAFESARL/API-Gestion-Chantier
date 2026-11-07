@@ -1,6 +1,6 @@
 """Sélecteurs pour le journal d'audit de la plateforme."""
 
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.platform_admin.models import JournalPlateforme
 
@@ -14,7 +14,7 @@ def journal_plateforme(
     action=None,
 ):
     """Le journal filtré, du plus récent au plus ancien — un QuerySet, non évalué."""
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         qs = JournalPlateforme.objects.all()
 
         if du is not None:
@@ -33,7 +33,7 @@ def journal_plateforme(
 
 def codes_actions_journal() -> list[str]:
     """Retourne la liste triée des codes d'action distincts présents au journal."""
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         return sorted(
             set(JournalPlateforme.objects.values_list("action", flat=True).distinct())
         )

@@ -11,6 +11,7 @@ Plus `JetonReinitialisation` — contrat de réinitialisation §2.
 import hashlib
 from datetime import timedelta
 
+from apps.core.passerelle_schema import schema_courant
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -333,12 +334,12 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         # Règle C-03 (Q4) : Alimentation du registre global dans le schéma public
         if self.email and not self.email.endswith("@depart.invalide"):
             from django.db import connection
-            from django_tenants.utils import get_public_schema_name, schema_context
-            schema_actuel = getattr(connection, "schema_name", "public")
-            public_name = get_public_schema_name()
+            from apps.core.passerelle_schema import contexte_schema, schema_public
+            schema_actuel = schema_courant()
+            public_name = schema_public()
             if schema_actuel != public_name:
                 try:
-                    with schema_context(public_name):
+                    with contexte_schema(public_name):
                         from apps.tenants.models import Entreprise, RegistreEmail
                         ent = Entreprise.objects.filter(schema_name=schema_actuel).first()
                         if ent:

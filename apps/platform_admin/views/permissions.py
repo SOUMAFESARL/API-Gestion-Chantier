@@ -3,7 +3,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -45,7 +45,7 @@ class AdminPermissionListCreateView(APIView):
         responses={200: AdminPermissionSerializer(many=True)},
     )
     def get(self, request):
-        with schema_context("public"):
+        with contexte_schema("public"):
             permissions = (
                 Permission.objects.filter(supprime_le__isnull=True)
                 .prefetch_related("modules")
@@ -62,7 +62,7 @@ class AdminPermissionListCreateView(APIView):
     )
     def post(self, request):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             serializer = AdminPermissionCreateSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
@@ -80,7 +80,7 @@ class AdminPermissionListCreateView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
             retour = AdminPermissionSerializer(perm_complet)
             return Response(retour.data, status=status.HTTP_201_CREATED)
@@ -97,7 +97,7 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
         responses={200: AdminPermissionSerializer},
     )
     def get(self, request, pk):
-        with schema_context("public"):
+        with contexte_schema("public"):
             perm = get_object_or_404(
                 Permission.objects.prefetch_related("modules"), pk=pk, supprime_le__isnull=True
             )
@@ -128,7 +128,7 @@ class AdminPermissionDetailUpdateDeleteView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             perm_complet = Permission.objects.prefetch_related("modules").get(id=perm_maj.id)
             retour = AdminPermissionSerializer(perm_complet)
             return Response(retour.data, status=status.HTTP_200_OK)
@@ -184,7 +184,7 @@ class AdminPermissionAffecterModulesView(APIView):
             msg = str(exc.message if hasattr(exc, "message") else exc)
             raise ValidationError({"detail": msg}) from exc
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             perm_complet = Permission.objects.prefetch_related("modules").get(id=perm.id)
             retour = AdminPermissionSerializer(perm_complet)
             return Response(retour.data, status=status.HTTP_200_OK)

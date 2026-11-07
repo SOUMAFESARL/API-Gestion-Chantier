@@ -6,7 +6,7 @@ import uuid
 
 from django.db import transaction
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name
+from apps.core.passerelle_schema import schema_public
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.billing.models import Abonnement, Plan
@@ -37,7 +37,7 @@ def suspendre_client_plateforme(
     **kwargs,
 ) -> dict:
     """Suspend l'accès d'une entreprise cliente et enregistre l'action au journal."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
@@ -83,7 +83,7 @@ def reactiver_client_plateforme(
     **kwargs,
 ) -> dict:
     """Réactive une entreprise cliente suspendue et rétablit son abonnement."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
@@ -126,7 +126,7 @@ def changer_plan_client_plateforme(
     **kwargs,
 ) -> dict:
     """Modifie le forfait d'abonnement d'une entreprise cliente."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")
@@ -194,7 +194,7 @@ def modifier_echeance_client_plateforme(
     appareil: str = "",
 ) -> dict:
     """Modifie la date d'échéance de l'abonnement en cours d'une entreprise cliente."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     ent = Entreprise.objects.filter(pk=entreprise_id).exclude(schema_name=public_schema).first()
     if not ent:
         raise NotFound("Entreprise cliente introuvable.")

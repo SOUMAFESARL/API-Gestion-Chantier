@@ -5,7 +5,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework.exceptions import ValidationError
 
 from apps.audit.services import journaliser
@@ -74,10 +74,10 @@ def remplacer_telephones(
             raise ValidationError({"telephones": f"Le numéro {num} figure deux fois."})
         numeros_vus.add(num)
 
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
 
     with transaction.atomic():
-        with schema_context(public_schema):
+        with contexte_schema(public_schema):
             # 1. Lire les lignes actives de l'entreprise avec select_for_update
             existants = list(
                 TelephoneEntreprise.objects.select_for_update().filter(
@@ -206,7 +206,7 @@ def remplacer_telephones(
         ]
 
         if valeur_avant != valeur_apres:
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 journaliser(
                     action=ActionAudit.MODIFICATION,
                     type_entite="telephone_entreprise",
@@ -243,8 +243,8 @@ def definir_telephone_principal(
             }
         )
 
-    public_schema = get_public_schema_name()
-    with schema_context(public_schema):
+    public_schema = schema_public()
+    with contexte_schema(public_schema):
         existants = list(
             TelephoneEntreprise.objects.filter(
                 entreprise=entreprise, supprime_le__isnull=True

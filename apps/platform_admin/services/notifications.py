@@ -19,7 +19,7 @@ import logging
 from typing import Any
 
 from django.db import transaction
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.audit.models import JournalAudit
@@ -38,7 +38,7 @@ SUJET_SUPPRESSION_ENTREPRISE = "Suppression de votre espace CCD Digital"
 
 def trouver_dg_actif_entreprise(entreprise: Entreprise) -> Utilisateur | None:
     """Trouve l'utilisateur actif faisant office de DG dans le schéma de l'entreprise."""
-    with schema_context(entreprise.schema_name):
+    with contexte_schema(entreprise.schema_name):
         candidats = Utilisateur.objects.filter(
             supprime_le__isnull=True,
             is_active=True,
@@ -101,7 +101,7 @@ def journaliser_plateforme(
     appareil: str = "",
 ) -> JournalPlateforme:
     """Crée exactement une entrée dans le JournalPlateforme (schéma public, H-02)."""
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         user_id = getattr(acteur, "id", None)
         ent_id = getattr(entreprise, "id", None)
         return JournalPlateforme.objects.create(
@@ -125,7 +125,7 @@ def journaliser_tenant(
     appareil: str = "",
 ) -> None:
     """Crée exactement une entrée dans le JournalAudit du schéma de l'entreprise (L9-1)."""
-    with schema_context(entreprise.schema_name):
+    with contexte_schema(entreprise.schema_name):
         user_id = getattr(acteur, "id", None)
         JournalAudit.objects.create(
             utilisateur_id=user_id,

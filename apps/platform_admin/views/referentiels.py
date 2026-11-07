@@ -9,7 +9,7 @@ Les noms de lot se gèrent désormais dans la liste « Lots » du découpage
 
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.parsers import JSONParser
@@ -64,7 +64,7 @@ class ReferentielPlateformeListeView(APIView):
     )
     def get(self, request, categorie):
         cat = _categorie(categorie)
-        with schema_context("public"):
+        with contexte_schema("public"):
             entrees = ReferentielPlateforme.objects.filter(categorie=cat)
             return Response(EntreeSerializer(entrees, many=True).data)
 
@@ -80,7 +80,7 @@ class ReferentielPlateformeListeView(APIView):
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
         exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
-        with schema_context("public"):
+        with contexte_schema("public"):
             _refuser_doublon(cat, libelle)
             tous = ReferentielPlateforme.tous_objets.filter(categorie=cat)
             codes = set(tous.values_list("code", flat=True))
@@ -123,7 +123,7 @@ class ReferentielPlateformeDetailView(APIView):
         saisie.is_valid(raise_exception=True)
         libelle = " ".join(saisie.validated_data["libelle"].split())
         exiger_mode_de_base(cat, saisie.validated_data["groupe"].strip())
-        with schema_context("public"):
+        with contexte_schema("public"):
             entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
             _refuser_doublon(cat, libelle, exclure_id=entree.id)
             avant = {"libelle": entree.libelle, "groupe": entree.groupe}
@@ -142,7 +142,7 @@ class ReferentielPlateformeDetailView(APIView):
     def delete(self, request, categorie, pk):
         exiger_superviseur(request)
         cat = _categorie(categorie)
-        with schema_context("public"):
+        with contexte_schema("public"):
             entree = get_object_or_404(ReferentielPlateforme, pk=pk, categorie=cat)
             entree.delete(utilisateur=request.user)
         journaliser_plateforme(

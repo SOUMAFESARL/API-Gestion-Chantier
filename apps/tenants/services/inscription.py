@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.utils.formats import localize
 from django.utils.timezone import localtime
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from rest_framework import status
 
 from apps.core.emails import envoyer
@@ -494,7 +494,7 @@ def provisionner(identifiant) -> None:
         # l'administrateur serait écrit dans `public.utilisateur`, chez
         # l'éditeur. La table existe, les colonnes aussi, l'insertion réussit,
         # **aucune erreur n'est levée**.
-        with schema_context(entreprise.schema_name):
+        with contexte_schema(entreprise.schema_name):
             from apps.accounts.models import Utilisateur
             from apps.core.enums import RoleGlobal, StatutUtilisateur
 

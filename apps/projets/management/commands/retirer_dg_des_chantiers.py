@@ -13,7 +13,7 @@ désactivées, et chaque DG concerné laisse une trace au journal d'audit.
 """
 
 from django.core.management.base import BaseCommand
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.projets.services.affectations import retirer_dg_des_chantiers
 
@@ -35,7 +35,7 @@ class Command(BaseCommand):
             entreprises = entreprises.filter(schema_name=options["schema"])
         appliquer = options["appliquer"]
         for entreprise in entreprises.order_by("schema_name"):
-            with schema_context(entreprise.schema_name):
+            with contexte_schema(entreprise.schema_name):
                 constats = retirer_dg_des_chantiers(appliquer=appliquer)
             for constat in constats:
                 self.stdout.write(f"{entreprise.schema_name} — {constat}")

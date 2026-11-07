@@ -5,7 +5,7 @@ import uuid
 from datetime import timedelta
 
 from django.db.models import Prefetch, Q
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework.exceptions import NotFound
 
 from apps.accounts.models import Utilisateur
@@ -95,7 +95,7 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
 
     if ent.schema_name and ent.schema_name != "public":
         try:
-            with schema_context(ent.schema_name):
+            with contexte_schema(ent.schema_name):
                 nb_utilisateurs = Utilisateur.objects.filter(statut=StatutUtilisateur.ACTIF).count()
                 nb_projets = Projet.objects.filter(supprime_le__isnull=True).count()
                 chef = (
@@ -176,7 +176,7 @@ def modules_du_client(ent: Entreprise) -> list[dict]:
     from apps.core.droits import _obtenir_modules_actifs
 
     # La règle lit aussi les tables du client en repli : on la pose dans son schéma.
-    with schema_context(ent.schema_name):
+    with contexte_schema(ent.schema_name):
         actifs = _obtenir_modules_actifs(ent)
     return [
         {
@@ -194,7 +194,7 @@ def modules_du_client(ent: Entreprise) -> list[dict]:
 
 def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
     """Retourne la liste des clients de la plateforme avec abonnements et compteurs."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     qs = (
         Entreprise.objects.exclude(schema_name=public_schema)
         .prefetch_related(
@@ -220,7 +220,7 @@ def lister_clients_plateforme(terme_recherche: str | None = None) -> list[dict]:
 
 def obtenir_fiche_client(client_id: uuid.UUID | str) -> dict:
     """Retourne la fiche détaillée d'une entreprise cliente."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     ent = (
         Entreprise.objects.filter(pk=client_id)
         .exclude(schema_name=public_schema)

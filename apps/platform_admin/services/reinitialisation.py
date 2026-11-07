@@ -22,7 +22,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import (
     DUREE_JETON_REINITIALISATION,
@@ -56,9 +56,9 @@ def demander_reinitialisation_super_admin(
     Seuls les comptes de la plateforme (`is_superuser` ou `is_staff`) dans `public` reçoivent un email.
     """
     adresse = (email or "").strip().lower()
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
 
-    with schema_context(public_schema):
+    with contexte_schema(public_schema):
         candidat = Utilisateur.objects.filter(email__iexact=adresse).first()
 
         super_admin_valide = (
@@ -141,10 +141,10 @@ def _envoyer_email_reinitialisation(super_admin: Utilisateur, jeton: uuid.UUID) 
 
 def verifier_jeton_super_admin(jeton_clair: str) -> JetonReinitialisation:
     """Vérifie la validité du jeton Super Admin sans le consommer (règle R-32)."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     empreinte = JetonReinitialisation.empreinte_de(jeton_clair)
 
-    with schema_context(public_schema):
+    with contexte_schema(public_schema):
         jeton = (
             JetonReinitialisation.objects.select_related("utilisateur")
             .filter(empreinte=empreinte)
@@ -169,9 +169,9 @@ def reinitialiser_mot_de_passe_super_admin(
 ) -> Utilisateur:
     """Consomme le jeton, applique le nouveau mot de passe et révoque les sessions existantes."""
     jeton = verifier_jeton_super_admin(jeton_clair)
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
 
-    with schema_context(public_schema):
+    with contexte_schema(public_schema):
         super_admin = jeton.utilisateur
 
         # Validation de la robustesse du mot de passe selon règles Django

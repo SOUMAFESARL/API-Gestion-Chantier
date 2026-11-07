@@ -2,7 +2,7 @@
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, OpenApiTypes, extend_schema
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
@@ -52,7 +52,7 @@ class FactureBaseView(GenericAPIView):
         if getattr(self, "swagger_fake_view", False):
             return Facture.objects.none()
         tenant = getattr(self.request, "tenant", None)
-        if tenant is None or tenant.schema_name == get_public_schema_name():
+        if tenant is None or tenant.schema_name == schema_public():
             raise PermissionDenied(
                 "Selectionnez une entreprise cliente pour consulter ses factures."
             )
@@ -76,7 +76,7 @@ class FactureListeView(FactureBaseView):
         },
     )
     def get(self, request):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             factures = self.get_queryset()
             statut = request.query_params.get("statut")
             if statut:
@@ -95,7 +95,7 @@ class FactureDetailView(FactureBaseView):
         responses={200: FactureSerializer, **ERREURS_FACTURE},
     )
     def get(self, request, pk):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             facture = get_object_or_404(self.get_queryset(), pk=pk)
             return Response(self.get_serializer(facture).data)
 
@@ -113,7 +113,7 @@ class FacturePDFView(FactureBaseView):
         },
     )
     def get(self, request, pk):
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             facture = get_object_or_404(self.get_queryset(), pk=pk)
             contenu = generer_pdf_facture(self.get_serializer(facture).data)
         response = HttpResponse(contenu, content_type="application/pdf")

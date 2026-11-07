@@ -2,7 +2,7 @@
 
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.parsers import JSONParser
@@ -37,7 +37,7 @@ class RolesSystemeListeView(APIView):
 
     @extend_schema(summary="Lister les rôles système", responses=RoleSystemeSerializer(many=True))
     def get(self, request):
-        with schema_context("public"):
+        with contexte_schema("public"):
             return Response(RoleSystemeSerializer(_modeles(), many=True).data)
 
     @extend_schema(
@@ -50,7 +50,7 @@ class RolesSystemeListeView(APIView):
         serializer = RoleSystemeCreationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         modele = creer_role_systeme(**serializer.validated_data, acteur=request.user)
-        with schema_context("public"):
+        with contexte_schema("public"):
             retour = RoleSystemeSerializer(_modeles().get(pk=modele.pk)).data
         return Response(retour, status=status.HTTP_201_CREATED)
 
@@ -66,17 +66,17 @@ class RoleSystemeDetailView(APIView):
     )
     def patch(self, request, pk):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             modele = get_object_or_404(ModeleRole, pk=pk)
         serializer = RoleSystemeModificationSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         modifier_role_systeme(modele, donnees=serializer.validated_data, acteur=request.user)
-        with schema_context("public"):
+        with contexte_schema("public"):
             return Response(RoleSystemeSerializer(_modeles().get(pk=pk)).data)
 
     @extend_schema(summary="Supprimer un rôle système (il devient personnalisé partout)")
     def delete(self, request, pk):
         exiger_superviseur(request)
-        with schema_context("public"):
+        with contexte_schema("public"):
             modele = get_object_or_404(ModeleRole, pk=pk)
         return Response(supprimer_role_systeme(modele, acteur=request.user))

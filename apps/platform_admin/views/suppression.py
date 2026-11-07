@@ -4,7 +4,7 @@ import logging
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -51,7 +51,7 @@ def _erreur(request, code: str, message: str, statut: int) -> Response:
 
 def _entreprise_cliente(client_id) -> Entreprise:
     return get_object_or_404(
-        Entreprise.objects.exclude(schema_name=get_public_schema_name()), pk=client_id
+        Entreprise.objects.exclude(schema_name=schema_public()), pk=client_id
     )
 
 
@@ -193,7 +193,7 @@ class SupprimerClientDefinitivementView(APIView):
 
         rapport = supprimer_definitivement(entreprise)
 
-        with schema_context(get_public_schema_name()):
+        with contexte_schema(schema_public()):
             JournalPlateforme.objects.create(
                 utilisateur_id=request.user.id,
                 entreprise_id=entreprise.id,

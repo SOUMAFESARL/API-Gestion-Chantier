@@ -11,7 +11,7 @@ from typing import Any
 
 from django.core.files.storage import default_storage
 from django.db import connection, transaction
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.billing.models import PaiementAbonnement
@@ -39,7 +39,7 @@ def _lire_schema(entreprise: Entreprise) -> dict[str, Any]:
         "nb_utilisateurs": 0, "nb_projets": 0,
     }
     try:
-        with schema_context(entreprise.schema_name):
+        with contexte_schema(entreprise.schema_name):
             lignes = list(
                 Utilisateur._base_manager.values(
                     "email", "nom", "prenom", "is_owner", "avatar", "role__code"
@@ -65,7 +65,7 @@ def _lire_schema(entreprise: Entreprise) -> dict[str, Any]:
 
 
 def _emails_du_registre(entreprise: Entreprise) -> set[str]:
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         return {
             e.strip().lower()
             for e in RegistreEmail._base_manager.filter(entreprise=entreprise).values_list(
@@ -84,7 +84,7 @@ def _adresses(entreprise: Entreprise, lecture: dict[str, Any]) -> list[str]:
 def apercu_suppression(entreprise: Entreprise) -> dict[str, Any]:
     """Ce que la suppression emporterait — pour que le super admin sache ce qu'il confirme."""
     lecture = _lire_schema(entreprise)
-    with schema_context(get_public_schema_name()):
+    with contexte_schema(schema_public()):
         nb_paiements = PaiementAbonnement._base_manager.filter(
             facture__entreprise=entreprise
         ).count()

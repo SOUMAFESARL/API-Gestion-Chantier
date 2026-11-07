@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 
 from apps.accounts.models import Module, Permission, Role, RoleModulePermission
 from apps.catalogue.models import CatalogueModule, CataloguePermission, EntrepriseModule
@@ -57,7 +57,7 @@ def _permissions_du_catalogue(permissions_input) -> list[CataloguePermission]:
     perms_trouvees = {}
     inconnus = []
 
-    with schema_context("public"):
+    with contexte_schema("public"):
         for p in permissions_input:
             p_val = None
             if isinstance(p, dict):
@@ -134,7 +134,7 @@ def propager_creation_module(
     perms_catalogue = _permissions_du_catalogue(permissions)
     _verifier_prefixes(code, perms_catalogue)
 
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         if CatalogueModule.objects.filter(code=code, supprime_le__isnull=True).exists():
             raise ValidationError(_(f"Un module avec le code '{code}' existe déjà."))
 
@@ -190,7 +190,7 @@ def propager_creation_module(
     codes_perms = [p.code for p in perms_catalogue]
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             mod = Module.objects.filter(code=code, supprime_le__isnull=True).first()
             if not mod:
                 mod, _ = Module.objects.update_or_create(
@@ -248,7 +248,7 @@ def propager_modification_module(
     """Met à jour un module dans le schéma public et synchronise les métadonnées et permissions dans tous les tenants."""
     retirees = set()
     nouvelles = None
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(id=module_id, supprime_le__isnull=True).first()
         if not cat_mod:
             mod_old = Module.objects.filter(id=module_id, supprime_le__isnull=True).first()
@@ -318,7 +318,7 @@ def propager_modification_module(
     )
 
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             mod = Module.objects.filter(code=cat_mod.code, supprime_le__isnull=True).first()
             if not mod:
                 mod = Module.objects.filter(id=cat_mod.id, supprime_le__isnull=True).first()
@@ -376,7 +376,7 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
     """Soft-delete un module dans public et dans tous les tenants (supprime_le = now(), est_actif = False)."""
     maintenant = timezone.now()
     code_supprime = ""
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(id=module_id, supprime_le__isnull=True).first()
         if not cat_mod:
             mod_old = Module.objects.filter(id=module_id, supprime_le__isnull=True).first()
@@ -402,7 +402,7 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             Module.objects.filter(code=code_supprime, supprime_le__isnull=True).update(
                 supprime_le=maintenant,
                 supprime_par=None,
@@ -430,7 +430,7 @@ def _resoudre_modules_codes(modules_input) -> list[str]:
     codes = set()
     from uuid import UUID
 
-    with schema_context("public"):
+    with contexte_schema("public"):
         for m in modules_input:
             if isinstance(m, dict):
                 m_val = m.get("code") or m.get("id")
@@ -481,7 +481,7 @@ def propager_creation_permission(
     module_code = code.split(".")[0].strip().lower()
     codes_modules = _resoudre_modules_codes(modules)
 
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(
             code=module_code, supprime_le__isnull=True
         ).first()
@@ -553,7 +553,7 @@ def propager_creation_permission(
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             perm_tenant, _cree = Permission.objects.update_or_create(
                 code=code,
                 defaults={
@@ -593,7 +593,7 @@ def propager_affectation_modules_permission(
     cat_mods_cibles = []
     perm_prefix = ""
 
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
@@ -676,7 +676,7 @@ def propager_affectation_modules_permission(
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             # Retrait du module => révocation de la permission de tous les rôles sur ce module
             if modules_retires or not cat_mods_cibles:
                 rmps = RoleModulePermission.objects.filter(supprime_le__isnull=True).filter(
@@ -715,7 +715,7 @@ def propager_modification_permission(
     modifie_par=None,
 ) -> CataloguePermission:
     """Modifie une permission dans public et synchronise ses métadonnées dans tous les tenants."""
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
@@ -759,7 +759,7 @@ def propager_modification_permission(
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             perm = Permission.objects.filter(
                 code=cat_perm.code, supprime_le__isnull=True
             ).first()
@@ -824,7 +824,7 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
     """Soft-delete une permission dans public et dans tous les tenants."""
     maintenant = timezone.now()
     code_supprime = ""
-    with schema_context("public"), transaction.atomic():
+    with contexte_schema("public"), transaction.atomic():
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
@@ -853,7 +853,7 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
 
     entreprises = list(Entreprise.objects.exclude(schema_name="public"))
     for entreprise in entreprises:
-        with schema_context(entreprise.schema_name), transaction.atomic():
+        with contexte_schema(entreprise.schema_name), transaction.atomic():
             for rmp in RoleModulePermission.objects.filter(permissions_catalogue=cat_perm):
                 rmp.permissions_catalogue.remove(cat_perm)
 
@@ -871,13 +871,13 @@ def synchroniser_modules_et_permissions_nouveau_tenant(schema_name: str) -> None
     if schema_name == "public":
         return
 
-    with schema_context("public"):
+    with contexte_schema("public"):
         modules_publics = list(Module.objects.filter(supprime_le__isnull=True))
         permissions_publiques = list(
             Permission.objects.filter(supprime_le__isnull=True).prefetch_related("modules")
         )
 
-    with schema_context(schema_name), transaction.atomic():
+    with contexte_schema(schema_name), transaction.atomic():
         # 1. Synchroniser d'abord les modules
         for m in modules_publics:
             Module.objects.update_or_create(
@@ -931,7 +931,7 @@ def propager_roles_systeme(acteur=None) -> dict:
         notifier_dg_action_plateforme,
     )
 
-    with schema_context("public"):
+    with contexte_schema("public"):
         modeles_actifs = list(
             ModeleRole.objects.filter(est_actif=True, supprime_le__isnull=True).prefetch_related(
                 "modules_plafonds"
@@ -946,11 +946,11 @@ def propager_roles_systeme(acteur=None) -> dict:
     entreprises_modifiees_count = 0
 
     for ea in entreprises:
-        with schema_context("public"):
+        with contexte_schema("public"):
             # Même règle que les droits : le catalogue décide (`apps.core.modules_actifs`).
             modules_actifs_ea = codes_modules_actifs(ea) - MODULES_SYSTEME
 
-        with schema_context(ea.schema_name):
+        with contexte_schema(ea.schema_name):
             with transaction.atomic():
                 ea_modifiee = False
                 roles_crees = []

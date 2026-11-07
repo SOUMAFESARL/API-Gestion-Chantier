@@ -117,10 +117,10 @@ def desactiver_collaborateur_plateforme(
 
     # 2. Purge de la table RegistreEmail (schéma public)
     try:
-        from django_tenants.utils import schema_context
+        from apps.core.passerelle_schema import contexte_schema
         from apps.tenants.models import RegistreEmail
 
-        with schema_context("public"):
+        with contexte_schema("public"):
             RegistreEmail.objects.filter(email__iexact=email_original.strip().lower()).delete()
     except Exception as exc:
         logger.warning("Erreur lors de la purge de RegistreEmail: %s", exc)

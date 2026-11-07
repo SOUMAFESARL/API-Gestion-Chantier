@@ -6,6 +6,7 @@ Module CDC : 1 (Gestion des Projets).
 
 from datetime import date
 
+from apps.core.passerelle_schema import schema_courant
 from django.core.exceptions import ValidationError as ValidationErrorDjango
 from django.db import connection, transaction
 from rest_framework import serializers
@@ -420,7 +421,7 @@ def reprogrammer_date_instance(
     alerte_declenchee = False
 
     if jours_derive_contractuelle > 30:
-        schema = getattr(connection, "schema_name", None)
+        schema = schema_courant()
         notifier_dg_derive_delai.delay(
             schema_name=schema,
             type_objet=type_objet,

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from apps.core.passerelle_schema import schema_courant
 from django.db import connection, models
 
 from apps.core.models import ModeleEntreprise
@@ -13,7 +14,7 @@ def chemin_contrat(instance, filename):
     if extension == ".jepg":
         extension = ".jpeg"
     return (
-        f"{connection.schema_name}/projets/{instance.projet_id}/contrats/{instance.pk}{extension}"
+        f"{schema_courant()}/projets/{instance.projet_id}/contrats/{instance.pk}{extension}"
     )
 
 

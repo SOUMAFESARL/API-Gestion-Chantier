@@ -1,7 +1,7 @@
 """Sérialiseurs pour la gestion des comptes administrateurs de la plateforme (Super Admin)."""
 
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context
+from apps.core.passerelle_schema import contexte_schema
 from rest_framework import serializers
 
 from apps.accounts.models import Utilisateur
@@ -66,7 +66,7 @@ class CreerCompteAdministrateurSerializer(serializers.Serializer):
 
     def validate_email(self, val: str) -> str:
         email = val.strip().lower()
-        with schema_context("public"):
+        with contexte_schema("public"):
             if Utilisateur.objects.filter(email=email, supprime_le__isnull=True).exists():
                 raise serializers.ValidationError(_("Un compte avec cette adresse email existe déjà."))
         return email
@@ -127,7 +127,7 @@ class ModifierProfilAdminSerializer(serializers.Serializer):
     def validate_email(self, val: str) -> str:
         email = val.strip().lower()
         user = self.context.get("user")
-        with schema_context("public"):
+        with contexte_schema("public"):
             qs = Utilisateur.objects.filter(email=email, supprime_le__isnull=True)
             if user:
                 qs = qs.exclude(id=user.id)

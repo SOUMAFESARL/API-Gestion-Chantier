@@ -13,7 +13,7 @@ import logging
 
 from django.db import transaction
 from django.utils import timezone
-from django_tenants.utils import get_public_schema_name, schema_context
+from apps.core.passerelle_schema import contexte_schema, schema_public
 
 from apps.accounts.models import Utilisateur
 from apps.accounts.services.authentification import (
@@ -48,11 +48,11 @@ def authentifier_super_admin(
     et possède l'attribut `is_superuser=True`.
     """
     email_nettoye = email.strip().lower()
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
     echec: ErreurMetier | None = None
     super_admin: Utilisateur | None = None
 
-    with schema_context(public_schema), transaction.atomic():
+    with contexte_schema(public_schema), transaction.atomic():
         candidat = (
             Utilisateur.objects.select_for_update().filter(email__iexact=email_nettoye).first()
         )
@@ -83,7 +83,7 @@ def authentifier_super_admin(
     # En cas d'échec d'authentification
     if echec is not None or super_admin is None:
         try:
-            with schema_context(public_schema):
+            with contexte_schema(public_schema):
                 JournalPlateforme.objects.create(
                     action="ECHEC_CONNEXION_SUPER_ADMIN",
                     detail={
@@ -121,7 +121,7 @@ def authentifier_super_admin(
 
     # Journalisation de l'accès réussi dans JournalPlateforme
     try:
-        with schema_context(public_schema):
+        with contexte_schema(public_schema):
             JournalPlateforme.objects.create(
                 utilisateur_id=super_admin.id,
                 action="CONNEXION_SUPER_ADMIN",
@@ -155,7 +155,7 @@ def deconnecter_super_admin(
     appareil: str = "",
 ) -> None:
     """Clôture la session Super Admin et révoque le jeton de renouvellement."""
-    public_schema = get_public_schema_name()
+    public_schema = schema_public()
 
     # Révocation côté serveur via la liste noire Redis si jeton fourni
     if refresh_token:
@@ -182,7 +182,7 @@ def deconnecter_super_admin(
                 payload = jwt.decode(refresh_token, options={"verify_signature": False})
                 token_uid = payload.get("user_id")
                 if token_uid:
-                    with schema_context(public_schema):
+                    with contexte_schema(public_schema):
                         u = Utilisateur.objects.filter(pk=token_uid).first()
                         if u:
                             user_id = u.id
@@ -190,7 +190,7 @@ def deconnecter_super_admin(
             except Exception:
                 pass
 
-        with schema_context(public_schema):
+        with contexte_schema(public_schema):
             JournalPlateforme.objects.create(
                 utilisateur_id=user_id,
                 action="DECONNEXION_SUPER_ADMIN",

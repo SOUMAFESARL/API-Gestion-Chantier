@@ -16,6 +16,8 @@ de l'entreprise, que rien ne tient à jour. Désormais, aucune copie locale n'en
 
 import uuid
 
+from apps.core.contexte import entreprise_courante_id
+
 __all__ = [
     "MODULES_SYSTEME",
     "codes_modules_actifs",
@@ -39,8 +41,41 @@ def resoudre_entreprise(entreprise=None):
     return active()
 
 
-def codes_modules_actifs(entreprise=None) -> set[str]:
-    """Codes (en minuscules) des modules ouverts à l'entreprise, « administration » compris."""
+def _identifiant_entreprise(entreprise=None) -> uuid.UUID | None:
+    """L'identifiant de l'entreprise passée (objet, identifiant ou texte), sinon de l'entreprise
+    active — sans lire la table des entreprises."""
+    if entreprise is None:
+        return entreprise_courante_id()
+    valeur = getattr(entreprise, "pk", entreprise)
+    if isinstance(valeur, uuid.UUID):
+        return valeur
+    try:
+        return uuid.UUID(str(valeur))
+    except ValueError:
+        return None
+
+
+def codes_modules_actifs(entreprise=None, request=None) -> set[str]:
+    """Codes (en minuscules) des modules ouverts à l'entreprise, « administration » compris.
+
+    Avec `request`, le résultat est retenu **sur cette requête** : il est demandé par le
+    middleware des modules fermés, puis par le calcul des droits. Il ne survit pas à la requête
+    — une tâche, une commande ou l'administration de la plateforme, qui ouvre et ferme les
+    modules, ne passent pas de requête et relisent toujours.
+    """
+    identifiant = _identifiant_entreprise(entreprise)
+    retenus = getattr(request, "_codes_modules_actifs", None) if request is not None else None
+    if retenus is not None and identifiant in retenus:
+        return set(retenus[identifiant])
+    resultat = _calculer_modules_actifs(identifiant)
+    if request is not None:
+        if retenus is None:
+            retenus = request._codes_modules_actifs = {}
+        retenus[identifiant] = frozenset(resultat)
+    return resultat
+
+
+def _calculer_modules_actifs(identifiant: uuid.UUID | None) -> set[str]:
     from apps.catalogue.models import CatalogueModule, EntrepriseModule
 
     actifs = {
@@ -56,12 +91,11 @@ def codes_modules_actifs(entreprise=None) -> set[str]:
 
         actifs = {p.module for p in REGISTRE.values()}
 
-    entreprise = resoudre_entreprise(entreprise)
-    if entreprise is not None:
+    if identifiant is not None:
         fermes = {
             code.lower()
             for code in EntrepriseModule.objects.filter(
-                entreprise=entreprise, est_actif=False, supprime_le__isnull=True
+                entreprise_id=identifiant, est_actif=False, supprime_le__isnull=True
             ).values_list("module__code", flat=True)
         }
         actifs -= fermes
@@ -69,5 +103,5 @@ def codes_modules_actifs(entreprise=None) -> set[str]:
     return actifs | MODULES_SYSTEME
 
 
-def module_ouvert(code_module: str, entreprise=None) -> bool:
-    return (code_module or "").lower() in codes_modules_actifs(entreprise)
+def module_ouvert(code_module: str, entreprise=None, request=None) -> bool:
+    return (code_module or "").lower() in codes_modules_actifs(entreprise, request=request)

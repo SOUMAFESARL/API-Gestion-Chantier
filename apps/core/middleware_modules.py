@@ -52,7 +52,7 @@ class ModuleFermeMiddleware:
         if entreprise_id is None:
             return None
         module = module_de_la_vue(view_func)
-        if module is None or module in codes_modules_actifs(entreprise_id):
+        if module is None or module in codes_modules_actifs(entreprise_id, request=request):
             return None
         return JsonResponse(
             {

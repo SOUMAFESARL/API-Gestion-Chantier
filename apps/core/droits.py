@@ -112,9 +112,9 @@ def _permissions_cochees(role) -> list[tuple[str | None, str | None, str]]:
     )
 
 
-def _obtenir_modules_actifs(entreprise=None) -> set[str]:
+def _obtenir_modules_actifs(entreprise=None, request=None) -> set[str]:
     """Codes des modules ouverts à l'entreprise — voir `apps.core.modules_actifs`."""
-    return codes_modules_actifs(entreprise)
+    return codes_modules_actifs(entreprise, request=request)
 
 
 def permissions_effectives(collaborateur, request=None, entreprise=None) -> set[str]:
@@ -132,7 +132,7 @@ def permissions_effectives(collaborateur, request=None, entreprise=None) -> set[
             request._permissions_effectives_cache = perms
         return perms
 
-    modules_actifs = _obtenir_modules_actifs(entreprise)
+    modules_actifs = _obtenir_modules_actifs(entreprise, request)
 
     from apps.catalogue.models import CataloguePermission
 

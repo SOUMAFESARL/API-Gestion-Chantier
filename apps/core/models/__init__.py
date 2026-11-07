@@ -19,9 +19,14 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.managers import ManagerActif, ManagerComplet
+from apps.core.managers import (
+    ManagerActif,
+    ManagerComplet,
+    ManagerEntrepriseActif,
+    ManagerEntrepriseComplet,
+)
 
-__all__ = ["ModeleBase", "ModeleHorodate"]
+__all__ = ["ModeleBase", "ModeleEntreprise", "ModeleHorodate"]
 
 
 class ModeleHorodate(models.Model):
@@ -102,3 +107,59 @@ class ModeleBase(models.Model):
         self.supprime_le = None
         self.supprime_par = None
         self.save(update_fields=["supprime_le", "supprime_par", "modifie_le"])
+
+
+class ErreurIsolation(ValueError):  # noqa: N818 — nommage français du dépôt
+    """Une ligne d'entreprise est écrite pour une autre entreprise que l'entreprise active."""
+
+
+class ModeleEntreprise(ModeleBase):
+    """Modèle de base de toute table d'entreprise — décision D9.
+
+    - **`entreprise`** porte l'appartenance de la ligne (règle R-2). Elle se remplit d'elle-même
+      depuis le contexte d'entreprise à la création, et ne peut pas désigner une autre entreprise
+      que l'entreprise active.
+    - **`objects` et `tous_objets`** sont cloisonnés (règle R-4) : ils ne voient que l'entreprise
+      active, et refusent de travailler sans elle (`HorsContexteEntreprise`).
+
+    *Lot 1 de la sortie du multi-schéma* : aucun modèle n'en hérite encore. Le lot 2 y fait
+    passer les tables d'entreprise une par une.
+    """
+
+    entreprise = models.ForeignKey(
+        "tenants.Entreprise",
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_index=True,
+        verbose_name=_("entreprise"),
+        editable=False,
+    )
+
+    objects = ManagerEntrepriseActif()
+    tous_objets = ManagerEntrepriseComplet()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        from apps.core.contexte import (
+            en_portee_plateforme,
+            entreprise_courante_id,
+            exiger_entreprise,
+        )
+
+        active = entreprise_courante_id()
+        if self.entreprise_id is None:
+            if en_portee_plateforme():
+                raise ErreurIsolation(
+                    "En portée plateforme, l'entreprise d'une nouvelle ligne se donne "
+                    "explicitement : rien ne permet de la déduire."
+                )
+            self.entreprise_id = exiger_entreprise()
+        elif active is not None and str(self.entreprise_id) != str(active):
+            raise ErreurIsolation(
+                f"Ligne de l'entreprise {self.entreprise_id} écrite pendant que "
+                f"l'entreprise {active} est active."
+            )
+        super().save(*args, **kwargs)
+

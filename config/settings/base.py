@@ -165,6 +165,9 @@ DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 # --------------------------------------------------------------------------
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    # Contexte d'entreprise remis à zéro au début et à la fin de chaque requête (D9) : un fil
+    # WSGI réutilisé n'hérite jamais de l'entreprise de la requête précédente.
+    "apps.core.middleware_contexte.ContexteEntrepriseMiddleware",
     "apps.core.middleware_tenant.TenantResolutionMiddleware",
     "apps.core.middleware.IdentifiantRequeteMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -320,8 +323,10 @@ PASSWORD_HASHERS = [
 # API
 # --------------------------------------------------------------------------
 REST_FRAMEWORK = {
+    # JWT, plus la comparaison du claim `entreprise` et son activation (D9, R-7). Sans claim,
+    # identique à `JWTAuthentication` : sans effet jusqu'au lot 5 de la sortie du multi-schéma.
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.core.authentification.AuthentificationEntreprise",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.PaginationStandard",

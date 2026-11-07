@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from apps.projets.models import Element, NiveauProjet
 
-__all__ = ["Arbre", "charger_arbre"]
+__all__ = ["Arbre", "charger_arbre", "precharger_arbres"]
 
 
 @dataclass
@@ -137,8 +137,46 @@ def _porte_une_mesure(feuille) -> bool:
     )
 
 
+def precharger_arbres(projets) -> None:
+    """Charge en deux requêtes les arbres de plusieurs projets, pour une vue de **lecture**.
+
+    Chaque instance de projet reçoit ses éléments et ses niveaux ; `charger_arbre` les reprend
+    ensuite au lieu de relire la base. Sans cela, la liste des projets relisait chaque arbre
+    quatre fois (statistiques, avancement, temporel, santé) : 8 requêtes par projet.
+
+    **Réservé aux lectures.** Le préchargement est figé : un service qui modifie l'arbre et le
+    relit dans la même requête doit travailler sur une instance qui n'a pas été préchargée —
+    c'est le cas de tous les services d'écriture, qui relisent le projet en base.
+    """
+    projets = list(projets)
+    if not projets:
+        return
+    elements: dict = defaultdict(list)
+    niveaux: dict = defaultdict(list)
+    ids = [p.pk for p in projets]
+    for element in Element.objects.filter(projet_id__in=ids).order_by(
+        "profondeur", "ordre", "cree_le"
+    ):
+        elements[element.projet_id].append(element)
+    for niveau in NiveauProjet.objects.filter(projet_id__in=ids).order_by("ordre"):
+        niveaux[niveau.projet_id].append(niveau)
+    for projet in projets:
+        projet._arbre_precharge = (elements[projet.pk], niveaux[projet.pk])
+
+
 def charger_arbre(projet, *, actifs_seulement: bool = False) -> Arbre:
     """L'arbre du projet. Par défaut avec les cases désactivées : elles gardent leur place."""
+    precharge = getattr(projet, "_arbre_precharge", None)
+    if precharge is not None:
+        elements, niveaux = precharge
+        if actifs_seulement:
+            elements = [e for e in elements if e.est_actif]
+        return Arbre(
+            projet=projet,
+            elements=list(elements),
+            niveaux=list(niveaux),
+            actifs_seulement=actifs_seulement,
+        )
     qs = Element.objects.filter(projet=projet)
     if actifs_seulement:
         qs = qs.filter(est_actif=True)

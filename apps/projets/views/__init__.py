@@ -24,6 +24,7 @@ from apps.core.permissions import (
     filtrer_queryset_par_affectations,
 )
 from apps.projets.models import Element, Projet, ProjetContrat
+from apps.projets.selectors.arbre import precharger_arbres
 from apps.projets.selectors.encadrement import prefetch_encadrement
 from apps.projets.serializers.swagger import (
     ProjetCreationResponseSerializer,
@@ -148,6 +149,7 @@ class ProjetListCreateView(APIView):
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         projets = list(qs)
+        precharger_arbres(projets)
         context = {
             "request": request,
             "calendrier": calendrier_pour_projets(projets),

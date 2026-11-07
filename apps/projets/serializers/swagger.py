@@ -314,12 +314,21 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
                     "fonction": aff.fonction_membre or "AUTRE",
                     # Le rôle tenu sur le projet : VI ou tout rôle de portée Projet.
                     "role_code": aff.role_projet,
-                    "role_libelle": aff.get_role_projet_display(),
+                    "role_libelle": aff.get_role_projet_display(self._libelles_roles()),
                     "affectation_id": str(aff.id),
                     "utilisateur": u_data,
                 }
             )
         return resultats
+
+    def _libelles_roles(self) -> dict[str, str]:
+        """Les libellés des rôles, lus une fois pour toute la réponse."""
+        from apps.projets.models.projet import libelles_des_roles
+
+        racine = self.root if self.root is not None else self
+        if not hasattr(racine, "_libelles_roles_cache"):
+            racine._libelles_roles_cache = libelles_des_roles()
+        return racine._libelles_roles_cache
 
     statistiques = serializers.SerializerMethodField(
         help_text="Compteurs et avancement des cases actives de l'arbre du projet."

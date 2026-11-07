@@ -10,7 +10,21 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.enums import BadgeSante, RoleProjet, StatutProjet, TypeProjet
 from apps.core.models import ModeleEntreprise
 
-__all__ = ["AffectationProjet", "Projet"]
+__all__ = ["AffectationProjet", "Projet", "libelles_des_roles"]
+
+
+def libelles_des_roles() -> dict[str, str]:
+    """Code du rôle (en majuscules) vers son libellé, en une requête.
+
+    Même résultat que la lecture rôle par rôle de `get_role_projet_display` : à code égal sans
+    tenir compte de la casse, le premier dans l'ordre de la table l'emporte.
+    """
+    from apps.accounts.models import Role
+
+    libelles: dict[str, str] = {}
+    for code, libelle in Role.objects.values_list("code", "libelle"):
+        libelles.setdefault((code or "").upper(), libelle)
+    return libelles
 
 
 class Projet(ModeleEntreprise):
@@ -271,13 +285,21 @@ class AffectationProjet(ModeleEntreprise):
             # 30/10/2026), vérifiée par le service des affectations.
         ]
 
-    def get_role_projet_display(self) -> str:
-        """Le libellé du rôle, lu dans la table `role` ; à défaut celui de l'énumération."""
-        from apps.accounts.models import Role
+    def get_role_projet_display(self, libelles: dict[str, str] | None = None) -> str:
+        """Le libellé du rôle, lu dans la table `role` ; à défaut celui de l'énumération.
 
-        role = Role.objects.filter(code__iexact=self.role_projet).only("libelle").first()
-        if role:
-            return role.libelle
+        `libelles` (voir `libelles_des_roles`) évite une requête par affectation quand on en
+        affiche plusieurs.
+        """
+        if libelles is not None:
+            libelle = libelles.get((self.role_projet or "").upper())
+        else:
+            from apps.accounts.models import Role
+
+            role = Role.objects.filter(code__iexact=self.role_projet).only("libelle").first()
+            libelle = role.libelle if role else None
+        if libelle:
+            return libelle
         return dict(RoleProjet.choices).get(self.role_projet, self.role_projet)
 
     def __str__(self) -> str:

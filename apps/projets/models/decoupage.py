@@ -21,7 +21,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.catalogue.models.referentiel import cle_comparaison
 from apps.core.enums import StatutActivite
 from apps.core.fields import MontantField, PourcentageField, QuantiteField
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = [
     "Element",
@@ -46,7 +46,7 @@ class ModeMesure(models.TextChoices):
 # --------------------------------------------------------------------------
 # Listes de valeurs de l'entreprise (§4)
 # --------------------------------------------------------------------------
-class ListeValeursEntreprise(ModeleBase):
+class ListeValeursEntreprise(ModeleEntreprise):
     libelle = models.CharField(_("libellé"), max_length=100)
     description = models.TextField(_("description"), blank=True, default="")
     ordre = models.PositiveIntegerField(_("ordre"), default=0)
@@ -59,7 +59,7 @@ class ListeValeursEntreprise(ModeleBase):
         return self.libelle
 
 
-class ValeurListeEntreprise(ModeleBase):
+class ValeurListeEntreprise(ModeleEntreprise):
     """Une valeur ajoutée par l'entreprise — à l'une de ses listes, ou à une liste plateforme."""
 
     liste_entreprise = models.ForeignKey(
@@ -98,7 +98,7 @@ class ValeurListeEntreprise(ModeleBase):
                 name="uq_valeur_liste_entreprise_cle",
             ),
             models.UniqueConstraint(
-                fields=["liste_plateforme", "cle_comparaison"],
+                fields=["entreprise", "liste_plateforme", "cle_comparaison"],
                 condition=models.Q(supprime_le__isnull=True, liste_plateforme__isnull=False),
                 name="uq_valeur_liste_plateforme_ajoutee_cle",
             ),
@@ -115,7 +115,7 @@ class ValeurListeEntreprise(ModeleBase):
 # --------------------------------------------------------------------------
 # Modèles de découpage de l'entreprise (§3)
 # --------------------------------------------------------------------------
-class ModeleDecoupageEntreprise(ModeleBase):
+class ModeleDecoupageEntreprise(ModeleEntreprise):
     nom = models.CharField(_("nom"), max_length=150)
     description = models.TextField(_("description"), blank=True, default="")
     types_projet = models.JSONField(_("types de projet"), default=list, blank=True)
@@ -140,7 +140,7 @@ class ModeleDecoupageEntreprise(ModeleBase):
         return self.nom
 
 
-class NiveauModeleEntreprise(ModeleBase):
+class NiveauModeleEntreprise(ModeleEntreprise):
     modele = models.ForeignKey(
         ModeleDecoupageEntreprise, on_delete=models.CASCADE, related_name="niveaux"
     )
@@ -167,7 +167,7 @@ class NiveauModeleEntreprise(ModeleBase):
         ordering = ["modele", "ordre"]
 
 
-class LigneModeleEntreprise(ModeleBase):
+class LigneModeleEntreprise(ModeleEntreprise):
     modele = models.ForeignKey(
         ModeleDecoupageEntreprise, on_delete=models.CASCADE, related_name="lignes"
     )
@@ -182,7 +182,7 @@ class LigneModeleEntreprise(ModeleBase):
 # --------------------------------------------------------------------------
 # Le gabarit et l'arbre d'un projet (§1, §2, §7)
 # --------------------------------------------------------------------------
-class NiveauProjet(ModeleBase):
+class NiveauProjet(ModeleEntreprise):
     projet = models.ForeignKey("projets.Projet", on_delete=models.CASCADE, related_name="niveaux")
     ordre = models.PositiveSmallIntegerField(_("ordre"))
     libelle = models.CharField(_("libellé"), max_length=60)
@@ -217,7 +217,7 @@ class NiveauProjet(ModeleBase):
         return f"{self.ordre}. {self.libelle}"
 
 
-class Element(ModeleBase):
+class Element(ModeleEntreprise):
     """Un élément de découpage : une case de l'arbre du projet.
 
     Une **feuille** est un élément sans enfant actif ; ce statut n'est pas fixe (découper une

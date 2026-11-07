@@ -18,7 +18,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import CodeEtape, ModeEtape, StatutConfiguration
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = [
     "ETAPES",
@@ -48,7 +48,7 @@ ETAPES: tuple[str, ...] = (
 ETAPES_FACULTATIVES: frozenset[str] = frozenset({CodeEtape.PROJET, CodeEtape.EQUIPE})
 
 
-class ProgressionConfiguration(ModeleBase):
+class ProgressionConfiguration(ModeleEntreprise):
     """Où en est la configuration — **une seule ligne par schéma**.
 
     **La configuration appartient à l'entreprise, pas à la personne.** Un second
@@ -88,7 +88,9 @@ class ProgressionConfiguration(ModeleBase):
         verbose_name = _("progression de configuration")
         verbose_name_plural = _("progressions de configuration")
         constraints = [
-            models.UniqueConstraint(fields=["unique_par_schema"], name="uq_progression_singleton"),
+            models.UniqueConstraint(
+                fields=["entreprise", "unique_par_schema"], name="uq_progression_singleton"
+            ),
             models.CheckConstraint(
                 condition=models.Q(unique_par_schema=True),
                 name="chk_progression_singleton",
@@ -126,7 +128,7 @@ class ProgressionConfiguration(ModeleBase):
         return self.terminee_le is not None
 
 
-class EtapeConfiguration(ModeleBase):
+class EtapeConfiguration(ModeleEntreprise):
     """Une étape franchie — **une ligne, jamais plus**.
 
     Une table fille plutôt qu'un tableau JSONB, et le motif est la concurrence :

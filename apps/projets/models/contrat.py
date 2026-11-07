@@ -4,7 +4,7 @@ from pathlib import Path
 
 from django.db import connection, models
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 from apps.projets.storage import StockageContrats
 
 
@@ -17,7 +17,7 @@ def chemin_contrat(instance, filename):
     )
 
 
-class ProjetContrat(ModeleBase):
+class ProjetContrat(ModeleEntreprise):
     projet = models.ForeignKey("projets.Projet", on_delete=models.CASCADE, related_name="contrats")
     fichier = models.FileField(upload_to=chemin_contrat, storage=StockageContrats(), max_length=255)
     nom = models.CharField(max_length=255)

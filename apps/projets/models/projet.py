@@ -8,12 +8,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import BadgeSante, RoleProjet, StatutProjet, TypeProjet
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["AffectationProjet", "Projet"]
 
 
-class Projet(ModeleBase):
+class Projet(ModeleEntreprise):
     """Chantier / Projet de construction."""
 
     reference = models.CharField(_("référence"), max_length=30)
@@ -170,10 +170,13 @@ class Projet(ModeleBase):
         ordering = ["-cree_le"]
         constraints = [
             models.UniqueConstraint(
-                fields=["reference"],
+                fields=["entreprise", "reference"],
                 condition=models.Q(supprime_le__isnull=True),
-                name="uq_projet_reference_tenant",
-            )
+                name="uq_projet_reference",
+            ),
+            # Cible des clés composites (projet_id, entreprise_id) des tables enfants (D9, R-3) :
+            # un enfant ne peut pas pointer vers le projet d'une autre entreprise.
+            models.UniqueConstraint(fields=["id", "entreprise"], name="uq_projet_id_entreprise"),
         ]
 
     @property
@@ -205,7 +208,7 @@ class Projet(ModeleBase):
         return f"{self.reference} — {self.nom}"
 
 
-class AffectationProjet(ModeleBase):
+class AffectationProjet(ModeleEntreprise):
     """Affectation d'un utilisateur à un projet avec un rôle spécifique."""
 
     utilisateur = models.ForeignKey(

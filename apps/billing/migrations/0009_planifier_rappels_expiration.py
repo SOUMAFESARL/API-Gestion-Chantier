@@ -2,7 +2,7 @@ from django.db import migrations
 
 
 def planifier(apps, schema_editor):
-    if schema_editor.connection.schema_name != "public":
+    if getattr(schema_editor.connection, "schema_name", "public") != "public":
         return
     crontab_model = apps.get_model("django_celery_beat", "CrontabSchedule")
     periodique_model = apps.get_model("django_celery_beat", "PeriodicTask")
@@ -25,7 +25,7 @@ def planifier(apps, schema_editor):
 
 
 def deplanifier(apps, schema_editor):
-    if schema_editor.connection.schema_name == "public":
+    if getattr(schema_editor.connection, "schema_name", "public") == "public":
         apps.get_model("django_celery_beat", "PeriodicTask").objects.filter(
             name="billing.relancer_abonnements"
         ).delete()

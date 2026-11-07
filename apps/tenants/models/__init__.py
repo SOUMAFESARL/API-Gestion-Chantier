@@ -15,7 +15,6 @@ from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.models import DomainMixin, TenantMixin
 
 from apps.core.enums import StatutEntreprise
 from apps.core.models import ModeleBase
@@ -32,20 +31,17 @@ __all__ = [
 DUREE_LIEN_ACTIVATION = timedelta(hours=48)
 
 
-class Entreprise(TenantMixin):
-    """L'entreprise BTP abonnée. Porte son schéma PostgreSQL.
+class Entreprise(models.Model):
+    """L'entreprise BTP abonnée — décision D9 : un schéma unique.
 
-    `TenantMixin` fournit `schema_name` et la création du schéma.
-    Aucune donnée métier ne vit ici : elle est dans le schéma nommé par
-    `schema_name`.
+    Toute donnée métier lui est rattachée par sa colonne `entreprise_id` (`ModeleEntreprise`).
+    `schema_name` ne nomme plus de schéma : c'est l'identifiant lisible de l'entreprise, qui
+    devient `slug` au lot 8 de la sortie du multi-schéma.
     """
 
-    # Le schéma est créé dès l'enregistrement de la ligne, dans la même
-    # transaction (US-014 : création transactionnelle tenant + schéma).
-    auto_create_schema = True
-    auto_drop_schema = False  # RG-06 : on ne détruit jamais un schéma client
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Hier fourni par `TenantMixin` (django-tenants) ; déclaré à l'identique, même colonne.
+    schema_name = models.CharField(max_length=63, unique=True, db_index=True)
 
     raison_sociale = models.CharField(_("raison sociale"), max_length=200)
     nom_commercial = models.CharField(_("nom commercial"), max_length=200, blank=True)
@@ -113,6 +109,9 @@ class Entreprise(TenantMixin):
             )
         ]
 
+    def __str__(self) -> str:
+        return f"{self.raison_sociale} ({self.schema_name})"
+
     def save(self, *args, **kwargs):
         if self.raison_sociale:
             self.raison_sociale = " ".join(self.raison_sociale.strip().split())
@@ -120,16 +119,19 @@ class Entreprise(TenantMixin):
             self.email_contact = self.email_contact.strip().lower()
         super().save(*args, **kwargs)
 
-    def __str__(self) -> str:
-        return f"{self.raison_sociale} ({self.schema_name})"
 
+class Domaine(models.Model):
+    """Vestige : le sous-domaine qui désignait l'entreprise sous django-tenants.
 
-class Domaine(DomainMixin):
-    """Le sous-domaine par lequel une entreprise atteint le produit.
-
-    En développement : `soumafe.localhost`, résolu vers 127.0.0.1 par le
-    navigateur, sans toucher au fichier hosts.
+    Plus rien ne résout une entreprise par son hôte (D9, R-7). La table disparaît au lot 8 ; ses
+    champs, hier fournis par `DomainMixin`, sont déclarés à l'identique jusque-là.
     """
+
+    domain = models.CharField(max_length=253, unique=True, db_index=True)
+    tenant = models.ForeignKey(
+        Entreprise, db_index=True, related_name="domains", on_delete=models.CASCADE
+    )
+    is_primary = models.BooleanField(default=True, db_index=True)
 
     class Meta:
         db_table = "domaine"

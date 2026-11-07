@@ -20,7 +20,7 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = [
     "AffectationEquipeElement",
@@ -30,7 +30,7 @@ __all__ = [
 ]
 
 
-class PersonneMainOeuvre(ModeleBase):
+class PersonneMainOeuvre(ModeleEntreprise):
     nom = models.CharField(_("nom"), max_length=150)
     prenom = models.CharField(_("prénom"), max_length=150)
     telephone = models.CharField(_("téléphone"), max_length=20, blank=True, default="")
@@ -73,7 +73,7 @@ class PersonneMainOeuvre(ModeleBase):
         return self.nom_complet
 
 
-class EquipeChantier(ModeleBase):
+class EquipeChantier(ModeleEntreprise):
     projet = models.ForeignKey("projets.Projet", on_delete=models.RESTRICT, related_name="equipes")
     nom = models.CharField(_("nom"), max_length=200)
     corps_etat = models.CharField(_("corps d'état"), max_length=200, blank=True, default="")
@@ -107,7 +107,7 @@ class EquipeChantier(ModeleBase):
         return self.nom
 
 
-class MembreEquipeChantier(ModeleBase):
+class MembreEquipeChantier(ModeleEntreprise):
     FONCTION_CHOICES = [
         ("CHEF_EQUIPE", _("Chef d'équipe")),
         ("OUVRIER_QUALIFIE", _("Ouvrier qualifié")),
@@ -152,7 +152,7 @@ class MembreEquipeChantier(ModeleBase):
         ]
 
 
-class AffectationEquipeElement(ModeleBase):
+class AffectationEquipeElement(ModeleEntreprise):
     equipe = models.ForeignKey(
         EquipeChantier, on_delete=models.RESTRICT, related_name="affectations_elements"
     )

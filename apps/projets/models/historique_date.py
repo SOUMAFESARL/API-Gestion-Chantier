@@ -10,7 +10,7 @@ from django.db import models
 from django.db.models.functions import Length
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 from .decoupage import Element
 from .motif_report import MotifReport
@@ -24,7 +24,7 @@ class TypeObjetHistorique(models.TextChoices):
     ELEMENT = "ELEMENT", _("Élément de découpage")
 
 
-class HistoriqueDate(ModeleBase):
+class HistoriqueDate(ModeleEntreprise):
     """Traçabilité immuable de chaque modification de date prévisionnelle (RG-11)."""
 
     type_objet = models.CharField(

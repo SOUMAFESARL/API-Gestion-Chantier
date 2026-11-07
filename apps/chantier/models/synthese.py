@@ -2,10 +2,10 @@
 
 from django.db import models
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 
-class SynthesePeriodique(ModeleBase):
+class SynthesePeriodique(ModeleEntreprise):
     """La part écrite et signée d'une synthèse — les chiffres, eux, se calculent.
 
     Une synthèse n'existe en base qu'à partir du moment où le conducteur de

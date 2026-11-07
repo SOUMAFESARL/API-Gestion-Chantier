@@ -1,7 +1,7 @@
 """Développement local."""
 
 from .base import *
-from .base import INSTALLED_APPS, config
+from .base import DATABASES, INSTALLED_APPS, config
 
 DEBUG = True
 
@@ -11,6 +11,10 @@ DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".localhost"]
 
 INSTALLED_APPS += ["django_extensions"]
+
+# La branche du schéma unique a sa propre base : la base multi-schéma reste intacte, pour
+# comparer les deux modèles sur le même jeu de test (`peupler_donnees_test`).
+DATABASES["default"]["NAME"] = config("POSTGRES_DB_SCHEMA_UNIQUE", default="ccd_schema_unique")
 
 CORS_ALLOW_ALL_ORIGINS = True
 

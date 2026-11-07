@@ -8,12 +8,12 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import RoleTiersChoix, TypeTiers
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["RoleTiers", "Tiers"]
 
 
-class Tiers(ModeleBase):
+class Tiers(ModeleEntreprise):
     """Acteur externe à l'entreprise cliente."""
 
     type_tiers = models.CharField(
@@ -48,7 +48,7 @@ class Tiers(ModeleBase):
         return self.raison_sociale
 
 
-class RoleTiers(ModeleBase):
+class RoleTiers(ModeleEntreprise):
     """Rôle joué par un tiers (un tiers peut être client et sous-traitant)."""
 
     tiers = models.ForeignKey(Tiers, on_delete=models.CASCADE, related_name="roles")

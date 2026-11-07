@@ -10,12 +10,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import SeveriteBlocage, StatutBlocage
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["Blocage"]
 
 
-class Blocage(ModeleBase):
+class Blocage(ModeleEntreprise):
     """Point bloquant ou incident survenu sur un chantier."""
 
     projet = models.ForeignKey(

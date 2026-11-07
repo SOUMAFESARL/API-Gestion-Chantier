@@ -128,11 +128,20 @@ class RequeteEntreprise(RequeteSansSupprimes):
         return super().explain(*args, **kwargs)
 
 
+def _classe_requete(manager) -> type[RequeteEntreprise]:
+    """Le QuerySet d'un gestionnaire cloisonné : le sien s'il dérive de `RequeteEntreprise`
+    (gestionnaire construit par `from_queryset`), sinon `RequeteEntreprise`."""
+    classe = getattr(manager, "_queryset_class", None)
+    return classe if isinstance(classe, type) and issubclass(classe, RequeteEntreprise) else (
+        RequeteEntreprise
+    )
+
+
 class ManagerEntrepriseActif(ManagerActif):
     """`objects` d'une table d'entreprise : entreprise active, lignes non supprimées."""
 
     def get_queryset(self):
-        return RequeteEntreprise.cloisonnee(self.model, using=self._db).filter(
+        return _classe_requete(self).cloisonnee(self.model, using=self._db).filter(
             supprime_le__isnull=True
         )
 
@@ -145,4 +154,4 @@ class ManagerEntrepriseComplet(ManagerComplet):
     """
 
     def get_queryset(self):
-        return RequeteEntreprise.cloisonnee(self.model, using=self._db)
+        return _classe_requete(self).cloisonnee(self.model, using=self._db)

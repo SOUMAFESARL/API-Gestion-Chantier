@@ -26,12 +26,12 @@ from __future__ import annotations
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["ExceptionCalendrier", "SemaineType"]
 
 
-class SemaineType(ModeleBase):
+class SemaineType(ModeleEntreprise):
     """Semaine type de travail d'une entreprise (ligne unique par schéma tenant).
 
     Première couche du calendrier d'entreprise : définit quels jours de la semaine
@@ -58,7 +58,7 @@ class SemaineType(ModeleBase):
         verbose_name_plural = _("semaines types")
         constraints = [
             models.UniqueConstraint(
-                fields=["cle"],
+                fields=["entreprise", "cle"],
                 name="uq_semaine_type_unique",
             )
         ]
@@ -95,7 +95,7 @@ class SemaineType(ModeleBase):
         return instance
 
 
-class ExceptionCalendrier(ModeleBase):
+class ExceptionCalendrier(ModeleEntreprise):
     """Exception de calendrier d'entreprise (troisième couche du calendrier).
 
     Prédomine sur les jours fériés nationaux et sur la semaine type.
@@ -120,7 +120,7 @@ class ExceptionCalendrier(ModeleBase):
         ordering = ["date"]
         constraints = [
             models.UniqueConstraint(
-                fields=["date"],
+                fields=["entreprise", "date"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_exception_calendrier_date",
             )

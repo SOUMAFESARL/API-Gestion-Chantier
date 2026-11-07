@@ -14,7 +14,7 @@ from __future__ import annotations
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["CODES_MENTIONS", "ParametresDocuments"]
 
@@ -42,7 +42,7 @@ def mentions_pied_par_defaut() -> list[str]:
     return ["raison_sociale", "adresse", "telephone"]
 
 
-class ParametresDocuments(ModeleBase):
+class ParametresDocuments(ModeleEntreprise):
     """Réglage de l'en-tête et du pied des documents (ligne unique par schéma tenant)."""
 
     cle = models.CharField(
@@ -79,7 +79,7 @@ class ParametresDocuments(ModeleBase):
         verbose_name_plural = _("paramètres des documents")
         constraints = [
             models.UniqueConstraint(
-                fields=["cle"],
+                fields=["entreprise", "cle"],
                 name="uq_parametres_documents_unique",
             )
         ]

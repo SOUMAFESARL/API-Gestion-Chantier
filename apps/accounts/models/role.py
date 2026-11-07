@@ -8,12 +8,13 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import ModuleChoix
-from apps.core.models import ModeleBase
+from apps.core.managers import ManagerEntrepriseComplet, RequeteEntreprise
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["Role", "RoleModulePermission"]
 
 
-class Role(ModeleBase):
+class Role(ModeleEntreprise):
     """Rôle au sein d'une organisation cliente (tenant).
 
     Les rôles système (AD, CP, CT, CC, DG, DF, VI) sont initialisés par défaut
@@ -53,7 +54,7 @@ class Role(ModeleBase):
         ordering = ["libelle"]
         constraints = [
             models.UniqueConstraint(
-                fields=["code"],
+                fields=["entreprise", "code"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_role_code_actif",
             )
@@ -63,7 +64,7 @@ class Role(ModeleBase):
         return self.libelle
 
 
-class RoleModulePermissionQuerySet(models.QuerySet):
+class RoleModulePermissionQuerySet(RequeteEntreprise):
     """QuerySet supportant l'alias virtuel 'module_code' pour filtrer par code de module."""
 
     def filter(self, *args, **kwargs):
@@ -93,7 +94,7 @@ class RoleModulePermissionQuerySet(models.QuerySet):
         return super().exclude(*new_args, **new_kwargs)
 
 
-class RoleModulePermission(ModeleBase):
+class RoleModulePermission(ModeleEntreprise):
     """Permissions accordées à un rôle sur l'un des modules applicatifs dynamiques BTP.
 
     Matrice par défaut au niveau de l'entreprise (tenant).
@@ -101,7 +102,8 @@ class RoleModulePermission(ModeleBase):
     automatiquement en cascade ses permissions associées.
     """
 
-    objects = RoleModulePermissionQuerySet.as_manager()
+    # Cloisonné (D9) ; comme avant, `objects` voit aussi les lignes supprimées logiquement.
+    objects = ManagerEntrepriseComplet.from_queryset(RoleModulePermissionQuerySet)()
 
     role = models.ForeignKey(
         Role,

@@ -10,12 +10,12 @@ et les surcharges par projet.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["Module"]
 
 
-class Module(ModeleBase):
+class Module(ModeleEntreprise):
     """Module applicatif dynamique de la plateforme BTP.
 
     Chaque enregistrement représente un module fonctionnel activable (ex: projets, chantier, ged...).
@@ -65,7 +65,7 @@ class Module(ModeleBase):
         ordering = ["ordre", "code"]
         constraints = [
             models.UniqueConstraint(
-                fields=["code"],
+                fields=["entreprise", "code"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_module_code_actif",
             )

@@ -9,12 +9,12 @@ sans hiérarchie imposée.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["Permission"]
 
 
-class Permission(ModeleBase):
+class Permission(ModeleEntreprise):
     """Autorisation granulaire dynamique de la plateforme.
 
     Chaque enregistrement représente une capacité ou un droit d'action (ex: 'projets.lire', 'projets.ecrire').
@@ -63,7 +63,7 @@ class Permission(ModeleBase):
         ordering = ["ordre", "code"]
         constraints = [
             models.UniqueConstraint(
-                fields=["code"],
+                fields=["entreprise", "code"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_permission_code_actif",
             )

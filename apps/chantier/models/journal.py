@@ -2,10 +2,10 @@
 
 from django.db import models
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 
-class JournalChantier(ModeleBase):
+class JournalChantier(ModeleEntreprise):
     rapport = models.OneToOneField(
         "chantier.RapportJournalier", on_delete=models.RESTRICT, related_name="journal"
     )
@@ -35,7 +35,7 @@ class JournalChantier(ModeleBase):
         db_table = "journal_chantier"
 
 
-class AlerteJournal(ModeleBase):
+class AlerteJournal(ModeleEntreprise):
     """Notification interne persistante, dédupliquée par clé de formulaire."""
 
     journal = models.ForeignKey(JournalChantier, on_delete=models.RESTRICT, related_name="alertes")

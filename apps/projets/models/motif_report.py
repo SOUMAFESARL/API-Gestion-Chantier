@@ -7,12 +7,12 @@ Module CDC : 1 (Gestion des Projets).
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["MotifReport"]
 
 
-class MotifReport(ModeleBase):
+class MotifReport(ModeleEntreprise):
     """Motif dynamique qualifiant la raison d'un report de date prévisionnelle."""
 
     code = models.CharField(
@@ -48,7 +48,7 @@ class MotifReport(ModeleBase):
         ordering = ["ordre", "libelle"]
         constraints = [
             models.UniqueConstraint(
-                fields=["code"],
+                fields=["entreprise", "code"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_motif_report_code_actif",
             )

@@ -8,14 +8,14 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 from .decoupage import Element
 
 __all__ = ["MiseAJourInline"]
 
 
-class MiseAJourInline(ModeleBase):
+class MiseAJourInline(ModeleEntreprise):
     """Mise à jour manuelle de l'avancement d'une feuille de l'arbre."""
 
     element = models.ForeignKey(

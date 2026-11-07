@@ -48,6 +48,11 @@ class JournalAudit(models.Model):
     # expiration, un provisionnement. Ne pas confondre avec « inconnu ».
     utilisateur_id = models.UUIDField(_("utilisateur"), null=True, blank=True, db_index=True)
 
+    # D9 : l'entreprise de l'action ; nulle pour une action de la plateforme. Un identifiant et
+    # non une clé étrangère, comme `utilisateur_id` : le journal est immuable (RG-07) et ne doit
+    # jamais empêcher la purge d'une entreprise. Renseignée à l'insertion, depuis le contexte.
+    entreprise_id = models.UUIDField(_("entreprise"), null=True, blank=True, db_index=True)
+
     action = models.CharField(_("action"), max_length=20, choices=ActionAudit.choices)
     type_entite = models.CharField(_("type d'entité"), max_length=50)
     entite_id = models.UUIDField(_("identifiant de l'entité"), null=True, blank=True)
@@ -71,3 +76,10 @@ class JournalAudit(models.Model):
 
     def __str__(self) -> str:
         return f"{self.horodatage:%Y-%m-%d %H:%M} — {self.action} sur {self.type_entite}"
+
+    def save(self, *args, **kwargs):
+        if self.entreprise_id is None:
+            from apps.core.contexte import entreprise_courante_id
+
+            self.entreprise_id = entreprise_courante_id()
+        super().save(*args, **kwargs)

@@ -10,12 +10,12 @@ Retirer un lien est une suppression logique : l'historique des deux tâches le g
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["Dependance"]
 
 
-class Dependance(ModeleBase):
+class Dependance(ModeleEntreprise):
     projet = models.ForeignKey(
         "projets.Projet", on_delete=models.CASCADE, related_name="dependances"
     )

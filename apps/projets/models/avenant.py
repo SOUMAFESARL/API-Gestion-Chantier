@@ -15,7 +15,7 @@ from pathlib import Path
 from django.db import connection, models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 from apps.projets.storage import StockageContrats
 
 __all__ = ["Avenant"]
@@ -30,7 +30,7 @@ def chemin_avenant(instance, filename):
     )
 
 
-class Avenant(ModeleBase):
+class Avenant(ModeleEntreprise):
     projet = models.ForeignKey("projets.Projet", on_delete=models.CASCADE, related_name="avenants")
     numero = models.CharField(_("numéro"), max_length=30)
     date_signature = models.DateField(_("date de signature"))

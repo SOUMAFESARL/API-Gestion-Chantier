@@ -114,7 +114,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("catalogue", "0001_initial"),
-        ("accounts", "0001_squashed_0018_seed_permission_modules_m2m"),
+        ("accounts", "0001_initial"),
         ("tenants", "0010_remove_demandeinscription_uq_demande_slug_and_more"),
     ]
 

@@ -9,12 +9,12 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.fields import PourcentageField
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["PointAvancement"]
 
 
-class PointAvancement(ModeleBase):
+class PointAvancement(ModeleEntreprise):
     projet = models.ForeignKey(
         "projets.Projet", on_delete=models.CASCADE, related_name="points_avancement"
     )

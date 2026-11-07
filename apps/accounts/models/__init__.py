@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import RoleGlobal, StatutUtilisateur
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleBase, ModeleEntreprise
 
 from .module import Module
 from .permission import Permission
@@ -122,6 +122,17 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         blank=True,
         related_name="collaborateurs",
         verbose_name=_("rôle"),
+    )
+    # D9, R-8 : une seule table pour tous les comptes. Nulle pour le personnel de CCD Digital,
+    # renseignée pour les collaborateurs d'une entreprise. Le gestionnaire reste **non
+    # cloisonné** : l'authentification cherche le compte avant de savoir son entreprise.
+    entreprise = models.ForeignKey(
+        "tenants.Entreprise",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="utilisateurs",
+        verbose_name=_("entreprise"),
     )
     statut = models.CharField(
         _("statut"),
@@ -287,6 +298,19 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
         return None
 
     def save(self, *args, **kwargs):
+        from apps.core.contexte import entreprise_courante_id
+        from apps.core.models import ErreurIsolation
+
+        active = entreprise_courante_id()
+        if self.entreprise_id is None and active is not None:
+            self.entreprise_id = active
+        elif self.entreprise_id is not None and active is not None and (
+            str(self.entreprise_id) != str(active)
+        ):
+            raise ErreurIsolation(
+                f"Compte de l'entreprise {self.entreprise_id} écrit pendant que "
+                f"l'entreprise {active} est active."
+            )
         if self.role_id:
             try:
                 if self.role and self.role.code:
@@ -354,7 +378,7 @@ class Utilisateur(ModeleBase, AbstractBaseUser, PermissionsMixin):
             self.save(update_fields=["tentatives_echouees", "bloque_le", "modifie_le"])
 
 
-class Invitation(ModeleBase):
+class Invitation(ModeleEntreprise):
     """Un compte créé mais pas encore activé — workflow T1, lien valable 72 h (MLD §5.2)."""
 
     class Statut(models.TextChoices):
@@ -413,7 +437,7 @@ class Invitation(ModeleBase):
         return hashlib.sha256(str(jeton).encode()).hexdigest()
 
 
-class Appareil(ModeleBase):
+class Appareil(ModeleEntreprise):
     """Un téléphone ou un navigateur connu de l'utilisateur.
 
     Porte le jeton FCM utilisé pour les notifications push (US-056).
@@ -442,7 +466,7 @@ class Appareil(ModeleBase):
         return f"{self.get_type_appareil_display()} — {self.utilisateur}"
 
 
-class JetonReinitialisation(ModeleBase):
+class JetonReinitialisation(ModeleEntreprise):
     """Un lien de réinitialisation de mot de passe — contrat §2.
 
     **Ce qui est stocké est l'empreinte, jamais le jeton** (décision J2). Un

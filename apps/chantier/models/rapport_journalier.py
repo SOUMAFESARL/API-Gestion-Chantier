@@ -8,12 +8,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import Meteo, StatutRapport
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["RapportJournalier"]
 
 
-class RapportJournalier(ModeleBase):
+class RapportJournalier(ModeleEntreprise):
     """Journal de chantier quotidien."""
 
     projet = models.ForeignKey(

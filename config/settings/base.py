@@ -88,55 +88,38 @@ def _liste(valeur: str) -> list[str]:
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="", cast=_liste)
 
 # --------------------------------------------------------------------------
-# Applications — la répartition entre les deux listes EST l'isolation.
-# Une application placée dans TENANT_APPS voit ses tables créées dans chaque
-# schéma client ; dans SHARED_APPS, dans le seul schéma `public`.
-# Se tromper de liste, c'est exposer les données d'un client à un autre.
+# Applications — un seul schéma (décision D9, `04_Conception/plan_technique/
+# architecture_globale_systeme/decision_schema_unique_CCD_Digital.md`).
+# L'isolation n'est plus le choix d'une liste : c'est la colonne `entreprise_id`
+# de toute table d'entreprise (`ModeleEntreprise`), filtrée par les gestionnaires
+# de l'ORM et, au lot 4, par la sécurité au niveau des lignes de PostgreSQL.
 # --------------------------------------------------------------------------
-SHARED_APPS = [
-    "django_tenants",  # doit rester en premier
-    "apps.tenants",  # porte le modèle de tenant
+INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "django.contrib.admin",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # plateforme
+    "apps.tenants",
     "apps.core",
-    "apps.catalogue",  # Catalogue souverain partagé dans public uniquement (Modules, Permissions, Droit d'usage)
-    "apps.accounts",  # écart E1 — voir README §Écarts
-    # Même raison que `accounts`, et c'est l'écart E1 qui l'impose : le journal
-    # d'audit suit les utilisateurs, qui existent dans `public` **et** dans
-    # chaque schéma client. Présent d'un seul côté, il laissait les actions du
-    # personnel de l'éditeur sans trace — or le Socle §2.4 dit « sans
-    # exception », et un registre à trous ne prouve rien en cas de litige.
-    "apps.audit",
+    "apps.catalogue",
     "apps.billing",
     "apps.platform_admin",
     "apps.support",
     "apps.referentiels",
-]
-
-TENANT_APPS = [
-    "django.contrib.contenttypes",
-    "django.contrib.auth",
-    # socle transverse
-    "apps.core",
+    # entreprise
     "apps.accounts",
     "apps.audit",
     "apps.notifications",
     "apps.tiers",
     "apps.onboarding",
-    # modules métier souverains (5 modules cibles)
     "apps.projets",  # module 1 : projets et affectations
     "apps.chantier",  # module 2 : suivi technique et rapports
     "apps.ged",  # module 3 : gestion documentaire
     "apps.pilotage",  # module 4 : tableaux de bord et pilotage
-]
-
-
-
-TIERCES_APPS = [
+    # tierces
     "rest_framework",
     "rest_framework_simplejwt",
     "django_filters",
@@ -145,30 +128,23 @@ TIERCES_APPS = [
     "django_celery_beat",
 ]
 
-SHARED_APPS += TIERCES_APPS
-TENANT_APPS += ["rest_framework", "django_filters"]
-
-INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
-
-# --------------------------------------------------------------------------
-# Multi-tenant
-# --------------------------------------------------------------------------
+# Vestiges de django-tenants : plus d'application, plus de moteur ni de routeur, mais le code
+# d'avant le lot 3 appelle encore ses utilitaires, qui lisent ces réglages. Ils disparaissent au
+# lot 8 avec le paquet.
 TENANT_MODEL = "tenants.Entreprise"
 TENANT_DOMAIN_MODEL = "tenants.Domaine"
 PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "config.urls_public"
-DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 
 # --------------------------------------------------------------------------
-# Middleware — TenantMainMiddleware doit rester en tête : il détermine le
-# schéma avant que la moindre requête ne touche la base.
+# Middleware — le contexte d'entreprise est remis à zéro en tête ; c'est
+# l'authentification qui l'active (D9, R-7). Plus de résolution de schéma.
 # --------------------------------------------------------------------------
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     # Contexte d'entreprise remis à zéro au début et à la fin de chaque requête (D9) : un fil
     # WSGI réutilisé n'hérite jamais de l'entreprise de la requête précédente.
     "apps.core.middleware_contexte.ContexteEntrepriseMiddleware",
-    "apps.core.middleware_tenant.TenantResolutionMiddleware",
     "apps.core.middleware.IdentifiantRequeteMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -205,12 +181,11 @@ TEMPLATES = [
 ]
 
 # --------------------------------------------------------------------------
-# Base de données — le moteur django_tenants est obligatoire, c'est lui qui
-# positionne le `search_path` sur le schéma du client à chaque connexion.
+# Base de données — le moteur PostgreSQL de Django : un seul schéma (D9).
 # --------------------------------------------------------------------------
 DATABASES = {
     "default": {
-        "ENGINE": "django_tenants.postgresql_backend",
+        "ENGINE": "django.db.backends.postgresql",
         "NAME": config("POSTGRES_DB", default="ccd_digital"),
         "USER": config("POSTGRES_USER", default="ccd"),
         "PASSWORD": config("POSTGRES_PASSWORD", default=""),

@@ -2,10 +2,10 @@
 
 from django.db import models
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 
-class RelanceJournal(ModeleBase):
+class RelanceJournal(ModeleEntreprise):
     """Une relance envoyée par e-mail, pour une ligne du journal (un chantier, un rédacteur, un jour).
 
     Une ligne du journal n'a pas toujours de rapport : quand il manque, il

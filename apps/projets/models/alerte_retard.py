@@ -9,7 +9,7 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["AlerteRetard", "NiveauAlerteRetard", "StatutAlerteRetard"]
 
@@ -31,7 +31,7 @@ class StatutAlerteRetard(models.TextChoices):
     IGNOREE = "IGNOREE", _("Ignorée")
 
 
-class AlerteRetard(ModeleBase):
+class AlerteRetard(ModeleEntreprise):
     """Alerte de retard détectée automatiquement ou liée à la criticité du projet."""
 
     projet = models.ForeignKey(

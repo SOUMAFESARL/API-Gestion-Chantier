@@ -9,12 +9,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import BadgeSante
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["SanteProjetSnapshot"]
 
 
-class SanteProjetSnapshot(ModeleBase):
+class SanteProjetSnapshot(ModeleEntreprise):
     """Snapshot historique d'un calcul d'indice de santé pour un projet (conservation illimitée)."""
 
     projet = models.ForeignKey(

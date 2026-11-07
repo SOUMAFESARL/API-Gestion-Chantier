@@ -11,12 +11,12 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.catalogue.models.referentiel import CategorieReferentiel
-from apps.core.models import ModeleBase
+from apps.core.models import ModeleEntreprise
 
 __all__ = ["ReferentielEntreprise"]
 
 
-class ReferentielEntreprise(ModeleBase):
+class ReferentielEntreprise(ModeleEntreprise):
     categorie = models.CharField(
         _("catégorie"), max_length=20, choices=CategorieReferentiel.choices
     )
@@ -31,7 +31,7 @@ class ReferentielEntreprise(ModeleBase):
         ordering = ["categorie", "libelle"]
         constraints = [
             models.UniqueConstraint(
-                fields=["categorie", "code"],
+                fields=["entreprise", "categorie", "code"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_referentiel_entreprise_code_actif",
             )

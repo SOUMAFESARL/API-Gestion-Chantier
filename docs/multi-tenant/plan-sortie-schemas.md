@@ -284,7 +284,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 | 1 | Fait — socle du contexte | `26de87c` |
 | 2 | Fait — modèle de données | `773b9bd`, `a7e14a4` (ensemencement) |
 | 3 | Fait le 07/11/2026 — voir ci-dessous | `428dfa8`, `801a502` |
-| 4 | Fait le 07/11/2026 — voir ci-dessous | (ce commit) |
+| 4 | Fait le 07/11/2026 — voir ci-dessous | `27b9ccd` |
 
 ### Lot 3 — ce qui a été fait, et ce qu'il a fait apparaître
 

@@ -21,6 +21,7 @@ from apps.core.enums import StatutProjet, StatutRapport
 from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.core.purger_montants import purger_montants_recursif
 from apps.projets.models import Projet
+from apps.projets.selectors.arbre import precharger_arbres
 from apps.projets.serializers import TableauDeBordResponseSerializer
 from apps.projets.services.indicateurs_temporels import (
     calendrier_pour_projets,
@@ -167,6 +168,7 @@ class TableauDeBordView(APIView):
         )
 
         projets_liste = list(projets_qs)
+        precharger_arbres(projets_liste)
         cal = calendrier_pour_projets(projets_liste)
 
         for p in projets_liste:

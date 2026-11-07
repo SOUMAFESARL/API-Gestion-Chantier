@@ -297,8 +297,11 @@ class ProjetDetailView(APIView):
             )
             response["Cache-Control"] = "private, no-store"
             return response
+        # L'arbre sert à quatre champs de la réponse : chargé une fois.
+        precharger_arbres([projet])
+        context = {"request": request, "calendrier": calendrier_pour_projets([projet])}
         return Response(
-            ProjetCreationResponseSerializer(projet, context={"request": request}).data,
+            ProjetCreationResponseSerializer(projet, context=context).data,
             status=status.HTTP_200_OK,
         )
 

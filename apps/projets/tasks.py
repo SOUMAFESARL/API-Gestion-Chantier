@@ -120,6 +120,7 @@ def evaluer_f3_nuit_toutes_entreprises() -> dict:
     from apps.projets.models import Projet
     from apps.projets.services.alertes_retard import detecter_alertes_retard
     from apps.projets.services.avancement import synchroniser_rapport_approuve
+    from apps.projets.services.dates_derivees import recalculer_dates_derivees
     from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES
     from apps.projets.services.machine_etats import (
         STATUTS_PROJET_MANUELS_FIXES,
@@ -160,9 +161,12 @@ def evaluer_f3_nuit_toutes_entreprises() -> dict:
                             exc_info=True,
                         )
 
-                # Évaluation préalable des cases de chaque arbre (mise à jour calendaire)
+                # Évaluation préalable des cases de chaque arbre (mise à jour calendaire). Les
+                # dates des parents d'abord : un parent lit ses enfants, et une donnée modifiée
+                # hors des gestes de l'arbre ne doit pas rester décalée plus d'une nuit.
                 for projet_arbre in Projet.objects.filter(supprime_le__isnull=True).iterator():
                     try:
+                        recalculer_dates_derivees(projet_arbre)
                         evaluer_statuts_arbre(projet_arbre)
                     except Exception as err:
                         logger.error(

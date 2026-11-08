@@ -371,3 +371,37 @@ def test_rouvrir_une_tache_efface_sa_fin_reelle(chantier, auteur):
 
     assert feuille.cloture is False
     assert feuille.date_fin_reelle is None
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_la_commande_rattrape_des_donnees_ecrites_avant_la_regle(chantier):
+    """Des feuilles datées et clôturées **en base**, sans passer par les gestes de l'arbre : leurs
+    parents n'ont ni dates ni statut juste. `recalculer_arbres` les rattrape."""
+    from django.core.management import call_command
+
+    c = chantier
+    Element.objects.filter(pk=c["cloture"].pk).update(
+        date_debut_prevue=date(2026, 9, 8), date_fin_prevue=date(2026, 9, 17), cloture=True
+    )
+    Element.objects.filter(pk=c["implantation"].pk).update(
+        date_debut_prevue=date(2026, 9, 10), date_fin_prevue=date(2026, 9, 20), cloture=True
+    )
+    _relire(c["ouvrage"], c["phase"])
+    assert c["ouvrage"].date_debut_prevue is None
+
+    call_command("recalculer_arbres", entreprise="demo")
+    _relire(c["ouvrage"], c["phase"])
+
+    for parent in (c["ouvrage"], c["phase"]):
+        assert (parent.date_debut_prevue, parent.date_fin_prevue) == (
+            date(2026, 9, 8),
+            date(2026, 9, 20),
+        )
+        assert parent.dates_calculees is True
+        assert parent.statut == StatutActivite.CLOTURE
+
+    # Idempotente : relancée, elle ne change plus rien.
+    call_command("recalculer_arbres", entreprise="demo")
+    _relire(c["ouvrage"])
+    assert c["ouvrage"].date_fin_prevue == date(2026, 9, 20)

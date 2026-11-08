@@ -92,6 +92,11 @@ def _exemple(modele, lignes, reference, exemples):
     if modele is EquipeChantier and lignes.filter(membres__isnull=False).exists():
         # Une équipe qui a des membres : ses enfants servent d'exemples.
         lignes = lignes.filter(membres__isnull=False).distinct()
+    if modele._meta.label == "chantier.RapportJournalier":
+        # Le brouillon d'un autre auteur est invisible à son propre DG (404, voulu : `pour_auteur`).
+        # Les identifiants étant tirés au hasard à chaque montage, prendre « le plus petit » tombait
+        # une fois sur dix-sept sur ce brouillon et faisait échouer le contrôle positif.
+        lignes = lignes.exclude(statut="BROUILLON")
     return lignes.order_by("pk").values_list("pk", flat=True).first()
 
 

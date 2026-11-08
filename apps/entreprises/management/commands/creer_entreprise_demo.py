@@ -165,6 +165,67 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"  Collaborateur créé : {email}"))
         return utilisateur
 
+    def _remettre_en_conformite(self, projet, debut, fin) -> None:
+        """Aligne un chantier de démonstration sur la règle : pas de suivi sans découpage.
+
+        Une commande idempotente converge vers l'état spécifié au lieu de se contenter de ne rien
+        casser : les bases montées avant la règle portaient des chantiers « En cours » à 68 % ou
+        42 % **sans aucun découpage**, avec un rapport de l'ancien modèle — la fiche annonçait un
+        avancement que l'onglet « Avancement » ne pouvait pas expliquer.
+
+        - **Jamais démarré** (aucun journal : un chantier ne passe « En cours » qu'avec un rapport
+          soumis) : « En attente », sans avancement ni santé, début réel effacé, dates devant soi
+          (`debut` et `fin`) si les siennes sont passées. Ses rapports de l'ancien modèle (sans
+          journal) sont retirés.
+        - **Avec découpage** : on ne touche pas à l'arbre ; les valeurs dérivées (avancement,
+          théorique, santé, statut) sont recalculées par l'application, qui les écrit à partir de
+          l'arbre au lieu de garder celles saisies à la main.
+        """
+        from django.db import transaction
+        from django.utils import timezone
+
+        from apps.chantier.models import JournalChantier, RapportJournalier
+        from apps.core.enums import StatutProjet
+        from apps.projets.models import Element
+        from apps.projets.services.avancement import recalculer_apres_quantites
+
+        retires = (
+            RapportJournalier.tous_objets.filter(projet=projet, supprime_le__isnull=True)
+            .exclude(pk__in=JournalChantier.objects.values("rapport_id"))
+            .update(supprime_le=timezone.now())
+        )
+
+        decoupe = Element.objects.filter(projet=projet).exists()
+        demarre = JournalChantier.objects.filter(rapport__projet=projet).exists()
+        if not demarre:
+            champs = {
+                "statut": StatutProjet.EN_ATTENTE,
+                "avancement_reel": 0,
+                "avancement_theorique": 0,
+                "indice_sante": None,
+                "date_debut_reelle": None,
+            }
+            if projet.date_debut_prevue is None or projet.date_debut_prevue < timezone.localdate():
+                champs |= {"date_debut_prevue": debut, "date_fin_prevue": fin}
+            if retires or any(getattr(projet, nom) != valeur for nom, valeur in champs.items()):
+                for nom, valeur in champs.items():
+                    setattr(projet, nom, valeur)
+                projet.save(update_fields=[*champs, "modifie_le"])
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"  {projet.reference} : jamais démarré — remis « En attente », sans "
+                        f"avancement ni santé ({retires} rapport(s) de l'ancien modèle retiré(s))"
+                    )
+                )
+        if decoupe:
+            with transaction.atomic():
+                recalculer_apres_quantites([], projet=projet, declencheur_type="JEU_DE_DEMO")
+            projet.refresh_from_db()
+            self.stdout.write(
+                f"  {projet.reference} : découpage présent — statut {projet.statut}, "
+                f"avancement {projet.avancement_reel} %, santé {projet.indice_sante}"
+            )
+
     def _creer_donnees_metier_demo(self, mot_de_passe) -> None:
         """Peuple des données de chantiers, lots, rapports, bons de paiement et réceptions.
 
@@ -175,18 +236,14 @@ class Command(BaseCommand):
         14/10/2026) : un chef de projet et un chef de chantier de démonstration
         les tiennent à sa place. Ils se connectent avec le même mot de passe.
         """
-        from datetime import date
-        from decimal import Decimal
+        from datetime import timedelta
 
         from django.utils import timezone
 
-        from apps.chantier.models import RapportJournalier
         from apps.core.enums import (
-            Meteo,
             RoleProjet,
             RoleTiersChoix,
             StatutProjet,
-            StatutRapport,
             TypeTiers,
         )
         from apps.projets.models import AffectationProjet, Projet
@@ -274,6 +331,15 @@ class Command(BaseCommand):
         RoleTiers.objects.get_or_create(tiers=t_fourn2, role=RoleTiersChoix.FOURNISSEUR)
 
         # 2. Projets
+        #
+        # Trois chantiers **à découper** : en attente, sans avancement, sans santé, sans rapport.
+        # Le suivi d'avancement naît du découpage — l'arbre du projet — et le découpage ne
+        # s'applique qu'une fois le tableau de démarrage validé, depuis l'onglet « Découpage » :
+        # le parcours de démonstration commence donc là, comme celui d'un vrai chantier. Aucune
+        # valeur d'avancement, de santé ou de statut n'est écrite à la main ici (le jeu
+        # `peupler_donnees_test` donne, lui, des chantiers déjà suivis, calculés par l'application).
+        # Les dates se prennent à partir d'aujourd'hui pour que la démonstration ne vieillisse pas.
+        aujourdhui = timezone.localdate()
         p1, cree_p1 = Projet.objects.get_or_create(
             reference="CHANT-2026-001",
             defaults={
@@ -283,14 +349,10 @@ class Command(BaseCommand):
                 "ville": "Abidjan",
                 "quartier": "Cocody Angré 8ème Tranche",
                 "budget_initial_montant": 185_000_000_00,  # 185 M FCFA
-                "date_debut_prevue": date(2026, 1, 15),
-                "date_fin_prevue": date(2026, 11, 30),
-                "date_debut_reelle": date(2026, 1, 15),
+                "date_debut_prevue": aujourdhui + timedelta(days=14),
+                "date_fin_prevue": aujourdhui + timedelta(days=14 + 320),
                 "chef_projet": chef_projet,
-                "statut": StatutProjet.EN_COURS,
-                "avancement_reel": Decimal("68.00"),
-                "avancement_theorique": Decimal("65.00"),
-                "indice_sante": 85,
+                "statut": StatutProjet.EN_ATTENTE,
             },
         )
 
@@ -303,14 +365,10 @@ class Command(BaseCommand):
                 "ville": "San-Pédro",
                 "quartier": "Zone Portuaire",
                 "budget_initial_montant": 320_000_000_00,  # 320 M FCFA
-                "date_debut_prevue": date(2026, 2, 1),
-                "date_fin_prevue": date(2026, 12, 15),
-                "date_debut_reelle": date(2026, 2, 10),
+                "date_debut_prevue": aujourdhui + timedelta(days=21),
+                "date_fin_prevue": aujourdhui + timedelta(days=21 + 300),
                 "chef_projet": chef_projet,
-                "statut": StatutProjet.EN_COURS,
-                "avancement_reel": Decimal("42.00"),
-                "avancement_theorique": Decimal("40.00"),
-                "indice_sante": 78,
+                "statut": StatutProjet.EN_ATTENTE,
             },
         )
 
@@ -323,14 +381,10 @@ class Command(BaseCommand):
                 "ville": "Abidjan",
                 "quartier": "Riviera Palmeraie",
                 "budget_initial_montant": 95_000_000_00,  # 95 M FCFA
-                "date_debut_prevue": date(2025, 10, 1),
-                "date_fin_prevue": date(2026, 2, 28),  # Délai dépassé
-                "date_debut_reelle": date(2025, 10, 5),
+                "date_debut_prevue": aujourdhui + timedelta(days=30),
+                "date_fin_prevue": aujourdhui + timedelta(days=30 + 150),
                 "chef_projet": chef_projet,
-                "statut": StatutProjet.EN_RETARD,
-                "avancement_reel": Decimal("82.00"),
-                "avancement_theorique": Decimal("100.00"),
-                "indice_sante": 45,
+                "statut": StatutProjet.EN_ATTENTE,
             },
         )
 
@@ -345,51 +399,9 @@ class Command(BaseCommand):
                     utilisateur=chef_chantier, projet=projet, role_projet=RoleProjet.CHEF_CHANTIER
                 )
 
-        # 3. Rapports Journaliers du jour
-        today = timezone.now().date()
-        RapportJournalier.objects.get_or_create(
-            projet=p1,
-            date_rapport=today,
-            defaults={
-                "auteur": chef_chantier,
-                "meteo": Meteo.ENSOLEILLE,
-                "effectif_regie": 12,
-                "effectif_tacherons": 20,
-                "effectif_present": 32,
-                "observations": "Coulage dalle niveau 2 terminé conformément au plan de ferraillage.",
-                "blocages_critiques": 0,
-                "statut": StatutRapport.APPROUVE,
-            },
-        )
-
-        RapportJournalier.objects.get_or_create(
-            projet=p2,
-            date_rapport=today,
-            defaults={
-                "auteur": chef_chantier,
-                "meteo": Meteo.PLUIE,
-                "effectif_regie": 8,
-                "effectif_tacherons": 14,
-                "effectif_present": 22,
-                "observations": "Arrêt temporaire des travaux de terrassement à 14h suite à fortes pluies.",
-                "blocages_critiques": 1,
-                "statut": StatutRapport.SOUMIS,
-            },
-        )
-
-        RapportJournalier.objects.get_or_create(
-            projet=p3,
-            date_rapport=today,
-            defaults={
-                "auteur": chef_chantier,
-                "meteo": Meteo.ENSOLEILLE,
-                "effectif_regie": 4,
-                "effectif_tacherons": 10,
-                "effectif_present": 14,
-                "observations": "Pose des huisseries extérieures en cours.",
-                "blocages_critiques": 0,
-                "statut": StatutRapport.SOUMIS,
-            },
-        )
+        # 3. Une démonstration montée avant cette règle converge vers l'état spécifié.
+        for projet, jours, duree in ((p1, 14, 320), (p2, 21, 300), (p3, 30, 150)):
+            debut = aujourdhui + timedelta(days=jours)
+            self._remettre_en_conformite(projet, debut, debut + timedelta(days=duree))
 
         self.stdout.write(self.style.SUCCESS("  Données métier démo initialisées avec succès."))

@@ -8,8 +8,9 @@
 *Ce que cela corrige.* Le calcul précédent ajoutait aux modules actifs du catalogue ceux auxquels
 l'entreprise était « abonnée » (`EntrepriseModule.est_actif=True`). Or la création d'un module
 abonne d'office toutes les entreprises : désactiver ensuite le module dans le catalogue ne le
-retirait donc à personne. Il se repliait aussi, à défaut, sur la copie locale `Module` du schéma
-de l'entreprise, que rien ne tient à jour. Désormais, aucune copie locale n'entre dans la décision.
+retirait donc à personne. Il se repliait aussi, à défaut, sur une copie locale des modules par
+entreprise, que rien ne tenait à jour. Cette copie n'existe plus (décision Q3) : le catalogue est
+la seule source.
 
 « Administration » n'est pas un module qu'on souscrit : il reste toujours ouvert.
 """

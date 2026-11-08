@@ -66,39 +66,34 @@ class Role(ModeleEntreprise):
 class RoleModulePermissionQuerySet(RequeteEntreprise):
     """QuerySet supportant l'alias virtuel 'module_code' pour filtrer par code de module."""
 
-    def filter(self, *args, **kwargs):
-        new_args = list(args)
-        new_kwargs = {}
-        for k, v in kwargs.items():
-            if k == "module_code":
-                new_args.append(models.Q(module__code__iexact=v) | models.Q(module_catalogue__code__iexact=v))
-            elif k.startswith("module_code__"):
-                suffix = k[len("module_code__"):]
-                new_args.append(models.Q(**{f"module__code__{suffix}": v}) | models.Q(**{f"module_catalogue__code__{suffix}": v}))
+    @staticmethod
+    def _adapter(args, kwargs):
+        nouveaux_args = list(args)
+        nouveaux_kwargs = {}
+        for cle, valeur in kwargs.items():
+            if cle == "module_code":
+                nouveaux_kwargs["module_catalogue__code__iexact"] = valeur
+            elif cle.startswith("module_code__"):
+                nouveaux_kwargs[f"module_catalogue__code__{cle[len('module_code__'):]}"] = valeur
             else:
-                new_kwargs[k] = v
-        return super().filter(*new_args, **new_kwargs)
+                nouveaux_kwargs[cle] = valeur
+        return nouveaux_args, nouveaux_kwargs
+
+    def filter(self, *args, **kwargs):
+        args, kwargs = self._adapter(args, kwargs)
+        return super().filter(*args, **kwargs)
 
     def exclude(self, *args, **kwargs):
-        new_args = list(args)
-        new_kwargs = {}
-        for k, v in kwargs.items():
-            if k == "module_code":
-                new_args.append(models.Q(module__code__iexact=v) | models.Q(module_catalogue__code__iexact=v))
-            elif k.startswith("module_code__"):
-                suffix = k[len("module_code__"):]
-                new_args.append(models.Q(**{f"module__code__{suffix}": v}) | models.Q(**{f"module_catalogue__code__{suffix}": v}))
-            else:
-                new_kwargs[k] = v
-        return super().exclude(*new_args, **new_kwargs)
+        args, kwargs = self._adapter(args, kwargs)
+        return super().exclude(*args, **kwargs)
 
 
 class RoleModulePermission(ModeleEntreprise):
     """Permissions accordées à un rôle sur l'un des modules applicatifs dynamiques BTP.
 
-    Matrice par défaut au niveau de l'entreprise.
-    Intégrité référentielle stricte : la suppression d'un module supprime
-    automatiquement en cascade ses permissions associées.
+    Matrice par défaut au niveau de l'entreprise. Le module et les permissions sont ceux du
+    catalogue de la plateforme (`CatalogueModule`, `CataloguePermission`), sans copie locale : un
+    module du catalogue ne se supprime physiquement jamais (`PROTECT`).
     """
 
     # Cloisonné (D9) ; comme avant, `objects` voit aussi les lignes supprimées logiquement.
@@ -110,19 +105,9 @@ class RoleModulePermission(ModeleEntreprise):
         related_name="permissions_modules",
         verbose_name=_("rôle"),
     )
-    module = models.ForeignKey(
-        "accounts.Module",
-        on_delete=models.CASCADE,
-        related_name="permissions_roles",
-        verbose_name=_("module"),
-        null=True,
-        blank=True,
-    )
     module_catalogue = models.ForeignKey(
         "catalogue.CatalogueModule",
         on_delete=models.PROTECT,
-        null=True,
-        blank=True,
         related_name="permissions_roles_catalogue",
         verbose_name=_("module catalogue"),
     )
@@ -140,25 +125,15 @@ class RoleModulePermission(ModeleEntreprise):
         verbose_name_plural = _("permissions modules du rôle")
         constraints = [
             models.UniqueConstraint(
-                fields=["role", "module"],
-                condition=models.Q(supprime_le__isnull=True),
-                name="uq_role_module_actif",
-            ),
-            models.UniqueConstraint(
                 fields=["role", "module_catalogue"],
-                condition=models.Q(supprime_le__isnull=True, module_catalogue__isnull=False),
+                condition=models.Q(supprime_le__isnull=True),
                 name="uq_role_module_catalogue_actif",
             ),
         ]
 
     def __str__(self) -> str:
-        mod_libelle = self.module.libelle if self.module_id else "?"
-        return f"{self.role.libelle} — {mod_libelle}"
+        return f"{self.role.libelle} — {self.module_catalogue.libelle}"
 
     @property
     def module_code(self) -> str:
-        if self.module_id and self.module:
-            return (self.module.code or "").lower()
-        if self.module_catalogue_id and self.module_catalogue:
-            return (self.module_catalogue.code or "").lower()
-        return ""
+        return (self.module_catalogue.code or "").lower()

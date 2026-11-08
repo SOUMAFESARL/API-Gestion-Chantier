@@ -99,41 +99,6 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(on_delete=django.db.models.deletion.RESTRICT, related_name='jetons_reinitialisation', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
-            model_name='module',
-            name='cree_par',
-            field=models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par'),
-        ),
-        migrations.AddField(
-            model_name='module',
-            name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
-        ),
-        migrations.AddField(
-            model_name='module',
-            name='supprime_par',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par'),
-        ),
-        migrations.AddField(
-            model_name='permission',
-            name='cree_par',
-            field=models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par'),
-        ),
-        migrations.AddField(
-            model_name='permission',
-            name='entreprise',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='entreprises.entreprise', verbose_name='entreprise'),
-        ),
-        migrations.AddField(
-            model_name='permission',
-            name='modules',
-            field=models.ManyToManyField(blank=True, help_text='Modules fonctionnels et applicatifs autorisés à porter cette permission.', related_name='permissions', to='accounts.module', verbose_name='modules éligibles'),
-        ),
-        migrations.AddField(
-            model_name='permission',
-            name='supprime_par',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par'),
-        ),
-        migrations.AddField(
             model_name='role',
             name='cree_par',
             field=models.ForeignKey(blank=True, help_text="Nul lorsque l'écriture vient du système.", null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='créé par'),
@@ -165,13 +130,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='rolemodulepermission',
-            name='module',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='permissions_roles', to='accounts.module', verbose_name='module'),
-        ),
-        migrations.AddField(
-            model_name='rolemodulepermission',
             name='module_catalogue',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='permissions_roles_catalogue', to='catalogue.cataloguemodule', verbose_name='module catalogue'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='permissions_roles_catalogue', to='catalogue.cataloguemodule', verbose_name='module catalogue'),
         ),
         migrations.AddField(
             model_name='rolemodulepermission',
@@ -189,14 +149,6 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.RESTRICT, related_name='+', to=settings.AUTH_USER_MODEL, verbose_name='supprimé par'),
         ),
         migrations.AddConstraint(
-            model_name='module',
-            constraint=models.UniqueConstraint(condition=models.Q(('supprime_le__isnull', True)), fields=('entreprise', 'code'), name='uq_module_code_actif'),
-        ),
-        migrations.AddConstraint(
-            model_name='permission',
-            constraint=models.UniqueConstraint(condition=models.Q(('supprime_le__isnull', True)), fields=('entreprise', 'code'), name='uq_permission_code_actif'),
-        ),
-        migrations.AddConstraint(
             model_name='role',
             constraint=models.UniqueConstraint(condition=models.Q(('supprime_le__isnull', True)), fields=('entreprise', 'code'), name='uq_role_code_actif'),
         ),
@@ -206,10 +158,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='rolemodulepermission',
-            constraint=models.UniqueConstraint(condition=models.Q(('supprime_le__isnull', True)), fields=('role', 'module'), name='uq_role_module_actif'),
-        ),
-        migrations.AddConstraint(
-            model_name='rolemodulepermission',
-            constraint=models.UniqueConstraint(condition=models.Q(('module_catalogue__isnull', False), ('supprime_le__isnull', True)), fields=('role', 'module_catalogue'), name='uq_role_module_catalogue_actif'),
+            constraint=models.UniqueConstraint(condition=models.Q(('supprime_le__isnull', True)), fields=('role', 'module_catalogue'), name='uq_role_module_catalogue_actif'),
         ),
     ]

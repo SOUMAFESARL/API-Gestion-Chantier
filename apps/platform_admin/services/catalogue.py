@@ -17,12 +17,12 @@ Invariants garantis :
 """
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.contexte import contexte_entreprise
-from apps.accounts.models import Module, Permission, Role, RoleModulePermission
+from apps.accounts.models import Role, RoleModulePermission
 from apps.catalogue.models import CatalogueModule, CataloguePermission, EntrepriseModule
 from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
 from apps.entreprises.models import Entreprise
@@ -136,7 +136,7 @@ def propager_creation_module(
         if CatalogueModule.objects.filter(code=code, supprime_le__isnull=True).exists():
             raise ValidationError(_(f"Un module avec le code '{code}' existe déjà."))
 
-        cat_mod, _ = CatalogueModule.objects.update_or_create(
+        cat_mod, _cree = CatalogueModule.objects.update_or_create(
             code=code,
             defaults={
                 "libelle": libelle.strip(),
@@ -151,33 +151,6 @@ def propager_creation_module(
         )
         cat_mod.permissions.set(perms_catalogue)
 
-        # Ancien référentiel au mieux
-        mod_pub = Module.objects.filter(code=code, supprime_le__isnull=True).first()
-        if not mod_pub:
-            mod_pub, _ = Module.objects.update_or_create(
-                id=cat_mod.id,
-                defaults={
-                    "code": code,
-                    "libelle": libelle.strip(),
-                    "description": description.strip(),
-                    "ordre": ordre,
-                    "icone": icone.strip() or "box",
-                    "est_actif": est_actif,
-                    "cree_par": cree_par,
-                    "supprime_le": None,
-                    "supprime_par": None,
-                },
-            )
-        if mod_pub:
-            codes_perms = [p.code for p in perms_catalogue]
-            if codes_perms:
-                perms_pub = list(
-                    Permission.objects.filter(code__in=codes_perms, supprime_le__isnull=True)
-                )
-                mod_pub.permissions.set(perms_pub)
-            else:
-                mod_pub.permissions.clear()
-
         for entreprise in Entreprise.objects.all():
             EntrepriseModule.objects.update_or_create(
                 entreprise=entreprise,
@@ -185,49 +158,23 @@ def propager_creation_module(
                 defaults={"est_actif": est_actif},
             )
 
-    codes_perms = [p.code for p in perms_catalogue]
-    entreprises = list(Entreprise.objects.all())
-    for entreprise in entreprises:
+    for entreprise in Entreprise.objects.all():
         with contexte_entreprise(entreprise), transaction.atomic():
-            mod = Module.objects.filter(code=code, supprime_le__isnull=True).first()
-            if not mod:
-                mod, _ = Module.objects.update_or_create(
-                    id=cat_mod.id,
-                    defaults={
-                        "code": code,
-                        "libelle": libelle.strip(),
-                        "description": description.strip(),
-                        "ordre": ordre,
-                        "icone": icone.strip() or "box",
-                        "est_actif": est_actif,
-                        "supprime_le": None,
-                        "supprime_par": None,
-                    },
-                )
-            if mod:
-                if codes_perms:
-                    perms_entreprise = list(
-                        Permission.objects.filter(
-                            code__in=codes_perms, supprime_le__isnull=True
-                        )
-                    )
-                    mod.permissions.set(perms_entreprise)
-                else:
-                    mod.permissions.clear()
-
-            roles = Role.objects.filter(supprime_le__isnull=True)
-            for role in roles:
-                rmp, _ = RoleModulePermission.objects.get_or_create(
+            for role in Role.objects.filter(supprime_le__isnull=True):
+                rmp, _cree = RoleModulePermission.objects.get_or_create(
                     role=role,
-                    module=mod,
-                    defaults={"cree_par": None, "module_catalogue": cat_mod},
+                    module_catalogue=cat_mod,
+                    defaults={"cree_par": None},
                 )
-                rmp.module_catalogue = cat_mod
+                # Un module recréé après suppression retrouve sa ligne, supprimée avec lui.
+                if rmp.supprime_le is not None:
+                    rmp.supprime_le = None
+                    rmp.supprime_par = None
+                    rmp.save()
                 if role.code in ("DG", "DIRECTEUR_GENERAL"):
                     rmp.permissions_catalogue.set(perms_catalogue)
                 else:
                     rmp.permissions_catalogue.clear()
-                rmp.save()
 
     return cat_mod
 
@@ -248,12 +195,6 @@ def propager_modification_module(
     nouvelles = None
     with transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(id=module_id, supprime_le__isnull=True).first()
-        if not cat_mod:
-            mod_old = Module.objects.filter(id=module_id, supprime_le__isnull=True).first()
-            if mod_old:
-                cat_mod = CatalogueModule.objects.filter(
-                    code=mod_old.code, supprime_le__isnull=True
-                ).first()
         if not cat_mod:
             raise ValidationError(_("Module introuvable."))
 
@@ -283,75 +224,21 @@ def propager_modification_module(
 
         cat_mod.save()
 
-        # Ancien référentiel au mieux
-        module_public = Module.objects.filter(
-            code=cat_mod.code, supprime_le__isnull=True
-        ).first()
-        if not module_public:
-            module_public = Module.objects.filter(
-                id=cat_mod.id, supprime_le__isnull=True
-            ).first()
-        if module_public:
-            if libelle is not None and libelle.strip():
-                module_public.libelle = libelle.strip()
-            if description is not None:
-                module_public.description = description.strip()
-            if ordre is not None:
-                module_public.ordre = ordre
-            if icone is not None:
-                module_public.icone = icone.strip()
-            if est_actif is not None:
-                module_public.est_actif = est_actif
-            if nouvelles is not None:
-                codes_perms = [p.code for p in nouvelles]
-                perms_pub = list(
-                    Permission.objects.filter(code__in=codes_perms, supprime_le__isnull=True)
-                )
-                module_public.permissions.set(perms_pub)
-            module_public.save()
-
     entreprises = list(Entreprise.objects.all())
     perms_retirees_objs = (
         list(CataloguePermission.objects.filter(code__in=retirees)) if retirees else []
     )
 
-    for entreprise in entreprises:
-        with contexte_entreprise(entreprise), transaction.atomic():
-            mod = Module.objects.filter(code=cat_mod.code, supprime_le__isnull=True).first()
-            if not mod:
-                mod = Module.objects.filter(id=cat_mod.id, supprime_le__isnull=True).first()
-            if mod:
-                if libelle is not None and libelle.strip():
-                    mod.libelle = libelle.strip()
-                if description is not None:
-                    mod.description = description.strip()
-                if ordre is not None:
-                    mod.ordre = ordre
-                if icone is not None:
-                    mod.icone = icone.strip()
-                if est_actif is not None:
-                    mod.est_actif = est_actif
-                mod.save()
-
-                if nouvelles is not None:
-                    codes_perms = [p.code for p in nouvelles]
-                    perms_entreprise = list(
-                        Permission.objects.filter(
-                            code__in=codes_perms, supprime_le__isnull=True
-                        )
-                    )
-                    mod.permissions.set(perms_entreprise)
-
-            # 1. Révocation des permissions retirées du module sur tous les rôles
-            if perms_retirees_objs:
-                rmps = RoleModulePermission.objects.filter(supprime_le__isnull=True).filter(
-                    models.Q(module__code=cat_mod.code) | models.Q(module_catalogue=cat_mod)
+    # Révocation des permissions retirées du module sur tous les rôles de toutes les entreprises.
+    # Règle A-05 : aucune attribution automatique aux rôles stockés.
+    if perms_retirees_objs:
+        for entreprise in entreprises:
+            with contexte_entreprise(entreprise), transaction.atomic():
+                rmps = RoleModulePermission.objects.filter(
+                    supprime_le__isnull=True, module_catalogue=cat_mod
                 )
                 for rmp in rmps:
                     rmp.permissions_catalogue.remove(*perms_retirees_objs)
-
-            # 2. Règle A-05 : aucune attribution automatique aux rôles stockés
-            pass
 
     return cat_mod
 
@@ -377,12 +264,6 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
     with transaction.atomic():
         cat_mod = CatalogueModule.objects.filter(id=module_id, supprime_le__isnull=True).first()
         if not cat_mod:
-            mod_old = Module.objects.filter(id=module_id, supprime_le__isnull=True).first()
-            if mod_old:
-                cat_mod = CatalogueModule.objects.filter(
-                    code=mod_old.code, supprime_le__isnull=True
-                ).first()
-        if not cat_mod:
             raise ValidationError(_("Module introuvable ou déjà supprimé."))
 
         code_supprime = cat_mod.code
@@ -391,24 +272,13 @@ def propager_suppression_module(*, module_id, supprime_par=None) -> dict:
         cat_mod.est_actif = False
         cat_mod.save()
 
-        Module.objects.filter(code=code_supprime, supprime_le__isnull=True).update(
-            supprime_le=maintenant,
-            supprime_par=supprime_par,
-            est_actif=False,
-        )
         EntrepriseModule.objects.filter(module=cat_mod).update(est_actif=False)
 
     entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
         with contexte_entreprise(entreprise), transaction.atomic():
-            Module.objects.filter(code=code_supprime, supprime_le__isnull=True).update(
-                supprime_le=maintenant,
-                supprime_par=None,
-                est_actif=False,
-            )
             RoleModulePermission.objects.filter(
-                models.Q(module__code=code_supprime)
-                | models.Q(module_catalogue__code=code_supprime),
+                module_catalogue=cat_mod,
                 supprime_le__isnull=True,
             ).update(
                 supprime_le=maintenant,
@@ -523,50 +393,6 @@ def propager_creation_permission(
         )
         cat_perm.modules.set(cat_mods)
 
-        # Ancien référentiel au mieux
-        perm_public = Permission.tous_objets.filter(code=code).first()
-        if perm_public:
-            perm_public.supprime_le = None
-            perm_public.supprime_par = None
-            perm_public.est_actif = est_actif
-            perm_public.libelle = libelle.strip()
-            perm_public.description = description.strip()
-            perm_public.ordre = ordre
-            perm_public.save()
-        else:
-            perm_public = Permission.objects.create(
-                id=cat_perm.id,
-                code=code,
-                libelle=libelle.strip(),
-                description=description.strip(),
-                ordre=ordre,
-                est_actif=est_actif,
-                cree_par=cree_par,
-            )
-        mods_public = list(
-            Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True)
-        )
-        perm_public.modules.set(mods_public)
-
-    entreprises = list(Entreprise.objects.all())
-    for entreprise in entreprises:
-        with contexte_entreprise(entreprise), transaction.atomic():
-            perm_entreprise, _cree = Permission.objects.update_or_create(
-                code=code,
-                defaults={
-                    "id": cat_perm.id,
-                    "libelle": libelle.strip(),
-                    "description": description.strip(),
-                    "ordre": ordre,
-                    "est_actif": est_actif,
-                    "supprime_le": None,
-                    "supprime_par": None,
-                },
-            )
-            mods_entreprise = list(
-                Module.objects.filter(code__in=codes_modules, supprime_le__isnull=True)
-            )
-            perm_entreprise.modules.set(mods_entreprise)
 
     return cat_perm
 
@@ -594,14 +420,6 @@ def propager_affectation_modules_permission(
         cat_perm = CataloguePermission.objects.filter(
             id=permission_id, supprime_le__isnull=True
         ).first()
-        if not cat_perm:
-            perm_old = Permission.objects.filter(
-                id=permission_id, supprime_le__isnull=True
-            ).first()
-            if perm_old:
-                cat_perm = CataloguePermission.objects.filter(
-                    code=perm_old.code, supprime_le__isnull=True
-                ).first()
         if not cat_perm:
             raise ValidationError(_("Permission introuvable."))
 
@@ -656,47 +474,17 @@ def propager_affectation_modules_permission(
             cat_perm.modifie_par = modifie_par
             cat_perm.save()
 
-        # Ancien référentiel au mieux
-        perm_public = Permission.objects.filter(
-            code=cat_perm.code, supprime_le__isnull=True
-        ).first()
-        if perm_public:
-            if cat_mods_cibles:
-                mods_pub = list(
-                    Module.objects.filter(
-                        code__in=[m.code for m in cat_mods_cibles], supprime_le__isnull=True
-                    )
-                )
-                perm_public.modules.set(mods_pub)
-            else:
-                perm_public.modules.clear()
-
     entreprises = list(Entreprise.objects.all())
-    for entreprise in entreprises:
-        with contexte_entreprise(entreprise), transaction.atomic():
-            # Retrait du module => révocation de la permission de tous les rôles sur ce module
-            if modules_retires or not cat_mods_cibles:
-                rmps = RoleModulePermission.objects.filter(supprime_le__isnull=True).filter(
-                    models.Q(module__code=perm_prefix)
-                    | models.Q(module_catalogue__code=perm_prefix)
+
+    # Retrait du module => révocation de la permission de tous les rôles sur ce module
+    if modules_retires or not cat_mods_cibles:
+        for entreprise in entreprises:
+            with contexte_entreprise(entreprise), transaction.atomic():
+                rmps = RoleModulePermission.objects.filter(
+                    supprime_le__isnull=True, module_catalogue__code=perm_prefix
                 )
                 for rmp in rmps:
                     rmp.permissions_catalogue.remove(cat_perm)
-
-            # Ancien référentiel au mieux
-            perm_entreprise = Permission.objects.filter(
-                code=cat_perm.code, supprime_le__isnull=True
-            ).first()
-            if perm_entreprise:
-                if cat_mods_cibles:
-                    mods_entreprise = list(
-                        Module.objects.filter(
-                            code__in=[m.code for m in cat_mods_cibles], supprime_le__isnull=True
-                        )
-                    )
-                    perm_entreprise.modules.set(mods_entreprise)
-                else:
-                    perm_entreprise.modules.clear()
 
     return cat_perm
 
@@ -717,14 +505,6 @@ def propager_modification_permission(
             id=permission_id, supprime_le__isnull=True
         ).first()
         if not cat_perm:
-            perm_old = Permission.objects.filter(
-                id=permission_id, supprime_le__isnull=True
-            ).first()
-            if perm_old:
-                cat_perm = CataloguePermission.objects.filter(
-                    code=perm_old.code, supprime_le__isnull=True
-                ).first()
-        if not cat_perm:
             raise ValidationError(_("Permission introuvable."))
 
         if libelle is not None and libelle.strip():
@@ -739,37 +519,7 @@ def propager_modification_permission(
             cat_perm.modifie_par = modifie_par
         cat_perm.save()
 
-        # Ancien référentiel au mieux
-        perm_public = Permission.objects.filter(
-            code=cat_perm.code, supprime_le__isnull=True
-        ).first()
-        if perm_public:
-            if libelle is not None and libelle.strip():
-                perm_public.libelle = libelle.strip()
-            if description is not None:
-                perm_public.description = description.strip()
-            if ordre is not None:
-                perm_public.ordre = ordre
-            if est_actif is not None:
-                perm_public.est_actif = est_actif
-            perm_public.save()
-
     entreprises = list(Entreprise.objects.all())
-    for entreprise in entreprises:
-        with contexte_entreprise(entreprise), transaction.atomic():
-            perm = Permission.objects.filter(
-                code=cat_perm.code, supprime_le__isnull=True
-            ).first()
-            if perm:
-                if libelle is not None and libelle.strip():
-                    perm.libelle = libelle.strip()
-                if description is not None:
-                    perm.description = description.strip()
-                if ordre is not None:
-                    perm.ordre = ordre
-                if est_actif is not None:
-                    perm.est_actif = est_actif
-                perm.save()
 
     if modules is not None:
         propager_affectation_modules_permission(
@@ -826,14 +576,6 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
             id=permission_id, supprime_le__isnull=True
         ).first()
         if not cat_perm:
-            perm_old = Permission.objects.filter(
-                id=permission_id, supprime_le__isnull=True
-            ).first()
-            if perm_old:
-                cat_perm = CataloguePermission.objects.filter(
-                    code=perm_old.code, supprime_le__isnull=True
-                ).first()
-        if not cat_perm:
             raise ValidationError(_("Permission introuvable ou déjà supprimée."))
 
         code_supprime = cat_perm.code
@@ -842,23 +584,11 @@ def propager_suppression_permission(*, permission_id, supprime_par=None) -> dict
         cat_perm.est_actif = False
         cat_perm.save()
 
-        Permission.objects.filter(code=code_supprime, supprime_le__isnull=True).update(
-            supprime_le=maintenant,
-            supprime_par=supprime_par,
-            est_actif=False,
-        )
-
     entreprises = list(Entreprise.objects.all())
     for entreprise in entreprises:
         with contexte_entreprise(entreprise), transaction.atomic():
             for rmp in RoleModulePermission.objects.filter(permissions_catalogue=cat_perm):
                 rmp.permissions_catalogue.remove(cat_perm)
-
-            Permission.objects.filter(code=code_supprime, supprime_le__isnull=True).update(
-                supprime_le=maintenant,
-                supprime_par=None,
-                est_actif=False,
-            )
 
     return {"permission_supprimee": code_supprime}
 
@@ -1018,13 +748,11 @@ def propager_roles_systeme(acteur=None) -> dict:
                             continue
 
                         cat_mod = cat_modules_map.get(mod_code_l)
-                        local_mod = Module.objects.filter(
-                            code__iexact=mod_code_l, supprime_le__isnull=True
-                        ).first()
+                        if cat_mod is None:
+                            continue
 
                         rmp = RoleModulePermission.objects.create(
                             role=nouveau_role,
-                            module=local_mod,
                             module_catalogue=cat_mod,
                         )
 

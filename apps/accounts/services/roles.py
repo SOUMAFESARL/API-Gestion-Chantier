@@ -13,11 +13,9 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.models import Module, Role, RoleModulePermission, Utilisateur
+from apps.accounts.models import Role, RoleModulePermission, Utilisateur
 from apps.catalogue.models import CatalogueModule, CataloguePermission
 from apps.core.enums import (
-    MODULES_DETAILS,
-    ModuleChoix,
     RoleGlobal,
     StatutUtilisateur,
 )
@@ -64,61 +62,32 @@ ROLES_SYSTEME_INFOS = {
 CODES_ROLES_SYSTEME = frozenset({"DG", "AD", "DO", "DF", "CP", "CT", "CC", "MAG", "BAI", "VI"})
 
 
-def modules_locaux_ouverts():
-    """La copie locale des modules, réduite à ceux que le catalogue ouvre à l'entreprise."""
+def modules_ouverts():
+    """Les modules du catalogue ouverts à l'entreprise active, « Administration » exclu.
+
+    « Administration » n'a pas de ligne dans la matrice d'un rôle (B-05). Ce qui est ouvert se
+    lit dans le catalogue de la plateforme (`apps.core.modules_actifs`) : il n'y a pas de copie
+    locale des modules.
+    """
     from apps.core.modules_actifs import MODULES_SYSTEME, codes_modules_actifs
 
     codes = codes_modules_actifs() - MODULES_SYSTEME
-    return Module.objects.filter(supprime_le__isnull=True, code__in=codes).order_by(
-        "ordre", "code"
-    )
+    return CatalogueModule.objects.filter(
+        supprime_le__isnull=True, est_actif=True, code__in=codes
+    ).order_by("ordre", "code")
 
 
-def initialiser_modules_par_defaut() -> list[Module]:
-    """Aligne la copie locale des modules (entreprise active) sur le catalogue de la plateforme.
+def modules_catalogue_actifs():
+    """Tous les modules actifs du catalogue (même fermés à cette entreprise), « Administration » exclu.
 
-    La copie locale n'existe que parce que `RoleModulePermission.module` y pointe. Elle ne décide
-    de rien : ce qui est ouvert se lit dans le catalogue (`apps.core.modules_actifs`). Son
-    `est_actif` recopie donc celui du catalogue, au lieu d'être remis à vrai à chaque appel — ce
-    qui rouvrait localement un module que le super admin avait désactivé.
+    C'est l'ensemble auquel tout rôle est lié (invariant de complétude), contrairement à
+    `modules_ouverts` qui ne garde que ceux que l'entreprise peut utiliser.
     """
     from apps.core.modules_actifs import MODULES_SYSTEME
 
-    # « Administration » n'a pas de ligne dans la matrice d'un rôle (B-05) : pas de copie locale.
-    catalogue = list(
-        CatalogueModule.objects.filter(supprime_le__isnull=True).exclude(
-            code__in=MODULES_SYSTEME
-        )
+    return CatalogueModule.objects.filter(supprime_le__isnull=True, est_actif=True).exclude(
+        code__in=MODULES_SYSTEME
     )
-    sources = [
-        (m.code.lower(), m.libelle, m.description, m.ordre, m.icone, m.est_actif) for m in catalogue
-    ] or [
-        (
-            code,
-            dict(ModuleChoix.choices).get(code, code),
-            details.get("description", ""),
-            details.get("ordre", 0),
-            details.get("icone", "box"),
-            True,
-        )
-        for code, details in MODULES_DETAILS.items()
-    ]
-    modules = []
-    with transaction.atomic():
-        for code, libelle, description, ordre, icone, est_actif in sources:
-            mod, _ = Module.objects.update_or_create(
-                code=code,
-                supprime_le__isnull=True,
-                defaults={
-                    "libelle": libelle,
-                    "description": description,
-                    "ordre": ordre,
-                    "icone": icone or "box",
-                    "est_actif": est_actif,
-                },
-            )
-            modules.append(mod)
-    return modules
 
 
 def _normaliser_permissions_modules(permissions_input) -> dict[str, list[str]]:
@@ -333,12 +302,7 @@ def appliquer_modeles_roles() -> list[Role]:
     """
     from apps.catalogue.models import ModeleRole
 
-    initialiser_modules_par_defaut()
-    modules_actifs = list(modules_locaux_ouverts())
-    cat_modules_map = {
-        m.code.lower(): m
-        for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-    }
+    modules_actifs = list(modules_ouverts())
     all_cat_perms_map = {
         p.code: p
         for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
@@ -395,9 +359,8 @@ def appliquer_modeles_roles() -> list[Role]:
                 m_key = mod.code.lower()
                 rmp, cree = RoleModulePermission.objects.get_or_create(
                     role=role,
-                    module=mod,
+                    module_catalogue=mod,
                     supprime_le__isnull=True,
-                    defaults={"module_catalogue": cat_modules_map.get(m_key)},
                 )
                 if not cree:
                     continue
@@ -452,10 +415,7 @@ def creer_role(
         )
 
         norm_perms = _normaliser_permissions_modules(permissions_modules)
-        modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
-        cat_modules_map = {
-            m.code.lower(): m for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-        }
+        modules_actifs = list(modules_catalogue_actifs())
         all_cat_perms = {
             p.code.lower(): p for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
         }
@@ -463,11 +423,9 @@ def creer_role(
         # Invariant de complétude : Tout rôle est obligatoirement lié à TOUS les modules actifs
         for mod in modules_actifs:
             perms_for_mod = norm_perms.get(mod.code.lower(), [])
-            cat_mod = cat_modules_map.get(mod.code.lower())
             rmp = RoleModulePermission.objects.create(
                 role=role,
-                module=mod,
-                module_catalogue=cat_mod,
+                module_catalogue=mod,
                 cree_par=cree_par,
             )
             if perms_for_mod:
@@ -513,38 +471,19 @@ def modifier_role(
             role.unique_par_projet = unique_par_projet
         role.save()
 
-        modules_actifs = list(Module.objects.filter(est_actif=True, supprime_le__isnull=True))
-        cat_modules_map = {
-            m.code.lower(): m for m in CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-        }
+        modules_actifs = list(modules_catalogue_actifs())
         all_cat_perms = {
             p.code.lower(): p for p in CataloguePermission.objects.filter(est_actif=True, supprime_le__isnull=True)
         }
 
         # Garantir l'invariant de liaison à tous les modules
         for mod in modules_actifs:
-            cat_mod = cat_modules_map.get(mod.code.lower())
-            filtre = Q(module=mod)
-            if cat_mod:
-                filtre |= Q(module_catalogue=cat_mod)
-            rmp = RoleModulePermission.objects.filter(role=role).filter(filtre).first()
-            if not rmp:
+            if not RoleModulePermission.objects.filter(role=role, module_catalogue=mod).exists():
                 RoleModulePermission.objects.create(
                     role=role,
-                    module=mod,
-                    module_catalogue=cat_mod,
+                    module_catalogue=mod,
                     cree_par=modifie_par,
                 )
-            else:
-                modifie = False
-                if not rmp.module:
-                    rmp.module = mod
-                    modifie = True
-                if not rmp.module_catalogue and cat_mod:
-                    rmp.module_catalogue = cat_mod
-                    modifie = True
-                if modifie:
-                    rmp.save()
 
         if permissions_modules is not None:
             norm_perms = _normaliser_permissions_modules(permissions_modules)
@@ -552,22 +491,9 @@ def modifier_role(
             for mod in modules_actifs:
                 mod_code = mod.code.lower()
                 if mod_code in norm_perms or is_full_list:
-                    cat_mod = cat_modules_map.get(mod_code)
-                    filtre = Q(module=mod)
-                    if cat_mod:
-                        filtre |= Q(module_catalogue=cat_mod)
-                    rmp = RoleModulePermission.objects.filter(role=role).filter(filtre).first()
-                    if not rmp:
-                        rmp = RoleModulePermission.objects.create(
-                            role=role,
-                            module=mod,
-                            module_catalogue=cat_mod,
-                            cree_par=modifie_par,
-                        )
-                    if not rmp.module_catalogue and cat_mod:
-                        rmp.module_catalogue = cat_mod
-                    if not rmp.module:
-                        rmp.module = mod
+                    rmp = RoleModulePermission.objects.filter(
+                        role=role, module_catalogue=mod
+                    ).first()
                     perms_list = norm_perms.get(mod_code, [])
                     cat_perms = [all_cat_perms[c.lower()] for c in perms_list if c.lower() in all_cat_perms]
                     rmp.permissions_catalogue.set(cat_perms)

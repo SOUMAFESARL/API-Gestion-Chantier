@@ -19,8 +19,6 @@ from apps.core.rls import isolation_entreprise, role_plateforme
 
 TABLES = [
     # accounts
-    "module",
-    "permission",
     "role",
     "role_module_permission",
     "utilisateur",

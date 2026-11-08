@@ -20,16 +20,12 @@ from apps.core.enums import RoleGlobal, StatutUtilisateur
 from apps.core.managers import ManagerComptesActif, ManagerComptesComplet, RequeteComptes
 from apps.core.models import ModeleBase, ModeleEntreprise
 
-from .module import Module
-from .permission import Permission
 from .role import Role, RoleModulePermission
 
 __all__ = [
     "Appareil",
     "Invitation",
     "JetonReinitialisation",
-    "Module",
-    "Permission",
     "Role",
     "RoleModulePermission",
     "Utilisateur",

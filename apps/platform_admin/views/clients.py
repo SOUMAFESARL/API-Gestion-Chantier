@@ -1,6 +1,6 @@
 """Vues pour la gestion des entreprises clientes de la plateforme par le Super Admin."""
 
-from django.db import models, transaction
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
@@ -494,10 +494,8 @@ class ActiverModuleClientPlateformeView(APIView):
         # Dans l'entreprise (A-11) :
         with contexte_entreprise(entreprise):
             with transaction.atomic():
-                from apps.accounts.models import Module, Role, RoleModulePermission
+                from apps.accounts.models import Role, RoleModulePermission
                 from apps.catalogue.models import CataloguePermission, ModeleRoleModule
-
-                mod_local = Module.objects.filter(code__iexact=module.code, supprime_le__isnull=True).first()
 
                 # Pour chaque rôle non-DG existant
                 roles_non_dg = Role.objects.exclude(code__in=["DG", "DIRECTEUR_GENERAL"]).filter(
@@ -505,20 +503,14 @@ class ActiverModuleClientPlateformeView(APIView):
                 )
 
                 for r in roles_non_dg:
-                    # S'il n'a pas encore de ligne pour ce module (par module ou module_catalogue)
+                    # S'il n'a pas encore de ligne pour ce module
                     rmp_existant = RoleModulePermission.objects.filter(
-                        models.Q(role=r)
-                        & (
-                            models.Q(module_catalogue=module)
-                            | models.Q(module__code__iexact=module.code)
-                        ),
-                        supprime_le__isnull=True,
+                        role=r, module_catalogue=module, supprime_le__isnull=True
                     ).first()
 
                     if not rmp_existant:
                         rmp = RoleModulePermission.objects.create(
                             role=r,
-                            module=mod_local,
                             module_catalogue=module,
                         )
                         # Rôle système : reçoit les défauts du modèle

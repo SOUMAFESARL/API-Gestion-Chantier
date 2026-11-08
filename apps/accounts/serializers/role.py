@@ -3,11 +3,12 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.accounts.models import Permission, Role, RoleModulePermission
+from apps.accounts.models import Role, RoleModulePermission
 from apps.accounts.services.roles import (
     compter_utilisateurs_et_affectations,
-    modules_locaux_ouverts,
+    modules_ouverts,
 )
+from apps.catalogue.models import CataloguePermission
 
 __all__ = [
     "PermissionItemSerializer",
@@ -23,28 +24,30 @@ __all__ = [
 
 class PermissionItemSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Permission
+        model = CataloguePermission
         fields = ["id", "code", "libelle", "description", "ordre"]
 
 
 class RoleModuleItemSerializer(serializers.Serializer):
-    module_id = serializers.UUIDField(source="module.id")
-    module_code = serializers.CharField(source="module.code")
-    module_libelle = serializers.CharField(source="module.libelle")
-    module_description = serializers.CharField(source="module.description", default="")
-    module_icone = serializers.CharField(source="module.icone", default="box")
-    module_ordre = serializers.IntegerField(source="module.ordre", default=0)
+    module_id = serializers.UUIDField(source="module_catalogue.id")
+    module_code = serializers.CharField(source="module_catalogue.code")
+    module_libelle = serializers.CharField(source="module_catalogue.libelle")
+    module_description = serializers.CharField(source="module_catalogue.description", default="")
+    module_icone = serializers.CharField(source="module_catalogue.icone", default="box")
+    module_ordre = serializers.IntegerField(source="module_catalogue.ordre", default=0)
     permissions = PermissionItemSerializer(many=True)
 
 
 class RoleModulePermissionSerializer(serializers.ModelSerializer):
-    module_code = serializers.CharField(source="module.code", read_only=True)
-    module_libelle = serializers.CharField(source="module.libelle", read_only=True)
-    permissions = PermissionItemSerializer(many=True, read_only=True)
+    module_code = serializers.CharField(source="module_catalogue.code", read_only=True)
+    module_libelle = serializers.CharField(source="module_catalogue.libelle", read_only=True)
+    permissions = PermissionItemSerializer(
+        many=True, read_only=True, source="permissions_catalogue"
+    )
 
     class Meta:
         model = RoleModulePermission
-        fields = ["module", "module_code", "module_libelle", "permissions"]
+        fields = ["module_catalogue", "module_code", "module_libelle", "permissions"]
 
 
 def _construire_tableau_dynamique_modules(role: Role):
@@ -53,19 +56,19 @@ def _construire_tableau_dynamique_modules(role: Role):
         RoleModulePermission.objects.filter(
             role=role,
             supprime_le__isnull=True,
-            module__in=modules_locaux_ouverts(),
+            module_catalogue__in=modules_ouverts(),
         )
-        .select_related("module")
+        .select_related("module_catalogue")
         .prefetch_related("permissions_catalogue")
-        .order_by("module__ordre", "module__code")
+        .order_by("module_catalogue__ordre", "module_catalogue__code")
     )
 
-    modules_actifs = list(modules_locaux_ouverts())
+    modules_actifs = list(modules_ouverts())
     modules_couverts = set()
 
     resultats = []
     for rmp in rpm_qs:
-        modules_couverts.add(rmp.module_id)
+        modules_couverts.add(rmp.module_catalogue_id)
         perms_list = [
             {
                 "id": str(p.id),
@@ -80,12 +83,12 @@ def _construire_tableau_dynamique_modules(role: Role):
         ]
         resultats.append(
             {
-                "module_id": str(rmp.module.id),
-                "module_code": rmp.module.code,
-                "module_libelle": rmp.module.libelle,
-                "module_description": rmp.module.description,
-                "module_icone": rmp.module.icone,
-                "module_ordre": rmp.module.ordre,
+                "module_id": str(rmp.module_catalogue.id),
+                "module_code": rmp.module_catalogue.code,
+                "module_libelle": rmp.module_catalogue.libelle,
+                "module_description": rmp.module_catalogue.description,
+                "module_icone": rmp.module_catalogue.icone,
+                "module_ordre": rmp.module_catalogue.ordre,
                 "permissions": perms_list,
             }
         )
@@ -140,7 +143,7 @@ def _valider_permissions_modules_structure(value):
 
     modules_valides = {
         m.lower()
-        for m in modules_locaux_ouverts().values_list("code", flat=True)
+        for m in modules_ouverts().values_list("code", flat=True)
     }
     perms_cat_valides = {
         c.lower()
@@ -214,10 +217,10 @@ class RoleSerializer(serializers.ModelSerializer):
         rpm_qs = RoleModulePermission.objects.filter(
             role=obj,
             supprime_le__isnull=True,
-        ).select_related("module").prefetch_related("permissions_catalogue")
+        ).select_related("module_catalogue").prefetch_related("permissions_catalogue")
         for rmp in rpm_qs:
-            for p in rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True):
-                mod_code = rmp.module.code.lower() if rmp.module else p.code.split(".")[0].lower()
+            for _p in rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True):
+                mod_code = rmp.module_catalogue.code.lower()
                 if mod_code not in ("projets", "projet"):
                     return ["permission_globale_sur_role_projet"]
         return []
@@ -230,17 +233,17 @@ class RoleSerializer(serializers.ModelSerializer):
 
     def get_permissions_modules(self, obj: Role) -> dict[str, list[str]]:
         """Dictionnaire dynamique associant chaque module actif à la liste ordonnée de ses codes de permissions."""
-        modules_actifs = list(modules_locaux_ouverts())
+        modules_actifs = list(modules_ouverts())
         rpm_qs = (
             RoleModulePermission.objects.filter(
                 role=obj,
                 supprime_le__isnull=True,
-                module__in=modules_actifs,
+                module_catalogue__in=modules_actifs,
             )
-            .select_related("module")
+            .select_related("module_catalogue")
             .prefetch_related("permissions_catalogue")
         )
-        rpm_par_module_id = {rmp.module_id: rmp for rmp in rpm_qs}
+        rpm_par_module_id = {rmp.module_catalogue_id: rmp for rmp in rpm_qs}
 
         resultat: dict[str, list[str]] = {}
         for mod in modules_actifs:

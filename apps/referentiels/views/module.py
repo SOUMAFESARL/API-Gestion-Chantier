@@ -8,10 +8,6 @@ from rest_framework.views import APIView
 
 from apps.entreprises.selectors import entreprise_courante
 from apps.catalogue.models import CatalogueModule
-from apps.accounts.models import Module
-from apps.accounts.services.roles import (
-    initialiser_modules_par_defaut,
-)
 from apps.referentiels.serializers.module import ModuleItemSerializer
 
 __all__ = ["ModuleListView"]
@@ -56,20 +52,6 @@ class ModuleListView(APIView):
                 .prefetch_related("permissions")
                 .order_by("ordre", "code")
             )
-
-        if not modules_qs.exists():
-            modules_qs = (
-                Module.objects.filter(est_actif=True, supprime_le__isnull=True)
-                .prefetch_related("permissions")
-                .order_by("ordre", "code")
-            )
-            if not modules_qs.exists():
-                initialiser_modules_par_defaut()
-                modules_qs = (
-                    CatalogueModule.objects.filter(est_actif=True, supprime_le__isnull=True)
-                    .prefetch_related("permissions")
-                    .order_by("ordre", "code")
-                )
 
         from apps.core.droits import permissions_effectives
 

@@ -93,12 +93,11 @@ def peut_voir_montants(utilisateur, request=None) -> bool:
     return a_permission(utilisateur, "projets.voir_montants", request=request)
 
 
-def _permissions_cochees(role) -> list[tuple[str | None, str | None, str]]:
+def _permissions_cochees(role) -> list[tuple[str, str]]:
     """Les permissions actives cochées pour un rôle, avec le module de chaque ligne — en une
     seule requête (une par ligne rôle-module auparavant).
 
-    Rend des triplets (code du module du catalogue, code de l'ancien module, code de la
-    permission). Une ligne sans permission active ne rend rien : elle n'accordait rien.
+    Rend des couples (code du module du catalogue, code de la permission). Une ligne sans permission active ne rend rien : elle n'accordait rien.
     """
     from apps.accounts.models import RoleModulePermission
 
@@ -108,7 +107,7 @@ def _permissions_cochees(role) -> list[tuple[str | None, str | None, str]]:
             supprime_le__isnull=True,
             permissions_catalogue__est_actif=True,
             permissions_catalogue__supprime_le__isnull=True,
-        ).values_list("module_catalogue__code", "module__code", "permissions_catalogue__code")
+        ).values_list("module_catalogue__code", "permissions_catalogue__code")
     )
 
 
@@ -218,9 +217,7 @@ def permissions_effectives(collaborateur, request=None, entreprise=None) -> set[
             initialiser_roles_par_defaut()
             lignes = _permissions_cochees(role)
 
-        for module_catalogue, module, code in lignes:
-            # Le module du catalogue l'emporte sur l'ancien module.
-            mod_code = module_catalogue or module
+        for mod_code, code in lignes:
             if not mod_code:
                 continue
             mod_key = mod_code.lower()

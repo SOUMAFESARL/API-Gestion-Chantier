@@ -77,47 +77,6 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='Module',
-            fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('cree_le', models.DateTimeField(auto_now_add=True, verbose_name='créé le')),
-                ('modifie_le', models.DateTimeField(auto_now=True, verbose_name='modifié le')),
-                ('supprime_le', models.DateTimeField(blank=True, db_index=True, help_text='Non nul = ligne supprimée logiquement. Jamais de suppression physique.', null=True, verbose_name='supprimé le')),
-                ('code', models.CharField(db_index=True, help_text="Code technique unique du module (ex: 'projets', 'chantier', 'ged').", max_length=30, verbose_name='code')),
-                ('libelle', models.CharField(help_text='Nom officiel et lisible du module.', max_length=100, verbose_name='libellé')),
-                ('description', models.TextField(blank=True, default='', help_text='Périmètre fonctionnel et fonctionnalités couvertes par ce module.', verbose_name='description')),
-                ('ordre', models.PositiveSmallIntegerField(default=0, help_text='Position ordonnée dans la navigation et les matrices de permissions.', verbose_name="ordre d'affichage")),
-                ('icone', models.CharField(blank=True, default='box', help_text="Identifiant de l'icône Lucide / frontend associée.", max_length=50, verbose_name='icône')),
-                ('est_actif', models.BooleanField(default=True, help_text='Indique si le module est disponible dans cette entreprise.', verbose_name='est actif')),
-            ],
-            options={
-                'verbose_name': 'module',
-                'verbose_name_plural': 'modules',
-                'db_table': 'module',
-                'ordering': ['ordre', 'code'],
-            },
-        ),
-        migrations.CreateModel(
-            name='Permission',
-            fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('cree_le', models.DateTimeField(auto_now_add=True, verbose_name='créé le')),
-                ('modifie_le', models.DateTimeField(auto_now=True, verbose_name='modifié le')),
-                ('supprime_le', models.DateTimeField(blank=True, db_index=True, help_text='Non nul = ligne supprimée logiquement. Jamais de suppression physique.', null=True, verbose_name='supprimé le')),
-                ('code', models.CharField(db_index=True, help_text="Code technique unique de l'autorisation (ex: 'projets.lire', 'chantier.valider').", max_length=50, verbose_name='code')),
-                ('libelle', models.CharField(help_text="Nom officiel et lisible de l'autorisation.", max_length=100, verbose_name='libellé')),
-                ('description', models.TextField(blank=True, default='', help_text="Description de l'action ou capacité conférée par cette permission.", verbose_name='description')),
-                ('ordre', models.PositiveSmallIntegerField(default=0, help_text='Position ordonnée dans les grilles et formulaires de permissions.', verbose_name="ordre d'affichage")),
-                ('est_actif', models.BooleanField(default=True, help_text='Indique si cette permission est active et disponible.', verbose_name='est actif')),
-            ],
-            options={
-                'verbose_name': 'permission',
-                'verbose_name_plural': 'permissions',
-                'db_table': 'permission',
-                'ordering': ['ordre', 'code'],
-            },
-        ),
-        migrations.CreateModel(
             name='Role',
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),

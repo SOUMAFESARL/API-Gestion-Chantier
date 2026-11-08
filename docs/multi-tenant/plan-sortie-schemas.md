@@ -444,6 +444,31 @@ Liste des projets vue par le DG (11 chantiers) : 115 → **17** requêtes, et 17
 
 **Restes, hors de ce nettoyage** :
 
-- **`accounts.Module` et `accounts.Permission`**, les « copies locales » que la décision Q3 disait supprimées, existent toujours : `Module` est un `ModeleEntreprise` (10 lignes en base), 52 usages dans 9 fichiers, dont `platform_admin/services/catalogue.py` qui écrit à la fois le catalogue et ces copies. Code vivant, donc ni mort ni traité ici ; sa suppression touche les modèles, les migrations et les services de rôles.
+- ~~**`accounts.Module` et `accounts.Permission`**, les « copies locales » que la décision Q3 disait supprimées~~ — **supprimées le 08/11/2026** (section suivante).
 - `df.aka` (rôle DF, portée Entreprise) est affecté comme VI à deux chantiers par `peupler_donnees_test`, ce que la règle du 16/10 interdit.
 - Les diagrammes `docs/schema_tenant_btp.*`, `docs/schema_public.*`, `docs/diagramme_base_de_donnees.*`, `docs/bd_images/` et `docs/bd_images.rar`, qui montraient l'ancienne base, sont **supprimés** (09/11/2026). Le MLD v2.0 de `04_Conception` fait foi pour la structure actuelle ; aucun diagramme du schéma unique n'a encore été produit.
+
+### Q3 appliquée : les copies locales `accounts.Module` / `accounts.Permission` n'existent plus — 08/11/2026
+
+**Ce qui a disparu.** Les deux modèles et leurs tables (`module`, `permission`, `permission_modules`) ; la colonne `role_module_permission.module_id` et l'unicité `uq_role_module_actif`. `RoleModulePermission` ne pointe plus que vers `catalogue.CatalogueModule` (`module_catalogue`, désormais **non nul**, avec ses permissions dans `permissions_catalogue`). Le nombre de tables d'entreprise baisse de deux : la suite d'étanchéité, qui les calcule par introspection, passe de 447 à **441 tests** (trois cas par table).
+
+**Cartographie des usages (52 occurrences, 9 fichiers).**
+
+| Fichier | Nature | Devenu |
+|---|---|---|
+| `platform_admin/services/catalogue.py` | **écriture** : chaque création, modification, suppression de module ou de permission recopiait l'opération dans le catalogue **et** dans la copie de chaque entreprise ; **repli** : un identifiant de copie était accepté à la place d'un identifiant de catalogue | le catalogue seul ; la propagation aux entreprises ne touche plus que `RoleModulePermission` (création des lignes, révocation des permissions retirées, suppression logique) |
+| `accounts/services/roles.py` | **écriture** (`initialiser_modules_par_defaut` alignait la copie sur le catalogue) et **lecture** (modules actifs d'un rôle) | `modules_ouverts()` (ouverts à l'entreprise) et `modules_catalogue_actifs()` (invariant de complétude d'un rôle) lisent `CatalogueModule` ; `initialiser_modules_par_defaut` supprimée |
+| `accounts/serializers/role.py` | lecture (matrice du rôle, validation des modules) | catalogue ; les clés JSON sont inchangées |
+| `platform_admin/views/clients.py` | écriture (activation d'un module pour un client) | ligne `RoleModulePermission` sur `module_catalogue` |
+| `referentiels/views/module.py` | **repli** vers la copie quand le catalogue est vide, puis `initialiser_modules_par_defaut` (qui n'amenait rien : elle relisait le catalogue vide) | repli supprimé |
+| `core/droits.py` | **repli** : `module_catalogue__code`, sinon `module__code` | `module_catalogue__code` |
+| `accounts/models/role.py` | alias `module_code` du queryset sur les deux FK | une seule |
+| `platform_admin/serializers/*.py`, `views/modules.py`, `views/permissions.py` | **faux positifs** : ils importent déjà `CatalogueModule as Module` | inchangés |
+
+**Un changement observable, assumé.** Dans `GET /parametres/roles/` (`modules[].module_id`), l'identifiant est maintenant celui du **catalogue** (il était celui de la copie, différent d'une entreprise à l'autre). La forme de la réponse ne change pas ; le back-office, lui, identifiait déjà les modules par leur identifiant de catalogue. Le frontend ne doit donc plus supposer qu'un `module_id` de rôle diffère de celui du back-office.
+
+**Deux corrections au passage.** `propager_creation_module` écrasait le `_` de traduction par `cat_mod, _ = …` : ses deux premiers refus (code ou libellé vide) auraient levé `UnboundLocalError` au lieu d'une `ValidationError`. Et un module recréé après suppression retrouve maintenant ses lignes `RoleModulePermission`, qui restaient supprimées logiquement.
+
+**Migrations modifiées en place** (la base repart de zéro) : `accounts/0001` et `0002`, et la liste des tables de `core/0001_isolation_rls`. Base locale `ccd_schema_unique` : ALTER appliqué (colonne et tables supprimées, `module_catalogue_id` non nul, unicité recréée, types de contenu `accounts.module`/`permission` retirés) — les 140 lignes de la matrice étaient toutes renseignées sur `module_catalogue_id`, rien n'est perdu.
+
+**Vérifié** : `check`, `makemigrations --check`, `ruff` (F401, F811, F841, F821, E9) propres ; `pytest apps/core/tests tests/etancheite` → **441 passés** ; `mesurer_requetes --reference tmp/perf/mesure_report_final.json --ignorer-empreintes` → **364 requêtes utiles, 54 réglages, 418 allers-retours, identiques à la référence**, mêmes statuts ; les dix comptes du socle se connectent par `/api/v1/auth/token/` avec leurs droits ; la matrice du rôle CP (`/roles/`) est égale à `PERMISSIONS_DEFAUT_ROLES` ; création, modification et suppression d'un module, création et modification d'un rôle, `propager_roles_systeme`, rejoués sur la base locale puis annulés.

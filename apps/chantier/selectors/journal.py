@@ -23,7 +23,7 @@ from apps.chantier.services.journal import (
     aujourdhui,
     cases_du_journal,
     est_jour_ouvre_entreprise,
-    jours_saisissables_ouvres,
+    jours_saisissables_projet,
     migrer_saisie_ancienne,
     premier_jour_rapport,
     statut_journal,
@@ -430,7 +430,10 @@ def preparation(projet, jour: date, *, journal=None, precedent=None, utilisateur
     return {
         "aujourdhui": aujourdhui().isoformat(),
         "est_jour_ouvre": est_jour_ouvre_entreprise(jour),
-        "jours_saisissables": [d.isoformat() for d in jours_saisissables_ouvres()],
+        "jours_saisissables": [
+            d.isoformat()
+            for d in jours_saisissables_projet(projet, conserver=[jour] if journal else ())
+        ],
         "meteo_suggeree": meteo_suggeree_journal(projet.ville),
         "previsions_veille": previsions_veille,
         "blocages_ouverts": blocages_ouverts_projet(projet),

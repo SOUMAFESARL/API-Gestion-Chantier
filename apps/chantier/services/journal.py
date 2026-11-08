@@ -5,7 +5,7 @@ import binascii
 import io
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import date, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -103,6 +103,23 @@ def jours_saisissables_ouvres(
     return retenus
 
 
+def jours_saisissables_projet(
+    projet, reference: date | None = None, *, conserver: Iterable[date] = ()
+) -> list[date]:
+    """Les jours saisissables **de ce chantier** : la fenêtre de l'entreprise, resserrée au premier
+    jour qui attend un rapport (`premier_jour_rapport`).
+
+    C'est la même règle que celle de `creer_journal` : sans elle, la préparation proposait des
+    jours que l'enregistrement refusait ensuite (« avant l'enregistrement du chantier »).
+    `conserver` garde les jours où l'appelant a déjà un rapport, pour qu'il puisse le rouvrir.
+    """
+    premier = premier_jour_rapport(projet)
+    gardes = set(conserver)
+    return [
+        jour for jour in jours_saisissables_ouvres(reference) if jour >= premier or jour in gardes
+    ]
+
+
 def est_jour_ouvre_entreprise(jour: date) -> bool:
     cal = calendrier_entreprise(jour, jour)
     return cal.est_ouvre(jour)
@@ -181,6 +198,7 @@ __all__ = [
     "affectations_actives",
     "est_jour_ouvre_entreprise",
     "jours_saisissables_ouvres",
+    "jours_saisissables_projet",
     "migrer_saisie_ancienne",
     "tient_fonction",
     "verifier_fonction",

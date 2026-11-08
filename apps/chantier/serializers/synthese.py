@@ -16,9 +16,12 @@ DUREE_MAX_JOURS = 366
 class DemandeSyntheseSerializer(StrictSerializer):
     """La période d'un chantier, telle que le frontend la met dans l'adresse.
 
-    Une semaine va du lundi au vendredi, un mois du premier au dernier jour :
+    Une semaine va du lundi au dimanche, un mois du premier au dernier jour :
     ce sont les deux périodes qui se signent, et qu'on ne doit pas pouvoir
-    signer deux fois sous deux bornes différentes.
+    signer deux fois sous deux bornes différentes. La période est calendaire ;
+    ce qu'elle retient, ce sont les jours ouvrés du calendrier de l'entreprise
+    (lundi-vendredi par défaut, samedi si l'entreprise l'ouvre) — voir
+    `selectors.synthese`, qui compte les jours et les rapports attendus avec ce calendrier.
     """
 
     projet = s.UUIDField()
@@ -34,9 +37,12 @@ class DemandeSyntheseSerializer(StrictSerializer):
             raise s.ValidationError({"date_fin": "La fin précède le début."})
         if debut > aujourdhui():
             raise s.ValidationError({"date_debut": "Une période future ne se synthétise pas."})
-        if type_ == "HEBDOMADAIRE" and (debut.weekday() != 0 or fin != debut + timedelta(days=4)):
+        if type_ == "HEBDOMADAIRE" and (debut.weekday() != 0 or fin != debut + timedelta(days=6)):
             raise s.ValidationError(
-                {"date_debut": "Une semaine de chantier va du lundi au vendredi."}
+                {
+                    "date_debut": "Une semaine va du lundi au dimanche ; "
+                    "la synthèse ne retient que les jours ouvrés du calendrier de l'entreprise."
+                }
             )
         if type_ == "MENSUELLE":
             dernier = calendar.monthrange(debut.year, debut.month)[1]

@@ -45,6 +45,7 @@ from apps.chantier.services.journal import (
     creer_journal,
     est_jour_ouvre_entreprise,
     jours_saisissables_ouvres,
+    jours_saisissables_projet,
     modifier_journal,
     rejeter_journal,
     signer_journal,
@@ -109,11 +110,20 @@ class JournalRapportsView(APIView):
         )
         qs = qs.defer("saisie", "photographie").prefetch_related(None)
         jour_cible = params.get("date") or aujourdhui()
+        if params.get("projet"):
+            # Pour un chantier précis, la fenêtre suit la même règle que l'enregistrement :
+            # jamais avant le premier jour qui attend un rapport.
+            projet = get_object_or_404(projets_visibles(request), pk=params["projet"])
+            jours = jours_saisissables_projet(
+                projet, conserver=qs.values_list("rapport__date_rapport", flat=True)
+            )
+        else:
+            jours = jours_saisissables_ouvres()
         return Response(
             {
                 "aujourdhui": aujourdhui().isoformat(),
                 "est_jour_ouvre": est_jour_ouvre_entreprise(jour_cible),
-                "jours_saisissables": [d.isoformat() for d in jours_saisissables_ouvres()],
+                "jours_saisissables": [d.isoformat() for d in jours],
                 "resultats": [
                     {
                         "id": str(j.rapport_id),
@@ -463,13 +473,16 @@ class JournalView(APIView):
         from django.utils import timezone
 
         jour_courant = aujourdhui()
+        jours = (
+            jours_saisissables_projet(projet, jour_courant)
+            if params.get("projet")
+            else jours_saisissables_ouvres(jour_courant)
+        )
         return Response(
             {
                 "aujourdhui": jour_courant.isoformat(),
                 "est_jour_ouvre": est_jour_ouvre_entreprise(jour_courant),
-                "jours_saisissables": [
-                    d.isoformat() for d in jours_saisissables_ouvres(jour_courant)
-                ],
+                "jours_saisissables": [d.isoformat() for d in jours],
                 "lu_le": timezone.now().isoformat(),
                 "resultats": journal_periode(request, debut, fin, projet_id=params.get("projet")),
             }

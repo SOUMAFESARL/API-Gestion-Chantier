@@ -20,10 +20,12 @@ from apps.chantier.models import Blocage, JournalChantier, RapportJournalier
 from apps.chantier.selectors.journal import document, preparation
 from apps.chantier.selectors.synthese import calculer as calculer_synthese
 from apps.chantier.selectors.synthese import projection as projection_synthese
+from apps.chantier.serializers.synthese import DemandeSyntheseSerializer
 from apps.chantier.services.journal import (
     RapportIncomplet,
     creer_journal,
     jours_saisissables_ouvres,
+    jours_saisissables_projet,
     modifier_journal,
     rejeter_journal,
     signer_journal,
@@ -604,3 +606,53 @@ def test_meteo_suggeree_open_meteo(cache_propre):
         assert suggestion["matin"] == "PLUVIEUX"
         assert suggestion["apres_midi"] == "PLUVIEUX"
         assert suggestion["conditions"] == "DIFFICILES"
+
+
+@pytest.mark.entreprise
+def test_jours_proposes_sont_ceux_que_l_enregistrement_accepte(contexte_chantier):
+    """La fenêtre d'un chantier ne propose jamais un jour que `creer_journal` refuserait.
+
+    Le chantier n'attend de rapport qu'à partir de son premier jour (début prévu ou
+    enregistrement, le plus tardif) : avant, la préparation offrait un formulaire que
+    l'enregistrement rejetait en `avant_enregistrement_projet`.
+    """
+    projet = contexte_chantier["projet"]
+    cc = contexte_chantier["cc"]
+    lundi = date(2026, 10, 26)
+    vendredi, jeudi = date(2026, 10, 23), date(2026, 10, 22)
+    Projet.objects.filter(pk=projet.pk).update(date_debut_prevue=vendredi)
+    projet.refresh_from_db()
+
+    with patch("apps.chantier.services.journal.aujourdhui", return_value=lundi):
+        assert jours_saisissables_ouvres(lundi) == [jeudi, vendredi, lundi]
+        assert jours_saisissables_projet(projet, lundi) == [vendredi, lundi]
+        # Un rapport déjà posé sur un jour plus ancien reste rouvrable.
+        rouvrable = jours_saisissables_projet(projet, lundi, conserver=[jeudi])
+        assert rouvrable == [jeudi, vendredi, lundi]
+
+        with pytest.raises(ErreurMetier) as refus:
+            creer_journal(projet=projet, utilisateur=cc, jour=jeudi, data={})
+        assert refus.value.details == {"date": "avant_enregistrement_projet"}
+        for jour in jours_saisissables_projet(projet, lundi):
+            journal = creer_journal(projet=projet, utilisateur=cc, jour=jour, data={})
+            assert journal.rapport.date_rapport == jour
+
+
+def test_synthese_hebdomadaire_va_du_lundi_au_dimanche():
+    """La semaine est calendaire (lundi→dimanche) ; les jours ouvrés du calendrier font le reste."""
+
+    def demande(debut, fin):
+        return DemandeSyntheseSerializer(
+            data={
+                "projet": str(uuid.uuid4()),
+                "type": "HEBDOMADAIRE",
+                "date_debut": debut,
+                "date_fin": fin,
+            }
+        )
+
+    with patch("apps.chantier.services.journal.aujourdhui", return_value=date(2026, 11, 8)):
+        assert demande("2026-10-26", "2026-11-01").is_valid()
+        # Ni une semaine tronquée au vendredi, ni une semaine qui ne commence pas un lundi.
+        assert not demande("2026-10-26", "2026-10-30").is_valid()
+        assert not demande("2026-10-27", "2026-11-02").is_valid()

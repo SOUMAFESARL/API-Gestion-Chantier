@@ -446,4 +446,4 @@ Liste des projets vue par le DG (11 chantiers) : 115 → **17** requêtes, et 17
 
 - **`accounts.Module` et `accounts.Permission`**, les « copies locales » que la décision Q3 disait supprimées, existent toujours : `Module` est un `ModeleEntreprise` (10 lignes en base), 52 usages dans 9 fichiers, dont `platform_admin/services/catalogue.py` qui écrit à la fois le catalogue et ces copies. Code vivant, donc ni mort ni traité ici ; sa suppression touche les modèles, les migrations et les services de rôles.
 - `df.aka` (rôle DF, portée Entreprise) est affecté comme VI à deux chantiers par `peupler_donnees_test`, ce que la règle du 16/10 interdit.
-- Les diagrammes `docs/schema_tenant_btp.*`, `docs/schema_public.*` et `docs/diagramme_base_de_donnees.*` montrent encore l'ancienne base.
+- Les diagrammes `docs/schema_tenant_btp.*`, `docs/schema_public.*`, `docs/diagramme_base_de_donnees.*`, `docs/bd_images/` et `docs/bd_images.rar`, qui montraient l'ancienne base, sont **supprimés** (09/11/2026). Le MLD v2.0 de `04_Conception` fait foi pour la structure actuelle ; aucun diagramme du schéma unique n'a encore été produit.

@@ -225,6 +225,35 @@ class TestEnregistrement:
             Essai(libelle="x", entreprise_id=A).save()
 
 
+class TestInsertionEnMasse:
+    """`bulk_create` ne passe pas par `save()` : l'entreprise doit être posée quand même."""
+
+    @pytest.fixture(autouse=True)
+    def sans_base(self):
+        with mock.patch.object(models.QuerySet, "bulk_create", lambda self, objs, *a, **k: objs) as bc:
+            yield bc
+
+    def test_entreprise_remplie_depuis_le_contexte(self):
+        lignes = [Essai(libelle="a"), Essai(libelle="b")]
+        with contexte_entreprise(A):
+            Essai.objects.bulk_create(lignes)
+        assert {ligne.entreprise_id for ligne in lignes} == {A}
+
+    def test_autre_entreprise_refusee(self):
+        with contexte_entreprise(A), pytest.raises(ErreurIsolation):
+            Essai.objects.bulk_create([Essai(libelle="a"), Essai(libelle="b", entreprise_id=B)])
+
+    def test_hors_contexte_refuse(self):
+        with pytest.raises(HorsContexteEntreprise):
+            Essai.objects.bulk_create([Essai(libelle="a")])
+
+    def test_plateforme_exige_une_entreprise_explicite(self):
+        with portee_plateforme(motif="reprise"):
+            with pytest.raises(ErreurIsolation):
+                Essai.objects.bulk_create([Essai(libelle="a")])
+            Essai.objects.bulk_create([Essai(libelle="a", entreprise_id=A)])
+
+
 # --- L'authentification --------------------------------------------------------------------------
 class TestAuthentification:
     def utilisateur(self, entreprise=..., pk=1):

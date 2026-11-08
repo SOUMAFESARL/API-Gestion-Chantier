@@ -94,6 +94,19 @@ class RequeteEntreprise(RequeteSansSupprimes):
             self.query.add_q(models.Q(entreprise_id=exiger_entreprise()))
         self._cloisonnement_a_appliquer = False
 
+    def bulk_create(self, objs, *args, **kwargs):
+        """L'insertion en masse pose l'entreprise comme `save()`, avec les mêmes refus.
+
+        `bulk_create` ne passe jamais par `save()` : une ligne créée en mémoire sans entreprise
+        partait telle quelle, et la RLS la refusait en erreur 500 (ou, sans RLS, le NOT NULL).
+        """
+        objs = list(objs)
+        for objet in objs:
+            poser = getattr(objet, "_poser_entreprise", None)
+            if poser is not None:
+                poser()
+        return super().bulk_create(objs, *args, **kwargs)
+
     # Toutes les portes vers la base passent par l'une de ces méthodes.
     def _fetch_all(self):
         self._cloisonner()
@@ -165,7 +178,7 @@ class RequeteComptes(RequeteEntreprise):
 
     Elle partage tout de `RequeteEntreprise`, sauf ce qu'elle fait **sans entreprise active** :
     elle ne refuse pas, elle rend le **personnel de CCD Digital** (`entreprise` nulle). C'est ce
-    que rendait la table `utilisateur` du schéma `public` dans l'ancien modèle multi-schéma, et ce qu'attend le
+    que rendait la table `utilisateur` de la plateforme dans l'ancien modèle multi-schéma, et ce qu'attend le
     code de l'administration de la plateforme, qui tourne sans entreprise.
 
     | Contexte | Comptes visibles |

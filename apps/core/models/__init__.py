@@ -142,6 +142,15 @@ class ModeleEntreprise(ModeleBase):
         abstract = True
 
     def save(self, *args, **kwargs):
+        self._poser_entreprise()
+        super().save(*args, **kwargs)
+
+    def _poser_entreprise(self) -> None:
+        """Remplit `entreprise_id` depuis le contexte, ou refuse (R-2).
+
+        Une seule règle, appelée par `save()` **et** par `bulk_create` (qui n'appelle jamais
+        `save()` : sans cela, les lignes insérées en masse partaient sans entreprise).
+        """
         from apps.core.contexte import (
             en_portee_plateforme,
             entreprise_courante_id,
@@ -161,5 +170,4 @@ class ModeleEntreprise(ModeleBase):
                 f"Ligne de l'entreprise {self.entreprise_id} écrite pendant que "
                 f"l'entreprise {active} est active."
             )
-        super().save(*args, **kwargs)
 

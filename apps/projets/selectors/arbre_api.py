@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from apps.core.droits import peut_voir_montants
 from apps.projets.models import AffectationEquipeElement
-from apps.projets.selectors.arbre import charger_arbre
+from apps.projets.selectors.arbre import charger_arbre, objectif_atteint
 from apps.projets.services.perimetres import perimetre_de
 from apps.projets.services.sante_calculs import calculer_arbre
 
@@ -75,17 +75,9 @@ def depassement(feuille) -> float | None:
 
 
 def a_cloturer(feuille) -> bool:
-    """À 100 %, la plateforme propose « Clôturer ? » ; elle ne clôture jamais seule."""
-    if feuille.cloture:
-        return False
-    if feuille.mode_mesure == "QUANTITE":
-        return (
-            bool(feuille.quantite_prevue)
-            and (feuille.quantite_realisee or 0) >= feuille.quantite_prevue
-        )
-    if feuille.mode_mesure == "POURCENTAGE":
-        return (feuille.pourcentage_declare or 0) >= 100
-    return False
+    """Objectif atteint mais feuille ouverte : une feuille rouverte exprès, ou arrivée avant que
+    la clôture soit automatique. À 100 %, une saisie clôt la feuille d'elle-même."""
+    return not feuille.cloture and objectif_atteint(feuille)
 
 
 def representer_case(
@@ -176,6 +168,8 @@ def representer_case(
         "date_fin_baseline": element.date_fin_baseline,
         "date_debut_reelle": element.date_debut_reelle,
         "date_fin_reelle": element.date_fin_reelle,
+        # Vrai : les dates prévues de ce parent sont lues chez ses enfants, pas posées à la main
+        "dates_calculees": bool(not feuille and element.dates_calculees),
         # Avenants : l'origine plus les jours accordés (30/10/2026)
         "jours_accordes": element.jours_accordes,
         "date_fin_contractuelle": element.date_fin_contractuelle,

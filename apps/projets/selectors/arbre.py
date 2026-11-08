@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from apps.projets.models import Element, NiveauProjet
 
-__all__ = ["Arbre", "charger_arbre", "precharger_arbres"]
+__all__ = ["Arbre", "charger_arbre", "objectif_atteint", "precharger_arbres"]
 
 
 @dataclass
@@ -135,6 +135,21 @@ def _porte_une_mesure(feuille) -> bool:
         or (feuille.quantite_realisee or 0) > 0
         or (feuille.pourcentage_declare or 0) > 0
     )
+
+
+def objectif_atteint(feuille) -> bool:
+    """La mesure a rejoint le prévu : 100 % déclaré, ou quantité réalisée ≥ quantité prévue.
+
+    Un jalon ne passe pas par là : il se clôt quand il est atteint. Sans quantité prévue, rien
+    ne dit où est la fin : la feuille ne se clôt pas d'elle-même.
+    """
+    mode = feuille.mode_mesure
+    if mode == "QUANTITE":
+        prevue = feuille.quantite_prevue
+        return bool(prevue) and (feuille.quantite_realisee or 0) >= prevue
+    if mode == "POURCENTAGE":
+        return (feuille.pourcentage_declare or 0) >= 100
+    return False
 
 
 def precharger_arbres(projets) -> None:

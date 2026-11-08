@@ -9,6 +9,10 @@ proche en proche. L'écran l'affiche ; si l'on confirme, chacune est prolongée 
 reprogrammation, tracée avec le motif de l'enfant. Un parent ne rétrécit jamais tout seul.
 
 Une case ou un projet sans dates n'encadre rien : on ne borne que par ce qui est connu.
+
+**Une case sans dates propres les déduit de ses enfants** (`dates_derivees`) : elle n'a rien
+promis, donc elle ne borne rien et ne demande aucune prolongation. Seules les dates posées à la
+main sont un engagement.
 """
 
 from __future__ import annotations
@@ -69,10 +73,19 @@ def chaine_des_parents(element, arbre=None) -> list:
 def prolongations_necessaires(element, debut: date | None, fin: date | None, arbre=None) -> list:
     """Les parents à élargir pour que [debut, fin] tienne, de proche en proche jusqu'au projet."""
     from apps.projets.models import Projet
+    from apps.projets.services.dates_derivees import est_calcule
 
     prolongations: list[Prolongation] = []
     for parent in chaine_des_parents(element, arbre):
         p_debut, p_fin = parent.date_debut_prevue, parent.date_fin_prevue
+        if est_calcule(parent):
+            # Un parent calculé n'a rien promis : il s'étire avec ses enfants, sans alerte ni
+            # motif. Ses nouvelles bornes comptent pourtant pour l'ancêtre daté à la main.
+            nouveau_debut = min(p_debut, debut) if (p_debut and debut) else (debut or p_debut)
+            nouvelle_fin = max(p_fin, fin) if (p_fin and fin) else (fin or p_fin)
+            debut = nouveau_debut or debut
+            fin = nouvelle_fin or fin
+            continue
         nouveau_debut = min(p_debut, debut) if (p_debut and debut) else p_debut
         nouvelle_fin = max(p_fin, fin) if (p_fin and fin) else p_fin
         if nouveau_debut != p_debut or nouvelle_fin != p_fin:

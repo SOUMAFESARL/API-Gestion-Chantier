@@ -19,6 +19,7 @@ from apps.core.enums import StatutRapport
 from apps.projets.models import Element, ModeMesure, Projet
 from apps.projets.selectors.arbre import charger_arbre
 from apps.projets.services.alertes_retard import detecter_alertes_retard
+from apps.projets.services.arbre import cloturer_si_objectif_atteint
 from apps.projets.services.machine_etats import evaluer_statut_projet, evaluer_statuts_arbre
 from apps.projets.services.sante_calculs import calculer_arbre, resultat_projet
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante
@@ -227,6 +228,10 @@ def synchroniser_rapport_approuve(rapport_id: uuid.UUID | str) -> bool:
                 q_actuelle = feuille.quantite_realisee or Decimal("0.000")
                 feuille.quantite_realisee = q_actuelle + q_ajoute
                 champs.append("quantite_realisee")
+
+        # À 100 %, la feuille se clôt d'elle-même, au jour du rapport qui l'a menée là.
+        if champs and cloturer_si_objectif_atteint(feuille, jour=rapport.date_rapport):
+            champs.extend(["cloture", "cloture_le", "date_fin_reelle"])
 
         if champs:
             if feuille.date_debut_reelle is None and rapport.date_rapport:

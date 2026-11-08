@@ -20,6 +20,7 @@ from apps.projets.models import (
     Projet,
     TypeObjetHistorique,
 )
+from apps.projets.services.dates_derivees import recalculer_dates_derivees
 from apps.projets.tasks import notifier_dg_derive_delai
 
 __all__ = [
@@ -192,6 +193,8 @@ def planifier_element(
         )
     element.date_debut_prevue = date_debut
     element.date_fin_prevue = date_fin
+    # Posées à la main, ces dates sont un engagement : le parent ne se recalcule plus (§11).
+    element.dates_calculees = False
     element.save()
     decalages = appliquer_decalages(
         element,
@@ -203,6 +206,7 @@ def planifier_element(
         prolonger=prolonger,
         auteur=auteur,
     )
+    recalculer_dates_derivees(element.projet)
     return {"instance": element, "prolongations": prolongations, "decalages": decalages}
 
 
@@ -386,6 +390,10 @@ def reprogrammer_date_instance(
     instance.date_debut_prevue = debut_cible
     instance.date_fin_prevue = fin_cible
     champs_maj = ["date_debut_prevue", "date_fin_prevue", "modifie_le"]
+    if type_objet == TypeObjetHistorique.ELEMENT:
+        # Reprogrammer un parent à la main, c'est s'engager sur ses dates : plus de recalcul (§11).
+        instance.dates_calculees = False
+        champs_maj.append("dates_calculees")
 
     from apps.projets.services.machine_etats import retablir_statut_apres_decalage_si_necessaire
 
@@ -411,6 +419,8 @@ def reprogrammer_date_instance(
             prolonger=prolonger,
             auteur=auteur,
         )
+        # Les parents calculés suivent l'enfant qui vient de bouger.
+        recalculer_dates_derivees(instance.projet)
 
     # La dérive se lit sur l'origine (baseline v0) ; l'alerte au DG, elle, se mesure sur la date
     # contractuelle : un délai accordé par avenant n'est pas un retard (30/10/2026).

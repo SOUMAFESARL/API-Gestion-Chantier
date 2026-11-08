@@ -269,6 +269,10 @@ class Element(ModeleEntreprise):
     date_fin_baseline = models.DateField(_("fin baseline v0"), null=True, blank=True)
     date_debut_reelle = models.DateField(_("début réel"), null=True, blank=True)
     date_fin_reelle = models.DateField(_("fin réelle"), null=True, blank=True)
+    # Vrai tant que les dates d'un parent viennent de ses enfants (début le plus tôt, fin la plus
+    # tard) : le parent se recale seul à chaque changement. Faux dès que quelqu'un les pose à la
+    # main : elles deviennent un engagement qui borne les enfants (§11).
+    dates_calculees = models.BooleanField(_("dates calculées d'après les enfants"), default=False)
     # Jours accordés par les avenants qui citent cette case (30/10/2026).
     jours_accordes = models.IntegerField(_("jours accordés par avenant"), default=0)
 

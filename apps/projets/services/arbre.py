@@ -29,7 +29,7 @@ from apps.catalogue.models.referentiel import cle_comparaison
 from apps.core.enums import ActionAudit, ModeExecution
 from apps.core.exceptions import ErreurConflit, ErreurMetier
 from apps.projets.models import Element, MiseAJourInline, ModeMesure, NiveauProjet
-from apps.projets.selectors.arbre import charger_arbre
+from apps.projets.selectors.arbre import charger_arbre, objectif_atteint
 
 __all__ = [
     "LIBELLE_GENERAL",
@@ -38,6 +38,7 @@ __all__ = [
     "ajouter_niveau",
     "apercu_deplacement",
     "cloturer_feuille",
+    "cloturer_si_objectif_atteint",
     "deplacer_element",
     "desactiver_element",
     "detailler_feuille",
@@ -160,7 +161,10 @@ def _redevenir_feuille_si_besoin(parent) -> None:
 
 def _recalculer(projet) -> None:
     from apps.projets.services.avancement import recalculer_avancements_projet
+    from apps.projets.services.dates_derivees import recalculer_dates_derivees
 
+    # Les dates d'abord : le temporel d'un parent se lit sur elles.
+    recalculer_dates_derivees(projet)
     recalculer_avancements_projet(projet)
 
 
@@ -1110,6 +1114,7 @@ def mesurer_feuille(
             raise ValidationError({"atteint": "Indiquez si le jalon est atteint."})
         feuille.cloture = bool(atteint)
         feuille.cloture_le = timezone.now() if atteint else None
+    cloturee_seule = cloturer_si_objectif_atteint(feuille)
     feuille.save()
     MiseAJourInline.objects.create(
         element=feuille,
@@ -1120,6 +1125,8 @@ def mesurer_feuille(
         avancement_apres=Decimal(str(calculer_avancement_physique_feuille(feuille))),
         commentaire=commentaire.strip(),
     )
+    if cloturee_seule:
+        _tracer(feuille, auteur, "CLOTURE_AUTOMATIQUE")
     from apps.projets.services.avancement import recalculer_apres_quantites
 
     recalculer_apres_quantites(
@@ -1131,6 +1138,24 @@ def mesurer_feuille(
     return feuille
 
 
+def cloturer_si_objectif_atteint(feuille: Element, *, jour=None) -> bool:
+    """Une feuille dont la mesure rejoint le prévu se clôt d'elle-même (§10, 08/11/2026).
+
+    À 100 %, il n'y a plus rien à décider : la fin réelle est le jour de la saisie qui l'a
+    atteint (`jour`, la date du rapport ; à défaut aujourd'hui), pas celui où quelqu'un aurait
+    cliqué. Modifie l'instance sans l'enregistrer ; rend vrai si elle vient de se clore.
+
+    Le bouton « Clôturer » reste pour la tâche terminée **avant** son prévu ; « Rouvrir » pour
+    celle qu'on s'est trompé de clore.
+    """
+    if feuille.cloture or not objectif_atteint(feuille):
+        return False
+    feuille.cloture = True
+    feuille.cloture_le = timezone.now()
+    feuille.date_fin_reelle = feuille.date_fin_reelle or jour or timezone.localdate()
+    return True
+
+
 @transaction.atomic
 def cloturer_feuille(feuille: Element, *, auteur=None) -> Element:
     """Clôturer ne se fait que sur une feuille, et la met à 100 %. Pas de clôture en cascade."""
@@ -1139,7 +1164,8 @@ def cloturer_feuille(feuille: Element, *, auteur=None) -> Element:
         raise ErreurMetier("Seule une tâche du bas (une feuille) se clôture.")
     feuille.cloture = True
     feuille.cloture_le = timezone.now()
-    feuille.save(update_fields=["cloture", "cloture_le", "modifie_le"])
+    feuille.date_fin_reelle = feuille.date_fin_reelle or timezone.localdate()
+    feuille.save(update_fields=["cloture", "cloture_le", "date_fin_reelle", "modifie_le"])
     _tracer(feuille, auteur, "CLOTURE")
     from apps.projets.services.avancement import recalculer_apres_quantites
 
@@ -1154,7 +1180,9 @@ def rouvrir_feuille(feuille: Element, *, auteur=None, motif: str = "") -> Elemen
     motif = _exiger_motif(motif, "Rouvrir une tâche clôturée")
     feuille.cloture = False
     feuille.cloture_le = None
-    feuille.save(update_fields=["cloture", "cloture_le", "modifie_le"])
+    # La fin réelle est celle de la clôture : rouverte, elle s'efface.
+    feuille.date_fin_reelle = None
+    feuille.save(update_fields=["cloture", "cloture_le", "date_fin_reelle", "modifie_le"])
     _tracer(feuille, auteur, "REOUVERTURE", motif=motif)
     from apps.projets.services.avancement import recalculer_apres_quantites
 

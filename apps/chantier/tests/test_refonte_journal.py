@@ -691,3 +691,55 @@ def test_mode_execution_se_fige_avec_la_premiere_tache_commencee(contexte_chanti
     modifier_element(f_pct, donnees={"mode_execution": "REGIE"}, auteur=cp)
     f_pct.refresh_from_db()
     assert f_pct.mode_execution == "REGIE"
+
+
+@pytest.mark.entreprise
+def test_un_rapport_qui_atteint_le_prevu_cloture_la_feuille_au_jour_du_rapport(contexte_chantier):
+    """À 100 %, la feuille se clôt d'elle-même ; sa fin réelle est la date du rapport."""
+    c = contexte_chantier
+    lundi = date(2026, 10, 26)
+    saisie = {
+        "heure_debut": "07:30",
+        "heure_fin": "17:00",
+        "meteo": {"matin": "ENSOLEILLE", "apres_midi": "NUAGEUX", "conditions": "FAVORABLES"},
+        "equipes": [
+            {
+                "equipe_id": str(c["eq_macons"].id),
+                "presents": [str(c["p1"].id)],
+                "retards": [],
+                "heures": 8,
+            }
+        ],
+        "activites": [
+            {
+                "activite_id": str(c["f_qte"].id),
+                "equipe_ids": [str(c["eq_macons"].id)],
+                "quantite_jour": 100,  # le prévu : 100 m3
+            },
+            {
+                "activite_id": str(c["f_pct"].id),
+                "equipe_ids": [str(c["eq_macons"].id)],
+                "pourcentage_jour": 60,
+            },
+        ],
+        "note_redacteur": "Les fouilles sont terminées.",
+    }
+
+    with patch("apps.chantier.services.journal.aujourdhui", return_value=lundi):
+        journal = creer_journal(projet=c["projet"], utilisateur=c["cc"], jour=lundi, data={})
+        journal = soumettre_journal(journal=journal, utilisateur=c["cc"], data=saisie)
+        journal = signer_journal(
+            journal=journal, utilisateur=c["ct"], etape="VALIDATION", commentaire="Vérifié"
+        )
+        journal = signer_journal(
+            journal=journal, utilisateur=c["cp"], etape="APPROBATION", commentaire="Approuvé"
+        )
+        assert synchroniser_rapport_approuve(journal.rapport_id) is True
+
+    c["f_qte"].refresh_from_db()
+    c["f_pct"].refresh_from_db()
+    assert c["f_qte"].cloture is True
+    assert c["f_qte"].date_fin_reelle == lundi
+    # 60 % déclarés : la feuille reste ouverte, personne n'a rien à décider.
+    assert c["f_pct"].cloture is False
+    assert c["f_pct"].date_fin_reelle is None

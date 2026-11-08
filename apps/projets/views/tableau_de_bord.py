@@ -21,8 +21,9 @@ from apps.core.enums import StatutProjet, StatutRapport
 from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.core.purger_montants import purger_montants_recursif
 from apps.projets.models import Projet
-from apps.projets.selectors.arbre import precharger_arbres
+from apps.projets.selectors.arbre import charger_arbre, precharger_arbres
 from apps.projets.serializers import TableauDeBordResponseSerializer
+from apps.projets.services.budget import realise_valorise
 from apps.projets.services.indicateurs_temporels import (
     calendrier_pour_projets,
     indicateurs_temporels_projet,
@@ -157,9 +158,6 @@ class TableauDeBordView(APIView):
         scores_securite = []
         projets_data = []
 
-        # Pré-agrégation des dépenses réelles par projet (finance hors périmètre)
-        consommation_par_projet = {}
-
         # Pré-agrégation des blocages critiques par projet
         blocages_par_projet = dict(
             rapports_recents_qs.values("projet_id")
@@ -183,9 +181,12 @@ class TableauDeBordView(APIView):
             else:
                 chantiers_conformes += 1
 
-            # Consommation budgétaire réelle par projet
-            budget_consomme = consommation_par_projet.get(p.id, 0)
+            # Le budget se lit sur l'arbre : la valeur de ce qui est réalisé (pas de module
+            # financier, donc pas de dépensé réel), rapportée au budget en vigueur — l'initial plus
+            # les avenants. `precharger_arbres` a déjà chargé l'arbre : aucune requête de plus.
+            budget_consomme = realise_valorise(charger_arbre(p))
             budget_initial = p.budget_initial_montant or 0
+            budget_en_vigueur = p.budget_contractuel or 0
 
             # 1. Sous-note Délais (0-100) : 100 si ponctuel, -2 pts par % de retard
             if ecart < 0:
@@ -195,8 +196,8 @@ class TableauDeBordView(APIView):
             scores_delais.append(note_delais)
 
             # 2. Sous-note Budget (0-100) : 100 si respecté, dégressif si dépassement
-            if budget_initial > 0:
-                ratio_budget = budget_consomme / budget_initial
+            if budget_en_vigueur > 0:
+                ratio_budget = budget_consomme / budget_en_vigueur
                 if ratio_budget <= 1.0:
                     note_budget = 100
                 else:
@@ -239,6 +240,8 @@ class TableauDeBordView(APIView):
                 "delta_retard": delta_retard,
                 "ecart": ecart,
                 "budget_initial_montant": budget_initial,
+                "budget_contractuel_montant": p.budget_contractuel,
+                "budget_consomme_montant": budget_consomme,
                 "rapport_jour_statut": "SOUMIS" if rapport_soumis else "EN_ATTENTE",
                 "indice_sante": indice_projet,
                 "badge_sante": badge_projet,

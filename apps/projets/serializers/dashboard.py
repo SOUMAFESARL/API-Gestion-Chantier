@@ -72,6 +72,12 @@ class ProjetDashboardItemSerializer(serializers.Serializer):
     )
     ecart = serializers.FloatField()
     budget_initial_montant = serializers.IntegerField(allow_null=True)
+    budget_contractuel_montant = serializers.IntegerField(
+        allow_null=True, help_text="Budget initial plus les avenants : le budget en vigueur."
+    )
+    budget_consomme_montant = serializers.IntegerField(
+        help_text="Le réalisé valorisé (centimes) : Σ montant x avancement des feuilles."
+    )
     rapport_jour_statut = serializers.CharField(help_text="SOUMIS ou EN_ATTENTE")
     indice_sante = serializers.IntegerField(help_text="Note sur 100", allow_null=True)
     badge_sante = serializers.CharField(

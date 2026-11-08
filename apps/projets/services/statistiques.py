@@ -3,6 +3,7 @@
 
 from django.utils import timezone
 
+from apps.projets.services.budget import montant_chiffre, realise_valorise
 from apps.projets.services.sante_calculs import (
     calculer_arbre,
     calculer_avancement_physique_feuille,
@@ -26,6 +27,11 @@ def statistiques_arbre(arbre):
         "avancement_pondere": resultat.physique,
         "avancement_partiel": resultat.partiel,
         "ponderation": "MONTANT",
+        # Budget lu sur l'arbre (centimes) : ce que le découpage chiffre, et la valeur de ce qui
+        # est réalisé. Les clés disent « montant » : sans le droit de voir les montants, la
+        # purge générique les retire.
+        "decoupage_montant": montant_chiffre(arbre),
+        "realise_montant": realise_valorise(arbre),
         "feuilles_en_retard": sum(
             1
             for f in feuilles

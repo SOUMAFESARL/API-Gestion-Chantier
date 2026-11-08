@@ -64,6 +64,9 @@ CHAMPS_REPONSE = (
     "jours_accordes",
     "date_fin_contractuelle",
     "budget_contractuel",
+    # Le budget lu sur l'arbre (08/11/2026) : le réalisé valorisé, et ce que le découpage chiffre
+    "budget_consomme_montant",
+    "budget_decoupage_montant",
     # L'encadrement, en lecture : le frontend en déduit qui voit le chantier.
     "chef_projet",
     "conducteurs_travaux",
@@ -374,6 +377,25 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     delta_retard = serializers.SerializerMethodField(
         help_text="Avancement temporel - avancement physique, en points (positif = retard)."
     )
+
+    budget_consomme_montant = serializers.SerializerMethodField(
+        help_text=(
+            "La valeur de ce qui est réalisé (centimes) : Σ montant x avancement des feuilles. "
+            "Il n'y a pas de module financier : ce n'est pas du dépensé, et le nom du champ est "
+            "gardé pour les écrans existants."
+        )
+    )
+    budget_decoupage_montant = serializers.SerializerMethodField(
+        help_text="Ce que le découpage chiffre au total (centimes), à comparer au budget."
+    )
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_budget_consomme_montant(self, obj) -> int:
+        return self._statistiques(obj)["realise_montant"]
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_budget_decoupage_montant(self, obj) -> int:
+        return self._statistiques(obj)["decoupage_montant"]
 
     def get_avancement_reel(self, obj) -> float:
         valeur = self._statistiques(obj)["avancement_pondere"]

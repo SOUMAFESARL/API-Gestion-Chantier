@@ -405,3 +405,89 @@ def test_la_commande_rattrape_des_donnees_ecrites_avant_la_regle(chantier):
     call_command("recalculer_arbres", entreprise="demo")
     _relire(c["ouvrage"])
     assert c["ouvrage"].date_fin_prevue == date(2026, 9, 20)
+
+
+# --------------------------------------------------------------------------
+# Budget : ce qui est chiffré, ce qui est réalisé
+# --------------------------------------------------------------------------
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_le_realise_valorise_est_nul_avant_toute_mesure(chantier):
+    from apps.projets.services.budget import montant_chiffre, realise_valorise
+
+    arbre = charger_arbre(chantier["projet"], actifs_seulement=True)
+
+    assert montant_chiffre(arbre) == 4_000_000_00
+    assert realise_valorise(arbre) == 0
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_le_realise_valorise_est_la_somme_des_montants_par_avancement(chantier, auteur):
+    """3 M à 100 % + 1 M à 50 % = 3,5 M. Le reste du budget en découle."""
+    from apps.projets.services.budget import realise_valorise
+
+    c = chantier
+    mesurer_feuille(c["cloture"], auteur=auteur, commentaire="Fait", pourcentage_declare=100)
+    mesurer_feuille(c["implantation"], auteur=auteur, commentaire="Moitié", quantite_realisee=5)
+
+    arbre = charger_arbre(c["projet"], actifs_seulement=True)
+
+    assert realise_valorise(arbre) == 3_500_000_00
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_une_tache_cloturee_avant_son_prevu_vaut_son_montant_entier(chantier, auteur):
+    from apps.projets.services.arbre import cloturer_feuille
+    from apps.projets.services.budget import realise_valorise
+
+    c = chantier
+    mesurer_feuille(c["implantation"], auteur=auteur, commentaire="Moitié", quantite_realisee=5)
+    cloturer_feuille(c["implantation"], auteur=auteur)
+
+    arbre = charger_arbre(c["projet"], actifs_seulement=True)
+
+    assert realise_valorise(arbre) == 1_000_000_00
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_un_depassement_de_quantite_ne_fait_pas_valoir_plus_que_le_montant(chantier, auteur):
+    from apps.projets.services.budget import realise_valorise
+
+    c = chantier
+    mesurer_feuille(c["implantation"], auteur=auteur, commentaire="Large", quantite_realisee=15)
+
+    arbre = charger_arbre(c["projet"], actifs_seulement=True)
+
+    assert realise_valorise(arbre) == 1_000_000_00
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_une_case_desactivee_sort_du_realise_et_du_chiffre(chantier, auteur):
+    from apps.projets.services.budget import montant_chiffre, realise_valorise
+
+    c = chantier
+    mesurer_feuille(c["cloture"], auteur=auteur, commentaire="Fait", pourcentage_declare=100)
+    Element.objects.filter(pk=c["cloture"].pk).update(est_actif=False)
+
+    arbre = charger_arbre(c["projet"], actifs_seulement=True)
+
+    assert montant_chiffre(arbre) == 1_000_000_00
+    assert realise_valorise(arbre) == 0
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_les_statistiques_portent_le_chiffre_et_le_realise(chantier, auteur):
+    from apps.projets.services.statistiques import statistiques_arbre
+
+    c = chantier
+    mesurer_feuille(c["cloture"], auteur=auteur, commentaire="Fait", pourcentage_declare=100)
+
+    stats = statistiques_arbre(charger_arbre(c["projet"]))
+
+    assert stats["decoupage_montant"] == 4_000_000_00
+    assert stats["realise_montant"] == 3_000_000_00

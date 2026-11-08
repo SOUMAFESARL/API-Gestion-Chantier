@@ -630,6 +630,11 @@ def test_jours_proposes_sont_ceux_que_l_enregistrement_accepte(contexte_chantier
         rouvrable = jours_saisissables_projet(projet, lundi, conserver=[jeudi])
         assert rouvrable == [jeudi, vendredi, lundi]
 
+        # La préparation dit pourquoi : son premier jour, et la fenêtre qui en découle.
+        prep = preparation(projet, jeudi, utilisateur=cc)
+        assert prep["premier_jour"] == vendredi.isoformat()
+        assert prep["jours_saisissables"] == [vendredi.isoformat(), lundi.isoformat()]
+
         with pytest.raises(ErreurMetier) as refus:
             creer_journal(projet=projet, utilisateur=cc, jour=jeudi, data={})
         assert refus.value.details == {"date": "avant_enregistrement_projet"}

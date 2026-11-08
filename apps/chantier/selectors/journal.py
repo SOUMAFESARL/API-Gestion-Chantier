@@ -434,6 +434,9 @@ def preparation(projet, jour: date, *, journal=None, precedent=None, utilisateur
             d.isoformat()
             for d in jours_saisissables_projet(projet, conserver=[jour] if journal else ())
         ],
+        # Le premier jour qui attend un rapport : l'écran en tire la raison d'un jour refusé
+        # (chantier pas encore commencé ou enregistré) au lieu de la deviner.
+        "premier_jour": premier_jour_rapport(projet).isoformat(),
         "meteo_suggeree": meteo_suggeree_journal(projet.ville),
         "previsions_veille": previsions_veille,
         "blocages_ouverts": blocages_ouverts_projet(projet),

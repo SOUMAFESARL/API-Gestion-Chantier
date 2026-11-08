@@ -16,7 +16,7 @@ Sur une base **vide** (créée, sans table), dans l'ordre :
    passe se lit dans la variable d'environnement `CCD_SUPER_ADMIN_MOTDEPASSE`, jamais sur la
    ligne de commande, qui reste dans l'historique du terminal ;
 6. avec `--demo` (refusé quand `DEBUG` est faux) : pour chaque slug, `creer_entreprise_demo` puis
-   `peupler_donnees_test`. Deux entreprises (`demo beta`) donnent ce dont la suite d'étanchéité a
+   `peupler_donnees_test` puis `completer_donnees_locales`. Deux entreprises (`demo beta`) donnent ce dont la suite d'étanchéité a
    besoin.
 
 Rejouable : chaque étape converge, et une base déjà montée n'est que vérifiée.
@@ -88,6 +88,7 @@ class Command(BaseCommand):
             self._etape(f"Entreprise de démonstration « {slug} »")
             call_command("creer_entreprise_demo", entreprise=slug)
             call_command("peupler_donnees_test", entreprise=slug)
+            call_command("completer_donnees_locales", entreprise=[slug])
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Base montée."))

@@ -26,7 +26,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogue.models.referentiel import cle_comparaison
-from apps.core.enums import ActionAudit
+from apps.core.enums import ActionAudit, ModeExecution
 from apps.core.exceptions import ErreurConflit, ErreurMetier
 from apps.projets.models import Element, MiseAJourInline, ModeMesure, NiveauProjet
 from apps.projets.selectors.arbre import charger_arbre
@@ -323,6 +323,9 @@ def modifier_element(
         if {"quantite_prevue", "montant"} & set(donnees):
             motif = _exiger_motif(motif, "Modifier une tâche commencée")
 
+    if "mode_execution" in donnees:
+        _verifier_mode_modifiable(arbre, element, donnees["mode_execution"] or "")
+
     for nom in (*CHAMPS_MESURE, *CHAMPS_MONTANTS, "mode_execution", "type_bordereau"):
         if nom not in donnees:
             continue
@@ -353,6 +356,41 @@ def modifier_element(
     if recalculer:
         _recalculer(element.projet)
     return element
+
+
+def _verifier_mode_modifiable(arbre, element: Element, nouveau: str) -> None:
+    """RG-03 (F1 §13quater) : le mode **effectif** d'une tâche commencée ne change plus, ni
+    directement ni par héritage.
+
+    Changer le mode d'un parent est donc refusé si une tâche commencée en dessous en hérite ; une
+    tâche qui porte son propre mode n'est pas touchée par celui du parent. Un mode jamais défini
+    se lit « régie » : le poser explicitement sur la régie ne change rien et reste permis.
+    """
+    if nouveau == element.mode_execution:
+        return
+
+    def apres(feuille: Element) -> str:
+        for case in [feuille, *reversed(arbre.ancetres(feuille))]:
+            valeur = nouveau if case.pk == element.pk else case.mode_execution
+            if valeur:
+                return valeur
+        return ""
+
+    figees = []
+    for feuille in (element, *arbre.descendants(element)):
+        if not (arbre.est_feuille(feuille) and arbre.commence(feuille)):
+            continue
+        avant, futur = arbre.mode_execution(feuille), apres(feuille)
+        if futur != avant and not (avant == "" and futur == ModeExecution.REGIE.value):
+            figees.append(feuille.libelle)
+    if figees:
+        liste = ", ".join(f"« {libelle} »" for libelle in figees[:3])
+        suite = f" et {len(figees) - 3} autre(s)" if len(figees) > 3 else ""
+        raise ErreurMetier(
+            "Le mode d'exécution d'une tâche commencée ne change plus (il fixe la façon dont "
+            f"elle est rapportée et rémunérée) : {liste}{suite}. "
+            "Créez un nouveau mode, ou une autre tâche."
+        )
 
 
 def _serialisable(valeur):

@@ -54,6 +54,7 @@ from apps.projets.models import (
     PersonneMainOeuvre,
     Projet,
 )
+from apps.projets.services.arbre import modifier_element
 from apps.projets.services.avancement import synchroniser_rapport_approuve
 from apps.projets.services.meteo import meteo_suggeree_journal
 
@@ -661,3 +662,32 @@ def test_synthese_hebdomadaire_va_du_lundi_au_dimanche():
         # Ni une semaine tronquée au vendredi, ni une semaine qui ne commence pas un lundi.
         assert not demande("2026-10-26", "2026-10-30").is_valid()
         assert not demande("2026-10-27", "2026-11-02").is_valid()
+
+
+@pytest.mark.entreprise
+def test_mode_execution_se_fige_avec_la_premiere_tache_commencee(contexte_chantier):
+    """RG-03 : le mode effectif d'une tâche commencée ne change plus (direct ou hérité)."""
+    c = contexte_chantier
+    lot, f_qte, f_pct, cp = c["lot"], c["f_qte"], c["f_pct"], c["cp"]
+
+    # Rien n'est commencé : le mode se définit sur le parent et se change librement.
+    modifier_element(lot, donnees={"mode_execution": "SOUS_TRAITANCE_STRUCTUREE"}, auteur=cp)
+    modifier_element(lot, donnees={"mode_execution": "SOUS_TRAITANCE_INFORMELLE"}, auteur=cp)
+
+    # Une tâche du lot est commencée : son mode hérité est figé.
+    Element.objects.filter(pk=f_qte.pk).update(quantite_realisee=Decimal("5"))
+    with pytest.raises(ErreurMetier) as refus:
+        modifier_element(lot, donnees={"mode_execution": "REGIE"}, auteur=cp)
+    assert "Fouilles en rigoles" in str(refus.value)
+    with pytest.raises(ErreurMetier):
+        modifier_element(f_qte, donnees={"mode_execution": "REGIE"}, auteur=cp)
+    with pytest.raises(ErreurMetier):
+        modifier_element(lot, donnees={"mode_execution": ""}, auteur=cp)
+    lot.refresh_from_db()
+    assert lot.mode_execution == "SOUS_TRAITANCE_INFORMELLE"
+
+    # Redire le même mode ne change rien : permis. Une tâche non commencée garde sa liberté.
+    modifier_element(lot, donnees={"mode_execution": "SOUS_TRAITANCE_INFORMELLE"}, auteur=cp)
+    modifier_element(f_pct, donnees={"mode_execution": "REGIE"}, auteur=cp)
+    f_pct.refresh_from_db()
+    assert f_pct.mode_execution == "REGIE"

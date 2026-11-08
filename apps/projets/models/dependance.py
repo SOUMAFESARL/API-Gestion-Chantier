@@ -1,4 +1,4 @@
-"""Les dépendances entre tâches (décisions v1.2, §13quinquies.5 ; schéma de l'entreprise).
+"""Les dépendances entre tâches (décisions v1.2, §13quinquies.5 ; entreprise).
 
 **Un seul type de lien : B commence après la fin de A**, sans délai. Une tâche peut avoir
 plusieurs prédécesseurs ; un lien relie deux **feuilles** du même projet, d'une même branche ou

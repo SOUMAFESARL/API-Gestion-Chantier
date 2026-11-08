@@ -1,4 +1,4 @@
-"""Modèle CatalogueModule — catalogue partagé dans le schéma public."""
+"""Modèle CatalogueModule — catalogue partagé au niveau de la plateforme."""
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _

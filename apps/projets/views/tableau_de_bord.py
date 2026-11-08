@@ -1,6 +1,6 @@
 """Vue d'agrégation du Tableau de bord de pilotage décisionnel BTP — Maquette M10.
 
-Alimentée à 100% par les modèles réels du schéma entreprise :
+Alimentée à 100% par les modèles réels de l'entreprise :
 - Projets & Chantiers (apps.projets)
 - Rapports journaliers & Effectifs réels (apps.chantier)
 - Météo en direct & Alertes intempéries (Open-Meteo)

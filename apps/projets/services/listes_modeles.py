@@ -1,6 +1,6 @@
 """Listes de valeurs et modèles de découpage, vus par une entreprise (décisions v1.2, §3 et §4).
 
-Une entreprise voit **deux sources fusionnées** : celles de la plateforme (schéma public, lues
+Une entreprise voit **deux sources fusionnées** : celles de la plateforme (plateforme, lues
 sans copie) et les siennes. Une liste ou un modèle se désigne donc par un couple
 `{"origine": "PLATEFORME" | "ENTREPRISE", "id": "<uuid>"}`, jamais par son nom.
 
@@ -11,15 +11,15 @@ sans copie) et les siennes. Une liste ou un modèle se désigne donc par un coup
 - Un modèle porte un **gabarit** (niveaux ordonnés, une liste au plus par niveau) et des **lignes
   types** : `{"niveaux": [{"libelle", "liste", "alerter"}], "lignes": [[...], ...]}`.
 
-**Le back-office s'en sert aussi** (`apps.platform_admin.services.decoupage`) : appelés dans le
-schéma `public`, ces services ne voient que la plateforme — une liste n'y a que ses valeurs
+**Le back-office s'en sert aussi** (`apps.platform_admin.services.decoupage`) : appelés hors
+entreprise, ces services ne voient que la plateforme — une liste n'y a que ses valeurs
 plateforme, et un modèle plateforme ne puise que dans des listes plateforme (§3.8).
 """
 
 from __future__ import annotations
 
 from apps.core.contexte import entreprise_courante_id
-from django.db import connection, transaction
+from django.db import transaction
 from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.catalogue.models import (
@@ -114,7 +114,7 @@ def _valeur_en_dict(valeur, origine: str) -> dict:
 def valeurs_de_liste(liste) -> list[dict]:
     """Les valeurs d'une liste : celles de la plateforme puis celles ajoutées par l'entreprise.
 
-    Dans le schéma `public` (back-office), seulement celles de la plateforme.
+    Hors entreprise (back-office), seulement celles de la plateforme.
     """
     if liste is None:
         return []
@@ -707,7 +707,7 @@ def enregistrer_modele_plateforme(
     est_actif: bool = True,
     auteur=None,
 ) -> ModeleDecoupagePlateforme:
-    """Créer ou mettre à jour un modèle de la plateforme (back-office, schéma `public`).
+    """Créer ou mettre à jour un modèle de la plateforme (back-office).
 
     Chaque mise à jour **incrémente la version** : les copies personnalisées des entreprises
     savent ainsi signaler que leur original a changé, sans rien appliquer (§3.6). Aucun projet

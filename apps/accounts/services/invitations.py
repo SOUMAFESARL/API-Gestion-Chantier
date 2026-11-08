@@ -4,7 +4,6 @@ import logging
 import uuid
 from datetime import timedelta
 
-from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.utils import timezone
@@ -316,7 +315,7 @@ def _trouver_par_empreinte(empreinte: str, *, verrouiller: bool = False) -> Invi
     Le lien d'invitation arrive sans jeton de connexion, donc sans entreprise active : on lit
     l'entreprise de l'invitation en portée plateforme, puis on l'active — l'acceptation crée le
     compte et ses jetons **dans cette entreprise**. Plus de balayage
-    les schémas un par un.
+    les entreprises une par une.
     """
     if entreprise_courante_id() is None:
         with portee_plateforme(motif="invitation : retrouver l'entreprise d'un lien"):

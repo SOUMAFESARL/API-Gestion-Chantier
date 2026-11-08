@@ -21,5 +21,5 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         bilan = relancer_rapports_manquants_partout(options.get("entreprise"))
-        for schema, resultat in bilan.items():
-            self.stdout.write(f"{schema} : {resultat}")
+        for slug, resultat in bilan.items():
+            self.stdout.write(f"{slug} : {resultat}")

@@ -273,20 +273,6 @@ def reduire_a_hauteur(stack: np.ndarray, hauteur: int) -> np.ndarray:
     return downscale_hq(stack, (largeur, hauteur))
 
 
-def fit_on_canvas(stack: np.ndarray, size: int, pad: int = 0) -> np.ndarray:
-    """Réduit en conservant le ratio d'aspect et centre sur un canevas carré."""
-    inner = max(1, size - 2 * pad)
-    h, w = stack.shape[:2]
-    scale = min(inner / w, inner / h)
-    tw, th = max(1, round(w * scale)), max(1, round(h * scale))
-    small = downscale_hq(stack, (tw, th))
-
-    canvas = np.zeros((size, size, 4), dtype=np.float32)
-    x0, y0 = (size - tw) // 2, (size - th) // 2
-    canvas[y0 : y0 + th, x0 : x0 + tw] = small
-    return canvas
-
-
 def to_pil_rgba(arr: np.ndarray) -> Image.Image:
     """Convertit un tableau float32 [0, 1] en Image PIL RGBA 8 bits."""
     return Image.fromarray(np.round(np.clip(arr, 0.0, 1.0) * 255).astype(np.uint8), mode="RGBA")
@@ -477,9 +463,9 @@ def traiter_logo_entreprise(
     # `static()` sous `DEBUG`, et nulle part ailleurs : en production le logo
     # d'un client ne s'est jamais affiché une seule fois.
     #
-    # La clé suit l'isolation US-006 `{schema}/{module}/{uuid}`. L'ancien
-    # nommage `{schema}_{timestamp}_{slug}` rangeait tous les clients dans un
-    # même dossier plat, sous un nom devinable, et publiait le nom de schéma
+    # La clé suit l'isolation US-006 `{slug}/{module}/{uuid}`. L'ancien
+    # nommage `{slug}_{timestamp}_{nom}` rangeait tous les clients dans un
+    # même dossier plat, sous un nom devinable, et publiait le slug
     # dans une URL sans authentification.
     racine = f"{slug_entreprise}/logos/{uuid.uuid4().hex}"
 

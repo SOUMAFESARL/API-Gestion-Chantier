@@ -425,8 +425,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--entreprise", "--schema", dest="entreprise", default="demo",
-            help="Slug de l'entreprise (`--schema` reste accepté jusqu'au lot 8).",
+            "--entreprise", dest="entreprise", default="demo",
+            help="Slug de l'entreprise.",
         )
         parser.add_argument("--motdepasse", default="Demo1234!")
         parser.add_argument(

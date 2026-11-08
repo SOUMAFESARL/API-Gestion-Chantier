@@ -1,6 +1,5 @@
 """Statistiques calculées sur les cases actives de l'arbre, sans dépenses fictives."""
 
-from decimal import Decimal
 
 from django.utils import timezone
 
@@ -9,11 +8,6 @@ from apps.projets.services.sante_calculs import (
     calculer_avancement_physique_feuille,
     resultat_projet,
 )
-
-
-def pourcentage_realise(feuille):
-    """Le pourcentage de réalisation d'une feuille, en Decimal."""
-    return Decimal(str(calculer_avancement_physique_feuille(feuille)))
 
 
 def statistiques_arbre(arbre):

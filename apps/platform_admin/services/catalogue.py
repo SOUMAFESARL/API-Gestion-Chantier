@@ -122,7 +122,7 @@ def propager_creation_module(
     permissions: list | None = None,
     cree_par=None,
 ) -> CatalogueModule:
-    """Crée un module dans le schéma public et le propage immédiatement à toutes les entreprises."""
+    """Crée un module au niveau de la plateforme et le propage immédiatement à toutes les entreprises."""
     code = code.strip().lower()
     if not code:
         raise ValidationError(_("Le code du module est obligatoire."))
@@ -243,7 +243,7 @@ def propager_modification_module(
     permissions: list | None = None,
     modifie_par=None,
 ) -> CatalogueModule:
-    """Met à jour un module dans le schéma public et synchronise les métadonnées et permissions dans toutes les entreprises."""
+    """Met à jour un module au niveau de la plateforme et synchronise les métadonnées et permissions dans toutes les entreprises."""
     retirees = set()
     nouvelles = None
     with transaction.atomic():

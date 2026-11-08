@@ -119,60 +119,6 @@ class InitierPaiementView(APIView):
         return Response(resp_serializer.data, status=status.HTTP_200_OK)
 
 
-class AnnulerPaiementView(APIView):
-    """`POST /api/v1/billing/cinetpay/annuler/` — Abandon explicite d'une tentative en cours (Option A2)."""
-
-    permission_classes = [
-        permissions.IsAuthenticated,
-        APermission.pour("administration.abonnement_gerer"),
-    ]
-
-    @extend_schema(
-        summary="Annuler explicitement une session de paiement CinetPay en cours",
-        request=AnnulerPaiementRequestSerializer,
-        responses={
-            200: AnnulerPaiementResponseSerializer,
-            400: dict,
-            404: dict,
-        },
-    )
-    def post(self, request):
-        serializer = AnnulerPaiementRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        transaction_id = serializer.validated_data["transaction_id"]
-        motif = serializer.validated_data.get("motif", "Annulation demandée par l'utilisateur")
-
-        entreprise = entreprise_courante()
-
-        if entreprise is None:
-            return Response(
-                {"detail": "Aucune entreprise active identifiée pour cette requête."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            resultat = PaiementAbonnementService.annuler_paiement_en_cours(
-                entreprise=entreprise,
-                transaction_id=transaction_id,
-                motif=motif,
-            )
-        except ValueError as e:
-            return Response(
-                {"detail": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            logger.error(f"Erreur lors de l'annulation du paiement {transaction_id} : {e}")
-            return Response(
-                {"detail": f"Erreur lors de l'annulation : {e}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        resp_serializer = AnnulerPaiementResponseSerializer(resultat)
-        return Response(resp_serializer.data, status=status.HTTP_200_OK)
-
-
 @method_decorator(csrf_exempt, name="dispatch")
 class CinetPayWebhookView(APIView):
     """`POST /api/v1/billing/cinetpay/webhook/`

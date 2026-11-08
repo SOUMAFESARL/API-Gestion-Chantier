@@ -1,4 +1,4 @@
-"""Référentiels de la plateforme — types de projet et modes d'exécution (schéma public).
+"""Référentiels de la plateforme — types de projet et modes d'exécution (table de plateforme).
 
 Posés par le super admin, ils sont proposés à toutes les entreprises, qui y
 ajoutent les leurs (`projets.ReferentielEntreprise`) sans pouvoir retirer

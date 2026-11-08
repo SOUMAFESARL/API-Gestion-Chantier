@@ -2,7 +2,7 @@
 
 Super Admin CCD Digital : métriques plateforme, impersonification.
 
-Schéma       : public
+Portée       : plateforme
 Module CDC   : —
 Entités MCD  : JournalPlateforme, IdentitePlateforme
 """

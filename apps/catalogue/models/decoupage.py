@@ -1,4 +1,4 @@
-"""Listes de valeurs et modèles de découpage de la plateforme (schéma public).
+"""Listes de valeurs et modèles de découpage de la plateforme (table de plateforme).
 
 Décisions v1.2 du découpage, §3 et §4 :
 

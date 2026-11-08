@@ -8,7 +8,6 @@ from rest_framework.views import APIView
 
 from apps.core.ip_restriction import extraire_ip_client
 from apps.platform_admin.serializers.impersonation import (
-    ErreurPlateformeResponseSerializer,
     VerifierAccesSuperAdminResponseSerializer,
 )
 

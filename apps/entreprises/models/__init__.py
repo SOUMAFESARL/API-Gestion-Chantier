@@ -173,8 +173,8 @@ class DemandeInscription(ModeleBase):
     prenom = models.CharField(_("prénom"), max_length=100, blank=True)
 
     # **La colonne qu'on aimerait ne pas avoir** — MLD §4.8. Le mot de passe est
-    # saisi dans `public`, alors que le compte qui le portera vivra dans un
-    # schéma qui n'existe pas encore. Il est **haché**, vidé dès le
+    # saisi à l'inscription, alors que le compte qui le portera n'existe pas
+    # encore. Il est **haché**, vidé dès le
     # provisionnement, et **jamais transporté dans un message Celery** : un
     # message traverse Redis, s'y attarde et s'affiche en supervision.
     mot_de_passe_transitoire = models.CharField(
@@ -246,8 +246,8 @@ class DemandeInscription(ModeleBase):
 class TelephoneEntreprise(ModeleBase):
     """Un numéro de contact d'une entreprise — MLD §4.1.1 (v1.7).
 
-    `cree_par` et `supprime_par` restent nuls : les utilisateurs d'une entreprise vivent dans son
-    schéma, pas dans `public.utilisateur`, et une clé étrangère vers eux casserait à l'écriture.
+    `cree_par` et `supprime_par` restent nuls : héritage du multi-schéma, où les comptes d'une
+    entreprise vivaient hors de `public` et ne pouvaient pas être référencés.
     L'auteur est dans le journal d'audit de l'entreprise.
     """
 

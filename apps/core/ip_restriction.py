@@ -5,10 +5,7 @@ une liste blanche pouvant contenir des adresses IPv4/IPv6 isolées ou des
 masques de sous-réseau CIDR (ex: 192.168.1.0/24, 10.0.0.0/8).
 """
 
-import functools
-import ipaddress
 import logging
-from typing import Sequence
 
 logger = logging.getLogger("securite.super_admin")
 
@@ -27,12 +24,4 @@ def extraire_ip_client(request) -> str:
             return ip_parts[0]
     return (request.META.get("REMOTE_ADDR") or "").strip()
 
-
-def est_ip_autorisee(ip_str: str, autorisees: Sequence[str] | None = None) -> bool:
-    """Vérifie si l'adresse IP donnée est autorisée.
-
-    La restriction d'adresse IP étant complètement désactivée sur la plateforme,
-    toutes les adresses IP sont systématiquement autorisées (True).
-    """
-    return True
 

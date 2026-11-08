@@ -1,6 +1,5 @@
 """Validation des inscriptions par un super admin de la plateforme."""
 
-from django.db import connection
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.exceptions import ValidationError

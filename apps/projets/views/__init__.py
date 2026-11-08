@@ -19,7 +19,6 @@ from rest_framework.views import APIView
 
 from apps.core.droits import APermission
 from apps.core.permissions import (
-    EstDirection,
     GardePermissionProjet,
     filtrer_queryset_par_affectations,
 )

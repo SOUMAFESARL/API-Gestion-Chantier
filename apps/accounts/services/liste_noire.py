@@ -9,9 +9,9 @@ avec la D9. Restent les deux autres, en
 §3.1 : la table grandit sans fin, et le renouvellement est la requête la plus
 fréquente de l'API après la lecture.
 
-**Le code du schéma est obligatoire dans chaque clé.** Redis est partagé par
+**Le slug de l'entreprise est obligatoire dans chaque clé.** Redis est partagé par
 tous les clients : contrairement à PostgreSQL il n'offre aucune isolation, et
-c'est la forme de la clé qui la porte — T-008 §3.2. Sans le schéma, le `jti`
+c'est la forme de la clé qui la porte — T-008 §3.2. Sans lui, le `jti`
 révoqué d'un client refuserait le jeton d'un autre.
 """
 
@@ -19,7 +19,6 @@ import time
 
 from apps.entreprises.selectors import slug_courant
 from django.core.cache import cache
-from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 

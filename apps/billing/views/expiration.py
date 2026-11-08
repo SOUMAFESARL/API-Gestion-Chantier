@@ -27,7 +27,7 @@ class NotificationsExpirationView(APIView):
         responses={
             200: NotificationExpirationSerializer(many=True),
             401: OpenApiResponse(description="Authentification requise."),
-            403: OpenApiResponse(description="Role non autorise ou schema public."),
+            403: OpenApiResponse(description="Role non autorise ou compte de la plateforme."),
         },
     )
     def get(self, request):

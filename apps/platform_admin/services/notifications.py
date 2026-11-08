@@ -8,7 +8,7 @@ Règles de gestion :
     (transaction.on_commit).
   * Aucun courriel si la transaction échoue ou si l'entreprise n'a aucun DG actif.
 - H-02 : Chaque action d'écriture du Super Admin crée exactement une entrée dans
-  JournalPlateforme (schéma public).
+  JournalPlateforme (table de plateforme).
 - L9-1 : Chaque action modifiant l'espace d'une entreprise crée exactement une entrée dans
   JournalAudit (table d'entreprise).
 """
@@ -37,7 +37,7 @@ SUJET_SUPPRESSION_ENTREPRISE = "Suppression de votre espace CCD Digital"
 
 
 def trouver_dg_actif_entreprise(entreprise: Entreprise) -> Utilisateur | None:
-    """Trouve l'utilisateur actif faisant office de DG dans le schéma de l'entreprise."""
+    """Trouve l'utilisateur actif faisant office de DG dans l'entreprise."""
     with contexte_entreprise(entreprise):
         candidats = Utilisateur.objects.filter(
             supprime_le__isnull=True,
@@ -100,7 +100,7 @@ def journaliser_plateforme(
     adresse_ip: str | None = None,
     appareil: str = "",
 ) -> JournalPlateforme:
-    """Crée exactement une entrée dans le JournalPlateforme (schéma public, H-02)."""
+    """Crée exactement une entrée dans le JournalPlateforme (plateforme, H-02)."""
     user_id = getattr(acteur, "id", None)
     ent_id = getattr(entreprise, "id", None)
     return JournalPlateforme.objects.create(
@@ -123,7 +123,7 @@ def journaliser_entreprise(
     adresse_ip: str | None = None,
     appareil: str = "",
 ) -> None:
-    """Crée exactement une entrée dans le JournalAudit du schéma de l'entreprise (L9-1)."""
+    """Crée exactement une entrée dans le JournalAudit de l'entreprise (L9-1)."""
     with contexte_entreprise(entreprise):
         user_id = getattr(acteur, "id", None)
         JournalAudit.objects.create(

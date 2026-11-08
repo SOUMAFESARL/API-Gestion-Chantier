@@ -119,7 +119,7 @@ def formater_client_plateforme(ent: Entreprise) -> dict:
                 e,
             )
 
-    # Si pas de date de login dans le schéma, vérifier la demande d'inscription
+    # Si pas de date de login, vérifier la demande d'inscription
     if not active_le:
         demande = DemandeInscription.objects.filter(
             entreprise=ent, utilise_le__isnull=False
@@ -175,7 +175,7 @@ def modules_du_client(ent: Entreprise) -> list[dict]:
     """
     from apps.core.droits import _obtenir_modules_actifs
 
-    # La règle lit aussi les tables du client en repli : on la pose dans son schéma.
+    # La règle lit aussi les tables du client en repli : on la pose dans son entreprise.
     with contexte_entreprise(ent):
         actifs = _obtenir_modules_actifs(ent)
     return [

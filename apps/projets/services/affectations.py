@@ -190,7 +190,7 @@ def role_par_defaut(utilisateur) -> str:
 def retirer_dg_des_chantiers(*, appliquer: bool = False) -> list[str]:
     """Met les données antérieures à la règle en conformité : le DG quitte ses fonctions.
 
-    À appeler dans le schéma de l'entreprise. Pour chaque DG désigné chef de
+    À appeler dans l'entreprise. Pour chaque DG désigné chef de
     projet ou conducteur de travaux d'un chantier, ou affecté à un chantier :
     la désignation est retirée (le chantier passe « sans chef de projet ») et
     l'affectation désactivée — la même chose que la désactivation d'un

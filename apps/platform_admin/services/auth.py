@@ -1,10 +1,10 @@
 """Service d'authentification Super Admin — Plateforme CCD Digital (Control Plane).
 
 Règles de gestion :
-- Seul un compte présent dans le schéma `public` avec `is_superuser=True` (superviseur) ou `is_staff=True` (agent SUPPORT) peut s'authentifier.
+- Seul un compte présent au niveau de la plateforme avec `is_superuser=True` (superviseur) ou `is_staff=True` (agent SUPPORT) peut s'authentifier.
 - Toute tentative infructueuse (compte inexistant, mot de passe erroné, utilisateur non superuser)
   renvoie 401 IdentifiantsInvalides avec une égalité temporelle stricte.
-- Traçabilité complète des connexions et déconnexions dans `JournalPlateforme` (schéma `public`).
+- Traçabilité complète des connexions et déconnexions dans `JournalPlateforme` (table de plateforme).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def authentifier_super_admin(
 ) -> dict[str, object]:
     """Authentifie un Super Administrateur et émet ses jetons JWT.
 
-    Vérifie impérativement que l'utilisateur appartient au schéma `public`
+    Vérifie impérativement que l'utilisateur n'appartient à aucune entreprise
     et possède l'attribut `is_superuser=True`.
     """
     email_nettoye = email.strip().lower()

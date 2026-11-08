@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from apps.accounts.models import Role, Utilisateur
+from apps.accounts.models import Role
 from apps.core.enums import RoleGlobal
 from django.utils.translation import gettext_lazy as _
 

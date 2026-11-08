@@ -2,7 +2,7 @@
 
 **La ressource s'appelle `/configuration/`, pas `/wizard/`** — conventions A3 :
 *« Langue des ressources : français sans accent. »* Et elle est **au
-singulier** : c'est une ressource unique par schéma, pas une collection
+singulier** : c'est une ressource unique par entreprise, pas une collection
 (conventions §2.2, qui réserve le pluriel aux collections).
 
 **Réservées à `AD`.** La configuration appartient à l'entreprise, et c'est

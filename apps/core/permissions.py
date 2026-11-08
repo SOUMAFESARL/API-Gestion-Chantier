@@ -10,7 +10,6 @@ serveur à chaque requête : un utilisateur qui modifie l'URL à la main
 reçoit un 403, sans aucune donnée.
 """
 
-from django.db import models
 from rest_framework import permissions
 
 from apps.core.enums import RoleGlobal
@@ -66,11 +65,9 @@ def obtenir_projets_ids_actifs_utilisateur(user, request=None) -> list:
         return request._rbac_projets_ids_actifs
 
     from django.apps import apps as registre
-    from django.db.models import Q
 
     try:
         AffectationProjet = registre.get_model("projets", "AffectationProjet")
-        Projet = registre.get_model("projets", "Projet")
     except LookupError:
         return []
 

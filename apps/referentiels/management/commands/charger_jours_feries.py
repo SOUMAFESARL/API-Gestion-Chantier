@@ -3,7 +3,7 @@
 Usage :
     python manage.py charger_jours_feries --annee 2026 --annee 2027
 
-Alimente la table `jour_ferie` dans le schéma public (SHARED_APPS).
+Alimente la table `jour_ferie` au niveau de la plateforme (SHARED_APPS).
 Idempotente via `update_or_create(pays='CI', date_ferie=...)`.
 """
 
@@ -36,7 +36,7 @@ def calculer_date_paques(annee: int) -> date:
 
 
 class Command(BaseCommand):
-    help = "Charge les jours fériés de Côte d'Ivoire pour les années spécifiées (schéma public)."
+    help = "Charge les jours fériés de Côte d'Ivoire pour les années spécifiées (table de plateforme)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -117,5 +117,5 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(
-            self.style.SUCCESS(f"Chargement terminé : {total_charges} enregistrements au total (schéma public).")
+            self.style.SUCCESS(f"Chargement terminé : {total_charges} enregistrements au total (table de plateforme).")
         )

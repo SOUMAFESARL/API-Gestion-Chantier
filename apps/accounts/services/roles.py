@@ -75,7 +75,7 @@ def modules_locaux_ouverts():
 
 
 def initialiser_modules_par_defaut() -> list[Module]:
-    """Aligne la copie locale des modules (schéma courant) sur le catalogue du schéma public.
+    """Aligne la copie locale des modules (entreprise active) sur le catalogue de la plateforme.
 
     La copie locale n'existe que parce que `RoleModulePermission.module` y pointe. Elle ne décide
     de rien : ce qui est ouvert se lit dans le catalogue (`apps.core.modules_actifs`). Son
@@ -318,10 +318,10 @@ def _codes_par_defaut(
 
 
 def appliquer_modeles_roles() -> list[Role]:
-    """Crée, dans le schéma courant, les rôles système qui y manquent (A-07, A-12).
+    """Crée, dans l'entreprise active, les rôles système qui y manquent (A-07, A-12).
 
     **Les rôles système sont les gabarits vivants du catalogue** (`ModeleRole` actif et non
-    supprimé, schéma public). Un gabarit supprimé par le super admin n'est donc plus créé pour
+    supprimé, plateforme). Un gabarit supprimé par le super admin n'est donc plus créé pour
     une entreprise qui s'inscrit après ; les entreprises existantes, elles, gardent le rôle,
     devenu personnalisé (`supprimer_role_systeme`).
 

@@ -4,7 +4,7 @@ SFD F3 §6 & Erratum v1.0.1 (E-4).
 
 Règle des trois couches (de la plus forte à la plus faible) :
 1. Exceptions de l'entreprise (ExceptionCalendrier) : ouvré ou non ouvré pour une date précise.
-2. Jours fériés nationaux (referentiels.JourFerie, schéma public).
+2. Jours fériés nationaux (referentiels.JourFerie, plateforme).
 3. Semaine type de l'entreprise (SemaineType, lundi à vendredi par défaut).
 """
 

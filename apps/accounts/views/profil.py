@@ -41,9 +41,9 @@ class ProfilView(APIView):
         summary="Récupérer l'utilisateur connecté et son entreprise",
         description=(
             "Retourne le profil identifié par le jeton Bearer : identité, rôle, habilitations "
-            "et objet `entreprise` (id, raison sociale, schéma et logo). "
+            "et objet `entreprise` (id, raison sociale, slug et logo). "
             "Aucun identifiant utilisateur n'est à transmettre. "
-            "Pour un compte de plateforme dans le schéma public, `entreprise` vaut `null`.\n\n"
+            "Pour un compte de plateforme au niveau de la plateforme, `entreprise` vaut `null`.\n\n"
             "L'alias `GET /api/v1/utilisateurs/moi/` renvoie le même profil. "
             "Pour préparer le formulaire de projet avec ses listes de choix, appeler "
             "`GET /api/v1/projets/contexte-creation/`."

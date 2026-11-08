@@ -1,6 +1,6 @@
 """Identité de la plateforme : le nom et le logo sous lesquels CCD Digital se présente.
 
-Schéma : public. Une seule ligne existe (clé 1) : ce n'est pas une collection mais
+Portée : plateforme. Une seule ligne existe (clé 1) : ce n'est pas une collection mais
 un réglage, lu sans connexion par les pages publiques (connexion, tarifs).
 """
 

@@ -37,7 +37,7 @@ L'ancienne règle permettant à tout membre affecté de modifier le statut avec 
 ## 3. Protection du statut CRITIQUE (E-09)
 
 - Le statut `CRITIQUE` peut être positionné manuellement par tout utilisateur disposant de `projets.changer_statut` (ex: CP, DO, AD, DG).
-- **Protection contre l'écrasement automatique :** La tâche de fond d'évaluation quotidienne (`executer_evaluation_quotidienne_schema`) n'écrase jamais un projet au statut `CRITIQUE`. Le statut manuel reste maintenu jusqu'à ce qu'un utilisateur habilité le modifie explicitement.
+- **Protection contre l'écrasement automatique :** La tâche de fond d'évaluation quotidienne (`executer_evaluation_quotidienne`) n'écrase jamais un projet au statut `CRITIQUE`. Le statut manuel reste maintenu jusqu'à ce qu'un utilisateur habilité le modifie explicitement.
 
 ---
 

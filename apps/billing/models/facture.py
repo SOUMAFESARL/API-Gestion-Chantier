@@ -13,7 +13,7 @@ __all__ = ["Facture"]
 
 
 class Facture(ModeleBase):
-    """Facture émise pour un abonnement SaaS — Schéma `public`.
+    """Facture émise pour un abonnement SaaS — table de plateforme.
 
     Conforme aux règles de facturation OHADA :
     - Numérotation séquentielle continue et sans trou (FAC-AAAA-MM-XXXX).

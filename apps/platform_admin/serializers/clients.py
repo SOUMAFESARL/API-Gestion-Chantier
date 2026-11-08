@@ -57,7 +57,7 @@ class ClientPlateformeSerializer(serializers.Serializer):
     id = serializers.UUIDField(help_text="Identifiant unique de l'entreprise.")
     raison_sociale = serializers.CharField(help_text="Raison sociale de l'entreprise.")
     nom_commercial = serializers.CharField(allow_blank=True, help_text="Nom commercial usuel.")
-    slug = serializers.CharField(help_text="Identifiant de sous-domaine / schéma PostgreSQL.")
+    slug = serializers.CharField(help_text="Identifiant lisible de l'entreprise (slug).")
     pays = serializers.CharField(help_text="Code pays ISO (CI, SN, etc.).")
     ville = serializers.CharField(allow_blank=True, help_text="Ville du siège de l'entreprise.")
     email_contact = serializers.EmailField(help_text="Email principal de contact.")
@@ -75,10 +75,10 @@ class ClientPlateformeSerializer(serializers.Serializer):
         allow_null=True, required=False, help_text="Date du premier accès utilisateur."
     )
     nb_utilisateurs = serializers.IntegerField(
-        help_text="Nombre total d'utilisateurs actifs dans le schéma client."
+        help_text="Nombre total d'utilisateurs actifs dans l'entreprise."
     )
     nb_projets = serializers.IntegerField(
-        help_text="Nombre total de chantiers créés dans le schéma client."
+        help_text="Nombre total de chantiers créés dans l'entreprise."
     )
     abonnement = AbonnementClientSerializer(help_text="Détail de l'abonnement en cours.")
     dirigeant = DirigeantClientSerializer(allow_null=True)

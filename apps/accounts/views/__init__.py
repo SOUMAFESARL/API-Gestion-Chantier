@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
 from rest_framework.parsers import JSONParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -21,7 +21,6 @@ from apps.accounts.serializers import (
     ContenuJetonSerializer,
     DeconnexionSerializer,
     DemandeReinitialisationSerializer,
-    InvitationSerializer,
     JetonsSerializer,
     ReinitialisationSerializer,
     RenouvellementSerializer,
@@ -39,7 +38,6 @@ from apps.accounts.services.deconnexion import deconnecter
 from apps.accounts.services.invitations import (
     JetonInvitationExpire,
     accepter_invitation,
-    creer_invitation,
     obtenir_invitation_par_jeton,
 )
 from apps.accounts.services.reinitialisation import demander, reinitialiser, verifier
@@ -49,8 +47,6 @@ from apps.accounts.throttling import (
     ThrottleDemandeMdpParEmail,
     ThrottleDemandeMdpRapprochee,
 )
-from apps.core.enums import RoleGlobal
-from apps.core.exceptions import ActionInterditeDelegue
 
 from .collaborateur import (
     ParametresCollaborateurDetailView,

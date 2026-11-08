@@ -553,7 +553,7 @@ class ProjetCreationSerializer(serializers.Serializer):
                 )
 
         if self.instance is None:
-            # Tous les UUID sont résolus dans le schéma de l'entreprise courante.
+            # Tous les UUID sont résolus dans l'entreprise courante.
             membres = {
                 "chef_projet_id": [attrs["chef_projet_id"]] if attrs.get("chef_projet_id") else [],
                 "conducteur_travaux_id": (

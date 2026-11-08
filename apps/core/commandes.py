@@ -1,23 +1,11 @@
-"""Aide aux commandes de gestion : `--entreprise`, ou une portée plateforme déclarée.
-
-    class Command(CommandeEntrepriseMixin, BaseCommand):
-        def handle(self, *args, **options):
-            with self.contexte(options):
-                ...
-
-Sans `--entreprise`, la commande travaille en portée plateforme, nommée d'après la commande : elle
-traverse les entreprises et le dit dans le journal. Avec `--entreprise <slug ou identifiant>`, elle
-ne voit que celle-là.
-"""
+"""Aide aux commandes de gestion : retrouver une entreprise par son slug ou son identifiant."""
 
 from __future__ import annotations
 
 import uuid
-from contextlib import contextmanager
 
 from django.core.management.base import CommandError
 
-from apps.core.contexte import contexte_entreprise, portee_plateforme
 
 
 def trouver_entreprise(identifiant: str):
@@ -38,21 +26,3 @@ def trouver_entreprise(identifiant: str):
     return entreprise
 
 
-class CommandeEntrepriseMixin:
-    def add_arguments(self, parser):
-        super().add_arguments(parser)
-        parser.add_argument(
-            "--entreprise",
-            help="Slug ou identifiant de l'entreprise ; sans lui, portée plateforme.",
-        )
-
-    @contextmanager
-    def contexte(self, options):
-        identifiant = options.get("entreprise")
-        if identifiant:
-            with contexte_entreprise(trouver_entreprise(identifiant)):
-                yield
-        else:
-            nom = self.__class__.__module__.rsplit(".", 1)[-1]
-            with portee_plateforme(motif=f"commande {nom}"):
-                yield

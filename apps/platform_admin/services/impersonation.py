@@ -102,7 +102,7 @@ def demarrer_session_assistance(
     - Valide le motif (min 5 caractères)
     - Sélectionne l'utilisateur cible dans l'entreprise
     - Émet le jeton JWT d'assistance (1h, non renouvelable, lecture seule)
-    - Trace l'accès dans `JournalPlateforme` (schéma public) et `JournalAudit` (schéma client)
+    - Trace l'accès dans `JournalPlateforme` (table de plateforme) et `JournalAudit` (entreprise)
     """
     verifier_super_admin(super_admin)
 
@@ -160,7 +160,7 @@ def demarrer_session_assistance(
     token_str = str(token)
     duree_secondes = int(DUREE_SESSION_ASSISTANCE.total_seconds())
 
-    # 1. Écriture dans le Journal de Plateforme (schéma `public` — MLD §4.6)
+    # 1. Écriture dans le Journal de Plateforme (table de plateforme — MLD §4.6)
     JournalPlateforme.objects.create(
         utilisateur_id=super_admin.id,
         entreprise_id=entreprise.id,
@@ -269,7 +269,7 @@ def clore_session_assistance(
     appareil: str = "",
 ) -> None:
     """Journalise la fermeture volontaire d'une session d'assistance."""
-    # 1. Schéma public
+    # 1. Journal de la plateforme
     JournalPlateforme.objects.create(
         utilisateur_id=super_admin_id if super_admin_id else None,
         entreprise_id=entreprise_id if entreprise_id else None,
@@ -283,7 +283,7 @@ def clore_session_assistance(
         appareil=appareil[:255] if appareil else "",
     )
 
-    # 2. Schéma client si l'entreprise est connue
+    # 2. Journal d'audit de l'entreprise si elle est connue
     if entreprise_id:
         entreprise = Entreprise.objects.filter(pk=entreprise_id).first()
         if entreprise:

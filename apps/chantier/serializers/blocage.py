@@ -3,7 +3,7 @@
 from rest_framework import serializers
 
 from apps.chantier.models import Blocage
-from apps.core.enums import SeveriteBlocage, StatutBlocage
+from apps.core.enums import SeveriteBlocage
 
 
 class BlocageSerializer(serializers.ModelSerializer):

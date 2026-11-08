@@ -88,7 +88,7 @@ def dechiffrer(valeur: str) -> str | None:
 # Le réglage actif
 # ---------------------------------------------------------------------------
 def lire_parametres() -> ParametresMessagerie | None:
-    """La ligne unique du schéma public, ou `None`. Ne lève jamais."""
+    """La ligne unique de la plateforme, ou `None`. Ne lève jamais."""
     try:
         # Point de sauvegarde : une table absente (avant migration) ne doit pas invalider la
         # transaction de l'appelant — PostgreSQL refuse toute requête après une erreur.

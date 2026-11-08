@@ -1,4 +1,4 @@
-"""Le découpage d'un projet en arbre — décisions v1.2 (schéma de l'entreprise).
+"""Le découpage d'un projet en arbre — décisions v1.2 (entreprise).
 
 **Un seul objet, l'élément** (§1). Phase, ouvrage, lot, activité sont le même objet ; ils ne
 diffèrent que par leur parent. « Lot » n'est que le libellé du **niveau** où se trouve l'élément,

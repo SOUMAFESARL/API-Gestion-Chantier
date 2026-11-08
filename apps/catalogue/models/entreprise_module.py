@@ -11,7 +11,7 @@ __all__ = ["EntrepriseModule"]
 class EntrepriseModule(ModeleBase):
     """Droit d'usage d'un module du catalogue par une entreprise.
 
-    Table stockée dans le schéma `public`, reliant l'entreprise au module du catalogue.
+    Table stockée au niveau de la plateforme, reliant l'entreprise au module du catalogue.
     Permet l'activation/désactivation granulaire par entreprise sans réplication de données.
     """
 

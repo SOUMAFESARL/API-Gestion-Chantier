@@ -49,7 +49,7 @@ class DemandeReinitialisationAdminView(APIView):
 
     **Répond toujours 202 Accepted**, que l'adresse existe ou non et qu'elle appartienne
     à un Super Admin ou non, pour interdire toute énumération d'adresses.
-    L'email de réinitialisation n'est envoyé qu'aux comptes du schéma `public`
+    L'email de réinitialisation n'est envoyé qu'aux comptes de la plateforme
     ayant `is_superuser=True`.
     """
 

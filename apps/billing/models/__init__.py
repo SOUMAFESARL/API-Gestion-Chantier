@@ -1,9 +1,9 @@
-"""Application « billing » — plans et abonnements, schéma `public`.
+"""Application « billing » — plans et abonnements, tables de plateforme.
 
 Entités MCD : Plan, Abonnement  ·  Tables MLD §4.3 et §4.4
 
-Elles vivent dans `public` et **jamais** dans un schéma client : ce sont les
-tables de l'éditeur. Un client qui pourrait lire son propre abonnement pourrait
+Ce sont des tables de plateforme, hors RLS, et **jamais** des lignes d'entreprise
+ordinaires : ce sont les tables de l'éditeur. Un client qui pourrait lire son propre abonnement pourrait
 aussi le modifier — le rôle applicatif est le même.
 """
 

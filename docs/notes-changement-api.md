@@ -98,7 +98,7 @@
 - **[E-10] Priorité des gardes (Ordre d'évaluation)** : Les contrôles de permissions RBAC (`HTTP 403`) sont évalués en amont de l'état du chantier (`HTTP 409`). Un utilisateur sans permission reçoit 403 même sur un projet clos.
 
 ### Évolution des contrats et du comportement de l'API
-- **[E-09] Protection du statut CRITIQUE** : Le statut `CRITIQUE` peut être positionné manuellement par un utilisateur habilité (`projets.changer_statut`) et n'est plus jamais écrasé par la tâche d'évaluation quotidienne (`executer_evaluation_quotidienne_schema`).
+- **[E-09] Protection du statut CRITIQUE** : Le statut `CRITIQUE` peut être positionné manuellement par un utilisateur habilité (`projets.changer_statut`) et n'est plus jamais écrasé par la tâche d'évaluation quotidienne (`executer_evaluation_quotidienne`).
 - **[E-10] Maintien des écritures sur chantiers en arrêt** : Les statuts opérationnels d'arrêt (`SUSPENDU`, `BLOQUE`) maintiennent toutes les capacités d'écriture ouvertes (`HTTP 201 / 200`).
 
 ## Lot 7 : Montants financiers et visibilité budgétaire (E-11, E-12)

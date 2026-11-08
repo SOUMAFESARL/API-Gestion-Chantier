@@ -30,12 +30,6 @@ def formater_date(valeur: date | None) -> str:
     return valeur.strftime("%d/%m/%Y")
 
 
-def exiger_dates_projet(projet, champ: str = "non_field_errors") -> None:
-    """Règle D1 / D2 : le projet doit posséder date_debut_prevue et date_fin_prevue."""
-    if not projet or not projet.date_debut_prevue or not projet.date_fin_prevue:
-        raise ValidationError({champ: MSG_EXIGER_DATES_PROJET})
-
-
 @dataclass
 class Prolongation:
     """Une case (ou le projet) à élargir pour qu'un enfant y tienne."""

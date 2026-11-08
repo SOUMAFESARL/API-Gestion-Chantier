@@ -1,4 +1,4 @@
-"""Purge des sauvegardes de schémas supprimés de plus de 30 jours (tâche 2.4)."""
+"""Purge des sauvegardes d'entreprises supprimées de plus de 30 jours (tâche 2.4)."""
 
 import os
 import time
@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Purge les sauvegardes de schémas supprimés dont l'âge dépasse le seuil de rétention."
+    help = "Purge les sauvegardes d'entreprises supprimées dont l'âge dépasse le seuil de rétention."
 
     def add_arguments(self, parser):
         parser.add_argument(

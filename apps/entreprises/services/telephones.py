@@ -192,7 +192,7 @@ def remplacer_telephones(
             entreprise.telephone_contact = num_principal
             entreprise.save(update_fields=["telephone_contact"])
 
-        # 5. Journaliser dans le schéma de l'entreprise si quelque chose a changé
+        # 5. Journaliser dans l'entreprise si quelque chose a changé
         valeur_apres = [
             {
                 "libelle": item.libelle,

@@ -40,7 +40,7 @@ class ConnexionAdminView(APIView):
     """Connexion Super Admin — `POST /api/v1/admins/connexion/`.
 
     Authentifie un Super Administrateur de la plateforme par son email et son
-    mot de passe. Vérifie que le compte vit dans le schéma public et possède
+    mot de passe. Vérifie que le compte vit au niveau de la plateforme et possède
     `is_superuser=True`. Ne requiert aucune restriction d'adresse IP.
     """
 
@@ -53,7 +53,7 @@ class ConnexionAdminView(APIView):
         summary="Connexion Super Admin",
         description=(
             "Point d'entrée d'authentification dédié au Super Administrateur de la plateforme. "
-            "Seuls les comptes ayant `is_superuser=True` dans le schéma public sont autorisés. "
+            "Seuls les comptes ayant `is_superuser=True` au niveau de la plateforme sont autorisés. "
             "L'accès est accordé sur présentation exclusive de l'email et du mot de passe valides."
         ),
         request=ConnexionAdminSerializer,

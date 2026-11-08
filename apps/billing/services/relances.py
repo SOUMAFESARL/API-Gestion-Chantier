@@ -1,7 +1,7 @@
-"""Ce qu'une relance d'essai a besoin de savoir — et qui vit dans le schéma client.
+"""Ce qu'une relance d'essai a besoin de savoir — et qui vit dans l'entreprise.
 
-Ces deux fonctions **s'exécutent dans le schéma d'une entreprise**, jamais dans
-`public` : c'est l'appelant qui a posé le `schema_context`. Elles ne le font pas
+Ces deux fonctions **s'exécutent dans le contexte d'une entreprise**, jamais en portée
+plateforme : c'est l'appelant qui a ouvert le `contexte_entreprise`. Elles ne le font pas
 elles-mêmes, pour qu'une seule bascule couvre les deux lectures au lieu de deux.
 """
 
@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from apps.core.enums import RoleGlobal, StatutUtilisateur
 
-__all__ = ["bilan_du_schema", "destinataires_relance"]
+__all__ = ["bilan_entreprise", "destinataires_relance"]
 
 
-def bilan_du_schema() -> dict[str, int]:
+def bilan_entreprise() -> dict[str, int]:
     """Ce que l'entreprise a construit pendant son essai.
 
     **C'est ce rappel qui donne sa valeur au message** — parcours §2.3. Un email

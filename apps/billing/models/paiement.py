@@ -12,7 +12,7 @@ __all__ = ["PaiementAbonnement"]
 
 
 class PaiementAbonnement(ModeleBase):
-    """Règlement d'une facture via CinetPay ou autre moyen — Schéma `public`.
+    """Règlement d'une facture via CinetPay ou autre moyen — table de plateforme.
 
     - `reference_transaction` est UNIQUE : garantie d'idempotence contre les doubles appels webhook.
     - `charge_utile` conserve la réponse brute du prestataire pour audit et résolution des litiges.

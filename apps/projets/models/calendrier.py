@@ -6,7 +6,7 @@ Règle des trois couches (de la plus faible à la plus forte) :
 1. Semaine type (`SemaineType`) : jours de la semaine travaillés par défaut
    (lundi à vendredi par défaut).
 2. Jours fériés nationaux : table partagée `referentiels.JourFerie`
-   (schéma public, partagé entre toutes les entreprises).
+   (plateforme, partagé entre toutes les entreprises).
 3. Exceptions d'entreprise (`ExceptionCalendrier`) : date précise, sens ouvré
    ou non ouvré, et motif. Une exception l'emporte sur un jour férié national,
    qui l'emporte sur la semaine type.

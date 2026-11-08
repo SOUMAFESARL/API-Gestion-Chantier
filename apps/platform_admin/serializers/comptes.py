@@ -16,7 +16,7 @@ __all__ = [
 
 
 class CompteAdministrateurSerializer(serializers.ModelSerializer):
-    """Représentation d'un agent de la plateforme (schéma public) pour le back-office."""
+    """Représentation d'un agent de la plateforme (table de plateforme) pour le back-office."""
 
     nom_complet = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()

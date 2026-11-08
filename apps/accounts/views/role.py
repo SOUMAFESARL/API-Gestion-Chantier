@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -29,7 +29,6 @@ from apps.accounts.services.roles import (
 from apps.core.enums import RoleGlobal
 from apps.core.exceptions import (
     ActionReserveeDg,
-    ErreurConflit,
     RequeteRefusee,
     RoleSubstitutionObligatoire,
 )

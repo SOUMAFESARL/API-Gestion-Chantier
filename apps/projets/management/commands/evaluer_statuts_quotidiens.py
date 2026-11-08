@@ -11,7 +11,7 @@ from datetime import date
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from apps.projets.services.machine_etats import executer_evaluation_quotidienne_schema
+from apps.projets.services.machine_etats import executer_evaluation_quotidienne
 from apps.core.commandes import trouver_entreprise
 from apps.core.contexte import contexte_entreprise
 from apps.entreprises.models import Entreprise
@@ -33,7 +33,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        schema_cible = options.get("entreprise")
+        slug_cible = options.get("entreprise")
         date_str = options.get("date")
 
         if date_str:
@@ -49,12 +49,12 @@ class Command(BaseCommand):
             self.style.NOTICE(f"--- Démarrage de l'évaluation quotidienne des statuts ({date_ref}) ---")
         )
 
-        if schema_cible:
-            schemas = [schema_cible]
+        if slug_cible:
+            slugs = [slug_cible]
         else:
             from apps.core.enums import StatutEntreprise
 
-            schemas = list(
+            slugs = list(
                 Entreprise.objects.all()
                 .filter(statut__in=[StatutEntreprise.ACTIF, StatutEntreprise.ESSAI])
                 .values_list("slug", flat=True)
@@ -64,16 +64,16 @@ class Command(BaseCommand):
         total_lots = 0
         total_projets = 0
 
-        for schema_name in schemas:
+        for slug in slugs:
             try:
-                with contexte_entreprise(trouver_entreprise(schema_name)):
-                    rapport = executer_evaluation_quotidienne_schema(date_reference=date_ref)
+                with contexte_entreprise(trouver_entreprise(slug)):
+                    rapport = executer_evaluation_quotidienne(date_reference=date_ref)
                     total_activites += rapport["activites_modifiees"]
                     total_lots += rapport["lots_modifies"]
                     total_projets += rapport["projets_modifies"]
                     self.stdout.write(
                         self.style.SUCCESS(
-                            f"[{schema_name}] Succès : "
+                            f"[{slug}] Succès : "
                             f"{rapport['projets_modifies']} projets, "
                             f"{rapport['lots_modifies']} lots, "
                             f"{rapport['activites_modifiees']} activités mis à jour."
@@ -81,7 +81,7 @@ class Command(BaseCommand):
                     )
             except Exception as e:
                 self.stderr.write(
-                    self.style.ERROR(f"[{schema_name}] Erreur lors de l'évaluation : {e}")
+                    self.style.ERROR(f"[{slug}] Erreur lors de l'évaluation : {e}")
                 )
 
         self.stdout.write(

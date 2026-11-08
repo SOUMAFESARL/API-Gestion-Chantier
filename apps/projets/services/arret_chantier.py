@@ -6,7 +6,6 @@ Chaque déclaration, fin ou suppression d'arrêt de chantier planifie un recalcu
 
 from datetime import date
 from typing import Any
-from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import transaction

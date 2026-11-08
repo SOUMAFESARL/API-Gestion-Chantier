@@ -13,7 +13,7 @@ n'est plus compté comme un retard.
 from pathlib import Path
 
 from apps.entreprises.selectors import slug_courant
-from django.db import connection, models
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleEntreprise

@@ -1,11 +1,11 @@
 """Service de réinitialisation du mot de passe Super Admin — Control Plane CCD Digital.
 
 Règles de gestion :
-- Seul un compte présent dans le schéma `public` avec `is_superuser=True` ou `is_staff=True` (agent SUPPORT) et `is_active=True`
+- Seul un compte présent au niveau de la plateforme avec `is_superuser=True` ou `is_staff=True` (agent SUPPORT) et `is_active=True`
   peut réinitialiser son mot de passe par ce canal.
 - Toute demande pour un compte inexistant ou non superuser renvoie 202 Accepted
   sans émettre d'email, pour empêcher l'énumération d'adresses (silence défensif).
-- Traçabilité complète dans `JournalPlateforme` (schéma `public`) pour :
+- Traçabilité complète dans `JournalPlateforme` (table de plateforme) pour :
   - La demande de réinitialisation (action `DEMANDE_REINITIALISATION_SUPER_ADMIN`).
   - La réinitialisation effective (action `REINITIALISATION_MOT_DE_PASSE_SUPER_ADMIN`).
 - Vérification du jeton sans le consommer (règle R-32).

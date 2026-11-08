@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from apps.entreprises.selectors import slug_courant
-from django.db import connection, models
+from django.db import models
 
 from apps.core.models import ModeleEntreprise
 from apps.projets.storage import StockageContrats

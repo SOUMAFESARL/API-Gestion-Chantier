@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                 ('cree_le', models.DateTimeField(auto_now_add=True, verbose_name='créé le')),
                 ('modifie_le', models.DateTimeField(auto_now=True, verbose_name='modifié le')),
                 ('supprime_le', models.DateTimeField(blank=True, db_index=True, help_text='Non nul = ligne supprimée logiquement. Jamais de suppression physique.', null=True, verbose_name='supprimé le')),
-                ('unique_par_schema', models.BooleanField(default=True, editable=False)),
+                ('unique_par_entreprise', models.BooleanField(default=True, editable=False)),
                 ('statut', models.CharField(choices=[('EN_COURS', 'En cours'), ('TERMINEE', 'Terminée')], default='EN_COURS', max_length=20, verbose_name='statut')),
                 ('etape_courante', models.CharField(choices=[('ENTREPRISE', 'Votre entreprise'), ('PROJET', 'Premier projet'), ('EQUIPE', 'Votre équipe')], default='ENTREPRISE', max_length=20, verbose_name='étape courante')),
                 ('demarre_le', models.DateTimeField(auto_now_add=True, verbose_name='démarrée le')),
@@ -63,11 +63,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='progressionconfiguration',
-            constraint=models.UniqueConstraint(fields=('entreprise', 'unique_par_schema'), name='uq_progression_singleton'),
+            constraint=models.UniqueConstraint(fields=('entreprise', 'unique_par_entreprise'), name='uq_progression_singleton'),
         ),
         migrations.AddConstraint(
             model_name='progressionconfiguration',
-            constraint=models.CheckConstraint(condition=models.Q(('unique_par_schema', True)), name='chk_progression_singleton'),
+            constraint=models.CheckConstraint(condition=models.Q(('unique_par_entreprise', True)), name='chk_progression_singleton'),
         ),
         migrations.AddConstraint(
             model_name='etapeconfiguration',

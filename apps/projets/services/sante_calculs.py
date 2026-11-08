@@ -55,7 +55,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 def obtenir_jours_feries_ci(annee_min: int, annee_max: int) -> tuple[set[date], bool]:
-    """Récupère l'ensemble des jours fériés pour la Côte d'Ivoire (CI) dans le schéma public.
+    """Récupère l'ensemble des jours fériés pour la Côte d'Ivoire (CI) au niveau de la plateforme.
 
     Retourne (jours_feries_set, est_incomplet).
     est_incomplet vaut True si au moins une année de l'intervalle est totalement absente.

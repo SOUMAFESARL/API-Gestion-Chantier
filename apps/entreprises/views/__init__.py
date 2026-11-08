@@ -1,6 +1,6 @@
 """Vues de l'inscription — contrat T-021.
 
-**Les cinq endpoints vivent sur le domaine de la plateforme**, schéma `public`,
+**Les cinq endpoints vivent sur le domaine de la plateforme**,
 et jamais sur un sous-domaine client : au moment de l'inscription, le client n'a
 pas encore de sous-domaine.
 

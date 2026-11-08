@@ -6,10 +6,10 @@ Entités : ProgressionConfiguration, EtapeConfiguration  ·  contrat T-024
 **à chaque affichage du tableau de bord**, par chaque utilisateur, pour décider
 d'afficher ou non « Configuration 67 % — reprendre ». La placer dans `public`
 ferait de la table de la plateforme une dépendance de chaque page de chaque
-client — exactement ce que le découpage par schéma existe pour éviter.
+client — exactement ce que le découpage par entreprise existe pour éviter.
 
 L'agrégat de l'éditeur — « combien de clients ont fini ? » — reste possible par
-un parcours nocturne des schémas. Le produit en fait déjà un pour l'extraction
+un parcours nocturne des entreprises. Le produit en fait déjà un pour l'extraction
 anonymisée du service ML ; un second passage sur la même boucle ne coûte rien,
 et un tableau de bord commercial supporte le décalage d'une nuit.
 """
@@ -49,7 +49,7 @@ ETAPES_FACULTATIVES: frozenset[str] = frozenset({CodeEtape.PROJET, CodeEtape.EQU
 
 
 class ProgressionConfiguration(ModeleEntreprise):
-    """Où en est la configuration — **une seule ligne par schéma**.
+    """Où en est la configuration — **une seule ligne par entreprise**.
 
     **La configuration appartient à l'entreprise, pas à la personne.** Un second
     administrateur ne la recommence pas ; il la reprend.
@@ -69,7 +69,7 @@ class ProgressionConfiguration(ModeleEntreprise):
 
     Statut = StatutConfiguration
 
-    unique_par_schema = models.BooleanField(default=True, editable=False)
+    unique_par_entreprise = models.BooleanField(default=True, editable=False)
 
     statut = models.CharField(
         _("statut"), max_length=20, choices=Statut.choices, default=Statut.EN_COURS
@@ -89,10 +89,10 @@ class ProgressionConfiguration(ModeleEntreprise):
         verbose_name_plural = _("progressions de configuration")
         constraints = [
             models.UniqueConstraint(
-                fields=["entreprise", "unique_par_schema"], name="uq_progression_singleton"
+                fields=["entreprise", "unique_par_entreprise"], name="uq_progression_singleton"
             ),
             models.CheckConstraint(
-                condition=models.Q(unique_par_schema=True),
+                condition=models.Q(unique_par_entreprise=True),
                 name="chk_progression_singleton",
             ),
         ]

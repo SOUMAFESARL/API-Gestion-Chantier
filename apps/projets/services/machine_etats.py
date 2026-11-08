@@ -58,7 +58,7 @@ __all__ = [
     "changer_statut_projet",
     "evaluer_statut_projet",
     "evaluer_statuts_arbre",
-    "executer_evaluation_quotidienne_schema",
+    "executer_evaluation_quotidienne",
     "retablir_statut_apres_decalage_si_necessaire",
     "valider_transition_reception",
     "verifier_statut_projet_pour_ecriture",
@@ -430,7 +430,7 @@ def retablir_statut_apres_decalage_si_necessaire(
 
 
 @transaction.atomic
-def executer_evaluation_quotidienne_schema(date_reference: date | None = None) -> dict:
+def executer_evaluation_quotidienne(date_reference: date | None = None) -> dict:
     """Exécute l'évaluation quotidienne calendaire sur l'ensemble de l'entreprise active :
     les cases de chaque arbre, puis les projets."""
     date_ref = date_reference or timezone.now().date()

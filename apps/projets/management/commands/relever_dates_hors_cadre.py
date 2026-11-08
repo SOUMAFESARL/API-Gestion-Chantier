@@ -32,12 +32,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        schema_cible = options.get("entreprise")
+        slug_cible = options.get("entreprise")
 
-        if schema_cible:
-            schemas = [schema_cible]
+        if slug_cible:
+            slugs = [slug_cible]
         else:
-            schemas = list(
+            slugs = list(
                 Entreprise.objects.all().values_list(
                     "slug", flat=True
                 )
@@ -45,11 +45,11 @@ class Command(BaseCommand):
 
         total_anomalies = 0
 
-        for schema_nom in schemas:
-            self.stdout.write(self.style.NOTICE(f"=== Vérification de l'entreprise : {schema_nom} ==="))
-            with contexte_entreprise(trouver_entreprise(schema_nom)):
-                anomalies_schema = self._verifier_schema()
-                total_anomalies += anomalies_schema
+        for slug in slugs:
+            self.stdout.write(self.style.NOTICE(f"=== Vérification de l'entreprise : {slug} ==="))
+            with contexte_entreprise(trouver_entreprise(slug)):
+                anomalies_entreprise = self._verifier_entreprise()
+                total_anomalies += anomalies_entreprise
 
         if total_anomalies > 0:
             self.stdout.write(
@@ -63,7 +63,7 @@ class Command(BaseCommand):
                 )
             )
 
-    def _verifier_schema(self) -> int:
+    def _verifier_entreprise(self) -> int:
         """Les cases dont les dates sortent de celles de leur parent (case ou projet)."""
         anomalies = 0
         cases = Element.objects.select_related("projet", "parent").filter(

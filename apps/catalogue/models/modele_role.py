@@ -11,7 +11,7 @@ __all__ = ["ModeleRole", "ModeleRoleModule"]
 class ModeleRole(ModeleBase):
     """Gabarit type de rôle métier BTP souverain.
 
-    Défini au niveau plateforme (schéma public). Sert de matrice de référence
+    Défini au niveau plateforme (table de plateforme). Sert de matrice de référence
     pour les rôles créés ou instanciés dans les entreprises.
     """
 

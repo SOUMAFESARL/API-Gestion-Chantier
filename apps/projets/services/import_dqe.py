@@ -80,10 +80,6 @@ def _index_par_chemin(arbre) -> dict:
     return index
 
 
-def _texte_date(valeur) -> str | None:
-    return valeur.isoformat() if isinstance(valeur, date) else valeur
-
-
 def _valeur_affichee(champ, valeur, montants_visibles):
     if champ == "montant" and not montants_visibles:
         return None

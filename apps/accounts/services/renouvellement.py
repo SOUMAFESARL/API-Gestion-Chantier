@@ -18,11 +18,11 @@ rejoué quatre fois répondait `200` à chaque fois.
 
 L'application `token_blacklist` n'est **pas** la parade — décision **S4** de
 T-008 : ses tables portent une clé étrangère vers `utilisateur`, qui existe
-dans `public` **et** dans chaque schéma client. La liste noire est dans le
+dans `public` **et** dans chaque entreprise. La liste noire est dans le
 cache (`services/liste_noire.py`), et la rotation est faite ici.
 
 Ce que ce module ne fait pas encore, et qui reste à DEV-1 / DEV-3 :
-le claim `sdt` et le plafond absolu de session (T-008 §2.3), le claim `schema`
+le claim `sdt` et le plafond absolu de session (T-008 §2.3), le claim `entreprise`
 (§5.2), et la lecture de l'époque par `JWTAuthentication` sur chaque requête
 authentifiée (§6.5).
 """

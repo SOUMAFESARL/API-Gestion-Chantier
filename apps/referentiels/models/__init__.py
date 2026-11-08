@@ -1,6 +1,6 @@
-"""Application « referentiels » — schéma `public`.
+"""Application « referentiels » — tables de plateforme.
 
-Référentiels partagés par toutes les entreprises. Les dupliquer dans chaque schéma
+Référentiels partagés par toutes les entreprises. Les dupliquer dans chaque entreprise
 garantirait qu'ils finissent désynchronisés.
 
 Entités MCD : JourFerie  (MCD §4.7)

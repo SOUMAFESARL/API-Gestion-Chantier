@@ -1,6 +1,6 @@
 """Messagerie de la plateforme : le serveur SMTP par lequel partent tous les e-mails du produit.
 
-Schéma : public. Une seule ligne existe (clé 1) : c'est un réglage, pas une collection.
+Portée : plateforme. Une seule ligne existe (clé 1) : c'est un réglage, pas une collection.
 
 **Pourquoi en base et pas seulement dans le `.env`.** Le `.env` du serveur n'est modifiable que
 depuis le panneau d'hébergement ; un mot de passe d'application révoqué (par exemple quand la

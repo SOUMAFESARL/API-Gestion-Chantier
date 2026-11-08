@@ -45,15 +45,3 @@ class IdentifiantRequeteMiddleware:
             _identifiant.reset(jeton)
 
 
-class RestrictionIPPlateformeMiddleware:
-    """Ancien middleware de restriction IP — complètement désactivé.
-
-    Toutes les requêtes passent directement sans aucune restriction d'adresse IP.
-    """
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        return self.get_response(request)
-

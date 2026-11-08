@@ -8,7 +8,7 @@ from datetime import date
 
 from apps.core.contexte import exiger_entreprise
 from django.core.exceptions import ValidationError as ValidationErrorDjango
-from django.db import connection, transaction
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 

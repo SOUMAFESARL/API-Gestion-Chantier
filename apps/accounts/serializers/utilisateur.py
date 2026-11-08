@@ -53,15 +53,3 @@ class UtilisateurSerializer(serializers.ModelSerializer):
         ]
 
 
-class ProfilMoiSerializer(serializers.Serializer):
-    """Contrat d'API §1.1 — Profil utilisateur enrichi."""
-
-    id = serializers.UUIDField()
-    email = serializers.EmailField()
-    nom = serializers.CharField()
-    prenom = serializers.CharField(allow_blank=True)
-    role_global = serializers.CharField()
-    is_dg = serializers.BooleanField()
-    is_owner = serializers.BooleanField()
-    langue = serializers.CharField()
-    doit_changer_mot_de_passe = serializers.BooleanField()

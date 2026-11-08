@@ -1,9 +1,9 @@
-"""Crée ou met à jour un compte Super Admin dans le schéma `public`.
+"""Crée ou met à jour un compte Super Admin au niveau de la plateforme.
 
     python manage.py creer_super_admin --email support@ccd-digital.ci --motdepasse MonMotDePasseFort123!
 
 Configure le compte avec `is_superuser=True`, `is_staff=True`, `is_active=True`
-dans le schéma `public` de la plateforme.
+au niveau de la plateforme de la plateforme.
 Idempotente : si le compte existe déjà, son mot de passe est mis à jour
 et ses privilèges superuser sont activés.
 """
@@ -15,7 +15,7 @@ from apps.core.enums import RoleGlobal, StatutUtilisateur
 
 
 class Command(BaseCommand):
-    help = "Crée ou met à jour un compte Super Admin de la plateforme dans le schéma public."
+    help = "Crée ou met à jour un compte Super Admin de la plateforme au niveau de la plateforme."
 
     def add_arguments(self, parser):
         parser.add_argument("--email", required=True, help="Adresse email du Super Admin.")

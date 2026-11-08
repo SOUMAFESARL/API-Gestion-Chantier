@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.entreprises.selectors import entreprise_courante
-from apps.core.enums import RoleGlobal
 from apps.projets.models import AffectationProjet, Projet
 from apps.projets.referentiels.villes import lister_villes, nom_agglomeration
 from apps.projets.serializers import (

@@ -18,8 +18,6 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.utils import timezone
-from django.utils.formats import localize
-from django.utils.timezone import localtime
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 
@@ -100,9 +98,9 @@ def _slug_libre(base: str) -> str:
     """Le premier slug libre, `base` puis `base_2` … `base_10`.
 
     Deux tables à interroger, et c'est délibéré : un slug réservé par une
-    demande **en attente** vaut autant qu'un schéma déjà créé. Sans cela, deux
+    demande **en attente** vaut autant qu'une entreprise déjà créée. Sans cela, deux
     entreprises homonymes qui s'inscrivent à dix minutes d'intervalle se
-    disputent le même schéma au moment de l'activation — c'est-à-dire trop
+    disputent le même slug au moment de l'activation — c'est-à-dire trop
     tard, quand la personne a déjà saisi son mot de passe.
     """
     for tentative in range(1, SUFFIXES_MAX + 1):
@@ -210,54 +208,6 @@ def deposer(
     return demande
 
 
-def _envoyer_espace_existant(entreprise: Entreprise, destinataire: str) -> None:
-    """Branches 3 et 4 du §2.4 — et ce ne sont pas le même message.
-
-    **Une entreprise suspendue recevait « Vous avez déjà un espace »**, avec un
-    lien de connexion qui allait la refuser. La branche 4 de T-018 §11 — *« l'état,
-    la date, le contact commercial »* — n'avait jamais eu de code : les deux
-    branches partageaient un seul email. Le statut les sépare désormais.
-    """
-    if entreprise.statut in (StatutEntreprise.SUSPENDU, StatutEntreprise.RESILIE):
-        # **La date vient de l'abonnement, pas de l'entreprise.**
-        #
-        # *Elle était lue sur `entreprise.modifie_le` — un champ qui n'existe
-        # pas : `Entreprise` n'hérite pas de `ModeleBase`. Le
-        # `getattr` de repli évitait l'exception et laissait l'email partir avec
-        # **une date vide**, alors que la branche 4 de T-018 §11 exige « l'état,
-        # la date, le contact commercial ». Un défaut qu'aucune erreur ne
-        # signalait.*
-        dernier = entreprise.abonnements.order_by("-date_debut").first()
-        effet = getattr(dernier, "lecture_seule_depuis", None) if dernier else None
-        conservation = getattr(dernier, "suppression_prevue_le", None) if dernier else None
-
-        envoyer(
-            "espace_suspendu",
-            f"Votre espace CCD Digital est {entreprise.get_statut_display().lower()}",
-            destinataire,
-            {
-                "raison_sociale": entreprise.raison_sociale,
-                "statut_libelle": entreprise.get_statut_display(),
-                "date_effet": localize(localtime(effet).date()) if effet else "",
-                "conservation_jusqu_au": localize(conservation) if conservation else None,
-            },
-        )
-        return
-
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
-
-    envoyer(
-        "espace_existant",
-        "Vous avez déjà un espace CCD Digital",
-        destinataire,
-        {
-            "raison_sociale": entreprise.raison_sociale,
-            "lien_connexion": f"{frontend_url}/connexion",
-            "lien_reinitialisation": f"{frontend_url}/mot-de-passe/oublie",
-        },
-    )
-
-
 def _envoyer_espace_pret(entreprise: Entreprise, email_admin: str) -> None:
     """Branche 6 — « l'adresse de l'espace, les identifiants, les 14 jours ».
 
@@ -339,8 +289,6 @@ def verifier(jeton_clair: str) -> DemandeInscription:
         raise JetonInscriptionExpire()
 
     return demande
-
-
 
 
 # ---------------------------------------------------------------------------

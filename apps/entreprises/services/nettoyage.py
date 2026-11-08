@@ -14,7 +14,7 @@ import uuid
 from typing import Any
 
 from apps.accounts.models import Utilisateur
-from apps.core.contexte import contexte_entreprise
+from apps.core.contexte import contexte_entreprise, portee_plateforme
 from apps.core.enums import RoleGlobal
 from apps.entreprises.models import DemandeInscription, Entreprise
 from apps.entreprises.services.suppression_definitive import SLUGS_PROTEGES
@@ -161,7 +161,7 @@ def activer_ou_renouveler_abonnement(
     except (ValueError, AttributeError):
         pass
 
-    # 2. Tentative par nom de schéma
+    # 2. Tentative par slug
     if not ent:
         ent = Entreprise.objects.filter(slug__iexact=str(identifiant).strip()).first()
 
@@ -175,16 +175,16 @@ def activer_ou_renouveler_abonnement(
         if demande and demande.entreprise:
             ent = demande.entreprise
 
-    # 5. Tentative par recherche dans les utilisateurs des schémas
+    # 5. Tentative par l'adresse d'un compte : unique sur toute la plateforme (R-8), donc une
+    # seule requête en portée plateforme — plus de balayage des entreprises une par une.
     if not ent:
-        for candidate in Entreprise.objects.all():
-            try:
-                with contexte_entreprise(candidate):
-                    if Utilisateur.objects.filter(email__iexact=str(identifiant).strip()).exists():
-                        ent = candidate
-                        break
-            except Exception:
-                continue
+        with portee_plateforme(motif="activation d'abonnement : recherche par adresse de compte"):
+            compte = (
+                Utilisateur.objects.filter(email__iexact=str(identifiant).strip())
+                .select_related("entreprise")
+                .first()
+            )
+        ent = compte.entreprise if compte is not None else None
 
     if not ent:
         raise ValueError(f"Entreprise introuvable pour l'identifiant '{identifiant}'.")

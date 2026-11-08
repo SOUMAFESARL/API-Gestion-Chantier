@@ -80,7 +80,7 @@ class ConfigurationTerminee(ErreurConflit):
 # Lecture
 # --------------------------------------------------------------------------
 def lire_ou_creer() -> ProgressionConfiguration:
-    """La progression du schéma courant, créée si elle n'existe pas — §5.1.
+    """La progression de l'entreprise active, créée si elle n'existe pas — §5.1.
 
     **`GET` reste sans effet de bord observable** : le client reçoit dans les
     deux cas une progression à 0 %. La création n'est visible que du serveur.

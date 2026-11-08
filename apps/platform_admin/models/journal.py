@@ -12,7 +12,7 @@ __all__ = ["JournalPlateforme"]
 
 
 class JournalPlateforme(models.Model):
-    """Journal d'audit plateforme — schéma `public` (MLD §4.6).
+    """Journal d'audit plateforme — table de plateforme (MLD §4.6).
 
     Trace toutes les opérations de support, d'impersonification et
     d'administration de la plateforme CCD Digital.

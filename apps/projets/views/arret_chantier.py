@@ -7,7 +7,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.droits import APermission
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import ArretChantier, Projet
 from apps.projets.serializers.arret_chantier import (

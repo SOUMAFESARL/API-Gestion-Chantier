@@ -418,7 +418,7 @@ def generer_modele_excel_decoupage(
     - Feuille 2 (« Valeurs et mode d emploi ») : consignes et valeurs de référence par niveau.
     """
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Alignment, Font
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 

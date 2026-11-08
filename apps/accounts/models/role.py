@@ -7,7 +7,6 @@ Entités : Role, RoleModulePermission.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import ModuleChoix
 from apps.core.managers import ManagerEntrepriseComplet, RequeteEntreprise
 from apps.core.models import ModeleEntreprise
 

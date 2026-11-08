@@ -1,7 +1,7 @@
 """`/api/v1/admins/referentiels/{types-projet|modes-execution}/` — référentiels plateforme.
 
 Ce qui s'ajoute ici est proposé aussitôt à toutes les entreprises (lu depuis le
-schéma public), qui ne peuvent pas le retirer. Arbitrage du 16/10/2026.
+plateforme), qui ne peuvent pas le retirer. Arbitrage du 16/10/2026.
 
 Les noms de lot se gèrent désormais dans la liste « Lots » du découpage
 (`/api/v1/admins/decoupage/listes/`, `views/decoupage.py`).

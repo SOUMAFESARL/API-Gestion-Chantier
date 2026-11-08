@@ -37,7 +37,7 @@ def relancer_essais() -> int:
     message — elle rend l'état visible (§3.1).
     """
     from apps.billing.models import Abonnement, RelanceEssai
-    from apps.billing.services.relances import bilan_du_schema, destinataires_relance
+    from apps.billing.services.relances import bilan_entreprise, destinataires_relance
     from apps.core.emails import envoyer
 
     envoyees = 0
@@ -52,20 +52,20 @@ def relancer_essais() -> int:
         ).select_related("entreprise")
 
         for abonnement in abonnements:
-            schema = abonnement.entreprise.slug
+            slug = abonnement.entreprise.slug
 
             try:
                 with contexte_entreprise(abonnement.entreprise_id):
-                    bilan = bilan_du_schema()
+                    bilan = bilan_entreprise()
                     adresses = destinataires_relance()
             except Exception:
-                # Un schéma illisible ne doit pas arrêter la tournée des autres.
-                logger.exception("Relance impossible pour le schéma %s", schema)
+                # Une entreprise illisible ne doit pas arrêter la tournée des autres.
+                logger.exception("Relance impossible pour l'entreprise %s", slug)
                 continue
 
             if not adresses:
                 # Un espace sans administrateur actif : personne à qui écrire.
-                logger.warning("Aucun destinataire de relance dans le schéma %s", schema)
+                logger.warning("Aucun destinataire de relance dans l'entreprise %s", slug)
                 continue
 
             # La trace **avant** l'envoi : si la contrainte refuse la ligne, la
@@ -164,7 +164,7 @@ def reconcilier_paiements_anciens() -> dict:
 def verifier_paiements_en_attente() -> dict:
     """Tâche générique de réconciliation de l'ensemble des paiements CinetPay en attente.
 
-    Tourne dans le schéma `public` (tables billing) sur un intervalle régulier.
+    Tourne au niveau de la plateforme (tables billing) sur un intervalle régulier.
     """
     from apps.billing.services.paiement import PaiementAbonnementService
 

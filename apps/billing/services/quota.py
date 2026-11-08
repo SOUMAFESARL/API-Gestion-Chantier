@@ -14,7 +14,6 @@ règle derrière.
 from __future__ import annotations
 
 from apps.entreprises.selectors import entreprise_courante
-from django.db import connection
 
 __all__ = [
     "limite_du_plan",
@@ -51,7 +50,7 @@ def limite_du_plan(entreprise=None) -> int | None:
 
 
 def sieges_occupes() -> int:
-    """Les sièges consommés dans le schéma courant.
+    """Les sièges consommés dans l'entreprise active.
 
     **Une invitation en attente occupe un siège.** Ne compter que les comptes
     créés laisserait une entreprise au plan Starter envoyer trente invitations,

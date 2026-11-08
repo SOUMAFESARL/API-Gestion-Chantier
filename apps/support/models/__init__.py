@@ -2,7 +2,7 @@
 
 Tickets de support et base de connaissances.
 
-Schéma       : public
+Portée       : plateforme
 Module CDC   : —
 Entités MCD  : TicketSupport, ArticleConnaissance
 """

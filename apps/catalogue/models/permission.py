@@ -1,4 +1,4 @@
-"""Modèle CataloguePermission — autorisations granulaires stockées dans le schéma public."""
+"""Modèle CataloguePermission — autorisations granulaires stockées au niveau de la plateforme."""
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -31,7 +31,7 @@ class CataloguePermissionQuerySet(models.QuerySet):
 class CataloguePermission(ModeleBase):
     """Autorisation granulaire dynamique de la plateforme.
 
-    Stockée uniquement dans le schéma `public`.
+    Stockée uniquement au niveau de la plateforme.
     """
 
     objects = CataloguePermissionQuerySet.as_manager()

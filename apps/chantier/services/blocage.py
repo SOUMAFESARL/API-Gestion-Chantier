@@ -5,7 +5,6 @@ Chaque mutation déclenche un recalcul réactif asynchrone de l'indice de santé
 """
 
 from typing import Any
-from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -13,7 +12,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Utilisateur
 from apps.chantier.models import Blocage
-from apps.core.enums import SeveriteBlocage, StatutBlocage
+from apps.core.enums import StatutBlocage
 from apps.core.exceptions import ErreurMetier
 from apps.projets.models import Element, Projet
 from apps.projets.services.sante_declencheur import declencher_recalcul_sante

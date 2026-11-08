@@ -10,7 +10,6 @@ qui tient en un texte.
 import logging
 import uuid
 
-from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as ValidationDjango
 from django.db import transaction

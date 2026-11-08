@@ -2,7 +2,7 @@
 
 Règles : A-01, A-02, A-06.
 Source unique : apps.core.registre_permissions.REGISTRE.
-Exécutée dans le schéma public, strictement idempotente.
+Exécutée au niveau de la plateforme, strictement idempotente.
 """
 
 from django.core.management.base import BaseCommand

@@ -64,7 +64,7 @@ class PaiementAbonnementService:
     ) -> dict[str, Any]:
         """Prépare la facture et la transaction, puis contacte CinetPay pour obtenir le payment_url.
 
-        Exécuté dans le schéma `public` (tables billing).
+        Exécuté au niveau de la plateforme (tables billing).
         """
         # 0. Vérification du verrou d'initiation (Protection anti-double débit - Option A2)
         limite_active = timezone.now() - timedelta(minutes=PaiementAbonnement.DELAI_VERROU_MINUTES)

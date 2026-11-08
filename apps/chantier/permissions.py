@@ -5,7 +5,6 @@ Contrôle d'accès à deux niveaux (Socle Commun §2.3) :
 - Niveau 2 : Affectation au projet spécifique.
 """
 
-from rest_framework import permissions
 
 from apps.core.permissions import GardePermissionProjet
 

@@ -42,7 +42,7 @@ class ComptesAdministrateursListCreateView(APIView):
 
     @extend_schema(
         summary="Lister les comptes agents (Super Admin)",
-        description="Renvoie la liste des comptes d'administration de la plateforme dans le schéma public.",
+        description="Renvoie la liste des comptes d'administration de la plateforme au niveau de la plateforme.",
         responses={200: CompteAdministrateurSerializer(many=True)},
     )
     def get(self, request):
@@ -54,7 +54,7 @@ class ComptesAdministrateursListCreateView(APIView):
 
     @extend_schema(
         summary="Créer ou inviter un agent (Super Admin)",
-        description="Crée un nouveau compte administrateur dans le schéma public.",
+        description="Crée un nouveau compte administrateur au niveau de la plateforme.",
         request=CreerCompteAdministrateurSerializer,
         responses={201: CompteAdministrateurSerializer},
     )

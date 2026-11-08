@@ -1,4 +1,4 @@
-"""Lecture des factures de l'entreprise active dans le schema public."""
+"""Lecture des factures de l'entreprise active au niveau de la plateforme."""
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -14,11 +14,10 @@ from apps.billing.models import Facture
 from apps.billing.serializers.facture import FactureSerializer
 from apps.billing.services.facture import generer_pdf_facture
 from apps.core.droits import APermission
-from apps.core.enums import RoleGlobal
 
 ERREURS_FACTURE = {
     401: OpenApiResponse(description="Jeton JWT absent ou invalide."),
-    403: OpenApiResponse(description="Role non autorise ou schema public."),
+    403: OpenApiResponse(description="Role non autorise ou compte de la plateforme."),
     404: OpenApiResponse(description="Facture introuvable dans cette entreprise."),
 }
 DESCRIPTION_FACTURE = (

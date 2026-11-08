@@ -412,6 +412,13 @@ def changer_statut_projet(
     projet.statut = nouveau_statut
     projet.save(update_fields=["statut", "modifie_le"])
 
+    # Hors des statuts qui sont un acte, le statut se déduit du travail : sortir d'une
+    # désactivation ou de l'archive, ou reprendre un projet, le recalcule aussitôt au lieu de
+    # laisser « En cours » jusqu'à la nuit : un projet aux tâches toutes clôturées redevient
+    # Terminé.
+    if nouveau_statut not in STATUTS_PROJET_MANUELS_FIXES:
+        evaluer_statut_projet(projet)
+
     if ancien_statut != nouveau_statut:
         from apps.projets.services.sante_declencheur import declencher_recalcul_sante
 

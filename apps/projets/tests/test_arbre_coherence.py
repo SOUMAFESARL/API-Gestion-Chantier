@@ -609,3 +609,39 @@ def test_terminer_a_la_main_exige_des_taches_cloturees(chantier, auteur):
     c = chantier
     with pytest.raises(ValidationError):
         changer_statut_projet(c["projet"], StatutProjet.TERMINE, utilisateur=auteur)
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_reactiver_un_projet_archive_recalcule_son_statut(chantier, auteur):
+    """Sortir de l'archive ne fige pas « En cours » : le statut se déduit de nouveau des tâches."""
+    from apps.projets.services.machine_etats import changer_statut_projet
+
+    c = chantier
+    _terminer_tout(c, auteur)
+    changer_statut_projet(c["projet"], StatutProjet.ARCHIVE, utilisateur=auteur)
+    assert c["projet"].statut == StatutProjet.ARCHIVE
+
+    changer_statut_projet(c["projet"], StatutProjet.EN_COURS, utilisateur=auteur)
+    c["projet"].refresh_from_db()
+
+    # Toutes les tâches sont encore clôturées : il retrouve « Terminé » sans attendre la nuit.
+    assert c["projet"].statut == StatutProjet.TERMINE
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_receptionner_un_projet_termine_puis_le_refuser_s_il_reste_des_taches(chantier, auteur):
+    from rest_framework.exceptions import ValidationError
+
+    from apps.projets.services.machine_etats import changer_statut_projet
+
+    c = chantier
+    with pytest.raises(ValidationError):
+        changer_statut_projet(c["projet"], StatutProjet.RECEPTIONNE, utilisateur=auteur)
+
+    _terminer_tout(c, auteur)
+    changer_statut_projet(c["projet"], StatutProjet.RECEPTIONNE, utilisateur=auteur)
+    c["projet"].refresh_from_db()
+
+    assert c["projet"].statut == StatutProjet.RECEPTIONNE

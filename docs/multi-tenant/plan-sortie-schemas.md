@@ -355,7 +355,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
   - **Contrôle positif** : B lit ses propres lignes par les mêmes routes — sans lui, un 404 rendu à A pourrait n'être qu'une route mal désignée.
   - Un paramètre d'URL que la table `CIBLES` ne connaît pas fait **échouer** la suite : une route nouvelle ne passe pas en silence.
   - **Couches 1 et 2 sur chaque modèle et chaque table** : hors contexte, `objects` et `tous_objets` lèvent `HorsContexteEntreprise` ; le SQL brut ne voit aucune ligne d'entreprise ; dans A, aucune ligne de B ; le rôle de connexion n'est ni superutilisateur ni `BYPASSRLS`.
-  - Écarts tolérés, chacun avec sa raison (`REFUS_ATYPIQUES`, `CONTROLE_SANS_OBJET`) : les routes de listes de découpage répondent 400 « introuvable » au lieu de 404 (`resoudre_liste`), l'import de fichier 415 à un corps JSON.
+  - Écarts tolérés, chacun avec sa raison (`REFUS_ATYPIQUES`, `CONTROLE_SANS_OBJET`) : les routes de listes de découpage répondaient 400 « introuvable » au lieu de 404 (`resoudre_liste`), l'import de fichier 415 à un corps JSON — **levés le 08/11/2026, voir la section en fin de document**.
 - **CI** : le service PostgreSQL de GitHub crée un superutilisateur, à qui la RLS ne s'applique pas. Django s'y connecte désormais avec un rôle `ccd` créé sans privilège, et `roles_rls.sql` est joué avant les tests.
 - **Ce qu'il a fait apparaître : une fuite entre clients**, antérieure à la D9. `GET /api/v1/cinetpay/statut/<transaction>/` rendait le paiement d'une autre entreprise (statut, montant, facture, raison sociale) et en déclenchait la vérification auprès de CinetPay. `paiement_abonnement` est une table de plateforme, hors RLS : seule la vue la protège, et elle ne filtrait pas. Bornée à l'entreprise du compte, avant tout appel à CinetPay.
 - **Ce qu'il a fait apparaître : le fondateur sans rôle.** Dans une entreprise neuve (inscription comme démonstration), le fondateur était créé **avant** la matrice des rôles : `Utilisateur.save` ne trouvait pas le rôle `DG` et laissait `role_id` nul. Les rôles sont désormais semés d'abord ; `creer_tenant_demo` répare les démonstrations existantes.
@@ -368,7 +368,7 @@ Le principe : **ce qui ne dépend de rien part tout de suite, et rien de nouveau
 
   **À données égales, aucune requête utile de plus.** Les 28 d'écart viennent du jeu : la base neuve montre 11 chantiers au DG, l'ancienne 9, et la liste comme le tableau de bord relisent l'arbre de chaque chantier (4 et 6 requêtes par chantier — le N+1 que corrigent les lots 3-4 de `feature/perf-requetes`, toujours à reporter). Vérifié requête par requête contre l'ancien modèle. Les durées ne se comparent pas d'une base à l'autre (volumes différents) ; elles ne sont pas retenues.
 
-**Reste hors du lot 7** : le report de `feature/perf-requetes` (§11, étape 6) ; les codes 400/415 des listes de découpage, à aligner sur 404 ; les corps d'écriture qui désigneraient une ligne de B (`{"projet": "<B>"}`) ne sont éprouvés que par les clés composites et la RLS, pas par la suite.
+**Reste hors du lot 7** : le report de `feature/perf-requetes` (§11, étape 6)  ; les codes 400/415 des listes de découpage (alignés sur 404 le 08/11/2026) ; les corps d'écriture qui désigneraient une ligne de B (`{"projet": "<B>"}`) ne sont éprouvés que par les clés composites et la RLS, pas par la suite.
 
 ### Lot 8 — ce qui a été fait, et ce qu'il a fait apparaître
 
@@ -417,6 +417,11 @@ Les lots 2 à 4 de la branche (non fusionnée) sont repris sur `feature/schema-u
 
 Liste des projets vue par le DG (11 chantiers) : 115 → **17** requêtes, et 17 à 19 pour les trois comptes — le coût ne dépend plus du nombre de chantiers (le N+1 relevé au lot 7). Tableau de bord du DG : 88 → 20. Détail d'un projet : 37 → 18. Socle d'un appel authentifié pour un compte non-DG : 14 → 8.
 
-**Vérifié** : `check` et `makemigrations --check` propres ; `pytest apps/core/tests tests/etancheite` (la commande de la CI) rend **443 passés** sur deux passages, et un passage a rendu 1 échec — `test_controle_positif_b_lit_ses_propres_lignes[chantier/rapports/<pk>/]`, un 404 — qui ne s'est pas reproduit, ni seul ni aux deux passages suivants. Le commit d'avant le report a passé 443/443 sur son unique passage : l'échec n'est donc **ni expliqué ni écarté**. À surveiller en CI.
+**Vérifié** : `check` et `makemigrations --check` propres ; `pytest apps/core/tests tests/etancheite` (la commande de la CI) rend **443 passés**. Un passage sur trois avait rendu 1 échec (`test_controle_positif_b_lit_ses_propres_lignes[chantier/rapports/<pk>/]`, 404) ; sa cause est trouvée et corrigée ci-dessous.
 
 **Reste de ce que la branche avait ouvert** (hors report) : la barrière JWT §5.2 et le lot 8 de la branche (structure par schéma) sont à reprendre à part, sans lien avec ce report.
+
+### Les deux restes hors lots — 08/11/2026
+
+- **Listes de découpage : 404 au lieu de 400/415.** `_liste_de_url` (`apps/projets/views/decoupage.py`) répond désormais **404** « Cette liste est introuvable » quand la liste de l'URL n'existe pas ou appartient à une autre entreprise. `resoudre_liste` garde son 400 : c'est le bon code pour une référence envoyée **dans un corps**. Les deux routes qui validaient d'abord le corps (`…/valeurs/`) ou l'analyseur (`…/valeurs/importer/`, 415 à un corps JSON) résolvent la liste **en premier** — DRF n'analyse le corps qu'à l'accès à `request.FILES`. `REFUS_ATYPIQUES` est **vide** : toute route doit répondre 403, 404 ou 405. Le frontend ne lit pas le message d'ancien 400.
+- **L'échec intermittent n'était pas un défaut du produit.** Le DG ne voit pas le brouillon d'un autre auteur (`pour_auteur` : 404, voulu). Le contrôle positif prend « le rapport de plus petit identifiant » de B, et les identifiants sont tirés au hasard à chaque montage de la base de test : sur les 12 rapports de `TEST-2026-002` dont un brouillon, le test tombait dessus environ une fois sur douze. `tests/etancheite/conftest.py` écarte désormais les brouillons du choix de l'exemple. Vérifié sur `beta` en base locale : sur 93 rapports, 5 brouillons d'autres auteurs rendent 404 au DG, tous les autres sont lisibles.

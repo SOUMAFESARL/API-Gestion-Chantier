@@ -80,25 +80,9 @@ CORPS = {
 }
 
 # Refus sous un autre code que 403/404, sans rien laisser voir de B : tolérés, chacun avec sa
-# raison. Le corps et le témoin restent vérifiés.
-REFUS_ATYPIQUES = {
-    "api/v1/^decoupage/listes/(?P<origine>PLATEFORME|ENTREPRISE|plateforme|entreprise)/"
-    "(?P<pk>[0-9a-fA-F-]{36})/$": (
-        {400},
-        "la liste de l'URL passe par `resoudre_liste`, qui répond 400 « Cette liste est "
-        "introuvable » (elle valide aussi les références envoyées dans un corps)",
-    ),
-    "api/v1/^decoupage/listes/(?P<origine>PLATEFORME|ENTREPRISE|plateforme|entreprise)/"
-    "(?P<pk>[0-9a-fA-F-]{36})/valeurs/$": (
-        {400},
-        "le corps est validé avant la liste, puis `resoudre_liste` répond 400",
-    ),
-    "api/v1/^decoupage/listes/(?P<origine>PLATEFORME|ENTREPRISE|plateforme|entreprise)/"
-    "(?P<pk>[0-9a-fA-F-]{36})/valeurs/importer/$": (
-        {415},
-        "import de fichier : un corps JSON est refusé par l'analyseur avant la vue",
-    ),
-}
+# raison. Le corps et le témoin restent vérifiés. Vide depuis l'alignement des listes de
+# découpage sur 404 (08/11/2026) : toute route doit répondre 403, 404 ou 405.
+REFUS_ATYPIQUES: dict[str, tuple[set[int], str]] = {}
 
 # Routes dont le contrôle positif (B lit sa propre ligne) est sans objet.
 CONTROLE_SANS_OBJET = {

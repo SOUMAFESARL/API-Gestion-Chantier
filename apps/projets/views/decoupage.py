@@ -4,6 +4,7 @@ Les vues restent sans logique : permission, validation, appel du service, répon
 sur une case vérifie la permission **dans le périmètre** (`services.perimetres.exiger`).
 """
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
@@ -171,7 +172,16 @@ class ListesView(APIView):
 
 
 def _liste_de_url(origine, pk):
-    return lm.resoudre_liste({"origine": origine.upper(), "id": pk})
+    """La liste désignée par l'URL ; 404 si elle n'existe pas — ou si elle appartient à une autre
+    entreprise, que la RLS rend invisible.
+
+    `resoudre_liste` répond 400 : c'est le bon code pour une référence envoyée **dans un corps**,
+    pas pour la ressource de l'URL.
+    """
+    try:
+        return lm.resoudre_liste({"origine": origine.upper(), "id": pk})
+    except (ValidationError, DjangoValidationError) as exc:
+        raise NotFound("Cette liste est introuvable.") from exc
 
 
 class ListeDetailView(APIView):
@@ -212,10 +222,11 @@ class ListeValeursView(APIView):
 
     @schema(summary="Ajouter des valeurs à une liste", request=AjoutValeursSerializer)
     def post(self, request, origine, pk):
+        liste = _liste_de_url(origine, pk)  # d'abord : une liste inconnue est un 404, quel que soit le corps
         donnees = AjoutValeursSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
         resultat = lm.ajouter_valeurs(
-            _liste_de_url(origine, pk),
+            liste,
             donnees.validated_data["valeurs"],
             donnees.validated_data["groupe"],
             auteur=request.user,
@@ -240,12 +251,13 @@ class ListeValeursImporterView(APIView):
         },
     )
     def post(self, request, origine, pk):
+        # La liste d'abord : DRF n'analyse le corps qu'à l'accès à `request.FILES`, et un corps
+        # inadapté (415) ne doit pas masquer une liste inconnue (404).
+        liste = _liste_de_url(origine, pk)
         fichier = request.FILES.get("fichier")
         if fichier is None:
             raise ValidationError({"fichier": "Joignez un fichier .xlsx ou .csv."})
-        resultat = lm.importer_valeurs_fichier(
-            _liste_de_url(origine, pk), fichier, auteur=request.user
-        )
+        resultat = lm.importer_valeurs_fichier(liste, fichier, auteur=request.user)
         return Response(resultat, status=status.HTTP_201_CREATED)
 
 

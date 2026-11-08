@@ -26,13 +26,13 @@ class Command(BaseCommand):
         from apps.projets.models import Projet
         from apps.projets.services.avancement import recalculer_avancements_projet
         from apps.projets.services.dates_derivees import recalculer_dates_derivees
-        from apps.projets.services.machine_etats import evaluer_statuts_arbre
+        from apps.projets.services.machine_etats import evaluer_statut_projet, evaluer_statuts_arbre
 
         entreprises = Entreprise.objects.exclude(slug="")
         if options["entreprise"]:
             entreprises = entreprises.filter(slug=options["entreprise"])
 
-        projets_traites = dates_recalees = statuts_changes = 0
+        projets_traites = dates_recalees = statuts_changes = projets_changes = 0
         for entreprise in entreprises:
             with contexte_entreprise(entreprise):
                 for projet in Projet.objects.filter(supprime_le__isnull=True):
@@ -40,11 +40,14 @@ class Command(BaseCommand):
                     dates_recalees += recalculer_dates_derivees(projet)
                     recalculer_avancements_projet(projet)
                     statuts_changes += evaluer_statuts_arbre(projet)
+                    # Le projet lit ses cases : terminé quand toutes les tâches le sont.
+                    projets_changes += int(evaluer_statut_projet(projet))
                     projets_traites += 1
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"{projets_traites} projet(s) recalé(s) : {dates_recalees} parent(s) re-daté(s), "
-                f"{statuts_changes} statut(s) corrigé(s)."
+                f"{statuts_changes} statut(s) de case corrigé(s), {projets_changes} statut(s) de "
+                "projet corrigé(s)."
             )
         )

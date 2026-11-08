@@ -162,10 +162,16 @@ def _redevenir_feuille_si_besoin(parent) -> None:
 def _recalculer(projet) -> None:
     from apps.projets.services.avancement import recalculer_avancements_projet
     from apps.projets.services.dates_derivees import recalculer_dates_derivees
+    from apps.projets.services.machine_etats import evaluer_statut_projet, evaluer_statuts_arbre
 
     # Les dates d'abord : le temporel d'un parent se lit sur elles.
     recalculer_dates_derivees(projet)
     recalculer_avancements_projet(projet)
+    # Puis les statuts : un parent est clôturé *parce que* ses enfants le sont, et le projet est
+    # terminé de même. Ajouter, déplacer ou désactiver une tâche les rouvre aussitôt, sans attendre
+    # la nuit.
+    evaluer_statuts_arbre(projet)
+    evaluer_statut_projet(projet)
 
 
 def _transferer_liens(ancienne_feuille, auteur) -> None:

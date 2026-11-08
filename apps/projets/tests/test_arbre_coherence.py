@@ -491,3 +491,121 @@ def test_les_statistiques_portent_le_chiffre_et_le_realise(chantier, auteur):
 
     assert stats["decoupage_montant"] == 4_000_000_00
     assert stats["realise_montant"] == 3_000_000_00
+
+
+# --------------------------------------------------------------------------
+# Le projet lit ses cases : Terminé quand toutes les tâches le sont
+# --------------------------------------------------------------------------
+def _terminer_tout(c, auteur):
+    mesurer_feuille(c["cloture"], auteur=auteur, commentaire="Fait", pourcentage_declare=100)
+    mesurer_feuille(c["implantation"], auteur=auteur, commentaire="Fait", quantite_realisee=10)
+    c["projet"].refresh_from_db()
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_le_projet_est_termine_quand_toutes_ses_taches_le_sont(chantier, auteur):
+    c = chantier
+
+    mesurer_feuille(c["cloture"], auteur=auteur, commentaire="Fait", pourcentage_declare=100)
+    c["projet"].refresh_from_db()
+    assert c["projet"].statut != StatutProjet.TERMINE  # une tâche sur deux
+
+    mesurer_feuille(c["implantation"], auteur=auteur, commentaire="Fait", quantite_realisee=10)
+    c["projet"].refresh_from_db()
+
+    assert c["projet"].statut == StatutProjet.TERMINE
+    assert c["projet"].date_fin_reelle is not None
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_rouvrir_une_tache_rouvre_le_projet_et_efface_sa_fin_reelle(chantier, auteur):
+    from apps.projets.services.arbre import rouvrir_feuille
+
+    c = chantier
+    _terminer_tout(c, auteur)
+    assert c["projet"].statut == StatutProjet.TERMINE
+
+    rouvrir_feuille(c["implantation"], auteur=auteur, motif="Une réserve du maître d'ouvrage")
+    c["projet"].refresh_from_db()
+
+    assert c["projet"].statut != StatutProjet.TERMINE
+    assert c["projet"].date_fin_reelle is None
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_ajouter_une_tache_rouvre_le_projet_termine_et_le_parent_clos(chantier, auteur):
+    from apps.projets.services.arbre import ajouter_element
+
+    c = chantier
+    _terminer_tout(c, auteur)
+    assert c["projet"].statut == StatutProjet.TERMINE
+
+    ajouter_element(
+        c["projet"],
+        parent=c["ouvrage"],
+        libelle="Branchement provisoire",
+        auteur=auteur,
+        motif="Branchement provisoire oublié au marché",
+    )
+    c["projet"].refresh_from_db()
+    _relire(c["ouvrage"], c["phase"])
+
+    assert c["projet"].statut != StatutProjet.TERMINE
+    # Sans attendre la nuit : les parents ne restent pas « Clôturée ».
+    assert c["ouvrage"].statut != StatutActivite.CLOTURE
+    assert c["phase"].statut != StatutActivite.CLOTURE
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_un_projet_suspendu_ou_receptionne_ne_change_pas_tout_seul(chantier, auteur):
+    for statut in (StatutProjet.SUSPENDU, StatutProjet.RECEPTIONNE):
+        Projet.objects.filter(pk=chantier["projet"].pk).update(statut=statut)
+        chantier["cloture"].refresh_from_db()
+        mesurer_feuille(
+            Element.objects.get(pk=chantier["cloture"].pk),
+            auteur=auteur,
+            commentaire="Fait",
+            pourcentage_declare=100,
+        )
+        mesurer_feuille(
+            Element.objects.get(pk=chantier["implantation"].pk),
+            auteur=auteur,
+            commentaire="Fait",
+            quantite_realisee=10,
+        )
+        chantier["projet"].refresh_from_db()
+        assert chantier["projet"].statut == statut
+        # On rouvre pour le tour suivant.
+        Element.objects.filter(
+            pk__in=[chantier["cloture"].pk, chantier["implantation"].pk]
+        ).update(cloture=False, pourcentage_declare=0, quantite_realisee=0)
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_un_projet_en_attente_demarre_des_qu_une_tache_porte_une_mesure(chantier, auteur):
+    """Sans montant, l'avancement est indisponible : c'est la mesure d'une tâche qui démarre."""
+    c = chantier
+    Element.objects.filter(projet=c["projet"]).update(montant=None)
+    Projet.objects.filter(pk=c["projet"].pk).update(statut=StatutProjet.EN_ATTENTE)
+
+    mesurer_feuille(c["cloture"], auteur=auteur, commentaire="Début", pourcentage_declare=20)
+    c["projet"].refresh_from_db()
+
+    assert c["projet"].statut == StatutProjet.EN_COURS
+
+
+@pytest.mark.regle
+@pytest.mark.entreprise
+def test_terminer_a_la_main_exige_des_taches_cloturees(chantier, auteur):
+    from rest_framework.exceptions import ValidationError
+
+    from apps.projets.services.machine_etats import changer_statut_projet
+
+    c = chantier
+    with pytest.raises(ValidationError):
+        changer_statut_projet(c["projet"], StatutProjet.TERMINE, utilisateur=auteur)

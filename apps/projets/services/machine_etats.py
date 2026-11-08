@@ -19,13 +19,19 @@ Invariants garantis :
 2. Rétablissement instantané en temps réel :
    - EN_RETARD -> EN_COURS dès qu'un décalage justifié (reprogrammation de date)
      repousse la date de fin à une date >= date_du_jour.
-3. Verrou absolu de Réception :
-   - Aucun projet ne peut passer à RECEPTIONNE (ou TERMINE) tant qu'une feuille active de son
-     arbre n'est pas clôturée (ou à 100 %).
-4. Préservation des états manuels et terminaux (puits stables) :
-   - Les statuts SUSPENDU, BLOQUE, DESACTIVE, RESILIE, ARCHIVE, RECEPTIONNE et TERMINE
-     (STATUTS_PROJET_MANUELS_FIXES) ne sont jamais écrasés automatiquement par la tâche nocturne.
-     Le statut CRITIQUE est quant à lui automatique (SFD F3 §7) et non protégé.
+3. Le projet lit ses cases (08/11/2026) — comme une case lit ses enfants :
+   - TERMINE dès que **toutes** les feuilles actives de l'arbre sont clôturées, et dès qu'il y en
+     a au moins une. Il n'est plus saisi à la main : il se déduit, et il se défait de lui-même
+     quand une tâche se rouvre ou qu'une tâche s'ajoute (la fin réelle du projet s'efface).
+   - EN_ATTENTE -> EN_COURS dès qu'une feuille porte une mesure, même sans montant.
+   - RECEPTIONNE, lui, reste un acte : l'ouvrage terminé est reçu par le client.
+4. Verrou absolu de Réception :
+   - Aucun projet ne peut passer à RECEPTIONNE (ou TERMINE à la main) tant qu'une feuille active de
+     son arbre n'est pas clôturée (ou à 100 %).
+5. Préservation des états manuels et terminaux (puits stables) :
+   - Les statuts SUSPENDU, BLOQUE, DESACTIVE, RESILIE, ARCHIVE et RECEPTIONNE
+     (STATUTS_PROJET_MANUELS_FIXES) ne sont jamais écrasés automatiquement. TERMINE n'en fait
+     plus partie : il se déduit des feuilles. CRITIQUE est lui aussi automatique (SFD F3 §7).
 """
 
 import logging
@@ -107,7 +113,6 @@ STATUTS_PROJET_MANUELS_FIXES = frozenset(
         StatutProjet.RESILIE,
         StatutProjet.ARCHIVE,
         StatutProjet.RECEPTIONNE,
-        StatutProjet.TERMINE,
     }
 )
 
@@ -215,10 +220,36 @@ def evaluer_statuts_arbre(projet: Projet, date_reference: date | None = None) ->
     return len(a_jour)
 
 
+def _dates_reelles(projet: Projet, feuilles, ancien_statut, date_ref: date) -> list[str]:
+    """Les dates réelles du projet suivent ses tâches ; rend les champs modifiés.
+
+    - début réel : le plus tôt de ceux des tâches, posé une fois, au premier démarrage ;
+    - fin réelle : la plus tard de celles des tâches quand le projet devient « Terminé », et
+      **effacée** s'il se rouvre — comme celle d'une tâche rouverte (§13quinquies.3).
+    """
+    champs = []
+    if projet.date_debut_reelle is None:
+        debuts = [f.date_debut_reelle for f in feuilles if f.date_debut_reelle]
+        if debuts:
+            projet.date_debut_reelle = min(debuts)
+            champs.append("date_debut_reelle")
+    if projet.statut == StatutProjet.TERMINE:
+        if projet.date_fin_reelle is None:
+            fins = [f.date_fin_reelle for f in feuilles if f.date_fin_reelle]
+            projet.date_fin_reelle = max(fins) if fins else date_ref
+            champs.append("date_fin_reelle")
+    elif ancien_statut == StatutProjet.TERMINE and projet.date_fin_reelle is not None:
+        projet.date_fin_reelle = None
+        champs.append("date_fin_reelle")
+    return champs
+
+
 def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) -> bool:
     """Évalue et met à jour le statut d'un projet selon la SFD F3 §7.
 
     Règles de passage et transitions :
+    0. TERMINE se déduit : toutes les tâches clôturées, le projet est terminé ; une tâche rouverte
+       ou ajoutée le rouvre (le retard se rejuge alors sur les cases suivies).
     1. Préservation absolue des statuts manuels et terminaux (STATUTS_PROJET_MANUELS_FIXES).
     2. EN_ATTENTE reste EN_ATTENTE tant que la date de début n'est pas atteinte OU
        qu'aucun rapport F2 n'a été soumis (SOUMIS ou APPROUVE), puis passe EN_COURS.
@@ -239,7 +270,16 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
     if projet.statut in STATUTS_PROJET_MANUELS_FIXES:
         return False
 
-    if projet.statut == StatutProjet.EN_ATTENTE:
+    arbre = charger_arbre(projet)
+    feuilles = arbre.feuilles()
+    # Le projet lit ses cases : toutes les tâches clôturées, il est terminé — rien à décider.
+    # Sans tâche (pas de découpage), « Terminé » reste un acte manuel et n'est jamais déduit.
+    termine = bool(feuilles) and all(f.cloture for f in feuilles)
+    ancien_statut = projet.statut
+
+    if termine:
+        nouveau_statut = StatutProjet.TERMINE
+    elif projet.statut == StatutProjet.EN_ATTENTE:
         date_debut = projet.date_debut_prevue or getattr(projet, "date_debut_reelle", None)
         debut_atteint = bool(date_debut and date_ref >= date_debut)
         rapport_soumis = projet.rapports_journaliers.filter(
@@ -253,7 +293,16 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
         avancement_positif = bool(
             projet.avancement_reel is not None and projet.avancement_reel > Decimal("0")
         )
-        if not ((debut_atteint and rapport_soumis) or rapport_approuve or avancement_positif):
+        # Une tâche mesurée suffit à démarrer le projet, même quand aucun montant ne donne
+        # d'avancement chiffré.
+        racines = [racine for racine in arbre.racines() if racine.est_actif]
+        arbre_demarre = any(arbre.commence(racine) for racine in racines)
+        if not (
+            (debut_atteint and rapport_soumis)
+            or rapport_approuve
+            or avancement_positif
+            or arbre_demarre
+        ):
             return False
         nouveau_statut = StatutProjet.EN_COURS
     else:
@@ -265,7 +314,6 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
             getattr(projet, "date_debut_reelle", None),
             getattr(projet, "date_fin_reelle", None),
         )
-        arbre = charger_arbre(projet)
         resultats = calculer_arbre(arbre)
         par_case = calculer_deltas_arbre(arbre, resultats, date_ref, calendrier)
         deltas: list[float] = [
@@ -294,9 +342,10 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
                 nouveau_statut = StatutProjet.EN_COURS
 
     if projet.statut != nouveau_statut:
-        ancien = projet.statut
+        ancien = ancien_statut
         projet.statut = nouveau_statut
-        projet.save(update_fields=["statut", "modifie_le"])
+        champs = ["statut", "modifie_le", *_dates_reelles(projet, feuilles, ancien, date_ref)]
+        projet.save(update_fields=champs)
         logger.info(
             "Projet %s (%s) : statut mis à jour de %s -> %s",
             projet.id,
@@ -330,7 +379,9 @@ def changer_statut_projet(
     """
     ancien_statut = projet.statut
 
-    if nouveau_statut == StatutProjet.RECEPTIONNE:
+    # Terminer ou réceptionner exige des tâches toutes clôturées (le docstring du module le disait
+    # déjà de TERMINE ; seul RECEPTIONNE était gardé).
+    if nouveau_statut in (StatutProjet.RECEPTIONNE, StatutProjet.TERMINE):
         valider_transition_reception(projet)
 
     # C2 : SUSPENDU ouvre automatiquement un ArretChantier, et la reprise le ferme

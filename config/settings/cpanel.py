@@ -3,6 +3,9 @@
 from .production import *
 from .production import MIDDLEWARE
 
+# Le compte cPanel ne peut pas créer de rôle BYPASSRLS.
+CCD_PLATEFORME_SANS_ROLE = config("CCD_PLATEFORME_SANS_ROLE", default=True, cast=bool)
+
 MIDDLEWARE = list(MIDDLEWARE)
 MIDDLEWARE.insert(
     MIDDLEWARE.index("django.middleware.security.SecurityMiddleware") + 1,

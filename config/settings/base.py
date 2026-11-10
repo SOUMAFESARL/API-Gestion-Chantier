@@ -189,6 +189,7 @@ DATABASES = {
 # Le rôle PostgreSQL de la portée plateforme : `BYPASSRLS`, accordé au rôle de connexion, pris
 # par `SET ROLE` le temps d'une `portee_plateforme(...)`. Créé par scripts/sql/roles_rls.sql.
 CCD_ROLE_PLATEFORME = config("POSTGRES_ROLE_PLATEFORME", default="ccd_plateforme")
+CCD_PLATEFORME_SANS_ROLE = config("CCD_PLATEFORME_SANS_ROLE", default=False, cast=bool)
 
 # --------------------------------------------------------------------------
 # Compatibilité SGBD : autoriser PostgreSQL >= 13.0 (notamment PostgreSQL 13.23

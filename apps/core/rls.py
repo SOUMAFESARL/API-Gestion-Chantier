@@ -19,6 +19,12 @@ diffère :
 | rien | vide | celui de connexion | **aucune ligne d'entreprise** ; le personnel (`utilisateur`) |
 | portée plateforme | vide | `ccd_plateforme` (`BYPASSRLS`) | tout |
 
+Sur cPanel, `CCD_PLATEFORME_SANS_ROLE=True` remplace le changement de rôle par
+`ccd.portee_plateforme=on`. La migration core.0003 ajoute les politiques correspondantes.
+Le wrapper remet ce réglage à `off` pour chaque contexte ordinaire, y compris
+une entreprise ouverte à l'intérieur d'une portée plateforme. Ce mode conserve
+la même limite de confiance face au SQL hostile que les réglages d'entreprise.
+
 Le réglage n'est donc jamais « oublié » sur une connexion réutilisée (`CONN_MAX_AGE`) : la
 première requête de la requête HTTP suivante le remet d'accord avec son propre contexte, avant de
 s'exécuter. Une connexion qui n'a jamais reçu de réglage ne voit rien.
@@ -54,6 +60,13 @@ __all__ = [
 ]
 
 REGLAGE_ENTREPRISE = "ccd.entreprise_id"
+REGLAGE_PLATEFORME = "ccd.portee_plateforme"
+
+
+def plateforme_sans_role() -> bool:
+    """Mode hébergement mutualisé : portée explicite par réglage de session."""
+    return getattr(settings, "CCD_PLATEFORME_SANS_ROLE", False)
+
 
 # Les tables d'entreprise dont `entreprise_id` peut être nul : le personnel de l'éditeur et ce
 # qui le suit (R-8), les actions de la plateforme dans le journal (R-11). Une ligne nulle n'est
@@ -84,7 +97,7 @@ def role_plateforme() -> str:
 def etat_voulu() -> tuple[str, str]:
     """`(entreprise, rôle)` que la session doit porter pour le contexte en cours."""
     if en_portee_plateforme():
-        return "", role_plateforme()
+        return "", "none" if plateforme_sans_role() else role_plateforme()
     identifiant = entreprise_courante_id()
     return (str(identifiant) if identifiant else ""), "none"
 
@@ -97,17 +110,26 @@ def appliquer_contexte_rls(execute, sql, params, many, context):
     """
     connexion = context["connection"]
     voulu = etat_voulu()
+    plateforme = plateforme_sans_role() and en_portee_plateforme()
+    etat = (*voulu, plateforme)
     # Les instructions de point de sauvegarde ne lisent aucune ligne, et `ROLLBACK TO SAVEPOINT`
     # doit pouvoir partir d'une transaction en échec, où tout autre ordre serait refusé.
     if not many and isinstance(sql, str) and sql.lstrip()[:9].upper() in _SANS_REGLAGE:
         return execute(sql, params, many, context)
-    if getattr(connexion, "etat_rls", None) != voulu:
+    if getattr(connexion, "etat_rls", None) != etat:
         try:
             # Le curseur brut de psycopg : ni les autres wrappers ni le journal des requêtes de
             # Django ne voient ce réglage (`assertNumQueries`, `mesurer_requetes` restent justes).
             context["cursor"].cursor.execute(
-                "SELECT set_config(%s, %s, false), set_config('role', %s, false)",
-                [REGLAGE_ENTREPRISE, voulu[0], voulu[1]],
+                "SELECT set_config(%s, %s, false), set_config('role', %s, false), "
+                "set_config(%s, %s, false)",
+                [
+                    REGLAGE_ENTREPRISE,
+                    voulu[0],
+                    voulu[1],
+                    REGLAGE_PLATEFORME,
+                    "on" if plateforme else "off",
+                ],
             )
         except Exception:
             connexion.etat_rls = None
@@ -118,7 +140,7 @@ def appliquer_contexte_rls(execute, sql, params, many, context):
                     voulu[1],
                 )
             raise
-        connexion.etat_rls = voulu
+        connexion.etat_rls = etat
         # Compté à part : un aller-retour vers la base que `CaptureQueriesContext` ne voit pas.
         connexion.reglages_rls = getattr(connexion, "reglages_rls", 0) + 1
     return execute(sql, params, many, context)
@@ -204,7 +226,9 @@ def diagnostic_isolation(connexion, *, tables: bool = True) -> list[str]:
             [role],
         )
         ligne = curseur.fetchone()
-        if ligne is None:
+        if plateforme_sans_role():
+            pass  # Les politiques dédiées sont vérifiées ci-dessous.
+        elif ligne is None:
             defauts.append(
                 f"Le rôle « {role} » n'existe pas : la portée plateforme échouera "
                 "(scripts/sql/roles_rls.sql)."
@@ -230,11 +254,20 @@ def diagnostic_isolation(connexion, *, tables: bool = True) -> list[str]:
         )
         etat = {nom: (active, forcee, politique) for nom, active, forcee, politique in curseur}
 
+        if plateforme_sans_role():
+            curseur.execute(
+                "SELECT tablename FROM pg_policies WHERE schemaname = 'public' "
+                "AND policyname = 'portee_plateforme_session'",
+            )
+            couvertes = {nom for (nom,) in curseur}
+            for table in sorted(tables_attendues() - couvertes):
+                defauts.append(f"Table « {table} » sans politique de plateforme par session.")
+
     for table in sorted(tables_attendues()):
         active, forcee, politique = etat.get(table, (False, False, False))
         if not (active and forcee and politique):
             defauts.append(
                 f"Table « {table} » sans isolation complète (RLS active={active}, "
-                f"forcée={forcee}, politique={politique}) : isolation_entreprise(\"{table}\")."
+                f'forcée={forcee}, politique={politique}) : isolation_entreprise("{table}").'
             )
     return defauts

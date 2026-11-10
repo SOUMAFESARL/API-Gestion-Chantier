@@ -11,11 +11,16 @@ import pytest
 from django.db import connection, transaction
 
 from apps.core.contexte import contexte_entreprise, portee_plateforme, reinitialiser_contexte
-from apps.core.rls import diagnostic_isolation, role_plateforme
-from apps.projets.models import MotifReport
+from apps.core.rls import diagnostic_isolation, plateforme_sans_role, role_plateforme
 from apps.entreprises.models import Entreprise
+from apps.projets.models import MotifReport
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True, params=[False, True], ids=["role", "session"])
+def mode_plateforme(request, settings):
+    settings.CCD_PLATEFORME_SANS_ROLE = request.param
 
 
 @pytest.fixture(autouse=True)
@@ -90,7 +95,10 @@ def test_ecrire_pour_une_autre_entreprise_est_refuse(deux_entreprises):
 def test_la_portee_plateforme_voit_tout(deux_entreprises):
     with portee_plateforme(motif="test de la RLS"):
         assert codes() == {"PLUIE", "GREVE", "PANNE"}
-        assert brut("SELECT current_user")[0][0] == role_plateforme()
+        if plateforme_sans_role():
+            assert brut("SELECT current_setting('ccd.portee_plateforme')")[0][0] == "on"
+        else:
+            assert brut("SELECT current_user")[0][0] == role_plateforme()
     assert brut("SELECT current_user")[0][0] != role_plateforme()
     assert codes() == set()
 

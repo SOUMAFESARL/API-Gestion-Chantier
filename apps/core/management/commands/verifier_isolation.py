@@ -9,7 +9,12 @@ Sort en erreur au moindre défaut : à lancer après un déploiement ou une migr
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from apps.core.rls import diagnostic_isolation, role_plateforme, tables_attendues
+from apps.core.rls import (
+    diagnostic_isolation,
+    plateforme_sans_role,
+    role_plateforme,
+    tables_attendues,
+)
 
 
 class Command(BaseCommand):
@@ -24,6 +29,10 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Isolation en place : {len(tables_attendues())} tables sous RLS forcée, "
-                f"portée plateforme par le rôle « {role_plateforme()} »."
+                + (
+                    "portée plateforme par session."
+                    if plateforme_sans_role()
+                    else f"portée plateforme par le rôle « {role_plateforme()} »."
+                )
             )
         )

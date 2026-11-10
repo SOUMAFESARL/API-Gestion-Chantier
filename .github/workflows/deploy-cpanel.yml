@@ -82,12 +82,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/local.txt
 
-      - name: Créer le rôle applicatif et le rôle de la portée plateforme
+      - name: Créer le rôle de connexion de test
         env:
           PGPASSWORD: test-only
         run: |
           psql -h 127.0.0.1 -U postgres -d ccd_digital -v ON_ERROR_STOP=1 -c             "CREATE ROLE ccd LOGIN PASSWORD 'test-only' NOSUPERUSER NOBYPASSRLS CREATEDB;"
-          psql -h 127.0.0.1 -U postgres -d ccd_digital -v app=ccd -f scripts/sql/roles_rls.sql
 
       - name: Vérifier la configuration Django
         run: |

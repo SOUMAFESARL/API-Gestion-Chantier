@@ -17,11 +17,10 @@ def verifier_isolation_rls(app_configs=None, databases=None, **kwargs):
         connexion = connections[alias]
         if connexion.vendor != "postgresql":
             continue
-        # `migrate` lance ce contrôle **avant** de migrer : une table que la migration en attente
-        # va créer (base neuve, nouvelle table d'entreprise) n'a pas encore sa politique, et le
-        # contrôle bloquerait la migration même qui la pose. Les rôles se vérifient toujours ;
-        # les tables, une fois les migrations appliquées (`verifier_isolation` après `migrate`).
-        tables = not _migrations_en_attente(connexion)
+        # Le retrait ne peut etre controle qu'apres les migrations.
+        if _migrations_en_attente(connexion):
+            continue
+        tables = True
         for defaut in diagnostic_isolation(connexion, tables=tables):
             erreurs.append(Error(defaut, id="core.E101", obj=alias))
     return erreurs

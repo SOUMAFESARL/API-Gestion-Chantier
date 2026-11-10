@@ -7,8 +7,7 @@
 Sur une base **vide** (créée, sans table), dans l'ordre :
 
 1. `migrate`, une passe depuis les `0001` ;
-2. `verifier_isolation` : la RLS est en place sur toutes les tables d'entreprise, le rôle de
-   connexion la subit, le rôle de la portée plateforme existe ;
+2. `verifier_isolation` : absence de RLS residuelle ; isolation par Django ;
 3. `ensemencer_plateforme` : catalogue, modèles de rôles, référentiels, listes, modèles de
    découpage, plans, identité de la plateforme — **sauté si le catalogue est déjà là** ;
 4. `charger_jours_feries` pour l'année en cours et la suivante ;
@@ -21,8 +20,7 @@ Sur une base **vide** (créée, sans table), dans l'ordre :
 
 Rejouable : chaque étape converge, et une base déjà montée n'est que vérifiée.
 
-**Prérequis, une fois par serveur** : `scripts/sql/roles_rls.sql`, joué en superutilisateur, crée
-le rôle `ccd_plateforme`. Les droits par base, eux, sont redonnés par la migration RLS.
+Aucun role PostgreSQL privilegie requis. Les migrations necessitent le proprietaire des tables.
 """
 
 import os

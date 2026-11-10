@@ -1,14 +1,4 @@
-"""Couches 1 et 2 de l'isolation, éprouvées sur **chaque** modèle et **chaque** table (D9, §4.3).
-
-Les tests unitaires de `apps/core/tests` vérifient le mécanisme sur une table ; ceux-ci vérifient
-qu'aucun modèle ni aucune table n'y échappe, avec les deux entreprises peuplées :
-
-- hors contexte, toute requête ORM sur un modèle d'entreprise lève `HorsContexteEntreprise` —
-  par `objects` comme par `tous_objets` ;
-- hors contexte, le SQL brut ne voit aucune ligne d'entreprise ;
-- dans le contexte de A, le SQL brut ne voit aucune ligne de B ;
-- le rôle de connexion subit la RLS (ni superutilisateur, ni `BYPASSRLS`).
-"""
+"""Isolation des gestionnaires Django de chaque modele et absence de RLS residuelle."""
 
 from __future__ import annotations
 
@@ -23,7 +13,7 @@ from apps.core.contexte import (
     reinitialiser_contexte,
 )
 from apps.core.models import ModeleEntreprise
-from apps.core.rls import TABLES_A_ENTREPRISE_NULLABLE, diagnostic_isolation
+from apps.core.rls import diagnostic_isolation
 
 pytestmark = pytest.mark.django_db
 
@@ -31,7 +21,6 @@ MODELES = sorted(
     (m for m in apps.get_models() if issubclass(m, ModeleEntreprise) and m._meta.managed),
     key=lambda m: m._meta.label,
 )
-TABLES = sorted({m._meta.db_table for m in MODELES} | TABLES_A_ENTREPRISE_NULLABLE)
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +36,7 @@ def compter(requete: str, params=None) -> int:
         return curseur.fetchone()[0]
 
 
-def test_le_role_de_connexion_subit_la_rls():
+def test_la_rls_est_retiree():
     assert diagnostic_isolation(connection) == []
 
 
@@ -63,24 +52,13 @@ def test_hors_contexte_l_orm_refuse(modele, monde):
             list(gestionnaire.all()[:1])
 
 
-@pytest.mark.parametrize("table", TABLES)
-def test_hors_contexte_le_sql_brut_ne_voit_aucune_ligne_d_entreprise(table, monde):
-    requete = f'SELECT count(*) FROM "{table}" WHERE entreprise_id IS NOT NULL'
-    assert compter(requete) == 0
-
-
-@pytest.mark.parametrize("table", TABLES)
-def test_dans_a_le_sql_brut_ne_voit_aucune_ligne_de_b(table, monde):
-    with portee_plateforme(motif="suite d'étanchéité : lignes de B présentes"):
-        chez_b = compter(f'SELECT count(*) FROM "{table}" WHERE entreprise_id = %s', [monde.b.pk])
+@pytest.mark.parametrize("modele", MODELES, ids=lambda m: m._meta.label)
+def test_dans_a_l_orm_ne_voit_aucune_ligne_de_b(modele, monde):
     with contexte_entreprise(monde.a):
-        vues = compter(
-            f'SELECT count(*) FROM "{table}" WHERE entreprise_id IS DISTINCT FROM %s',
-            [monde.a.pk],
-        )
-    assert vues == 0, (
-        f"{table} : A voit {vues} lignes qui ne sont pas les siennes ({chez_b} chez B)"
-    )
+        for nom in ("objects", "tous_objets"):
+            gestionnaire = getattr(modele, nom, None)
+            if gestionnaire is not None:
+                assert not gestionnaire.exclude(entreprise_id=monde.a.pk).exists()
 
 
 def test_les_deux_entreprises_ont_des_donnees(monde):

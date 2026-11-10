@@ -68,14 +68,23 @@ def migrer_bd_vue(request):
         return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
 
     out = StringIO()
+    erreurs = StringIO()
     try:
-        call_command("migrate", interactive=False, stdout=out)
-        call_command("verifier_isolation", stdout=out)
+        call_command("migrate", interactive=False, stdout=out, stderr=erreurs)
+        call_command("verifier_isolation", stdout=out, stderr=erreurs)
         call_command("synchroniser_catalogue_permissions", stdout=out)
         call_command("propager_roles_systeme", stdout=out)
         return JsonResponse({"statut": "succes", "output": out.getvalue()})
     except Exception as exc:
-        return JsonResponse({"statut": "erreur", "details": str(exc)}, status=500)
+        return JsonResponse(
+            {
+                "statut": "erreur",
+                "details": str(exc),
+                "diagnostic": erreurs.getvalue(),
+                "output": out.getvalue(),
+            },
+            status=500,
+        )
 
 
 @csrf_exempt

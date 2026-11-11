@@ -56,6 +56,9 @@ class Command(BaseCommand):
             # Les rôles avant le fondateur : `Utilisateur.save` ne rattache le rôle `DG` que
             # s'il existe déjà (même ordre que `services/inscription.activer`).
             initialiser_roles_par_defaut()
+            from apps.projets.services.reprogrammation import initialiser_motifs_report_par_defaut
+
+            initialiser_motifs_report_par_defaut()
             utilisateur = Utilisateur.objects.filter(email=options["email"]).first()
             if utilisateur is None:
                 # `create_user`, jamais `create_superuser` — règle R-64 de T-020.

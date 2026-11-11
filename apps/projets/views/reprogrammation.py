@@ -30,7 +30,10 @@ from apps.projets.serializers import (
     ReprogrammationRequestSerializer,
     ReprogrammationResponseSerializer,
 )
-from apps.projets.services.reprogrammation import reprogrammer_date_instance
+from apps.projets.services.reprogrammation import (
+    initialiser_motifs_report_par_defaut,
+    reprogrammer_date_instance,
+)
 
 __all__ = [
     "ElementHistoriqueDatesView",
@@ -50,7 +53,7 @@ class MotifReportListCreateView(APIView):
     parser_classes = [JSONParser]
 
     def get_permissions(self):
-        return [IsAuthenticated(), APermission.pour("pilotage.lire")()]
+        return [IsAuthenticated(), APermission.pour("projets.planifier")()]
 
     @extend_schema(
         summary="Lister les motifs de report actifs",
@@ -58,6 +61,7 @@ class MotifReportListCreateView(APIView):
         responses={200: MotifReportSerializer(many=True)},
     )
     def get(self, request):
+        initialiser_motifs_report_par_defaut()
         motifs = MotifReport.objects.filter(supprime_le__isnull=True, est_actif=True)
         return Response(MotifReportSerializer(motifs, many=True).data, status=status.HTTP_200_OK)
 

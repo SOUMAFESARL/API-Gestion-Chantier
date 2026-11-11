@@ -24,11 +24,38 @@ from apps.projets.services.dates_derivees import recalculer_dates_derivees
 from apps.projets.tasks import notifier_dg_derive_delai
 
 __all__ = [
+    "MOTIFS_REPORT_DEFAUT",
     "ProlongationRequise",
     "apercu_reprogrammation",
+    "initialiser_motifs_report_par_defaut",
     "planifier_element",
     "reprogrammer_date_instance",
 ]
+
+MOTIFS_REPORT_DEFAUT = (
+    ("INTEMPERIES", "Intempéries", 1, "Fortes pluies, inondations ou intempéries bloquantes."),
+    ("CLIENT", "Client", 2, "Retard de validation, modification des plans ou demande client."),
+    ("TECHNIQUE", "Technique", 3, "Aléa géotechnique, panne matérielle ou contrainte structurelle."),
+    ("ADMINISTRATIF", "Administratif", 4, "Attente d'autorisation administrative ou permis."),
+    ("AUTRE", "Autre", 5, "Autre motif exceptionnel tracé et justifié."),
+)
+
+
+def initialiser_motifs_report_par_defaut() -> None:
+    """Sème les 5 motifs de report par défaut si l'entreprise active n'en possède aucun."""
+    if MotifReport.tous_objets.filter(supprime_le__isnull=True).exists():
+        return
+    for code, libelle, ordre, description in MOTIFS_REPORT_DEFAUT:
+        MotifReport.objects.get_or_create(
+            code=code,
+            supprime_le__isnull=True,
+            defaults={
+                "libelle": libelle,
+                "ordre": ordre,
+                "description": description,
+                "est_actif": True,
+            },
+        )
 
 
 class ProlongationRequise(ErreurMetier):

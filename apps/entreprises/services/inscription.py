@@ -393,6 +393,9 @@ def provisionner(demande: DemandeInscription) -> Entreprise:
         # fondateur : `Utilisateur.save` ne rattache le rôle `DG` que s'il existe déjà — semé
         # après, le fondateur restait sans rôle (`role_id` nul), écart trouvé au lot 7.
         initialiser_roles_par_defaut()
+        from apps.projets.services.reprogrammation import initialiser_motifs_report_par_defaut
+
+        initialiser_motifs_report_par_defaut()
 
         # D-DEMO-01 / T-S1-01 : le premier inscrit est Directeur Général et propriétaire
         # immuable de l'entreprise. Le mot de passe est déjà haché : `create_user` le hacherait

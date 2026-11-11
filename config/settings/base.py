@@ -496,14 +496,17 @@ TAILLE_MAX_FICHIER_MO = 50  # US-006 : refus 413 au-delà
 PHOTOS_MAX_PAR_RAPPORT = 5  # RG-14
 
 # --------------------------------------------------------------------------
-# Cache et tâches asynchrones
+# Cache et tâches asynchrones (sans dépendance Redis obligatoire)
 # --------------------------------------------------------------------------
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
 
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
+        "BACKEND": config(
+            "CACHE_BACKEND",
+            default="django.core.cache.backends.locmem.LocMemCache",
+        ),
+        "LOCATION": config("CACHE_LOCATION", default="ccd-local-cache"),
     }
 }
 
@@ -513,8 +516,8 @@ CELERY_TIMEZONE = FUSEAU_AFFICHAGE  # l'alerte de 17 h 30 est une heure locale
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
-CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=True, cast=bool)
+CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=True, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=False, cast=bool)
 
 from celery.schedules import crontab
 

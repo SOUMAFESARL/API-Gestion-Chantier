@@ -463,23 +463,32 @@ def reprogrammer_date_instance(
         motif_libelle_notif = motif.libelle
 
         def _notifier_derive():
-            try:
-                notifier_dg_derive_delai.delay(
-                    entreprise_id=entreprise_id_notif,
-                    type_objet=type_objet,
-                    objet_id=objet_id_notif,
-                    jours_derive=jours_derive_contractuelle,
-                    motif_libelle=motif_libelle_notif,
-                    justification=justif_propre,
-                )
-            except Exception:
-                import logging
+            import threading
+            from django.db import close_old_connections
 
-                logging.getLogger(__name__).exception(
-                    "Échec de l'envoi de la notification de dérive de délai pour %s %s.",
-                    type_objet,
-                    objet_id_notif,
-                )
+            def _envoi():
+                try:
+                    close_old_connections()
+                    notifier_dg_derive_delai(
+                        entreprise_id=entreprise_id_notif,
+                        type_objet=type_objet,
+                        objet_id=objet_id_notif,
+                        jours_derive=jours_derive_contractuelle,
+                        motif_libelle=motif_libelle_notif,
+                        justification=justif_propre,
+                    )
+                except Exception:
+                    import logging
+
+                    logging.getLogger(__name__).exception(
+                        "Échec de l'envoi de la notification de dérive de délai pour %s %s.",
+                        type_objet,
+                        objet_id_notif,
+                    )
+                finally:
+                    close_old_connections()
+
+            threading.Thread(target=_envoi, daemon=True).start()
 
         transaction.on_commit(_notifier_derive)
         alerte_declenchee = True

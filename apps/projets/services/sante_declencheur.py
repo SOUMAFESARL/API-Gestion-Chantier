@@ -1,32 +1,25 @@
 """Service de déclenchement réactif du recalcul de l'indice de santé de projet.
 
-Conformément à la spécification (C8) :
-- Pas de recalcul synchrone bloquant les requêtes HTTP.
-- Clé Redis 'en attente' pour dédupliquer les déclenchements consécutifs.
-- Déclenchement via transaction.on_commit vers la tâche Celery recalculer_sante_projet_task.
+Exécution directe en Python après validation de la transaction (`transaction.on_commit`),
+sans aucune dépendance à Redis, au cache ni au broker Celery.
 """
 
 import logging
 from typing import Any
 from uuid import UUID
 
-from django.core.cache import cache
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.core.contexte import exiger_entreprise
 
 logger = logging.getLogger(__name__)
 
 CLE_PREFIX_ATTENTE = "sante:recalcul_en_attente"
-TTL_CLE_ATTENTE_SECONDES = 300  # 5 minutes de TTL de sécurité
+TTL_CLE_ATTENTE_SECONDES = 300
 
 
 def obtenir_cle_recalcul_en_attente(entreprise_id: Any, projet_id: Any) -> str:
-    """Construit la clé Redis identifiant un recalcul en attente pour un projet.
-
-    Indexée par l'entreprise et non plus par le schéma (D9) : un slug peut être réattribué, un
-    identifiant d'entreprise jamais.
-    """
+    """Construit l'identifiant de déduplication d'un recalcul de santé pour un projet."""
     return f"{CLE_PREFIX_ATTENTE}:{entreprise_id}:{str(projet_id)}"
 
 
@@ -35,15 +28,7 @@ def declencher_recalcul_sante(
     declencheur_type: str,
     declencheur_id: Any | None = None,
 ) -> None:
-    """Enregistre l'intention de recalcul et planifie la tâche Celery post-commit (C8 / F2).
-
-    Règles de concurrence et déduplication :
-    1. cache.add est exécuté DANS le callback on_commit pour éviter de poser un verrou orphelin
-       si la transaction courante est annulée (rollback).
-    2. Si la clé est posée avec succès, la tâche est planifiée avec un countdown de 10s pour regrouper
-       les rafales d'événements.
-    3. Si la clé existe déjà, la tâche déjà planifiée recalculera l'état le plus récent.
-    """
+    """Planifie le recalcul de l'indice de santé directement en post-commit, sans Redis ni Celery."""
     from apps.projets.tasks import recalculer_sante_projet_task
 
     entreprise_id = str(exiger_entreprise())
@@ -51,47 +36,30 @@ def declencher_recalcul_sante(
     declencheur_id_str = str(declencheur_id) if declencheur_id is not None else None
     projet_id_str = str(projet_id)
 
-    def _planifier_apres_commit():
-        try:
-            cle_posee = cache.add(cle, 1, timeout=TTL_CLE_ATTENTE_SECONDES)
-        except Exception:
-            logger.warning(
-                "Cache indisponible lors du verrou de recalcul santé pour le projet %s ; exécution directe.",
-                projet_id_str,
-                exc_info=True,
-            )
-            cle_posee = True
+    en_attente: set[str] = getattr(connection, "_sante_recalculs_en_attente", None)
+    if en_attente is None:
+        en_attente = set()
+        connection._sante_recalculs_en_attente = en_attente
 
-        if cle_posee:
-            try:
-                recalculer_sante_projet_task.apply_async(
-                    kwargs={
-                        "entreprise_id": entreprise_id,
-                        "projet_id": projet_id_str,
-                        "declencheur_type": declencheur_type,
-                        "declencheur_id": declencheur_id_str,
-                    },
-                    countdown=10,
-                )
-                logger.debug(
-                    "Tâche de recalcul santé planifiée pour le projet %s (%s, déclencheur %s, countdown 10s).",
-                    projet_id_str,
-                    entreprise_id,
-                    declencheur_type,
-                )
-            except Exception:
-                logger.exception(
-                    "Échec de la planification du recalcul santé pour le projet %s (%s).",
-                    projet_id_str,
-                    entreprise_id,
-                )
-        else:
-            logger.debug(
-                "Recalcul santé déjà en attente pour le projet %s (%s). Déclencheur %s absorbé.",
+    if cle in en_attente:
+        return
+    en_attente.add(cle)
+
+    def _executer_apres_commit():
+        en_attente.discard(cle)
+        try:
+            recalculer_sante_projet_task(
+                entreprise_id=entreprise_id,
+                projet_id=projet_id_str,
+                declencheur_type=declencheur_type,
+                declencheur_id=declencheur_id_str,
+            )
+        except Exception:
+            logger.exception(
+                "Échec du recalcul de santé post-commit pour le projet %s (%s).",
                 projet_id_str,
                 entreprise_id,
-                declencheur_type,
             )
 
-    transaction.on_commit(_planifier_apres_commit)
+    transaction.on_commit(_executer_apres_commit)
 

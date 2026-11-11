@@ -297,7 +297,6 @@ def recalculer_sante_projet_task(
     """
     from decimal import Decimal
 
-    from django.core.cache import cache
     from django.db import transaction
     from django.utils import timezone
 
@@ -305,14 +304,6 @@ def recalculer_sante_projet_task(
     from apps.projets.models import Projet, SanteProjetSnapshot
     from apps.projets.services.indice_sante import STATUTS_SANTE_FIGES, evaluer_indice_sante
     from apps.projets.services.sante_calculs import calculer_avancement_physique_projet
-    from apps.projets.services.sante_declencheur import obtenir_cle_recalcul_en_attente
-
-    # 1. Effacement immédiat de la clé Redis en début d'exécution (C8)
-    cle = obtenir_cle_recalcul_en_attente(entreprise_id, projet_id)
-    try:
-        cache.delete(cle)
-    except Exception:
-        logger.warning("Impossible de supprimer la clé de cache %s.", cle, exc_info=True)
 
     def _executer():
         with transaction.atomic():

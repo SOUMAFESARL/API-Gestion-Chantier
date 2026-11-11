@@ -150,7 +150,9 @@ class GardePermissionProjet(permissions.BasePermission):
         projet_id = view.kwargs.get("projet_id") or view.kwargs.get("projet_pk")
         if not projet_id and "pk" in view.kwargs:
             view_name = view.__class__.__name__
-            if not request.path.startswith("/api/v1/lots/") and not request.path.startswith("/api/v1/activites/"):
+            if not request.path.startswith(
+                ("/api/v1/lots/", "/api/v1/activites/", "/api/v1/elements/")
+            ):
                 if (
                     view_name.startswith("Projet")
                     and "equipe_id" not in view.kwargs

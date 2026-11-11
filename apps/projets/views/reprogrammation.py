@@ -87,7 +87,7 @@ class BaseReprogrammerView(APIView):
     parser_classes = [JSONParser]
     permission_classes = [
         IsAuthenticated,
-        GardePermissionProjet.pour("projets.ecrire"),
+        GardePermissionProjet.pour("projets.planifier"),
     ]
 
     def executer_reprogrammation(self, request, instance, type_objet: str):

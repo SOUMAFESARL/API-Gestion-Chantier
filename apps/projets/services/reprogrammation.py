@@ -458,14 +458,30 @@ def reprogrammer_date_instance(
     alerte_declenchee = False
 
     if jours_derive_contractuelle > 30:
-        notifier_dg_derive_delai.delay(
-            entreprise_id=str(exiger_entreprise()),
-            type_objet=type_objet,
-            objet_id=str(instance.id),
-            jours_derive=jours_derive_contractuelle,
-            motif_libelle=motif.libelle,
-            justification=justif_propre,
-        )
+        entreprise_id_notif = str(exiger_entreprise())
+        objet_id_notif = str(instance.id)
+        motif_libelle_notif = motif.libelle
+
+        def _notifier_derive():
+            try:
+                notifier_dg_derive_delai.delay(
+                    entreprise_id=entreprise_id_notif,
+                    type_objet=type_objet,
+                    objet_id=objet_id_notif,
+                    jours_derive=jours_derive_contractuelle,
+                    motif_libelle=motif_libelle_notif,
+                    justification=justif_propre,
+                )
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).exception(
+                    "Échec de l'envoi de la notification de dérive de délai pour %s %s.",
+                    type_objet,
+                    objet_id_notif,
+                )
+
+        transaction.on_commit(_notifier_derive)
         alerte_declenchee = True
 
     # Déclenchement réactif du recalcul de santé (C8)

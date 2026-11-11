@@ -309,7 +309,10 @@ def recalculer_sante_projet_task(
 
     # 1. Effacement immédiat de la clé Redis en début d'exécution (C8)
     cle = obtenir_cle_recalcul_en_attente(entreprise_id, projet_id)
-    cache.delete(cle)
+    try:
+        cache.delete(cle)
+    except Exception:
+        logger.warning("Impossible de supprimer la clé de cache %s.", cle, exc_info=True)
 
     def _executer():
         with transaction.atomic():

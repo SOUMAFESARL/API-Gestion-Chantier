@@ -52,23 +52,39 @@ def declencher_recalcul_sante(
     projet_id_str = str(projet_id)
 
     def _planifier_apres_commit():
-        cle_posee = cache.add(cle, 1, timeout=TTL_CLE_ATTENTE_SECONDES)
-        if cle_posee:
-            recalculer_sante_projet_task.apply_async(
-                kwargs={
-                    "entreprise_id": entreprise_id,
-                    "projet_id": projet_id_str,
-                    "declencheur_type": declencheur_type,
-                    "declencheur_id": declencheur_id_str,
-                },
-                countdown=10,
-            )
-            logger.debug(
-                "Tâche de recalcul santé planifiée pour le projet %s (%s, déclencheur %s, countdown 10s).",
+        try:
+            cle_posee = cache.add(cle, 1, timeout=TTL_CLE_ATTENTE_SECONDES)
+        except Exception:
+            logger.warning(
+                "Cache indisponible lors du verrou de recalcul santé pour le projet %s ; exécution directe.",
                 projet_id_str,
-                entreprise_id,
-                declencheur_type,
+                exc_info=True,
             )
+            cle_posee = True
+
+        if cle_posee:
+            try:
+                recalculer_sante_projet_task.apply_async(
+                    kwargs={
+                        "entreprise_id": entreprise_id,
+                        "projet_id": projet_id_str,
+                        "declencheur_type": declencheur_type,
+                        "declencheur_id": declencheur_id_str,
+                    },
+                    countdown=10,
+                )
+                logger.debug(
+                    "Tâche de recalcul santé planifiée pour le projet %s (%s, déclencheur %s, countdown 10s).",
+                    projet_id_str,
+                    entreprise_id,
+                    declencheur_type,
+                )
+            except Exception:
+                logger.exception(
+                    "Échec de la planification du recalcul santé pour le projet %s (%s).",
+                    projet_id_str,
+                    entreprise_id,
+                )
         else:
             logger.debug(
                 "Recalcul santé déjà en attente pour le projet %s (%s). Déclencheur %s absorbé.",

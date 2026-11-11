@@ -56,3 +56,6 @@ personas_extracted.json
 *.xlsx
 sauvegardes/
 
+
+# Journaux d'erreurs écrits sur le serveur cPanel
+logs/

@@ -19,6 +19,7 @@ comportement. `message` est fait pour l'œil humain et changera.
 
 import logging
 
+from django.conf import settings
 from django.core.exceptions import ValidationError as ValidationDjango
 from rest_framework import status
 from rest_framework.exceptions import APIException
@@ -233,13 +234,16 @@ def gestionnaire_erreurs(exc, context):
 
     if reponse is None:
         logger.exception("Erreur non gérée", exc_info=exc, extra={"trace_id": trace_id})
+        message = "Une erreur interne est survenue. L'équipe technique a été informée."
+        details = {}
+        if getattr(settings, "EXPOSER_CAUSE_ERREUR_INTERNE", False):
+            # Diagnostic temporaire (cPanel) : sans accès aux journaux du serveur, la cause
+            # n'apparaît nulle part ailleurs. À désactiver une fois la panne comprise.
+            cause = f"{type(exc).__name__} : {str(exc)[:300]}"
+            details = {"cause": cause}
+            message = f"{message} [{cause}]"
         return Response(
-            _enveloppe(
-                "erreur_interne",
-                "Une erreur interne est survenue. L'équipe technique a été informée.",
-                {},
-                trace_id,
-            ),
+            _enveloppe("erreur_interne", message, details, trace_id),
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 

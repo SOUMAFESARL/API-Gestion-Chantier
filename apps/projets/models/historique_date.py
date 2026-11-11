@@ -93,7 +93,7 @@ class HistoriqueDate(ModeleEntreprise):
         ]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(justification__regex=r"^[\s\S]{30,}$"),
+                condition=models.Q(justification__regex=r"^.{30,}$"),
                 name="chk_historique_date_justification_min_30",
             )
         ]

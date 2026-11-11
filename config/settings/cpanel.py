@@ -26,10 +26,10 @@ CACHES = {
 CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=True, cast=bool)
 CELERY_TASK_EAGER_PROPAGATES = config("CELERY_TASK_EAGER_PROPAGATES", default=False, cast=bool)
 
-# Diagnostic : la cause d'une erreur 500 est renvoyée dans le message, et la trace complète est
-# écrite dans `logs/erreurs.log` (lisible depuis le gestionnaire de fichiers cPanel).
-# Mettre EXPOSER_CAUSE_ERREUR_INTERNE=False dans le .env une fois la panne comprise.
-EXPOSER_CAUSE_ERREUR_INTERNE = config("EXPOSER_CAUSE_ERREUR_INTERNE", default=True, cast=bool)
+# Diagnostic : la trace complète d'une erreur 500 est écrite dans `logs/erreurs.log`
+# (lisible depuis le gestionnaire de fichiers cPanel). Mettre EXPOSER_CAUSE_ERREUR_INTERNE=True
+# dans le .env uniquement le temps d'un diagnostic à l'écran.
+EXPOSER_CAUSE_ERREUR_INTERNE = config("EXPOSER_CAUSE_ERREUR_INTERNE", default=False, cast=bool)
 
 import copy  # noqa: E402
 from pathlib import Path  # noqa: E402

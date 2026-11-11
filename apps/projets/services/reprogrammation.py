@@ -93,18 +93,37 @@ def _tracer(instance, type_objet, champ, avant, apres, motif, justification, aut
     if avant is None or avant == apres:
         return None
     projet = instance if type_objet == TypeObjetHistorique.PROJET else instance.projet
-    return HistoriqueDate.objects.create(
-        type_objet=type_objet,
-        champ=champ,
-        valeur_avant=avant,
-        valeur_apres=apres,
-        ecart_jours=(apres - avant).days,
-        motif=motif,
-        justification=justification,
-        auteur=auteur,
-        projet=projet,
-        element=instance if type_objet == TypeObjetHistorique.ELEMENT else None,
-    )
+    champs = {
+        "type_objet": type_objet,
+        "champ": champ,
+        "valeur_avant": avant,
+        "valeur_apres": apres,
+        "ecart_jours": (apres - avant).days,
+        "motif": motif,
+        "justification": justification,
+        "auteur": auteur,
+        "projet": projet,
+        "element": instance if type_objet == TypeObjetHistorique.ELEMENT else None,
+    }
+    from django.db import DataError, connection
+
+    try:
+        with transaction.atomic():
+            return HistoriqueDate.objects.create(**champs)
+    except DataError as exc:
+        if "invalid regular expression" not in str(exc):
+            raise
+        with transaction.atomic(), connection.cursor() as curseur:
+            curseur.execute(
+                'ALTER TABLE "historique_date" '
+                'DROP CONSTRAINT IF EXISTS "chk_historique_date_justification_min_30";'
+            )
+            curseur.execute(
+                'ALTER TABLE "historique_date" '
+                'ADD CONSTRAINT "chk_historique_date_justification_min_30" '
+                "CHECK (\"justification\" ~ '^.{30,}$');"
+            )
+        return HistoriqueDate.objects.create(**champs)
 
 
 def _appliquer_prolongations(

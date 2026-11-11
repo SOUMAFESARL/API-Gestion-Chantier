@@ -288,6 +288,35 @@ class EtatProvisionnementView(APIView):
         return Response({"statut": "PROVISIONNEMENT"})
 
 
+def _rafraichir_couleur_logo_si_defaut(entreprise) -> None:
+    """Extrait la couleur dominante d'un logo déjà enregistré si `couleur_primaire` est restée au défaut."""
+    if not entreprise or not getattr(entreprise, "logo", ""):
+        return
+    couleur_actuelle = (getattr(entreprise, "couleur_primaire", "") or "").strip().upper()
+    if couleur_actuelle and couleur_actuelle != "#D4652A":
+        return
+    try:
+        from django.core.files.storage import default_storage
+        from PIL import Image
+        import numpy as np
+        from apps.entreprises.services.images import extraire_couleur_dominante_cielab
+
+        cle = entreprise.logo or entreprise.logo_original
+        if not cle or not default_storage.exists(cle):
+            return
+        with default_storage.open(cle, "rb") as flux:
+            im = Image.open(flux).convert("RGBA")
+            rgba = np.asarray(im, dtype=np.float32) / np.float32(255.0)
+        analyse = extraire_couleur_dominante_cielab(rgba)
+        dominante = (analyse.get("dominant_color") or "#F97316").upper()
+        if dominante == "#D4652A":
+            dominante = "#D4652B"
+        entreprise.couleur_primaire = dominante
+        entreprise.save(update_fields=["couleur_primaire"])
+    except Exception:
+        pass
+
+
 def _sauvegarder_entreprise(entreprise, request) -> Response:
     if entreprise is None:
         raise RequeteRefusee(_("Aucune entreprise active."))
@@ -324,13 +353,13 @@ def _sauvegarder_entreprise(entreprise, request) -> Response:
             entreprise.logo_1x = resultat_logo["cle_1x"]
             entreprise.logo_original = resultat_logo["cle_original"]
             fond_retire = resultat_logo["fond_retire"]
-            if not donnees.get("couleur_primaire"):
-                entreprise.couleur_primaire = resultat_logo["dominant_color"]
+            donnees["couleur_primaire"] = resultat_logo["dominant_color"]
 
         elif retirer_logo:
             entreprise.logo = ""
             entreprise.logo_1x = ""
             entreprise.logo_original = ""
+            donnees["couleur_primaire"] = ""
 
         for champ, valeur in donnees.items():
             setattr(entreprise, champ, valeur)
@@ -392,6 +421,7 @@ class EntrepriseView(APIView):
         entreprise = entreprise_courante()
         if entreprise is None:
             raise RequeteRefusee(_("Aucune entreprise active."))
+        _rafraichir_couleur_logo_si_defaut(entreprise)
         serializer = EntrepriseSerializer(entreprise, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -433,6 +463,7 @@ class ConfigurationEntrepriseView(APIView):
         entreprise = entreprise_courante()
         if entreprise is None:
             raise RequeteRefusee(_("Aucune entreprise active."))
+        _rafraichir_couleur_logo_si_defaut(entreprise)
         serializer = EntrepriseSerializer(entreprise, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 

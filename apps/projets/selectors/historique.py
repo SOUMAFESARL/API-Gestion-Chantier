@@ -38,6 +38,7 @@ LIBELLES_GESTES = {
     "LIENS_RETIRES_SUPPRESSION": "Dépendances retirées (suppression)",
     "LIENS_HERITES_DETAIL": "Dépendances reportées sur les sous-tâches",
     "DECALAGE_SUCCESSEUR": "Décalée après une tâche qui la précède",
+    "REPROGRAMMATION": "Reprogrammation des dates",
 }
 
 #: Ce qu'une personne sans `projets.voir_montants` ne voit pas dans les valeurs avant et après.

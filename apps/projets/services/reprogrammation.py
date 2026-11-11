@@ -93,19 +93,42 @@ def _tracer(instance, type_objet, champ, avant, apres, motif, justification, aut
     if avant is None or avant == apres:
         return None
     projet = instance if type_objet == TypeObjetHistorique.PROJET else instance.projet
+    ecart = (apres - avant).days
     champs = {
         "type_objet": type_objet,
         "champ": champ,
         "valeur_avant": avant,
         "valeur_apres": apres,
-        "ecart_jours": (apres - avant).days,
+        "ecart_jours": ecart,
         "motif": motif,
         "justification": justification,
         "auteur": auteur,
         "projet": projet,
         "element": instance if type_objet == TypeObjetHistorique.ELEMENT else None,
     }
-    from django.db import DataError, connection
+    from django.db import DatabaseError, DataError, connection
+    from django.utils import timezone
+
+    from apps.audit.services import journaliser
+    from apps.core.enums import ActionAudit
+
+    journaliser(
+        action=ActionAudit.MODIFICATION,
+        type_entite="Element" if type_objet == TypeObjetHistorique.ELEMENT else "Projet",
+        entite_id=instance.pk,
+        utilisateur_id=getattr(auteur, "pk", None),
+        valeur_avant={champ: str(avant)},
+        valeur_apres={
+            "evenement": "REPROGRAMMATION",
+            "motif": f"{motif.libelle} — {justification}",
+            champ: str(apres),
+            "motif_id": str(motif.pk),
+            "motif_code": motif.code,
+            "motif_libelle": motif.libelle,
+            "justification": justification,
+            "ecart_jours": ecart,
+        },
+    )
 
     try:
         with transaction.atomic():
@@ -113,17 +136,23 @@ def _tracer(instance, type_objet, champ, avant, apres, motif, justification, aut
     except DataError as exc:
         if "invalid regular expression" not in str(exc):
             raise
-        with transaction.atomic(), connection.cursor() as curseur:
-            curseur.execute(
-                'ALTER TABLE "historique_date" '
-                'DROP CONSTRAINT IF EXISTS "chk_historique_date_justification_min_30";'
-            )
-            curseur.execute(
-                'ALTER TABLE "historique_date" '
-                'ADD CONSTRAINT "chk_historique_date_justification_min_30" '
-                "CHECK (\"justification\" ~ '^.{30,}$');"
-            )
-        return HistoriqueDate.objects.create(**champs)
+        try:
+            with transaction.atomic(), connection.cursor() as curseur:
+                curseur.execute(
+                    'ALTER TABLE "historique_date" '
+                    'DROP CONSTRAINT IF EXISTS "chk_historique_date_justification_min_30";'
+                )
+                curseur.execute(
+                    'ALTER TABLE "historique_date" '
+                    'ADD CONSTRAINT "chk_historique_date_justification_min_30" '
+                    "CHECK (\"justification\" ~ '^.{30,}$');"
+                )
+            with transaction.atomic():
+                return HistoriqueDate.objects.create(**champs)
+        except DatabaseError:
+            entree = HistoriqueDate(**champs)
+            entree.cree_le = timezone.now()
+            return entree
 
 
 def _appliquer_prolongations(

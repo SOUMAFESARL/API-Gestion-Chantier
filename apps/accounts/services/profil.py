@@ -96,6 +96,7 @@ def obtenir_donnees_profil(utilisateur: Utilisateur, request=None) -> dict:
             "raison_sociale": entreprise.raison_sociale,
             "slug": entreprise.slug,
             "logo_url": url_logo(entreprise, request),
+            "couleur_primaire": getattr(entreprise, "couleur_primaire", "") or "",
         }
 
     # 3. Permissions effectives

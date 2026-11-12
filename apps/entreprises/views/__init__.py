@@ -353,7 +353,9 @@ def _sauvegarder_entreprise(entreprise, request) -> Response:
             entreprise.logo_1x = resultat_logo["cle_1x"]
             entreprise.logo_original = resultat_logo["cle_original"]
             fond_retire = resultat_logo["fond_retire"]
-            donnees["couleur_primaire"] = resultat_logo["dominant_color"]
+            donnees["couleur_primaire"] = (
+                donnees.get("couleur_primaire") or resultat_logo["dominant_color"]
+            )
 
         elif retirer_logo:
             entreprise.logo = ""

@@ -1,0 +1,1 @@
+"""Sérialiseurs du module stock."""

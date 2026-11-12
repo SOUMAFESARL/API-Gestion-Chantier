@@ -1,0 +1,362 @@
+[
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "7d7cb42d-4861-5a9b-91d3-b4a308b6d0f1",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "CIM-425",
+      "designation": "Ciment CPA 42.5",
+      "categorie": "MATERIAU",
+      "famille": "Gros œuvre / Liants",
+      "unite_mesure": "SAC",
+      "seuil_alerte_defaut": "200.000",
+      "description": "Ciment Portland composé CPA 42.5 en sacs de 50 kg pour béton armé et maçonnerie.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "75854ab8-0427-5226-ae86-a3def5c7e0f9",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "SAB-CON",
+      "designation": "Sable concassé",
+      "categorie": "MATERIAU",
+      "famille": "Granulats",
+      "unite_mesure": "M3",
+      "seuil_alerte_defaut": "10.000",
+      "description": "Sable concassé 0/4 mm pour mortiers et bétons de chantier.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "a9e83a79-787a-5677-a1c0-28a9f4bbbb54",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "GRA-2040",
+      "designation": "Gravillons 20/40",
+      "categorie": "MATERIAU",
+      "famille": "Granulats",
+      "unite_mesure": "M3",
+      "seuil_alerte_defaut": "15.000",
+      "description": "Gravillons concassés 20/40 mm pour la confection de béton armé.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "6a60a5ba-da7f-54ed-92aa-5db370e7618b",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "GRA-0515",
+      "designation": "Gravillons 5/15",
+      "categorie": "MATERIAU",
+      "famille": "Granulats",
+      "unite_mesure": "M3",
+      "seuil_alerte_defaut": "10.000",
+      "description": "Gravillons concassés 5/15 mm pour bétons fins et dallages.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "a4865443-967c-573c-bf48-15f82ebb252d",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "FER-HA12",
+      "designation": "Fer HA 12 mm",
+      "categorie": "MATERIAU",
+      "famille": "Aciers / Armatures",
+      "unite_mesure": "KG",
+      "seuil_alerte_defaut": "1000.000",
+      "description": "Barres d acier haute adhérence FeE500 diamètre 12 mm.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "d0ffed14-8812-575f-bd03-b361f1927dc7",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "FER-HA10",
+      "designation": "Fer HA 10 mm",
+      "categorie": "MATERIAU",
+      "famille": "Aciers / Armatures",
+      "unite_mesure": "KG",
+      "seuil_alerte_defaut": "1000.000",
+      "description": "Barres d acier haute adhérence FeE500 diamètre 10 mm.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "aec98745-51a3-5d00-bf62-92399237219e",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "FER-HA08",
+      "designation": "Fer HA 8 mm",
+      "categorie": "MATERIAU",
+      "famille": "Aciers / Armatures",
+      "unite_mesure": "KG",
+      "seuil_alerte_defaut": "800.000",
+      "description": "Barres d acier haute adhérence FeE500 diamètre 8 mm pour cadres et étriers.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "80a3ebb2-5b99-53ec-aa1c-219a88af3f3c",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "FER-HA06",
+      "designation": "Fer lisse ou HA 6 mm",
+      "categorie": "MATERIAU",
+      "famille": "Aciers / Armatures",
+      "unite_mesure": "KG",
+      "seuil_alerte_defaut": "500.000",
+      "description": "Acier de frettage et ligatures diamètre 6 mm.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "74f7ed6d-1bd2-5860-be5b-51e001eb55e9",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "BOI-COF",
+      "designation": "Bois de coffrage",
+      "categorie": "MATERIAU",
+      "famille": "Bois / Coffrage",
+      "unite_mesure": "M2",
+      "seuil_alerte_defaut": "80.000",
+      "description": "Planches et madriers en bois blanc pour coffrage traditionnel.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "22663424-fbfc-5691-a923-725b3c51eb16",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "CPQ-18",
+      "designation": "Contreplaqué filmé 18 mm",
+      "categorie": "MATERIAU",
+      "famille": "Bois / Coffrage",
+      "unite_mesure": "M2",
+      "seuil_alerte_defaut": "50.000",
+      "description": "Panneaux de contreplaqué bakélisé 18 mm réutilisables.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "bde8931b-9d78-51a9-a99c-107b1937152f",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "AGG-152040",
+      "designation": "Agglomérés creux 15x20x40",
+      "categorie": "MATERIAU",
+      "famille": "Gros œuvre / Maçonnerie",
+      "unite_mesure": "U",
+      "seuil_alerte_defaut": "500.000",
+      "description": "Parpaings béton creux standard 15x20x40 pour élévation des murs.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "373ba556-0cb4-522f-8b8c-ef122031eb82",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "EQP-VIB",
+      "designation": "Vibreur à béton thermique",
+      "categorie": "EQUIPEMENT",
+      "famille": "Équipements de chantier",
+      "unite_mesure": "U",
+      "seuil_alerte_defaut": "1.000",
+      "description": "Groupe vibreur thermique avec flexible et aiguille 45 mm (circuit CT+CP).",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "24cc5ffe-595b-5695-9fe8-997bdaa1dc73",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "EQP-BET350",
+      "designation": "Bétonnière thermique 350L",
+      "categorie": "EQUIPEMENT",
+      "famille": "Équipements de chantier",
+      "unite_mesure": "U",
+      "seuil_alerte_defaut": "1.000",
+      "description": "Bétonnière tractable moteur thermique diesel 350 litres (circuit CT+CP).",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "f69f42df-31f8-503f-b13b-0dd191b1c2ec",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "EQP-GRP10",
+      "designation": "Groupe électrogène 10 kVA",
+      "categorie": "EQUIPEMENT",
+      "famille": "Équipements de chantier",
+      "unite_mesure": "U",
+      "seuil_alerte_defaut": "1.000",
+      "description": "Groupe électrogène diesel insonorisé 10 kVA monophasé / triphasé.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "9770dca9-e3be-51df-8837-3bd9f6fcf497",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "CON-POI70",
+      "designation": "Pointes ordinaires 70 mm",
+      "categorie": "CONSOMMABLE",
+      "famille": "Consommables",
+      "unite_mesure": "KG",
+      "seuil_alerte_defaut": "25.000",
+      "description": "Pointes acier pour clouage de coffrage.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "ec747204-b58d-5b45-bcf2-0274850a0ae8",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "CON-FILREC",
+      "designation": "Fil de fer recuit 1.2 mm",
+      "categorie": "CONSOMMABLE",
+      "famille": "Consommables",
+      "unite_mesure": "KG",
+      "seuil_alerte_defaut": "50.000",
+      "description": "Fil de fer recuit pour ligature des armatures métalliques.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "e41a39e2-214a-5f99-a227-3efd3baf29ad",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "OUT-PEL",
+      "designation": "Pelle ronde de chantier",
+      "categorie": "OUTILLAGE",
+      "famille": "Petit outillage",
+      "unite_mesure": "U",
+      "seuil_alerte_defaut": "5.000",
+      "description": "Pelle ronde acier avec manche en frêne ou composite.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  },
+  {
+    "model": "stock.articlecatalogue",
+    "pk": "7d715ac4-1825-5f82-8b6e-af43d369123e",
+    "fields": {
+      "entreprise": "c397b0d3-7c94-4265-bc0d-44ddf2f5bbb6",
+      "code": "OUT-BRO100",
+      "designation": "Brouette renforcée 100L",
+      "categorie": "OUTILLAGE",
+      "famille": "Petit outillage",
+      "unite_mesure": "U",
+      "seuil_alerte_defaut": "3.000",
+      "description": "Brouette de chantier renforcée cuve emboutie 100 litres.",
+      "est_actif": true,
+      "cree_le": "2026-11-12T10:00:00Z",
+      "modifie_le": "2026-11-12T10:00:00Z",
+      "cree_par": null,
+      "supprime_le": null,
+      "supprime_par": null
+    }
+  }
+]

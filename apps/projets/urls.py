@@ -76,6 +76,7 @@ from apps.projets.views.equipe import (
     MainOeuvreImportModeleView,
     MainOeuvreImportVerifierView,
     MainOeuvreListCreateView,
+    MainOeuvreUtilisateursView,
     ProjetEquipeAffectationDetailView,
     ProjetEquipeAffectationView,
     ProjetEquipeDetailView,
@@ -180,6 +181,11 @@ urlpatterns = [
     ),
     # Registre de main-d'œuvre de l'entreprise
     path("main-oeuvre/", MainOeuvreListCreateView.as_view(), name="main-oeuvre-liste"),
+    path(
+        "main-oeuvre/utilisateurs/",
+        MainOeuvreUtilisateursView.as_view(),
+        name="main-oeuvre-utilisateurs",
+    ),
     path(
         "main-oeuvre/import/",
         MainOeuvreImportVerifierView.as_view(),

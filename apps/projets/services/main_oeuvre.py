@@ -13,7 +13,7 @@ from django.db import transaction
 from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 
-from apps.core.enums import RoleTiersChoix
+from apps.core.enums import RoleGlobal, RoleTiersChoix
 from apps.core.exceptions import ErreurConflit, ErreurMetier
 from apps.projets.models import MembreEquipeChantier, PersonneMainOeuvre
 
@@ -92,11 +92,10 @@ def creer_personne(
     if erreurs:
         raise ValidationError(erreurs)
     verifier_partenaire(entreprise_partenaire)
-    if (
-        utilisateur is not None
-        and PersonneMainOeuvre.objects.filter(utilisateur=utilisateur).exists()
-    ):
-        raise ErreurConflit("Ce collaborateur a déjà sa fiche dans le registre.")
+    if utilisateur is not None:
+        fiche = PersonneMainOeuvre.tous_objets.filter(utilisateur=utilisateur).first()
+        if fiche is not None:
+            return fiche_du_collaborateur(utilisateur, createur=createur)
     _verifier_doublon(nom, prenom, entreprise_partenaire)
     return PersonneMainOeuvre.objects.create(
         nom=nom,
@@ -109,15 +108,41 @@ def creer_personne(
     )
 
 
+def _libelle_role_utilisateur(utilisateur) -> str:
+    if getattr(utilisateur, "role", None):
+        return utilisateur.role.libelle
+    role_global = getattr(utilisateur, "role_global", None)
+    if role_global:
+        return dict(RoleGlobal.choices).get(role_global, role_global)
+    return ""
+
+
 def fiche_du_collaborateur(utilisateur, createur=None) -> PersonneMainOeuvre:
-    """La fiche d'un collaborateur avec compte — créée à la volée, de notre entreprise."""
-    fiche = PersonneMainOeuvre.objects.filter(utilisateur=utilisateur).first()
+    """Fiche d'un collaborateur avec compte — créée ou réactivée, de notre entreprise."""
+    fiche = PersonneMainOeuvre.tous_objets.filter(utilisateur=utilisateur).first()
     if fiche is not None:
+        champs = []
+        if fiche.supprime_le is not None:
+            fiche.supprime_le = None
+            champs.append("supprime_le")
+        if not fiche.est_actif:
+            fiche.est_actif = True
+            champs.append("est_actif")
+        role_nom = _libelle_role_utilisateur(utilisateur)
+        if not fiche.metier and role_nom:
+            fiche.metier = role_nom
+            champs.append("metier")
+        if champs:
+            champs.append("modifie_le")
+            fiche.save(update_fields=list(dict.fromkeys(champs)))
         return fiche
+
+    role_nom = _libelle_role_utilisateur(utilisateur)
     return PersonneMainOeuvre.objects.create(
         nom=_texte(utilisateur.nom) or utilisateur.email,
         prenom=_texte(utilisateur.prenom) or "-",
         telephone=getattr(utilisateur, "telephone", "") or "",
+        metier=role_nom,
         utilisateur=utilisateur,
         cree_par=createur,
     )
@@ -178,7 +203,9 @@ def retirer_personne(personne: PersonneMainOeuvre, *, utilisateur=None) -> None:
 
 def lister_personnes(*, recherche: str = "", entreprise: str = "", actives: bool = True):
     """`entreprise` : vide (toutes), « INTERNE » (la nôtre) ou l'identifiant d'un partenaire."""
-    qs = PersonneMainOeuvre.objects.select_related("entreprise_partenaire", "utilisateur")
+    qs = PersonneMainOeuvre.objects.select_related(
+        "entreprise_partenaire", "utilisateur", "utilisateur__role"
+    )
     if actives:
         qs = qs.filter(est_actif=True)
     if recherche:

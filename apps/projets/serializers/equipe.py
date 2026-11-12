@@ -26,6 +26,7 @@ __all__ = [
     "PersonneCreationSerializer",
     "PersonneModificationSerializer",
     "PersonneSerializer",
+    "UtilisateurPourEquipeSerializer",
 ]
 
 FONCTIONS = [c[0] for c in MembreEquipeChantier.FONCTION_CHOICES]
@@ -52,6 +53,7 @@ class PersonneSerializer(serializers.ModelSerializer):
     nom_complet = serializers.CharField(read_only=True)
     entreprise = serializers.SerializerMethodField()
     a_un_compte = serializers.SerializerMethodField()
+    utilisateur = serializers.SerializerMethodField()
 
     class Meta:
         model = PersonneMainOeuvre
@@ -65,6 +67,7 @@ class PersonneSerializer(serializers.ModelSerializer):
             "entreprise",
             "a_un_compte",
             "utilisateur_id",
+            "utilisateur",
             "est_actif",
         ]
 
@@ -75,6 +78,35 @@ class PersonneSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.BooleanField())
     def get_a_un_compte(self, obj) -> bool:
         return obj.utilisateur_id is not None
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_utilisateur(self, obj):
+        if not obj.utilisateur_id:
+            return None
+        u = obj.utilisateur
+        if not u:
+            return None
+        from apps.core.enums import RoleGlobal
+
+        if getattr(u, "role", None):
+            role_libelle = u.role.libelle
+            role_code = u.role.code
+        elif getattr(u, "role_global", None):
+            role_libelle = dict(RoleGlobal.choices).get(u.role_global, u.role_global)
+            role_code = u.role_global
+        else:
+            role_libelle = ""
+            role_code = ""
+
+        return {
+            "id": u.pk,
+            "email": u.email,
+            "nom": u.nom,
+            "prenom": u.prenom,
+            "nom_complet": u.nom_complet,
+            "role": role_libelle,
+            "role_code": (role_code or "").upper(),
+        }
 
 
 class PersonneCreationSerializer(serializers.Serializer):
@@ -192,8 +224,12 @@ class EquipeSerializer(serializers.ModelSerializer):
 
 
 class MembreCreationSerializer(serializers.Serializer):
-    personne_id = serializers.UUIDField(required=False)
+    personne_id = serializers.UUIDField(required=False, allow_null=True)
     personne_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_empty=False
+    )
+    utilisateur_id = serializers.UUIDField(required=False, allow_null=True)
+    utilisateur_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, allow_empty=False
     )
     fonction = serializers.ChoiceField(choices=FONCTIONS, required=False, default="OUVRIER")
@@ -202,20 +238,48 @@ class MembreCreationSerializer(serializers.Serializer):
     date_depart = serializers.DateField(required=False, allow_null=True, default=None)
 
     def validate(self, attrs):
-        ids = list(dict.fromkeys(attrs.get("personne_ids") or []))
+        ids = [i for i in list(dict.fromkeys(attrs.get("personne_ids") or [])) if i]
         if attrs.get("personne_id") and attrs["personne_id"] not in ids:
             ids.insert(0, attrs["personne_id"])
-        if not ids:
+
+        u_ids = [u for u in list(dict.fromkeys(attrs.get("utilisateur_ids") or [])) if u]
+        if attrs.get("utilisateur_id") and attrs["utilisateur_id"] not in u_ids:
+            u_ids.insert(0, attrs["utilisateur_id"])
+
+        if not ids and not u_ids:
             raise serializers.ValidationError(
-                {"personne_id": "Sélectionnez au moins une personne du registre."}
+                {
+                    "personne_id": (
+                        "Sélectionnez au moins une personne du registre ou un "
+                        "collaborateur avec compte."
+                    )
+                }
             )
-        if (attrs.get("est_chef") or attrs.get("fonction") == "CHEF_EQUIPE") and len(ids) > 1:
+        total_personnes = len(ids) + len(u_ids)
+        est_chef = attrs.get("est_chef") or attrs.get("fonction") == "CHEF_EQUIPE"
+        if est_chef and total_personnes > 1:
             raise serializers.ValidationError(
                 {"est_chef": "Une équipe n'a qu'un seul chef : sélectionnez une seule personne."}
             )
         attrs["personne_ids"] = ids
-        attrs["personne_id"] = ids[0]
+        if ids:
+            attrs["personne_id"] = ids[0]
+        attrs["utilisateur_ids"] = u_ids
+        if u_ids:
+            attrs["utilisateur_id"] = u_ids[0]
         return attrs
+
+
+class UtilisateurPourEquipeSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    nom = serializers.CharField()
+    prenom = serializers.CharField(allow_blank=True, default="")
+    nom_complet = serializers.CharField()
+    email = serializers.EmailField()
+    telephone = serializers.CharField(allow_blank=True, default="")
+    role = serializers.CharField()
+    role_code = serializers.CharField()
+    personne_id = serializers.UUIDField(allow_null=True)
 
 
 class MembreModificationSerializer(serializers.Serializer):

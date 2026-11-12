@@ -43,6 +43,7 @@ from apps.projets.serializers.equipe import (
     PersonneCreationSerializer,
     PersonneModificationSerializer,
     PersonneSerializer,
+    UtilisateurPourEquipeSerializer,
 )
 from apps.projets.services import equipes as service
 from apps.projets.services import main_oeuvre
@@ -53,6 +54,7 @@ __all__ = [
     "MainOeuvreImportModeleView",
     "MainOeuvreImportVerifierView",
     "MainOeuvreListCreateView",
+    "MainOeuvreUtilisateursView",
     "ProjetEquipeAffectationDetailView",
     "ProjetEquipeAffectationView",
     "ProjetEquipeDetailView",
@@ -92,6 +94,7 @@ class BaseEquipeView(APIView):
 def equipes_projet(projet):
     return projet.equipes.select_related("entreprise_partenaire").prefetch_related(
         "membres__personne__entreprise_partenaire",
+        "membres__personne__utilisateur__role",
         "affectations_elements__element__niveau",
     )
 
@@ -148,9 +151,20 @@ class ProjetEquipeListCreateView(BaseEquipeView):
         membres_developpes = []
         for m in v["membres"]:
             copie = dict(m)
-            ids = copie.pop("personne_ids", [copie.get("personne_id")])
-            for pid in ids:
+            p_ids = [p for p in copie.pop("personne_ids", []) if p]
+            if copie.get("personne_id") and copie["personne_id"] not in p_ids:
+                p_ids.insert(0, copie["personne_id"])
+            copie.pop("personne_id", None)
+
+            u_ids = [u for u in copie.pop("utilisateur_ids", []) if u]
+            if copie.get("utilisateur_id") and copie["utilisateur_id"] not in u_ids:
+                u_ids.insert(0, copie["utilisateur_id"])
+            copie.pop("utilisateur_id", None)
+
+            for pid in p_ids:
                 membres_developpes.append({**copie, "personne_id": pid})
+            for uid in u_ids:
+                membres_developpes.append({**copie, "utilisateur_id": uid})
         equipe, avertissements = service.creer_equipe(
             projet,
             nom=v["nom"],
@@ -201,14 +215,14 @@ class ProjetEquipeDetailView(BaseEquipeView):
 
 
 class ProjetEquipeMembreListCreateView(BaseEquipeView):
-    """`POST /api/v1/projets/{id}/equipes/{equipe_id}/membres/` — ajouter un ou plusieurs membres du registre."""
+    """`POST /api/v1/projets/{id}/equipes/{equipe_id}/membres/`."""
 
     @extend_schema(
         tags=TAGS,
         summary="Ajouter un ou plusieurs membres partageant la même fonction",
         description=(
-            "Les personnes viennent du registre de main-d'œuvre (`personne_id` ou `personne_ids`). "
-            "Une personne déjà dans une autre équipe le même jour est acceptée, avec un avertissement."
+            "Personnes issues du registre (`personne_id`/`personne_ids`/`utilisateur_ids`). "
+            "Une personne déjà dans une autre équipe le même jour donne un avertissement."
         ),
         request=MembreCreationSerializer,
         responses={201: MembreSerializer, **ERREURS_EQUIPES},
@@ -220,14 +234,31 @@ class ProjetEquipeMembreListCreateView(BaseEquipeView):
         donnees = MembreCreationSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
         valides = dict(donnees.validated_data)
-        ids = valides.pop("personne_ids", [valides.get("personne_id")])
+        p_ids = [p for p in valides.pop("personne_ids", []) if p]
+        if valides.get("personne_id") and valides["personne_id"] not in p_ids:
+            p_ids.insert(0, valides["personne_id"])
+        valides.pop("personne_id", None)
+
+        u_ids = [u for u in valides.pop("utilisateur_ids", []) if u]
+        if valides.get("utilisateur_id") and valides["utilisateur_id"] not in u_ids:
+            u_ids.insert(0, valides["utilisateur_id"])
+        valides.pop("utilisateur_id", None)
+
         membres = []
         avertissements = []
-        for pid in ids:
+        for pid in p_ids:
             membre, avert = service.ajouter_membre(
                 equipe,
                 createur=request.user,
                 **{**valides, "personne_id": pid},
+            )
+            membres.append(membre)
+            avertissements.extend(avert)
+        for uid in u_ids:
+            membre, avert = service.ajouter_membre(
+                equipe,
+                createur=request.user,
+                **{**valides, "utilisateur_id": uid},
             )
             membres.append(membre)
             avertissements.extend(avert)
@@ -463,6 +494,75 @@ class MainOeuvreListCreateView(APIView):
             **v,
         )
         return Response(PersonneSerializer(personne).data, status=status.HTTP_201_CREATED)
+
+
+class MainOeuvreUtilisateursView(APIView):
+    """`GET /api/v1/main-oeuvre/utilisateurs/`.
+
+    Collaborateurs actifs avec compte de l'entreprise pour sélection dans les équipes.
+    Isolation stricte par entreprise garantie par `Utilisateur.objects`.
+    """
+
+    permission_classes = [IsAuthenticated, APermission.pour("projets.lire")]
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Collaborateurs actifs de l'entreprise pour sélection dans les équipes",
+        description=(
+            "Liste des utilisateurs actifs de l'entreprise avec rôle, email et fiche registre."
+        ),
+        responses={200: UtilisateurPourEquipeSerializer(many=True)},
+    )
+    def get(self, request):
+        from apps.accounts.models import Utilisateur
+        from apps.core.enums import RoleGlobal, StatutUtilisateur
+
+        utilisateurs = (
+            Utilisateur.objects.filter(
+                is_active=True,
+                statut=StatutUtilisateur.ACTIF,
+                supprime_le__isnull=True,
+            )
+            .select_related("role")
+            .order_by("nom", "prenom")
+        )
+        fiches = {
+            p.utilisateur_id: p
+            for p in PersonneMainOeuvre.objects.filter(
+                utilisateur__in=utilisateurs,
+                supprime_le__isnull=True,
+            )
+        }
+        resultats = []
+        for u in utilisateurs:
+            if getattr(u, "role", None):
+                role_libelle = u.role.libelle
+                role_code = u.role.code
+            elif getattr(u, "role_global", None):
+                role_libelle = dict(RoleGlobal.choices).get(u.role_global, u.role_global)
+                role_code = u.role_global
+            else:
+                role_libelle = ""
+                role_code = ""
+
+            fiche = fiches.get(u.pk)
+            resultats.append(
+                {
+                    "id": u.id,
+                    "nom": u.nom,
+                    "prenom": u.prenom,
+                    "nom_complet": u.nom_complet,
+                    "email": u.email,
+                    "telephone": u.telephone,
+                    "role": role_libelle,
+                    "role_code": (role_code or "").upper(),
+                    "personne_id": fiche.id if fiche else None,
+                }
+            )
+        return Response(
+            UtilisateurPourEquipeSerializer(resultats, many=True).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class MainOeuvreDetailView(APIView):

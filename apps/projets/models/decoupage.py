@@ -339,6 +339,14 @@ class Element(ModeleEntreprise):
         super().save(*args, **kwargs)
 
     @property
+    def date_debut(self):
+        return self.date_debut_prevue
+
+    @property
+    def date_fin(self):
+        return self.date_fin_prevue
+
+    @property
     def date_fin_contractuelle(self):
         """L'origine (baseline v0) plus les jours accordés par avenant."""
         from datetime import timedelta

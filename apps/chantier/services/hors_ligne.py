@@ -118,7 +118,7 @@ DEPLACEE = "n'est plus dans votre journal : déplacée, suspendue, clôturée ou
 
 def trier_lignes(saisie, projet, jour: date, chemins) -> list[dict]:
     """Écarte les lignes que l'arbre n'accepte plus ; rend les lignes refusées et leur motif."""
-    cases = cases_du_journal(projet, chemins)
+    cases = cases_du_journal(projet, chemins, jour=jour)
     libelles = {str(e.pk): e.libelle for e in cases.arbre.elements}
     libelles.update(
         (str(pk), nom)

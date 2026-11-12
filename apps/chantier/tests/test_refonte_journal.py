@@ -241,8 +241,8 @@ def test_preparation_exclut_suspendues_et_marque_attendues_ce_jour(contexte_chan
         assert str(f_suspendue.id) not in ids
         assert ids[str(contexte_chantier["f_qte"].id)]["attendue_ce_jour"] is True
         assert ids[str(contexte_chantier["f_pct"].id)]["attendue_ce_jour"] is True
-        # Prévue en novembre et non commencée -> non attendue ce jour, mais disponible dans l'arbre
-        assert ids[str(contexte_chantier["f_jalon"].id)]["attendue_ce_jour"] is False
+        # Prévue en novembre -> non proposée ce jour car hors plage de dates (filtrage strict)
+        assert str(contexte_chantier["f_jalon"].id) not in ids
 
 
 @pytest.mark.entreprise
@@ -250,6 +250,9 @@ def test_garde_fou_equipe_a3_et_trois_modes_mesure_f3(contexte_chantier):
     """Vérifie le garde-fou A3, le circuit sans _CT/_CP et la synchronisation F3 des 3 modes."""
     c = contexte_chantier
     lundi = date(2026, 10, 26)
+    Element.objects.filter(pk=c["f_jalon"].pk).update(
+        date_debut_prevue=date(2026, 10, 20), date_fin_prevue=date(2026, 10, 30)
+    )
 
     with patch("apps.chantier.services.journal.aujourdhui", return_value=lundi):
         journal = creer_journal(projet=c["projet"], utilisateur=c["cc"], jour=lundi, data={})

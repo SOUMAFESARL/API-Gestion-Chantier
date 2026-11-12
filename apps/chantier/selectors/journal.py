@@ -1,6 +1,7 @@
 """Lectures et projections du journal de chantier (arbre, équipes, calendrier ouvré et F3)."""
 
 from collections import OrderedDict, defaultdict
+from collections.abc import Iterable
 from copy import copy
 from datetime import date, timedelta
 from decimal import Decimal
@@ -136,6 +137,7 @@ def contexte_projet(
     chemins=(),
     auteur=None,
     previsions_veille_ids: set[str] | None = None,
+    conserver_ids: Iterable[str] = (),
 ):
     """Ce que le rédacteur saisit, sur sa partie du projet (`chemins` ; vide : tout le projet)."""
     from apps.projets.services.avancement import quantites_synchronisees
@@ -146,7 +148,7 @@ def contexte_projet(
         "APPROBATION": noms_des_titulaires(projet, APPROUVER, chemins),
     }
     table_modes = table_modes_execution()
-    cases = cases_du_journal(projet, chemins)
+    cases = cases_du_journal(projet, chemins, jour=jour, conserver_ids=conserver_ids)
     numeros = cases.arbre.numerotation()
     cal = _calendrier_autour_arbre(cases.arbre, jour)
     aff_feuilles = equipes_par_feuille(cases)
@@ -212,9 +214,19 @@ def contexte_projet(
                 "projet_nom": projet.nom,
                 "projet_reference": projet.reference,
                 "redacteur_nom": intervenants["REDACTION"],
+                "date_debut": (
+                    groupe.date_debut_prevue.isoformat()
+                    if groupe.date_debut_prevue
+                    else None
+                ),
+                "date_fin": (
+                    groupe.date_fin_prevue.isoformat()
+                    if groupe.date_fin_prevue
+                    else None
+                ),
             }
         )
-        for activite in cases.feuilles_par_groupe[id_groupe]:
+        for activite in cases.feuilles_par_groupe.get(id_groupe, []):
             identifiant = str(activite.id)
             mode_m = activite.mode_mesure or ModeMesure.QUANTITE
             base_repli = max(
@@ -254,6 +266,16 @@ def contexte_projet(
                     "avancement_theorique": theo,
                     "equipes_affectees": aff_feuilles.get(identifiant, []),
                     "attendue_ce_jour": attendue,
+                    "date_debut": (
+                        activite.date_debut_prevue.isoformat()
+                        if activite.date_debut_prevue
+                        else None
+                    ),
+                    "date_fin": (
+                        activite.date_fin_prevue.isoformat()
+                        if activite.date_fin_prevue
+                        else None
+                    ),
                 }
             )
 
@@ -393,6 +415,16 @@ def preparation(projet, jour: date, *, journal=None, precedent=None, utilisateur
     ]
     prev_ids = {str(p["activite_id"]) for p in previsions_veille if p.get("activite_id")}
 
+    conserver_ids = set()
+    if journal and journal.saisie:
+        s_ex = migrer_saisie_ancienne(journal.saisie)
+        for a in s_ex.get("activites", []):
+            if a.get("activite_id"):
+                conserver_ids.add(str(a["activite_id"]))
+        for lot in s_ex.get("lots_travailles", []):
+            if lot.get("lot_id"):
+                conserver_ids.add(str(lot["lot_id"]))
+
     contexte = (
         _normaliser_contexte_lu(journal.photographie)
         if journal
@@ -404,6 +436,7 @@ def preparation(projet, jour: date, *, journal=None, precedent=None, utilisateur
             chemins=chemins,
             auteur=utilisateur,
             previsions_veille_ids=prev_ids,
+            conserver_ids=conserver_ids,
         )
     )
 
@@ -732,7 +765,18 @@ def document(
         relance_le = relances_du_jour([r.projet_id], r.date_rapport, r.date_rapport).get(
             cle_ligne(journal)
         )
-    contexte_brut = contexte or journal.photographie or contexte_projet(r.projet, r.date_rapport)
+    conserver_ids = set()
+    for a in saisie.get("activites", []):
+        if a.get("activite_id"):
+            conserver_ids.add(str(a["activite_id"]))
+    for lot in saisie.get("lots_travailles", []):
+        if lot.get("lot_id"):
+            conserver_ids.add(str(lot["lot_id"]))
+    contexte_brut = (
+        contexte
+        or journal.photographie
+        or contexte_projet(r.projet, r.date_rapport, conserver_ids=conserver_ids)
+    )
     contexte = _normaliser_contexte_lu(contexte_brut)
 
     arbre_base = arbre or charger_arbre(r.projet)

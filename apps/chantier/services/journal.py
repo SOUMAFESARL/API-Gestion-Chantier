@@ -154,24 +154,60 @@ def verifier_jour(jour: date, *, statut_actuel: str | None = None) -> None:
 class CasesDuJournal:
     """Ce que le journal saisit, lu dans l'arbre du découpage.
 
-    Seules les **feuilles** actives, non clôturées et non suspendues sont ouvertes à la saisie.
+    Seules les **feuilles** actives, non clôturées, non suspendues et datées pour le jour du journal
+    (date_debut <= jour <= date_fin) sont ouvertes à la saisie.
     Chacune se range sous son **groupe** (`Arbre.groupe`).
     """
 
-    def __init__(self, projet, chemins=()):
+    def __init__(
+        self,
+        projet,
+        chemins=(),
+        jour: date | None = None,
+        conserver_ids: Iterable[str] = (),
+    ):
         self.arbre = charger_arbre(projet, actifs_seulement=True)
         self.groupes: dict[str, Element] = {}
         self.feuilles: dict[str, Element] = {}
         self.feuilles_par_groupe: dict[str, list[Element]] = {}
+        conserver = {str(i) for i in conserver_ids} if conserver_ids else set()
+
         for feuille in self.arbre.feuilles():
-            if feuille.cloture or self.arbre.suspendu(feuille):
-                continue
-            if chemins and not any(feuille.chemin.startswith(c) for c in chemins):
-                continue
+            pk_str = str(feuille.pk)
+            conserve = pk_str in conserver
+            if not conserve:
+                if feuille.cloture or self.arbre.suspendu(feuille):
+                    continue
+                if chemins and not any(feuille.chemin.startswith(c) for c in chemins):
+                    continue
+                if jour is not None:
+                    # Règle stricte : date_debut ET date_fin renseignées
+                    # ET date_debut <= jour <= date_fin
+                    if not (feuille.date_debut_prevue and feuille.date_fin_prevue):
+                        continue
+                    if not (feuille.date_debut_prevue <= jour <= feuille.date_fin_prevue):
+                        continue
+            else:
+                if chemins and not any(feuille.chemin.startswith(c) for c in chemins):
+                    continue
+
             groupe = self.arbre.groupe(feuille)
             self.groupes.setdefault(str(groupe.pk), groupe)
-            self.feuilles[str(feuille.pk)] = feuille
+            self.feuilles[pk_str] = feuille
             self.feuilles_par_groupe.setdefault(str(groupe.pk), []).append(feuille)
+
+        if conserver:
+            for elem in self.arbre.elements:
+                pk_str = str(elem.pk)
+                if (
+                    pk_str in conserver
+                    and pk_str not in self.groupes
+                    and not self.arbre.est_feuille(elem)
+                ):
+                    if chemins and not any(elem.chemin.startswith(c) for c in chemins):
+                        continue
+                    self.groupes[pk_str] = elem
+                    self.feuilles_par_groupe.setdefault(pk_str, [])
 
     def groupe_de(self, feuille) -> Element:
         return self.arbre.groupe(feuille)
@@ -185,8 +221,13 @@ class CasesDuJournal:
         ]
 
 
-def cases_du_journal(projet, chemins=()) -> CasesDuJournal:
-    return CasesDuJournal(projet, chemins)
+def cases_du_journal(
+    projet,
+    chemins=(),
+    jour: date | None = None,
+    conserver_ids: Iterable[str] = (),
+) -> CasesDuJournal:
+    return CasesDuJournal(projet, chemins, jour=jour, conserver_ids=conserver_ids)
 
 
 def verifier_auteur(rapport, utilisateur):
@@ -549,7 +590,16 @@ def normaliser_saisie(data, *, projet, jour, utilisateur, existante=None, chemin
     ):
         saisie["meteo"]["conditions"] = "ARRET"
 
-    cases = cases_du_journal(projet, chemins)
+    conserver_ids = set()
+    if existante:
+        for a in existante.get("activites", []):
+            if a.get("activite_id"):
+                conserver_ids.add(str(a["activite_id"]))
+        for lot in existante.get("lots_travailles", []):
+            if lot.get("lot_id"):
+                conserver_ids.add(str(lot["lot_id"]))
+
+    cases = cases_du_journal(projet, chemins, jour=jour, conserver_ids=conserver_ids)
     lots = cases.groupes
     equipes = equipes_du_journal(cases, jour)
     equipes_par_id = {e["equipe_id"]: e for e in equipes}
@@ -662,7 +712,7 @@ def _pourcentages_acquis_veille(projet, jour: date) -> dict[str, float]:
     return acquis
 
 
-def valider_soumission(saisie, projet, chemins=()):
+def valider_soumission(saisie, projet, chemins=(), conserver_ids=()):
     erreurs: dict[str, list[str]] = {}
 
     def exiger(condition, cle, message):
@@ -719,7 +769,7 @@ def valider_soumission(saisie, projet, chemins=()):
             "La synthèse de fin de journée doit comporter au moins 10 caractères.",
         )
 
-        cases = cases_du_journal(projet, chemins)
+        cases = cases_du_journal(projet, chemins, jour=jour, conserver_ids=conserver_ids)
         equipes = equipes_du_journal(cases, jour)
         pct_veille = _pourcentages_acquis_veille(projet, jour)
 
@@ -1037,10 +1087,23 @@ def soumettre_journal(*, journal, utilisateur, data):
     journal = enregistrer(journal, utilisateur, data)
     rapport = journal.rapport
     chemins = chemins_des_cases(journal.perimetre_ids)
-    valider_soumission(journal.saisie, rapport.projet, chemins)
+    conserver_ids = set()
+    if journal.saisie:
+        s_ex = migrer_saisie_ancienne(journal.saisie)
+        for a in s_ex.get("activites", []):
+            if a.get("activite_id"):
+                conserver_ids.add(str(a["activite_id"]))
+        for lot in s_ex.get("lots_travailles", []):
+            if lot.get("lot_id"):
+                conserver_ids.add(str(lot["lot_id"]))
+    valider_soumission(journal.saisie, rapport.projet, chemins, conserver_ids=conserver_ids)
     _synchroniser_blocages_du_journal(journal, utilisateur)
     journal.photographie = contexte_projet(
-        rapport.projet, rapport.date_rapport, chemins=chemins, auteur=utilisateur
+        rapport.projet,
+        rapport.date_rapport,
+        chemins=chemins,
+        auteur=utilisateur,
+        conserver_ids=conserver_ids,
     )
     rapport.statut = StatutRapport.SOUMIS
     rapport.soumis_le = timezone.now()

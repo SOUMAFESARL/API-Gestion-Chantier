@@ -84,6 +84,127 @@ REGISTRE: dict[str, DefPermission] = {
         DefPermission("tiers.ecrire", "tiers", 2, "Créer / modifier les tiers"),
         DefPermission("pilotage.lire", "pilotage", 1, "Tableaux de bord"),
         DefPermission("pilotage.voir_montants", "pilotage", 3, "Voir les montants financiers"),
+        # F6 GED (Gestion Documentaire)
+        DefPermission("ged.lire", "ged", 1, "Consulter la GED"),
+        DefPermission("ged.telecharger", "ged", 1, "Télécharger un document"),
+        DefPermission("ged.voir_plans", "ged", 2, "Voir les plans"),
+        DefPermission("ged.deposer_plans", "ged", 2, "Déposer des plans"),
+        DefPermission("ged.supprimer_plans", "ged", 3, "Supprimer des plans"),
+        DefPermission("ged.voir_contrats", "ged", 2, "Voir les contrats"),
+        DefPermission("ged.deposer_contrats", "ged", 2, "Déposer des contrats"),
+        DefPermission("ged.supprimer_contrats", "ged", 3, "Supprimer des contrats"),
+        DefPermission("ged.voir_rapports", "ged", 2, "Voir les rapports"),
+        DefPermission("ged.deposer_rapports", "ged", 2, "Déposer des rapports"),
+        DefPermission("ged.supprimer_rapports", "ged", 3, "Supprimer des rapports"),
+        DefPermission(
+            "ged.voir_administratif", "ged", 2, "Voir les documents administratifs"
+        ),
+        DefPermission(
+            "ged.deposer_administratif",
+            "ged",
+            2,
+            "Déposer des documents administratifs",
+        ),
+        DefPermission(
+            "ged.supprimer_administratif",
+            "ged",
+            3,
+            "Supprimer des documents administratifs",
+        ),
+        DefPermission("ged.voir_photos", "ged", 2, "Voir les photos"),
+        DefPermission("ged.deposer_photos", "ged", 2, "Déposer des photos"),
+        DefPermission("ged.supprimer_photos", "ged", 3, "Supprimer des photos"),
+        DefPermission("ged.voir_divers", "ged", 2, "Voir les documents divers"),
+        DefPermission("ged.deposer_divers", "ged", 2, "Déposer des documents divers"),
+        DefPermission("ged.supprimer_divers", "ged", 3, "Supprimer des documents divers"),
+        # F9 Stock & Approvisionnements
+        DefPermission(
+            "stock.lire", "stock", 1, "Consulter le stock et les mouvements"
+        ),
+        DefPermission(
+            "stock.da_creer",
+            "stock",
+            2,
+            "Émettre une demande d'approvisionnement (DA)",
+        ),
+        DefPermission(
+            "stock.da_modifier",
+            "stock",
+            2,
+            "Modifier une DA au statut EN_ATTENTE",
+        ),
+        DefPermission(
+            "stock.da_lire",
+            "stock",
+            1,
+            "Voir les demandes d'approvisionnement (DA)",
+        ),
+        DefPermission(
+            "stock.bc_emettre",
+            "stock",
+            3,
+            "Émettre un bon de commande (exclusif DO/DG)",
+        ),
+        DefPermission(
+            "stock.bc_lire", "stock", 1, "Voir les bons de commande (BC)"
+        ),
+        DefPermission(
+            "stock.bc_cloturer", "stock", 2, "Clôturer un bon de commande partiel"
+        ),
+        DefPermission(
+            "stock.reception_saisir",
+            "stock",
+            2,
+            "Saisir une réception de livraison sur chantier",
+        ),
+        DefPermission(
+            "stock.brv_valider_ct",
+            "stock",
+            3,
+            "Valider le BRV matériaux (technique)",
+        ),
+        DefPermission(
+            "stock.brv_valider_cp",
+            "stock",
+            3,
+            "Valider le BRV équipements (séquentiel)",
+        ),
+        DefPermission(
+            "stock.justificatif_uploader",
+            "stock",
+            2,
+            "Téléverser le bon de livraison (BL) signé",
+        ),
+        DefPermission(
+            "stock.mouvement_manuel_creer",
+            "stock",
+            2,
+            "Saisir un mouvement manuel de stock",
+        ),
+        DefPermission(
+            "stock.transfert_inter_lots",
+            "stock",
+            2,
+            "Autoriser un transfert inter-lots",
+        ),
+        DefPermission(
+            "stock.transfert_inter_chantiers",
+            "stock",
+            2,
+            "Autoriser un transfert inter-chantiers",
+        ),
+        DefPermission(
+            "stock.inventaire_realiser",
+            "stock",
+            2,
+            "Réaliser un inventaire physique",
+        ),
+        DefPermission(
+            "stock.inventaire_valider",
+            "stock",
+            3,
+            "Valider un inventaire physique",
+        ),
         DefPermission(
             "administration.collaborateurs_voir",
             "administration",

@@ -102,6 +102,23 @@
   }
  },
  {
+  "model": "catalogue.cataloguemodule",
+  "pk": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock",
+   "libelle": "Stock & Approvisionnements",
+   "description": "Demandes d'approvisionnement, bons de commande, réceptions terrain (BRV), gestion du stock et inventaires.",
+   "ordre": 6,
+   "icone": "boxes",
+   "est_actif": true
+  }
+ },
+ {
   "model": "catalogue.cataloguepermission",
   "pk": "0034d600-8f4d-49df-95e7-7f2e77b69618",
   "fields": {
@@ -1048,6 +1065,726 @@
    "reservee_administration": false,
    "modules": [
     "d31d1558-4ea3-44a5-9be3-a31eaf144bfb"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "02683572-a465-548a-8b09-5ec1341e862c",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.lire",
+   "libelle": "Consulter la GED",
+   "description": "Consulter la GED",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "f3d29a30-e82c-5d0c-82f8-157d38e866fe",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.telecharger",
+   "libelle": "Télécharger un document",
+   "description": "Télécharger un document",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "3f7cfc32-0e28-52eb-9002-85dc29ace4f0",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.voir_plans",
+   "libelle": "Voir les plans",
+   "description": "Voir les plans",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "13bdb3dc-6749-5ba3-9f89-5c45fb29cd9d",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.deposer_plans",
+   "libelle": "Déposer des plans",
+   "description": "Déposer des plans",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "888c2c0d-bede-5edf-b3be-755ff6eb83c0",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.supprimer_plans",
+   "libelle": "Supprimer des plans",
+   "description": "Supprimer des plans",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "51199a13-32da-521a-89bc-860aa2a6080a",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.voir_contrats",
+   "libelle": "Voir les contrats",
+   "description": "Voir les contrats",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "294f79b9-219e-57da-811b-9961d1b8fa05",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.deposer_contrats",
+   "libelle": "Déposer des contrats",
+   "description": "Déposer des contrats",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "0897042d-9194-55d9-89ff-4ba9a7c24514",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.supprimer_contrats",
+   "libelle": "Supprimer des contrats",
+   "description": "Supprimer des contrats",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b7deb03a-c198-5fc7-b264-8dabbc8b275c",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.voir_rapports",
+   "libelle": "Voir les rapports",
+   "description": "Voir les rapports",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "e4529dc8-25b4-538c-b365-9f8f4268d17d",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.deposer_rapports",
+   "libelle": "Déposer des rapports",
+   "description": "Déposer des rapports",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "7602e638-d2da-5e1f-a2b4-911248344dd2",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.supprimer_rapports",
+   "libelle": "Supprimer des rapports",
+   "description": "Supprimer des rapports",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "98a9f495-6d4c-5620-8ac1-ba8e745877b3",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.voir_administratif",
+   "libelle": "Voir les documents administratifs",
+   "description": "Voir les documents administratifs",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "d5ae4f6e-ba38-5384-bf5e-8715a0fc0623",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.deposer_administratif",
+   "libelle": "Déposer des documents administratifs",
+   "description": "Déposer des documents administratifs",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "3e4aa59e-a4c5-50c9-ae5f-6ac6a978a7ac",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.supprimer_administratif",
+   "libelle": "Supprimer des documents administratifs",
+   "description": "Supprimer des documents administratifs",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "dbf20be6-0c2a-581f-80ad-4b69f3496924",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.voir_photos",
+   "libelle": "Voir les photos",
+   "description": "Voir les photos",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "388b466f-6355-5999-a0cd-4c228edbf85a",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.deposer_photos",
+   "libelle": "Déposer des photos",
+   "description": "Déposer des photos",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "47c68376-6139-526b-9246-0f045240d075",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.supprimer_photos",
+   "libelle": "Supprimer des photos",
+   "description": "Supprimer des photos",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "76315e25-701e-5971-b467-1ff2866861d5",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.voir_divers",
+   "libelle": "Voir les documents divers",
+   "description": "Voir les documents divers",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "1dea741b-76f1-5ecb-99a6-1f8656348add",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.deposer_divers",
+   "libelle": "Déposer des documents divers",
+   "description": "Déposer des documents divers",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "6487bd78-1e0d-58e0-a8c6-5311b5e47b87",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "ged.supprimer_divers",
+   "libelle": "Supprimer des documents divers",
+   "description": "Supprimer des documents divers",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "d07b763c-4bd4-45a0-95cf-b5831cbc50de"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "400820cf-732a-5f83-9fad-1a257273c0ec",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.lire",
+   "libelle": "Consulter le stock et les mouvements",
+   "description": "Consulter le stock et les mouvements",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "de7b0536-1db7-52f8-9922-2a69d2871ef8",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.da_creer",
+   "libelle": "Émettre une demande d'approvisionnement (DA)",
+   "description": "Émettre une demande d'approvisionnement (DA)",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "651cb68a-0d7b-549f-a4b5-6dd2dc73de09",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.da_modifier",
+   "libelle": "Modifier une DA au statut EN_ATTENTE",
+   "description": "Modifier une DA au statut EN_ATTENTE",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "a6d4a0d6-4311-5802-aeb3-06fc66ff8937",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.da_lire",
+   "libelle": "Voir les demandes d'approvisionnement (DA)",
+   "description": "Voir les demandes d'approvisionnement (DA)",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "889f5ad6-e4cb-5971-ab7e-0aafcacf2b6d",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.bc_emettre",
+   "libelle": "Émettre un bon de commande (exclusif DO/DG)",
+   "description": "Émettre un bon de commande (exclusif DO/DG)",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "fa4fa9cc-7e94-5870-a212-f9c0205be530",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.bc_lire",
+   "libelle": "Voir les bons de commande (BC)",
+   "description": "Voir les bons de commande (BC)",
+   "ordre": 1,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "1ca02ef0-73fb-5e40-aa75-5df7a677fcd6",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.bc_cloturer",
+   "libelle": "Clôturer un bon de commande partiel",
+   "description": "Clôturer un bon de commande partiel",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "83b971b4-4be5-5cb3-8907-c3560b4c7115",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.reception_saisir",
+   "libelle": "Saisir une réception de livraison sur chantier",
+   "description": "Saisir une réception de livraison sur chantier",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "96d23327-f375-57b3-ba5d-cda3786f86e6",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.brv_valider_ct",
+   "libelle": "Valider le BRV matériaux (technique)",
+   "description": "Valider le BRV matériaux (technique)",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "55978602-2439-562a-a2c9-18f74cc67d46",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.brv_valider_cp",
+   "libelle": "Valider le BRV équipements (séquentiel)",
+   "description": "Valider le BRV équipements (séquentiel)",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "31274e6e-34c1-5460-b730-9ae4c1e30561",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.justificatif_uploader",
+   "libelle": "Téléverser le bon de livraison (BL) signé",
+   "description": "Téléverser le bon de livraison (BL) signé",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "4a61c9cf-6874-5d1f-9330-2694c1dca5f5",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.mouvement_manuel_creer",
+   "libelle": "Saisir un mouvement manuel de stock",
+   "description": "Saisir un mouvement manuel de stock",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "56f089c4-25f3-59ca-bc64-f1bd29923b04",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.transfert_inter_lots",
+   "libelle": "Autoriser un transfert inter-lots",
+   "description": "Autoriser un transfert inter-lots",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "e93b2fdf-b0ec-5091-858d-01ae16ac5376",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.transfert_inter_chantiers",
+   "libelle": "Autoriser un transfert inter-chantiers",
+   "description": "Autoriser un transfert inter-chantiers",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "b59bfe76-de23-58b3-b5ec-17280dacc8ce",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.inventaire_realiser",
+   "libelle": "Réaliser un inventaire physique",
+   "description": "Réaliser un inventaire physique",
+   "ordre": 2,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
+   ]
+  }
+ },
+ {
+  "model": "catalogue.cataloguepermission",
+  "pk": "dd232637-5e62-5daf-992e-37626dfa7795",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "code": "stock.inventaire_valider",
+   "libelle": "Valider un inventaire physique",
+   "description": "Valider un inventaire physique",
+   "ordre": 3,
+   "est_actif": true,
+   "reservee_administration": false,
+   "modules": [
+    "e07b763c-4bd4-45a0-95cf-b5831cbc50df"
    ]
   }
  },
@@ -2104,6 +2841,160 @@
    "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
    "module": "d1086db5-0ff4-4d71-b63a-36edb9ec8c43",
    "module_code": "chantier"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "bcfcd64f-667c-5b95-86c6-c90a7ae9ddfb",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "0e9bddd7-59ac-4df9-a541-5cb12e79f788",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "2951ba3c-2aad-5abb-883f-ef6cb48c8df1",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "259ba6dc-2973-428d-bc97-7f299ed2fc0d",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "924cdb30-b36c-5f36-83a6-a95499aefd58",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "31647ccd-fd4f-4bb5-a9f8-de7b18e6c2c8",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "85c20968-4a0a-5442-9db6-1790da184784",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "3f697819-c658-4dd5-a189-d4fbf1a94014",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "88b72390-2e07-5787-bae8-5be86e8ac7dc",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "4f9ede71-1360-457c-8ac7-d9af1b0b5dac",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "225e992a-f817-5dad-83d1-a8fa41a7d9a6",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "6696c2ef-1367-4485-b7d4-0e9e14df84d4",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "55c4166c-c695-527d-970a-7fcfd2c161ff",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "91143fe6-12ea-405c-a2a9-0594550ffd90",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "ecaa06c7-71e9-5f1d-84f8-17eca87d5f10",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "a2a7eb6d-a73c-43bc-9ad0-d08eb6c697be",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "33ae190d-cde6-5fe1-844e-57b7e142113c",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "b56b0377-7a55-4687-8049-a0a7595ef378",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "58e23011-e302-5e55-9296-8acf3eadf5af",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "d03ebe8a-77ed-463a-b328-6d9284518ae9",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
+  }
+ },
+ {
+  "model": "catalogue.modelerolemodule",
+  "pk": "bb791359-865d-52ec-8981-bdb8e8a8ee33",
+  "fields": {
+   "cree_le": "2026-11-12T10:00:00.000Z",
+   "modifie_le": "2026-11-12T10:00:00.000Z",
+   "cree_par": null,
+   "supprime_le": null,
+   "supprime_par": null,
+   "modele_role": "e91deff7-029d-425b-8a01-75681a12348e",
+   "module": "e07b763c-4bd4-45a0-95cf-b5831cbc50df",
+   "module_code": "stock"
   }
  },
  {

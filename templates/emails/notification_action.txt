@@ -1,0 +1,19 @@
+{{ titre }}
+
+Bonjour{% if prenom %} {{ prenom }}{% endif %},
+
+{{ message }}
+
+{% if details %}
+{% for cle, val in details.items %}- {{ cle }} : {{ val }}
+{% endfor %}
+{% endif %}
+
+{% if lien_action %}
+{{ libelle_action }} :
+{{ lien_action }}
+{% endif %}
+
+--
+CCD Digital — Gestion de Chantier BTP
+Ce message est envoyé automatiquement, merci de ne pas y répondre.

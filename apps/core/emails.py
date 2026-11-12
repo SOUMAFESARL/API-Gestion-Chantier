@@ -36,12 +36,13 @@ from django.template.loader import get_template, render_to_string
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["envoyer", "adresse_frontend"]
+__all__ = ["adresse_frontend", "envoyer", "envoyer_email_notification"]
 
 
 def adresse_frontend() -> str:
-    """L'adresse publique du frontend, sans barre finale — **la seule** que les liens d'e-mail utilisent.
+    """L'adresse publique du frontend, sans barre finale.
 
+    C'est **la seule** que les liens d'e-mail utilisent.
     Des liens écrits `http://localhost:3000` en dur dans trois services faisaient partir des
     invitations et des réinitialisations dont le bouton ne menait nulle part hors du poste du
     développeur. Une valeur locale en production est une panne silencieuse : l'e-mail part, le
@@ -63,7 +64,7 @@ def _expediteur() -> str | None:
         from apps.platform_admin.services.messagerie import expediteur_actif
 
         return expediteur_actif()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return getattr(settings, "DEFAULT_FROM_EMAIL", None)
 
 
@@ -129,3 +130,54 @@ def envoyer(
     except Exception:
         logger.exception("Envoi de l'email « %s » impossible", gabarit)
         return False
+
+
+def envoyer_email_notification(
+    destinataire: str | Iterable[str],
+    sujet: str,
+    message: str,
+    *,
+    lien_action: str | None = None,
+    libelle_action: str = "Consulter dans l'application",
+    prenom: str = "",
+    details: dict[str, Any] | None = None,
+    contexte_supplementaire: dict[str, Any] | None = None,
+) -> bool:
+    """Envoie un e-mail de notification standardisé avec bouton d'action directe.
+
+    Conforme aux règles du produit :
+    - Format HTML et version texte alternative (emails/notification_action.{html,txt})
+    - Bouton d'action directe dont l'URL pointe vers l'adresse frontend publique
+    - Pas d'exception levée en cas d'erreur de délivrance (journalisation silencieuse)
+    """
+    destinataires = [destinataire] if isinstance(destinataire, str) else list(destinataire)
+
+    if not destinataires:
+        return False
+
+    url_complete = None
+    if lien_action:
+        if lien_action.startswith(("http://", "https://")):
+            url_complete = lien_action
+        else:
+            base = adresse_frontend()
+            url_complete = f"{base}/{lien_action.lstrip('/')}"
+
+    contexte = {
+        "sujet": sujet,
+        "titre": sujet,
+        "message": message,
+        "prenom": prenom,
+        "lien_action": url_complete,
+        "libelle_action": libelle_action,
+        "details": details or {},
+        **(contexte_supplementaire or {}),
+    }
+
+    return envoyer(
+        gabarit="notification_action",
+        sujet=sujet,
+        destinataires=destinataires,
+        contexte=contexte,
+    )
+

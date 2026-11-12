@@ -20,6 +20,9 @@ class ProfilEntrepriseSerializer(serializers.Serializer):
     raison_sociale = serializers.CharField(read_only=True)
     slug = serializers.CharField(read_only=True)
     logo_url = serializers.CharField(read_only=True, allow_null=True)
+    couleur_primaire = serializers.CharField(
+        read_only=True, allow_null=True, required=False, allow_blank=True
+    )
 
 
 class ProfilRolePersonnaliseSerializer(serializers.Serializer):

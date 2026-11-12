@@ -116,6 +116,7 @@ INSTALLED_APPS = [
     "apps.projets",  # module 1 : projets et affectations
     "apps.chantier",  # module 2 : suivi technique et rapports
     "apps.ged",  # module 3 : gestion documentaire
+    "apps.stock",  # module F9 : gestion des stocks et approvisionnements
     "apps.pilotage",  # module 4 : tableaux de bord et pilotage
     # tierces
     "rest_framework",

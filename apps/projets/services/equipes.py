@@ -211,6 +211,8 @@ def ajouter_membre(
     *,
     personne_id=None,
     personne: PersonneMainOeuvre | None = None,
+    utilisateur_id=None,
+    utilisateur=None,
     fonction: str = "OUVRIER",
     est_chef: bool = False,
     date_arrivee: date | None = None,
@@ -218,7 +220,24 @@ def ajouter_membre(
     createur=None,
 ) -> tuple[MembreEquipeChantier, list[dict]]:
     if personne is None:
-        personne = PersonneMainOeuvre.objects.filter(pk=personne_id).first()
+        if personne_id:
+            personne = PersonneMainOeuvre.objects.filter(pk=personne_id).first()
+        elif utilisateur or utilisateur_id:
+            if utilisateur is None:
+                from apps.accounts.models import Utilisateur
+
+                utilisateur = Utilisateur.objects.filter(
+                    pk=utilisateur_id,
+                    supprime_le__isnull=True,
+                    is_active=True,
+                ).first()
+            if utilisateur is None:
+                raise ValidationError(
+                    {"utilisateur_id": "Ce collaborateur est introuvable ou inactif."}
+                )
+            from apps.projets.services.main_oeuvre import fiche_du_collaborateur
+
+            personne = fiche_du_collaborateur(utilisateur, createur=createur)
     if personne is None or not personne.est_actif:
         raise ValidationError({"personne_id": "Cette personne est introuvable dans le registre."})
     debut = date_arrivee or timezone.localdate()

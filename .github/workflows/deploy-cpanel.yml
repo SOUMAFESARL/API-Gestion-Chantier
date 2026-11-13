@@ -1,0 +1,135 @@
+name: Tests et deploiement SSH cPanel
+
+on:
+  push:
+    branches: [feature/api-chantier]
+  pull_request:
+    branches: [feature/api-chantier]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpanel-api-chantier
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: apichantier
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d apichantier"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SECRET_KEY: ci-only-secret-key
+      DEBUG: 'False'
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DB_NAME: apichantier
+      DB_USER: postgres
+      DB_PASSWORD: test-only
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Installer les dependances
+        run: python -m pip install -r requirements.txt
+      - name: Verifier Django et les migrations
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+      - name: Executer les tests
+        run: python manage.py test --noinput
+
+  deploy:
+    needs: tests
+    if: github.ref == 'refs/heads/feature/api-chantier' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROJECT_DIR: ${{ vars.CPANEL_PROJECT_DIR }}
+      VENV_PYTHON: ${{ vars.CPANEL_VENV_PYTHON }}
+      SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
+      SSH_USERNAME: ${{ secrets.CPANEL_SSH_USERNAME }}
+      SSH_PASSWORD: ${{ secrets.CPANEL_SSH_PASSWORD }}
+      SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verifier les parametres du deploiement
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${PROJECT_DIR:?Configurer CPANEL_PROJECT_DIR}"
+          : "${VENV_PYTHON:?Configurer CPANEL_VENV_PYTHON}"
+          : "${SSH_HOST:?Configurer CPANEL_SSH_HOST}"
+          : "${SSH_USERNAME:?Configurer CPANEL_SSH_USERNAME}"
+          [[ "$PROJECT_DIR" == /* && "$PROJECT_DIR" != / ]]
+          [[ "$VENV_PYTHON" == /* ]]
+          if [[ -z "$SSH_PASSWORD" && -z "$SSH_KEY" ]]; then
+            echo 'Configurer CPANEL_SSH_KEY ou CPANEL_SSH_PASSWORD.' >&2
+            exit 1
+          fi
+      - name: Preparer les fichiers deployables
+        run: |
+          mkdir -p deploy
+          cp -R apps config manage.py requirements.txt passenger_wsgi.py deploy/
+      - name: Transferer le code par SSH
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.CPANEL_SSH_HOST }}
+          username: ${{ secrets.CPANEL_SSH_USERNAME }}
+          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: ${{ secrets.CPANEL_SSH_PORT || '22' }}
+          fingerprint: ${{ secrets.CPANEL_SSH_FINGERPRINT }}
+          source: deploy/*
+          target: ${{ vars.CPANEL_PROJECT_DIR }}
+          strip_components: 1
+          overwrite: true
+      - name: Installer, migrer et redemarrer Passenger
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.CPANEL_SSH_HOST }}
+          username: ${{ secrets.CPANEL_SSH_USERNAME }}
+          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: ${{ secrets.CPANEL_SSH_PORT || '22' }}
+          fingerprint: ${{ secrets.CPANEL_SSH_FINGERPRINT }}
+          envs: PROJECT_DIR,VENV_PYTHON
+          command_timeout: 10m
+          script: |
+            set -eu
+            cd "$PROJECT_DIR"
+            test -f .env
+            export DJANGO_SETTINGS_MODULE=config.settings
+            "$VENV_PYTHON" -m pip install -r requirements.txt
+            "$VENV_PYTHON" manage.py check
+            "$VENV_PYTHON" manage.py migrate --noinput
+            "$VENV_PYTHON" manage.py migrate --check
+            "$VENV_PYTHON" manage.py collectstatic --noinput
+            mkdir -p tmp
+            touch tmp/restart.txt
+      - name: Verifier la disponibilite de l'API
+        if: vars.CPANEL_HEALTH_URL != ''
+        env:
+          HEALTH_URL: ${{ vars.CPANEL_HEALTH_URL }}
+        run: |
+          curl --fail --silent --show-error --retry 12 --retry-all-errors \
+            --retry-delay 5 --connect-timeout 10 --max-time 20 "$HEALTH_URL"

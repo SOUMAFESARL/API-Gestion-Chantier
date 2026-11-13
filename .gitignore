@@ -17,7 +17,6 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
-
 # Django
 *.log
 staticfiles/
@@ -29,22 +28,22 @@ db.sqlite3
 .postgres-init-password
 tmp/
 passenger.log
-
 # Editeurs / OS
 .idea/
 .vscode/
 *.swp
 .DS_Store
 Thumbs.db
-
 # Documents PDF et gros medias
 *.pdf
 Manuels_Apprentissage/
 logo.png
-
 # Postman (collections, environnements et tests)
 *postman*
 *.postman_collection.json
 *.postman_environment.json
 postman/
-
+# Local PostgreSQL
+db.sqlite3-*
+.postgres/
+.postgres-password.tmp

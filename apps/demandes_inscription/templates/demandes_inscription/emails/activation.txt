@@ -1,0 +1,18 @@
+CCD Digital — Gestion de Chantier BTP
+
+Activez votre espace
+
+Bonjour,
+
+Votre inscription pour {{ raison_sociale }} est presque terminée.
+Choisissez votre mot de passe et complétez votre inscription en suivant ce lien, valable {{ expiration_heures }} heures :
+
+{{ activation_url }}
+
+Ce qui se passera ensuite
+Vous renseignez vos informations, choisissez votre mot de passe et acceptez les conditions générales. Votre demande est ensuite soumise à validation.
+
+Passé le délai de {{ expiration_heures }} heures, le lien expire. Aucun espace n’est créé à cette étape.
+
+Ce message vous est adressé par CCD Digital. Merci de ne pas y répondre : cette adresse n’est pas relevée.
+CCD Digital · Gestion de chantier BTP · Document confidentiel

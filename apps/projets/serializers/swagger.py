@@ -1,5 +1,7 @@
 """Creation form and update contracts."""
 
+from pathlib import Path
+
 from django.db import transaction
 from django.urls import reverse
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
@@ -21,6 +23,7 @@ from apps.projets.serializers import (
 )
 from apps.projets.serializers.statistiques import StatistiquesProjetSerializer
 from apps.projets.services.contrats import (
+    FORMATS,
     MAX_LOT,
     ajouter_contrats,
     nettoyer_contrats,
@@ -45,6 +48,7 @@ CHAMPS_FORMULAIRE = (
     "budget_initial_montant",
     "description",
     "contrat",
+    "ordre_service",
     "chef_projet_id",
     "conducteur_travaux_id",
 )
@@ -113,6 +117,12 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         max_length=10,
         help_text="Un ou plusieurs PDF/JPG/JPEG/PNG. Repeter contrat en multipart. 10 Mo/fichier.",
     )
+    ordre_service = FichierContratField(
+        validators=[valider_fichier_contrat],
+        required=False,
+        allow_null=True,
+        help_text="Ordre de service de démarrage (PDF/JPG/JPEG/PNG, max 10 Mo).",
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -131,12 +141,31 @@ class ProjetPostSerializer(ProjetCreationSerializer):
 
     def _avec_contrats(self, validated_data, operation):
         fichiers = validated_data.pop("contrat", [])
+        fichier_os = validated_data.pop("ordre_service", serializers.empty)
         stockes = []
         try:
             with transaction.atomic():
                 projet = operation(validated_data)
                 user = getattr(self.context.get("request"), "user", None)
                 ajouter_contrats(projet, fichiers, user, stockes)
+                if fichier_os is not serializers.empty and fichier_os is not None:
+                    ext = Path(fichier_os.name).suffix.lower()
+                    projet.ordre_service_nom = fichier_os.name[:255]
+                    projet.ordre_service_taille = fichier_os.size
+                    projet.ordre_service_type = FORMATS.get(
+                        ext, getattr(fichier_os, "content_type", "") or "application/pdf"
+                    )
+                    projet.ordre_service.save(fichier_os.name, fichier_os, save=False)
+                    stockes.append((projet.ordre_service.storage, projet.ordre_service.name))
+                    projet.save(
+                        update_fields=[
+                            "ordre_service",
+                            "ordre_service_nom",
+                            "ordre_service_taille",
+                            "ordre_service_type",
+                            "modifie_le",
+                        ]
+                    )
                 return projet
         except Exception:
             nettoyer_contrats(stockes)
@@ -367,6 +396,20 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     duree_jours_ouvres = serializers.SerializerMethodField()
     duree = serializers.SerializerMethodField()
     contrat = ContratProjetSerializer(source="contrats", many=True, read_only=True)
+    ordre_service = serializers.SerializerMethodField()
+
+    def get_ordre_service(self, obj) -> dict | None:
+        if not obj.ordre_service:
+            return None
+        path = reverse("projets:projet-ordre-service", kwargs={"pk": obj.pk})
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        url = request.build_absolute_uri(path) if request else path
+        return {
+            "nom": obj.ordre_service_nom or Path(obj.ordre_service.name).name,
+            "taille": obj.ordre_service_taille or 0,
+            "type_contenu": obj.ordre_service_type or "application/pdf",
+            "url": url,
+        }
 
     avancement_theorique = serializers.SerializerMethodField(
         help_text=(

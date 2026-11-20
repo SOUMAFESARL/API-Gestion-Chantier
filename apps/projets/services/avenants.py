@@ -66,17 +66,22 @@ def enregistrer_avenant(
     montant: int | None = None,
     elements_ids=(),
     document=None,
+    ordre_service=None,
     auteur=None,
 ) -> Avenant:
     """Un avenant signé : enregistré tel quel, sans circuit de validation."""
+    from pathlib import Path
+
     from apps.core.enums import ActionAudit
-    from apps.projets.services.contrats import valider_fichier_contrat
+    from apps.projets.services.contrats import FORMATS, valider_fichier_contrat
 
     cases = list(Element.objects.filter(pk__in=elements_ids or [], projet=projet))
     if len(cases) != len(set(map(str, elements_ids or []))):
         raise ValidationError({"elements_ids": "Une case n'appartient pas à ce projet."})
     if document is not None:
         valider_fichier_contrat(document)
+    if ordre_service is not None:
+        valider_fichier_contrat(ordre_service)
     avenant = Avenant(
         projet=projet,
         numero=numero.strip(),
@@ -91,11 +96,25 @@ def enregistrer_avenant(
             avenant.save()
     except IntegrityError:
         raise ErreurConflit(f"L'avenant n° {numero} existe déjà sur ce projet.") from None
+    champs_maj = []
     if document is not None:
+        ext_doc = Path(document.name).suffix.lower()
         avenant.document_nom = document.name[:255]
-        avenant.document_type = getattr(document, "content_type", "") or ""
+        avenant.document_type = FORMATS.get(
+            ext_doc, getattr(document, "content_type", "") or "application/octet-stream"
+        )
         avenant.document.save(document.name, document, save=False)
-        avenant.save(update_fields=["document", "document_nom", "document_type", "modifie_le"])
+        champs_maj.extend(["document", "document_nom", "document_type"])
+    if ordre_service is not None:
+        ext_os = Path(ordre_service.name).suffix.lower()
+        avenant.ordre_service_nom = ordre_service.name[:255]
+        avenant.ordre_service_type = FORMATS.get(
+            ext_os, getattr(ordre_service, "content_type", "") or "application/octet-stream"
+        )
+        avenant.ordre_service.save(ordre_service.name, ordre_service, save=False)
+        champs_maj.extend(["ordre_service", "ordre_service_nom", "ordre_service_type"])
+    if champs_maj:
+        avenant.save(update_fields=[*champs_maj, "modifie_le"])
     avenant.elements.set(cases)
     recalculer_avenants(projet)
     _tracer(
@@ -139,6 +158,12 @@ def avenant_en_dict(avenant: Avenant, *, montants_visibles: bool) -> dict:
         ],
         "document": {"nom": avenant.document_nom, "type": avenant.document_type}
         if avenant.document
+        else None,
+        "ordre_service": {
+            "nom": avenant.ordre_service_nom,
+            "type": avenant.ordre_service_type,
+        }
+        if avenant.ordre_service
         else None,
         "cree_le": avenant.cree_le,
     }

@@ -12,14 +12,14 @@ n'est plus compté comme un retard.
 
 from pathlib import Path
 
-from apps.entreprises.selectors import slug_courant
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleEntreprise
+from apps.entreprises.selectors import slug_courant
 from apps.projets.storage import StockageContrats
 
-__all__ = ["Avenant"]
+__all__ = ["Avenant", "chemin_avenant", "chemin_ordre_service_avenant"]
 
 
 def chemin_avenant(instance, filename):
@@ -27,7 +27,18 @@ def chemin_avenant(instance, filename):
     if extension == ".jepg":
         extension = ".jpeg"
     return (
-        f"{slug_courant() or 'plateforme'}/projets/{instance.projet_id}/avenants/{instance.pk}{extension}"
+        f"{slug_courant() or 'plateforme'}/projets/{instance.projet_id}/"
+        f"avenants/{instance.pk}{extension}"
+    )
+
+
+def chemin_ordre_service_avenant(instance, filename):
+    extension = Path(filename).suffix.lower()
+    if extension == ".jepg":
+        extension = ".jpeg"
+    return (
+        f"{slug_courant() or 'plateforme'}/projets/{instance.projet_id}/"
+        f"avenants/{instance.pk}_os{extension}"
     )
 
 
@@ -49,6 +60,14 @@ class Avenant(ModeleEntreprise):
     )
     document_nom = models.CharField(max_length=255, blank=True)
     document_type = models.CharField(max_length=50, blank=True)
+    ordre_service = models.FileField(
+        upload_to=chemin_ordre_service_avenant,
+        storage=StockageContrats(),
+        max_length=255,
+        blank=True,
+    )
+    ordre_service_nom = models.CharField(max_length=255, blank=True)
+    ordre_service_type = models.CharField(max_length=50, blank=True)
 
     class Meta:
         db_table = "avenant"

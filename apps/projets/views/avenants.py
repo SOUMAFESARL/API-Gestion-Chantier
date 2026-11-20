@@ -17,7 +17,12 @@ from apps.projets.services.avenants import avenant_en_dict, enregistrer_avenant,
 from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
 from apps.projets.services.perimetres import exiger
 
-__all__ = ["AvenantDetailView", "AvenantDocumentView", "ProjetAvenantsView"]
+__all__ = [
+    "AvenantDetailView",
+    "AvenantDocumentView",
+    "AvenantOrdreServiceView",
+    "ProjetAvenantsView",
+]
 
 TAGS = ["avenants"]
 
@@ -37,6 +42,7 @@ class AvenantCreationSerializer(serializers.Serializer):
         help_text="Vide : l'avenant porte sur le projet entier.",
     )
     document = serializers.FileField(required=False, allow_null=True, default=None)
+    ordre_service = serializers.FileField(required=True, allow_null=False)
 
 
 def _reponse(request, avenant):
@@ -122,6 +128,35 @@ class AvenantDocumentView(APIView):
             as_attachment=True,
             filename=avenant.document_nom or f"avenant-{avenant.numero}",
             content_type=avenant.document_type or "application/octet-stream",
+        )
+        reponse["Cache-Control"] = "private, no-store"
+        return reponse
+
+
+class AvenantOrdreServiceView(APIView):
+    """`GET /api/v1/avenants/{id}/ordre-service/` — l'ordre de service joint à l'avenant."""
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @extend_schema(
+        tags=TAGS,
+        summary="Télécharger l'ordre de service de l'avenant",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request, pk):
+        avenant = get_object_or_404(Avenant.objects.select_related("projet"), pk=pk)
+        self.check_object_permissions(request, avenant.projet)
+        if not avenant.ordre_service:
+            raise NotFound("Cet avenant n'a pas d'ordre de service joint.")
+        try:
+            fichier = avenant.ordre_service.open("rb")
+        except FileNotFoundError as exc:
+            raise NotFound("L'ordre de service de l'avenant est indisponible.") from exc
+        reponse = FileResponse(
+            fichier,
+            as_attachment=True,
+            filename=avenant.ordre_service_nom or f"ordre-service-avenant-{avenant.numero}",
+            content_type=avenant.ordre_service_type or "application/octet-stream",
         )
         reponse["Cache-Control"] = "private, no-store"
         return reponse

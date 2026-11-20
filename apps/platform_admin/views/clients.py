@@ -513,21 +513,34 @@ class ActiverModuleClientPlateformeView(APIView):
                             role=r,
                             module_catalogue=module,
                         )
-                        # Rôle système : reçoit les défauts du modèle
+                        # Rôle système : reçoit les défauts du modèle (PERMISSIONS_DEFAUT_ROLES)
                         if r.est_systeme:
-                            mrm = ModeleRoleModule.objects.filter(
-                                modele_role__code__iexact=r.code,
-                                module_code__iexact=module.code,
-                                supprime_le__isnull=True,
-                            ).first()
-                            if mrm:
-                                perms_cat = list(
-                                    CataloguePermission.objects.filter(
-                                        modules=module, est_actif=True, supprime_le__isnull=True
-                                    )
+                            from apps.accounts.services.roles import _codes_par_defaut
+
+                            mrm_codes = {
+                                m.lower()
+                                for m in ModeleRoleModule.objects.filter(
+                                    modele_role__code__iexact=r.code,
+                                    supprime_le__isnull=True,
+                                ).values_list("module_code", flat=True)
+                            }
+                            perms_cat_map = {
+                                p.code: p
+                                for p in CataloguePermission.objects.filter(
+                                    modules=module, est_actif=True, supprime_le__isnull=True
                                 )
-                                if perms_cat:
-                                    rmp.permissions_catalogue.set(perms_cat)
+                            }
+                            codes_defaut = _codes_par_defaut(
+                                (r.code or "").upper(),
+                                module.code.lower(),
+                                mrm_codes,
+                                perms_cat_map,
+                            )
+                            perms_a_assigner = [
+                                perms_cat_map[c] for c in codes_defaut if c in perms_cat_map
+                            ]
+                            if perms_a_assigner:
+                                rmp.permissions_catalogue.set(perms_a_assigner)
                         # Rôle personnalisé : reçoit une ligne explicite vide (permissions_catalogue reste vide)
 
         adresse_ip = extraire_ip_client(request)

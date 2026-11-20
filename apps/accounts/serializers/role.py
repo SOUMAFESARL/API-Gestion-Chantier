@@ -50,20 +50,58 @@ class RoleModulePermissionSerializer(serializers.ModelSerializer):
         fields = ["module_catalogue", "module_code", "module_libelle", "permissions"]
 
 
+def _est_role_dg(role: Role) -> bool:
+    return (role.code or "").strip().upper() in ("DG", "DIRECTEUR_GENERAL")
+
+
 def _construire_tableau_dynamique_modules(role: Role):
     """Construit le tableau dynamique complet de tous les modules actifs et de leurs permissions pour le rôle."""
+    from apps.catalogue.models import CataloguePermission
+
+    modules_actifs = list(modules_ouverts())
+
+    # Le Directeur Général possède dynamiquement toutes les permissions actives des modules ouverts
+    # (apps/core/droits.py, règle B-03). L'écran des rôles reflète cette vérité souveraine.
+    if _est_role_dg(role):
+        resultats = []
+        for m in modules_actifs:
+            perms_list = [
+                {
+                    "id": str(p.id),
+                    "code": p.code,
+                    "libelle": p.libelle,
+                    "description": p.description,
+                    "ordre": p.ordre,
+                }
+                for p in CataloguePermission.objects.filter(
+                    modules=m, est_actif=True, supprime_le__isnull=True
+                ).order_by("ordre", "code")
+            ]
+            resultats.append(
+                {
+                    "module_id": str(m.id),
+                    "module_code": m.code,
+                    "module_libelle": m.libelle,
+                    "module_description": m.description,
+                    "module_icone": m.icone,
+                    "module_ordre": m.ordre,
+                    "permissions": perms_list,
+                }
+            )
+        resultats.sort(key=lambda x: (x["module_ordre"], x["module_code"]))
+        return resultats
+
     rpm_qs = (
         RoleModulePermission.objects.filter(
             role=role,
             supprime_le__isnull=True,
-            module_catalogue__in=modules_ouverts(),
+            module_catalogue__in=modules_actifs,
         )
         .select_related("module_catalogue")
         .prefetch_related("permissions_catalogue")
         .order_by("module_catalogue__ordre", "module_catalogue__code")
     )
 
-    modules_actifs = list(modules_ouverts())
     modules_couverts = set()
 
     resultats = []
@@ -211,18 +249,6 @@ class RoleSerializer(serializers.ModelSerializer):
         ]
 
     def get_avertissements(self, obj: Role) -> list[str]:
-        if obj.portee != "PROJET":
-            return []
-        from apps.accounts.models import RoleModulePermission
-        rpm_qs = RoleModulePermission.objects.filter(
-            role=obj,
-            supprime_le__isnull=True,
-        ).select_related("module_catalogue").prefetch_related("permissions_catalogue")
-        for rmp in rpm_qs:
-            for _p in rmp.permissions_catalogue.filter(est_actif=True, supprime_le__isnull=True):
-                mod_code = rmp.module_catalogue.code.lower()
-                if mod_code not in ("projets", "projet"):
-                    return ["permission_globale_sur_role_projet"]
         return []
 
     def get_nb_utilisateurs(self, obj: Role) -> int:
@@ -233,7 +259,21 @@ class RoleSerializer(serializers.ModelSerializer):
 
     def get_permissions_modules(self, obj: Role) -> dict[str, list[str]]:
         """Dictionnaire dynamique associant chaque module actif à la liste ordonnée de ses codes de permissions."""
+        from apps.catalogue.models import CataloguePermission
+
         modules_actifs = list(modules_ouverts())
+        if _est_role_dg(obj):
+            return {
+                mod.code: list(
+                    CataloguePermission.objects.filter(
+                        modules=mod, est_actif=True, supprime_le__isnull=True
+                    )
+                    .order_by("ordre", "code")
+                    .values_list("code", flat=True)
+                )
+                for mod in modules_actifs
+            }
+
         rpm_qs = (
             RoleModulePermission.objects.filter(
                 role=obj,

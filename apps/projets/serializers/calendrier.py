@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from django.utils import timezone
@@ -9,7 +10,13 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from apps.core.exceptions import ErreurConflit, ErreurMetier
-from apps.projets.models.calendrier import ExceptionCalendrier, SemaineType
+from apps.projets.models.calendrier import (
+    JOURS_SEMAINE,
+    ExceptionCalendrier,
+    SemaineType,
+)
+
+FORMAT_HEURE_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 __all__ = [
     "CalendrierQuerySerializer",
@@ -23,7 +30,9 @@ __all__ = [
 
 
 class SemaineTypeSerializer(serializers.ModelSerializer):
-    """Sérialiseur de la semaine type (7 booléens)."""
+    """Sérialiseur de la semaine type (7 booléens + horaires par jour)."""
+
+    horaires_travail = serializers.SerializerMethodField()
 
     class Meta:
         model = SemaineType
@@ -35,13 +44,18 @@ class SemaineTypeSerializer(serializers.ModelSerializer):
             "vendredi",
             "samedi",
             "dimanche",
+            "horaires_travail",
         ]
+
+    def get_horaires_travail(self, obj: SemaineType) -> dict[str, dict[str, str]]:
+        return obj.horaires_normalises()
 
 
 class SemaineTypeUpdateSerializer(serializers.Serializer):
-    """Sérialiseur de modification partielle de la semaine type.
+    """Sérialiseur de modification partielle de la semaine type et des horaires.
 
-    Refuse une configuration sans aucun jour travaillé (ErreurMetier, 422).
+    Refuse une configuration sans aucun jour travaillé (ErreurMetier, 422)
+    ou des horaires incohérents (fin <= début).
     """
 
     lundi = serializers.BooleanField(required=False)
@@ -51,10 +65,11 @@ class SemaineTypeUpdateSerializer(serializers.Serializer):
     vendredi = serializers.BooleanField(required=False)
     samedi = serializers.BooleanField(required=False)
     dimanche = serializers.BooleanField(required=False)
+    horaires_travail = serializers.DictField(required=False)
 
     def validate(self, attrs: dict) -> dict:
         instance = getattr(self, "instance", None)
-        jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+        jours = list(JOURS_SEMAINE)
         valeurs = {}
         for j in jours:
             if j in attrs:
@@ -65,6 +80,45 @@ class SemaineTypeUpdateSerializer(serializers.Serializer):
                 valeurs[j] = False
         if not any(valeurs.values()):
             raise ErreurMetier("La semaine type doit comporter au moins un jour travaillé.")
+
+        horaires_actuels = (
+            instance.horaires_normalises()
+            if instance is not None
+            else {j: {"debut": "07:30", "fin": "17:00"} for j in jours}
+        )
+        if "horaires_travail" in attrs:
+            brut = attrs["horaires_travail"]
+            if not isinstance(brut, dict):
+                raise serializers.ValidationError(
+                    {"horaires_travail": _("Format des horaires invalide.")}
+                )
+            fusion = dict(horaires_actuels)
+            for jour_cle, plage in brut.items():
+                if jour_cle not in JOURS_SEMAINE:
+                    raise serializers.ValidationError(
+                        {"horaires_travail": _(f"Jour inconnu : {jour_cle}.")}
+                    )
+                if not isinstance(plage, dict):
+                    raise serializers.ValidationError(
+                        {"horaires_travail": _(f"Plage horaire invalide pour {jour_cle}.")}
+                    )
+                debut = str(plage.get("debut") or "").strip()
+                fin = str(plage.get("fin") or "").strip()
+                if not FORMAT_HEURE_RE.match(debut) or not FORMAT_HEURE_RE.match(fin):
+                    raise serializers.ValidationError(
+                        {
+                            "horaires_travail": _(
+                                f"Les horaires de {jour_cle} doivent être au format HH:MM."
+                            )
+                        }
+                    )
+                if fin <= debut:
+                    raise ErreurMetier(
+                        f"L'heure de fin doit être postérieure à l'heure de début ({jour_cle})."
+                    )
+                fusion[jour_cle] = {"debut": debut, "fin": fin}
+            attrs["horaires_travail"] = fusion
+
         return attrs
 
 

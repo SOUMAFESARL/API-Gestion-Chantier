@@ -460,9 +460,12 @@ def preparation(projet, jour: date, *, journal=None, precedent=None, utilisateur
         ],
     }
 
+    from apps.projets.models.calendrier import SemaineType
+
     return {
         "aujourdhui": aujourdhui().isoformat(),
         "est_jour_ouvre": est_jour_ouvre_entreprise(jour),
+        "horaires_defaut": SemaineType.courante().horaires_du_jour(jour),
         "jours_saisissables": [
             d.isoformat()
             for d in jours_saisissables_projet(projet, conserver=[jour] if journal else ())

@@ -23,19 +23,49 @@ Il n'y a pas de calendrier propre à un projet.
 
 from __future__ import annotations
 
+from datetime import date
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import ModeleEntreprise
 
-__all__ = ["ExceptionCalendrier", "SemaineType"]
+__all__ = [
+    "HEURE_DEBUT_DEFAUT",
+    "HEURE_FIN_DEFAUT",
+    "JOURS_SEMAINE",
+    "ExceptionCalendrier",
+    "SemaineType",
+    "horaires_travail_par_defaut",
+]
+
+JOURS_SEMAINE: tuple[str, ...] = (
+    "lundi",
+    "mardi",
+    "mercredi",
+    "jeudi",
+    "vendredi",
+    "samedi",
+    "dimanche",
+)
+HEURE_DEBUT_DEFAUT = "07:30"
+HEURE_FIN_DEFAUT = "17:00"
+
+
+def horaires_travail_par_defaut() -> dict[str, dict[str, str]]:
+    """Horaires par défaut de chaque jour de la semaine."""
+    return {
+        jour: {"debut": HEURE_DEBUT_DEFAUT, "fin": HEURE_FIN_DEFAUT}
+        for jour in JOURS_SEMAINE
+    }
 
 
 class SemaineType(ModeleEntreprise):
     """Semaine type de travail d'une entreprise (ligne unique par entreprise).
 
     Première couche du calendrier d'entreprise : définit quels jours de la semaine
-    sont réputés travaillés par défaut (du lundi au vendredi par défaut).
+    sont réputés travaillés par défaut (du lundi au vendredi par défaut) ainsi que
+    les horaires de travail (début et fin) de chaque jour ouvré.
     """
 
     cle = models.CharField(
@@ -51,6 +81,11 @@ class SemaineType(ModeleEntreprise):
     vendredi = models.BooleanField(_("vendredi"), default=True)
     samedi = models.BooleanField(_("samedi"), default=False)
     dimanche = models.BooleanField(_("dimanche"), default=False)
+    horaires_travail = models.JSONField(
+        _("horaires de travail"),
+        default=horaires_travail_par_defaut,
+        blank=True,
+    )
 
     class Meta:
         db_table = "semaine_type"
@@ -84,6 +119,29 @@ class SemaineType(ModeleEntreprise):
         if self.dimanche:
             jours.add(6)
         return frozenset(jours)
+
+    def horaires_normalises(self) -> dict[str, dict[str, str]]:
+        """Rend les horaires de travail complets pour les 7 jours avec repli sur 07:30-17:00."""
+        brut = self.horaires_travail if isinstance(self.horaires_travail, dict) else {}
+        resultat: dict[str, dict[str, str]] = {}
+        for jour in JOURS_SEMAINE:
+            entree = brut.get(jour) if isinstance(brut.get(jour), dict) else {}
+            debut = str(entree.get("debut") or HEURE_DEBUT_DEFAUT).strip()
+            fin = str(entree.get("fin") or HEURE_FIN_DEFAUT).strip()
+            resultat[jour] = {
+                "debut": debut or HEURE_DEBUT_DEFAUT,
+                "fin": fin or HEURE_FIN_DEFAUT,
+            }
+        return resultat
+
+    def horaires_du_jour(self, jour: date) -> dict[str, str]:
+        """Rend `{'heure_debut': 'HH:MM', 'heure_fin': 'HH:MM'}` pour la date donnée."""
+        nom_jour = JOURS_SEMAINE[jour.weekday()]
+        plage = self.horaires_normalises()[nom_jour]
+        return {
+            "heure_debut": plage["debut"],
+            "heure_fin": plage["fin"],
+        }
 
     @classmethod
     def courante(cls) -> SemaineType:

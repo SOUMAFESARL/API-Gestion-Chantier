@@ -146,7 +146,10 @@ class SemaineTypeView(APIView):
     def patch(self, request):
         semaine = SemaineType.courante()
         jours = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-        valeur_avant = {j: getattr(semaine, j) for j in jours}
+        valeur_avant = {
+            **{j: getattr(semaine, j) for j in jours},
+            "horaires_travail": semaine.horaires_normalises(),
+        }
 
         serializer = SemaineTypeUpdateSerializer(
             instance=semaine,
@@ -155,14 +158,14 @@ class SemaineTypeView(APIView):
         )
         serializer.is_valid(raise_exception=True)
 
-        valeurs_apres = {
-            j: serializer.validated_data.get(j, getattr(semaine, j))
-            for j in jours
-        }
-
         for j, v in serializer.validated_data.items():
             setattr(semaine, j, v)
         semaine.save(update_fields=[*serializer.validated_data, "modifie_le"])
+
+        valeurs_apres = {
+            **{j: getattr(semaine, j) for j in jours},
+            "horaires_travail": semaine.horaires_normalises(),
+        }
 
         appareil = (
             request.headers.get("User-Agent")

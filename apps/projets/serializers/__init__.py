@@ -12,6 +12,7 @@ from apps.accounts.models import Utilisateur
 from apps.accounts.serializers.profil import ProfilEntrepriseSerializer
 from apps.accounts.services.invitations import creer_invitation
 from apps.core.enums import (
+    NatureProjet,
     RoleGlobal,
     RoleProjet,
     StatutProjet,
@@ -51,6 +52,9 @@ from apps.projets.serializers.sante import (
     SanteHistoriqueItemSerializer,
 )
 from apps.projets.services.affectations import affecter_collaborateur_projet, verifier_affectable
+from apps.projets.services.informations_complementaires import (
+    valider_informations_complementaires,
+)
 from apps.projets.services.references import generer_reference_projet
 from apps.tiers.models import Tiers
 from apps.tiers.serializers import TiersSerializer
@@ -164,8 +168,10 @@ class ProjetSerializer(serializers.ModelSerializer):
             "reference",
             "nom",
             "peut_renommer",
+            "nature_projet",
             "type_projet",
             "description",
+            "informations_complementaires",
             "client",
             "maitre_ouvrage",
             "maitre_oeuvre",
@@ -280,6 +286,9 @@ class ProjetCreationSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
     reference = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     nom = serializers.CharField(max_length=200)
+    nature_projet = serializers.ChoiceField(
+        choices=NatureProjet.choices, required=False, allow_blank=True
+    )
     # Un code des référentiels (plateforme + entreprise) — voir `validate_type_projet`.
     type_projet = serializers.CharField(
         max_length=60, required=False, default=TypeProjet.BATIMENT_RESIDENTIEL
@@ -300,6 +309,7 @@ class ProjetCreationSerializer(serializers.Serializer):
         min_value=0, required=False, allow_null=True, default=None
     )
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    informations_complementaires = serializers.JSONField(required=False)
 
     # Le découpage ne se saisit plus ici : une fois le projet créé, le tableau de démarrage le
     # propose, pré-rempli par le modèle du type de projet (`POST /projets/{id}/decoupage/`).
@@ -355,6 +365,9 @@ class ProjetCreationSerializer(serializers.Serializer):
                 _("Choisissez un type de projet dans la liste, ou ajoutez-le.")
             )
         return value
+
+    def validate_informations_complementaires(self, value):
+        return valider_informations_complementaires(value)
 
     def validate(self, attrs):
         request = self.context.get("request") if getattr(self, "context", None) else None
@@ -773,6 +786,16 @@ class ProjetCreationSerializer(serializers.Serializer):
                 )
         ancien_nom = instance.nom
         ancien_budget = instance.budget_initial_montant
+        if "informations_complementaires" in validated_data:
+            existant = (
+                instance.informations_complementaires
+                if isinstance(instance.informations_complementaires, dict)
+                else {}
+            )
+            validated_data["informations_complementaires"] = {
+                **existant,
+                **validated_data["informations_complementaires"],
+            }
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
         instance.save()

@@ -9,7 +9,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.enums import BadgeSante, RoleProjet, StatutProjet, TypeProjet
+from apps.core.enums import BadgeSante, NatureProjet, RoleProjet, StatutProjet, TypeProjet
 from apps.core.models import ModeleEntreprise
 from apps.entreprises.selectors import slug_courant
 from apps.projets.storage import StockageContrats
@@ -46,13 +46,26 @@ class Projet(ModeleEntreprise):
 
     reference = models.CharField(_("référence"), max_length=30)
     nom = models.CharField(_("nom"), max_length=200)
+    nature_projet = models.CharField(
+        _("type de projet (public ou privé)"),
+        max_length=10,
+        choices=NatureProjet.choices,
+        blank=True,
+        default="",
+        db_index=True,
+    )
     # Code d'une entrée des référentiels (plateforme ou entreprise) — plus de liste figée.
     type_projet = models.CharField(
-        _("type de projet"),
+        _("type d'ouvrage"),
         max_length=60,
         default=TypeProjet.BATIMENT_RESIDENTIEL,
     )
     description = models.TextField(_("description"), blank=True)
+    informations_complementaires = models.JSONField(
+        _("informations complémentaires"),
+        default=dict,
+        blank=True,
+    )
 
     client = models.ForeignKey(
         "tiers.Tiers",

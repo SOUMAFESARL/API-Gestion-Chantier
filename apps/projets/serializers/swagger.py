@@ -7,7 +7,7 @@ from django.urls import reverse
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
-from apps.core.enums import StatutProjet
+from apps.core.enums import NatureProjet, StatutProjet
 from apps.projets.models import Projet, ProjetContrat
 from apps.projets.selectors.encadrement import (
     autres_membres_affectations,
@@ -35,8 +35,10 @@ CHAMPS_FORMULAIRE = (
     "nom",
     "statut",
     "reference",
+    "nature_projet",
     "type_projet",
     "ville",
+    "quartier",
     "maitre_ouvrage",
     "maitre_oeuvre",
     "date_debut_prevue",
@@ -47,6 +49,7 @@ CHAMPS_FORMULAIRE = (
     "duree",
     "budget_initial_montant",
     "description",
+    "informations_complementaires",
     "contrat",
     "ordre_service",
     "chef_projet_id",
@@ -109,8 +112,18 @@ class ProjetPostSerializer(ProjetCreationSerializer):
     )
     duree_jours_ouvres = serializers.IntegerField(read_only=True, allow_null=True)
     duree = DureeProjetSerializer(source="duree_calendaire", read_only=True, allow_null=True)
+    nature_projet = serializers.ChoiceField(
+        choices=NatureProjet.choices,
+        required=False,
+        allow_blank=True,
+        help_text="Type de projet : PUBLIC (Projet public) ou PRIVE (Projet privé).",
+    )
     type_projet = serializers.CharField(max_length=60)
     maitre_ouvrage = serializers.CharField(max_length=200)
+    informations_complementaires = serializers.JSONField(
+        required=False,
+        help_text="Informations complémentaires structurées de la fiche projet (objet JSON).",
+    )
     contrat = serializers.ListField(
         child=FichierContratField(validators=[valider_fichier_contrat]),
         required=False,

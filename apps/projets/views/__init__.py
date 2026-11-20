@@ -281,6 +281,21 @@ class ProjetDetailView(APIView):
             pk=pk,
         )
         self.check_object_permissions(request, projet)
+        if "ordre_service" in request.query_params:
+            if not projet.ordre_service:
+                raise NotFound("Ce projet n'a pas d'ordre de service de démarrage.")
+            try:
+                fichier = projet.ordre_service.open("rb")
+            except FileNotFoundError as exc:
+                raise NotFound("Le fichier de l'ordre de service est indisponible.") from exc
+            response = FileResponse(
+                fichier,
+                as_attachment=True,
+                filename=projet.ordre_service_nom or f"ordre-service-{projet.reference}",
+                content_type=projet.ordre_service_type or "application/octet-stream",
+            )
+            response["Cache-Control"] = "private, no-store"
+            return response
         if "contrat" in request.query_params:
             contrat_id = serializers.UUIDField().run_validation(request.query_params["contrat"])
             document = get_object_or_404(ProjetContrat, pk=contrat_id, projet=projet)
@@ -441,3 +456,32 @@ class ProjetDetailView(APIView):
         self.check_object_permissions(request, projet)
         projet.delete(utilisateur=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProjetOrdreServiceView(APIView):
+    """`GET /api/v1/projets/{id}/ordre-service/` — l'ordre de service de démarrage du projet."""
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @extend_schema(
+        tags=["projets"],
+        summary="Télécharger l'ordre de service de démarrage du projet",
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request, pk):
+        projet = get_object_or_404(Projet, pk=pk)
+        self.check_object_permissions(request, projet)
+        if not projet.ordre_service:
+            raise NotFound("Ce projet n'a pas d'ordre de service de démarrage.")
+        try:
+            fichier = projet.ordre_service.open("rb")
+        except FileNotFoundError as exc:
+            raise NotFound("Le fichier de l'ordre de service est indisponible.") from exc
+        response = FileResponse(
+            fichier,
+            as_attachment=True,
+            filename=projet.ordre_service_nom or f"ordre-service-{projet.reference}",
+            content_type=projet.ordre_service_type or "application/octet-stream",
+        )
+        response["Cache-Control"] = "private, no-store"
+        return response

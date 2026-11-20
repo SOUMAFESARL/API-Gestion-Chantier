@@ -11,6 +11,7 @@ from apps.projets.views import (
     ProjetCourbeView,
     ProjetDetailView,
     ProjetListCreateView,
+    ProjetOrdreServiceView,
     ProjetPlanningView,
     ProjetSanteApercuView,
     ProjetSanteDetailView,
@@ -25,7 +26,12 @@ from apps.projets.views.affectation import (
     ProjetChefChantierView,
     ProjetRemplacerView,
 )
-from apps.projets.views.avenants import AvenantDetailView, AvenantDocumentView, ProjetAvenantsView
+from apps.projets.views.avenants import (
+    AvenantDetailView,
+    AvenantDocumentView,
+    AvenantOrdreServiceView,
+    ProjetAvenantsView,
+)
 from apps.projets.views.calendrier import (
     CalendrierEntrepriseView,
     ExceptionCalendrierDetailView,
@@ -212,11 +218,21 @@ urlpatterns = [
     path("projets/meteo/", MeteoProjetView.as_view(), name="projet-meteo"),
     path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
+    path(
+        "projets/<uuid:pk>/ordre-service/",
+        ProjetOrdreServiceView.as_view(),
+        name="projet-ordre-service",
+    ),
     # Découpage d'un projet : tableau de démarrage, arbre, niveaux, cases
     path("projets/<uuid:pk>/decoupage/", ProjetDecoupageView.as_view(), name="projet-decoupage"),
     path("projets/<uuid:pk>/avenants/", ProjetAvenantsView.as_view(), name="projet-avenants"),
     path("avenants/<uuid:pk>/", AvenantDetailView.as_view(), name="avenant-detail"),
     path("avenants/<uuid:pk>/document/", AvenantDocumentView.as_view(), name="avenant-document"),
+    path(
+        "avenants/<uuid:pk>/ordre-service/",
+        AvenantOrdreServiceView.as_view(),
+        name="avenant-ordre-service",
+    ),
     path(
         "projets/<uuid:pk>/decoupage/importer/",
         ProjetDecoupageImporterView.as_view(),

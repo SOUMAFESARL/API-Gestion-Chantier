@@ -3,14 +3,28 @@
 Tables d'entreprise (`ModeleEntreprise`).
 """
 
+from pathlib import Path
+
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import BadgeSante, RoleProjet, StatutProjet, TypeProjet
 from apps.core.models import ModeleEntreprise
+from apps.entreprises.selectors import slug_courant
+from apps.projets.storage import StockageContrats
 
-__all__ = ["AffectationProjet", "Projet", "libelles_des_roles"]
+__all__ = ["AffectationProjet", "Projet", "chemin_ordre_service_projet", "libelles_des_roles"]
+
+
+def chemin_ordre_service_projet(instance, filename):
+    extension = Path(filename).suffix.lower()
+    if extension == ".jepg":
+        extension = ".jpeg"
+    return (
+        f"{slug_courant() or 'plateforme'}/projets/{instance.pk}/"
+        f"ordre-service/{instance.pk}{extension}"
+    )
 
 
 def libelles_des_roles() -> dict[str, str]:
@@ -146,6 +160,29 @@ class Projet(ModeleEntreprise):
         null=True,
         blank=True,
         help_text=_("Badge final (après application du plancher de gravité)."),
+    )
+
+    ordre_service = models.FileField(
+        _("ordre de service de démarrage"),
+        upload_to=chemin_ordre_service_projet,
+        storage=StockageContrats(),
+        max_length=255,
+        blank=True,
+    )
+    ordre_service_nom = models.CharField(
+        _("nom de l'ordre de service"),
+        max_length=255,
+        blank=True,
+    )
+    ordre_service_taille = models.PositiveBigIntegerField(
+        _("taille de l'ordre de service"),
+        null=True,
+        blank=True,
+    )
+    ordre_service_type = models.CharField(
+        _("type MIME de l'ordre de service"),
+        max_length=50,
+        blank=True,
     )
 
     @property

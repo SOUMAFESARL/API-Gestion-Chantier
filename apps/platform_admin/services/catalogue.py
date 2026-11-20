@@ -756,14 +756,26 @@ def propager_roles_systeme(acteur=None) -> dict:
                             module_catalogue=cat_mod,
                         )
 
-                        if cat_mod and modules_modele_map:
-                            perms_actives = list(
-                                CataloguePermission.objects.filter(
+                        if cat_mod:
+                            from apps.accounts.services.roles import _codes_par_defaut
+
+                            perms_actives_map = {
+                                p.code: p
+                                for p in CataloguePermission.objects.filter(
                                     modules=cat_mod, est_actif=True, supprime_le__isnull=True
                                 )
+                            }
+                            codes_defaut = _codes_par_defaut(
+                                (nouveau_role.code or "").upper(),
+                                mod_code_l,
+                                set(modules_modele_map.keys()),
+                                perms_actives_map,
                             )
-                            if perms_actives:
-                                rmp.permissions_catalogue.set(perms_actives)
+                            perms_a_assigner = [
+                                perms_actives_map[c] for c in codes_defaut if c in perms_actives_map
+                            ]
+                            if perms_a_assigner:
+                                rmp.permissions_catalogue.set(perms_a_assigner)
 
                 # Si l'entreprise a subi des modifications, tracer et notifier
                 if ea_modifiee:

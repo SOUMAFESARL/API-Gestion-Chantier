@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.catalogue.models import CatalogueModule, CataloguePermission
+from apps.core.enums import MODULES_DETAILS, ModuleChoix
 from apps.core.registre_permissions import REGISTRE
 
 
@@ -24,16 +25,21 @@ class Command(BaseCommand):
         crees = 0
         mis_a_jour = 0
 
+        libelles_modules = dict(ModuleChoix.choices)
+
         for code, def_perm in REGISTRE.items():
             codes_synchronises.add(code)
             mod_code = def_perm.module
+            details_mod = MODULES_DETAILS.get(mod_code, {})
 
-            # S'assurer que le module du catalogue existe
+            # S'assurer que le module du catalogue existe avec ses métadonnées officielles
             module, _ = CatalogueModule.objects.get_or_create(
                 code=mod_code,
                 defaults={
-                    "libelle": mod_code.capitalize(),
-                    "ordre": 1,
+                    "libelle": libelles_modules.get(mod_code, mod_code.capitalize()),
+                    "description": details_mod.get("description", ""),
+                    "ordre": details_mod.get("ordre", 1),
+                    "icone": details_mod.get("icone", "box"),
                     "est_actif": True,
                 },
             )

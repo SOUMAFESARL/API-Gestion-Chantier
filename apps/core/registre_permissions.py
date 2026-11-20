@@ -84,39 +84,40 @@ REGISTRE: dict[str, DefPermission] = {
         DefPermission("tiers.ecrire", "tiers", 2, "Créer / modifier les tiers"),
         DefPermission("pilotage.lire", "pilotage", 1, "Tableaux de bord"),
         DefPermission("pilotage.voir_montants", "pilotage", 3, "Voir les montants financiers"),
-        # F6 GED (Gestion Documentaire)
+        # F6 GED (Gestion Documentaire) — rangs séquentiels pour garantir l'ordre
+        # Générales (1-2) puis par catégorie BTP : Voir -> Déposer -> Supprimer (3-20).
         DefPermission("ged.lire", "ged", 1, "Consulter la GED"),
-        DefPermission("ged.telecharger", "ged", 1, "Télécharger un document"),
-        DefPermission("ged.voir_plans", "ged", 2, "Voir les plans"),
-        DefPermission("ged.deposer_plans", "ged", 2, "Déposer des plans"),
-        DefPermission("ged.supprimer_plans", "ged", 3, "Supprimer des plans"),
-        DefPermission("ged.voir_contrats", "ged", 2, "Voir les contrats"),
-        DefPermission("ged.deposer_contrats", "ged", 2, "Déposer des contrats"),
-        DefPermission("ged.supprimer_contrats", "ged", 3, "Supprimer des contrats"),
-        DefPermission("ged.voir_rapports", "ged", 2, "Voir les rapports"),
-        DefPermission("ged.deposer_rapports", "ged", 2, "Déposer des rapports"),
-        DefPermission("ged.supprimer_rapports", "ged", 3, "Supprimer des rapports"),
+        DefPermission("ged.telecharger", "ged", 2, "Télécharger un document"),
+        DefPermission("ged.voir_plans", "ged", 3, "Voir les plans"),
+        DefPermission("ged.deposer_plans", "ged", 4, "Déposer des plans"),
+        DefPermission("ged.supprimer_plans", "ged", 5, "Supprimer des plans"),
+        DefPermission("ged.voir_contrats", "ged", 6, "Voir les contrats"),
+        DefPermission("ged.deposer_contrats", "ged", 7, "Déposer des contrats"),
+        DefPermission("ged.supprimer_contrats", "ged", 8, "Supprimer des contrats"),
+        DefPermission("ged.voir_rapports", "ged", 9, "Voir les rapports"),
+        DefPermission("ged.deposer_rapports", "ged", 10, "Déposer des rapports"),
+        DefPermission("ged.supprimer_rapports", "ged", 11, "Supprimer des rapports"),
         DefPermission(
-            "ged.voir_administratif", "ged", 2, "Voir les documents administratifs"
+            "ged.voir_administratif", "ged", 12, "Voir les documents administratifs"
         ),
         DefPermission(
             "ged.deposer_administratif",
             "ged",
-            2,
+            13,
             "Déposer des documents administratifs",
         ),
         DefPermission(
             "ged.supprimer_administratif",
             "ged",
-            3,
+            14,
             "Supprimer des documents administratifs",
         ),
-        DefPermission("ged.voir_photos", "ged", 2, "Voir les photos"),
-        DefPermission("ged.deposer_photos", "ged", 2, "Déposer des photos"),
-        DefPermission("ged.supprimer_photos", "ged", 3, "Supprimer des photos"),
-        DefPermission("ged.voir_divers", "ged", 2, "Voir les documents divers"),
-        DefPermission("ged.deposer_divers", "ged", 2, "Déposer des documents divers"),
-        DefPermission("ged.supprimer_divers", "ged", 3, "Supprimer des documents divers"),
+        DefPermission("ged.voir_photos", "ged", 15, "Voir les photos"),
+        DefPermission("ged.deposer_photos", "ged", 16, "Déposer des photos"),
+        DefPermission("ged.supprimer_photos", "ged", 17, "Supprimer des photos"),
+        DefPermission("ged.voir_divers", "ged", 18, "Voir les documents divers"),
+        DefPermission("ged.deposer_divers", "ged", 19, "Déposer des documents divers"),
+        DefPermission("ged.supprimer_divers", "ged", 20, "Supprimer des documents divers"),
         # F9 Stock & Approvisionnements
         DefPermission(
             "stock.lire", "stock", 1, "Consulter le stock et les mouvements"

@@ -456,8 +456,6 @@ PERMISSIONS_DEFAUT_ROLES: dict[str, dict[str, tuple[str, ...]]] = {
             "ged.deposer_administratif",
             "ged.voir_photos",
             "ged.deposer_photos",
-            "ged.voir_divers",
-            "ged.deposer_divers",
         ),
         "stock": (),
     },

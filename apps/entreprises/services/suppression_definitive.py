@@ -141,7 +141,7 @@ def perimetre(entreprise, adresses: list[str] | None = None) -> Perimetre:
 def _lire_entreprise(entreprise) -> dict[str, Any]:
     """Adresses, fichiers, dirigeants et compteurs de l'entreprise — lus dans son contexte."""
     from apps.accounts.models import Utilisateur
-    from apps.projets.models import Projet
+    from apps.projets.models import Avenant, Projet
     from apps.projets.models.contrat import ProjetContrat
 
     with contexte_entreprise(entreprise):
@@ -150,6 +150,14 @@ def _lire_entreprise(entreprise) -> dict[str, Any]:
         )
         nb_projets = Projet.objects.filter(supprime_le__isnull=True).count()
         contrats = [c for c in ProjetContrat.objects.values_list("fichier", flat=True) if c]
+        contrats.extend(
+            c for c in Projet.objects.values_list("ordre_service", flat=True) if c
+        )
+        for doc, os_doc in Avenant.objects.values_list("document", "ordre_service"):
+            if doc:
+                contrats.append(doc)
+            if os_doc:
+                contrats.append(os_doc)
 
     resultat: dict[str, Any] = {
         "emails": set(), "avatars": [], "contrats": contrats, "dirigeants": [],

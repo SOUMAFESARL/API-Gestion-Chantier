@@ -83,6 +83,13 @@ class StatutActivite(models.TextChoices):
     CLOTURE = "CLOTURE", "Clôturée"
 
 
+class NatureProjet(models.TextChoices):
+    """Nature juridique et financière du chantier (public ou privé)."""
+
+    PUBLIC = "PUBLIC", "Projet public"
+    PRIVE = "PRIVE", "Projet privé"
+
+
 class TypeProjet(models.TextChoices):
     BATIMENT_RESIDENTIEL = "BATIMENT_RESIDENTIEL", "Bâtiment — Résidentiel"
     BATIMENT_COMMERCIAL = "BATIMENT_COMMERCIAL", "Bâtiment — Commercial"

@@ -86,7 +86,13 @@ REFUS_ATYPIQUES: dict[str, tuple[set[int], str]] = {}
 
 # Routes dont le contrôle positif (B lit sa propre ligne) est sans objet.
 CONTROLE_SANS_OBJET = {
+    "api/v1/projets/<uuid:pk>/ordre-service/": (
+        "le projet de test n'a pas d'ordre de service joint"
+    ),
     "api/v1/avenants/<uuid:pk>/document/": "l'avenant de test n'a pas de document joint",
+    "api/v1/avenants/<uuid:pk>/ordre-service/": (
+        "l'avenant de test n'a pas d'ordre de service joint"
+    ),
     "api/v1/factures/<uuid:pk>/": "réservée au personnel de l'éditeur (403 pour un client)",
     "api/v1/factures/<uuid:pk>/pdf/": "réservée au personnel de l'éditeur (403 pour un client)",
 }

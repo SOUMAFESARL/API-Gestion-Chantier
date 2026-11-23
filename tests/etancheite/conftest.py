@@ -33,9 +33,11 @@ def django_db_setup(django_db_setup, django_db_blocker):
     silence = io.StringIO()
     with django_db_blocker.unblock(), override_settings(DEBUG=True):
         reinitialiser_contexte()
-        from apps.catalogue.models import CatalogueModule
+        from apps.catalogue.models import ModeleRole
 
-        if not CatalogueModule._base_manager.exists():
+        # Les migrations de synchronisation peuvent créer des `CatalogueModule` avant
+        # l'ensemencement : la présence de `ModeleRole` atteste un catalogue réellement chargé.
+        if not ModeleRole._base_manager.exists():
             call_command("ensemencer_plateforme", stdout=silence)
         annee = timezone.localdate().year
         call_command("charger_jours_feries", annees=[annee, annee + 1], stdout=silence)

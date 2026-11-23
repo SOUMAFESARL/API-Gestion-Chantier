@@ -87,11 +87,52 @@ class Projet(ModeleEntreprise):
     quartier = models.CharField(_("quartier"), max_length=150, blank=True)
 
     budget_initial_montant = models.BigIntegerField(
-        _("budget initial (centimes)"),
+        _("budget prévisionnel (centimes)"),
         null=True,
         blank=True,
         default=None,
-        help_text=_("Montant en centimes de FCFA. Facultatif à la création."),
+        help_text=_("Budget prévisionnel interne en centimes de FCFA. Facultatif et modifiable."),
+    )
+    budget_contractuel_initial = models.BigIntegerField(
+        _("budget contractuel initial (centimes)"),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_(
+            "Montant contractuel initial en centimes de FCFA. "
+            "Exige un contrat joint et devient immuable après pose."
+        ),
+    )
+    duree_contractuelle_annees = models.PositiveIntegerField(
+        _("durée contractuelle (années)"),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_("Nombre d'années de la durée contractuelle d'exécution (exige un contrat)."),
+    )
+    duree_contractuelle_mois = models.PositiveIntegerField(
+        _("durée contractuelle (mois)"),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_("Nombre de mois de la durée contractuelle d'exécution (exige un contrat)."),
+    )
+    duree_contractuelle_jours = models.PositiveIntegerField(
+        _("durée contractuelle (jours)"),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_("Nombre de jours de la durée contractuelle d'exécution (exige un contrat)."),
+    )
+    date_debut_contractuelle = models.DateField(
+        _("date de début contractuelle"),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_(
+            "Date d'effet de l'ordre de service de démarrage. "
+            "Exige un fichier OS ; modifiable uniquement via un nouvel OS."
+        ),
     )
 
     date_debut_prevue = models.DateField(_("date de début prévue"), null=True, blank=True)
@@ -101,21 +142,28 @@ class Projet(ModeleEntreprise):
         _("date de début baseline v0"),
         null=True,
         blank=True,
-        help_text=_("Date de début contractuelle initiale (figée, intacte)."),
+        help_text=_("Date de début prévisionnelle initiale (figée, intacte)."),
     )
     date_fin_baseline = models.DateField(
         _("date de fin baseline v0"),
         null=True,
         blank=True,
-        help_text=_("Date de fin contractuelle initiale (figée, intacte)."),
+        help_text=_("Date de fin prévisionnelle initiale (figée, intacte)."),
     )
 
     date_debut_reelle = models.DateField(_("date de début réelle"), null=True, blank=True)
     date_fin_reelle = models.DateField(_("date de fin réelle"), null=True, blank=True)
 
-    # Cumuls des avenants qui portent sur le projet entier (30/10/2026), tenus par
-    # `services.avenants` : la date contractuelle est l'origine plus ces jours.
+    # Cumuls des avenants portant sur le projet entier, tenus par `services.avenants` :
+    # évite tout N+1 pour le calcul de `date_fin_contractuelle` et `budget_contractuel`.
     jours_accordes = models.IntegerField(_("jours accordés par avenant"), default=0)
+    prolongation_annees = models.PositiveIntegerField(
+        _("années accordées par avenant"), default=0
+    )
+    prolongation_mois = models.PositiveIntegerField(_("mois accordés par avenant"), default=0)
+    prolongation_jours = models.PositiveIntegerField(
+        _("jours accordés par avenant (cumul)"), default=0
+    )
     montant_avenants = models.BigIntegerField(_("montant des avenants"), default=0)
 
     chef_projet = models.ForeignKey(
@@ -241,22 +289,86 @@ class Projet(ModeleEntreprise):
             # Cible des clés composites (projet_id, entreprise_id) des tables enfants (D9, R-3) :
             # un enfant ne peut pas pointer vers le projet d'une autre entreprise.
             models.UniqueConstraint(fields=["id", "entreprise"], name="uq_projet_id_entreprise"),
+            models.CheckConstraint(
+                condition=models.Q(budget_contractuel_initial__isnull=True)
+                | models.Q(budget_contractuel_initial__gte=0),
+                name="chk_projet_budget_contractuel_positif",
+            ),
         ]
 
     @property
-    def date_fin_contractuelle(self):
-        """L'origine (baseline v0) plus les jours accordés par avenant."""
-        from datetime import timedelta
+    def a_duree_contractuelle(self) -> bool:
+        """Vrai dès que la durée contractuelle d'exécution est posée (> 0)."""
+        return (
+            (self.duree_contractuelle_annees or 0)
+            + (self.duree_contractuelle_mois or 0)
+            + (self.duree_contractuelle_jours or 0)
+        ) > 0
 
-        if not self.date_fin_baseline:
+    @property
+    def duree_contractuelle(self) -> dict[str, int] | None:
+        """Durée contractuelle initiale du marché (années, mois, jours), ou None."""
+        if not self.a_duree_contractuelle:
             return None
-        return self.date_fin_baseline + timedelta(days=self.jours_accordes or 0)
+        return {
+            "annees": self.duree_contractuelle_annees or 0,
+            "mois": self.duree_contractuelle_mois or 0,
+            "jours": self.duree_contractuelle_jours or 0,
+        }
+
+    @property
+    def prolongation_contractuelle(self) -> dict[str, int]:
+        """Cumul des prolongations accordées par avenant sur le projet entier."""
+        return {
+            "annees": self.prolongation_annees or 0,
+            "mois": self.prolongation_mois or 0,
+            "jours": self.prolongation_jours or 0,
+        }
+
+    @property
+    def date_fin_contractuelle_initiale(self):
+        """Date de début contractuelle (OS) + durée contractuelle initiale, sans avenants."""
+        if not self.date_debut_contractuelle or not self.a_duree_contractuelle:
+            return None
+        from apps.projets.services.durees import ajouter_duree_calendaire
+
+        return ajouter_duree_calendaire(
+            self.date_debut_contractuelle,
+            annees=self.duree_contractuelle_annees or 0,
+            mois=self.duree_contractuelle_mois or 0,
+            jours=self.duree_contractuelle_jours or 0,
+        )
+
+    @property
+    def date_fin_contractuelle(self):
+        """Début contractuel (OS) + durée contractuelle + prolongations d'avenants.
+
+        Reste None tant que l'OS de démarrage ou la durée contractuelle manque.
+        """
+        if not self.date_debut_contractuelle or not self.a_duree_contractuelle:
+            return None
+        from apps.projets.services.durees import ajouter_duree_calendaire
+
+        return ajouter_duree_calendaire(
+            self.date_debut_contractuelle,
+            annees=(self.duree_contractuelle_annees or 0) + (self.prolongation_annees or 0),
+            mois=(self.duree_contractuelle_mois or 0) + (self.prolongation_mois or 0),
+            jours=(self.duree_contractuelle_jours or 0) + (self.prolongation_jours or 0),
+        )
 
     @property
     def budget_contractuel(self):
-        if self.budget_initial_montant is None and not self.montant_avenants:
+        """Budget contractuel en vigueur (initial + avenants), ou None sans contrat chiffré."""
+        if self.budget_contractuel_initial is None:
             return None
-        return (self.budget_initial_montant or 0) + (self.montant_avenants or 0)
+        return self.budget_contractuel_initial + (self.montant_avenants or 0)
+
+    @property
+    def budget_reference(self):
+        """Plafond d'alerte du découpage : contractuel s'il existe, sinon prévisionnel."""
+        if self.budget_contractuel is not None:
+            return self.budget_contractuel
+        return self.budget_initial_montant
 
     def save(self, *args, **kwargs):
         """Initialise la Baseline v0 à la première sauvegarde si non définie."""

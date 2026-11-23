@@ -47,9 +47,11 @@ class Avenant(ModeleEntreprise):
     numero = models.CharField(_("numéro"), max_length=30)
     date_signature = models.DateField(_("date de signature"))
     objet = models.TextField(_("objet"))
-    # Jours calendaires accordés ; négatifs, ils raccourcissent le délai contractuel.
-    jours_accordes = models.IntegerField(_("jours accordés"), default=0)
-    # En plus ou en moins du budget contractuel, dans l'unité de `Projet.budget_initial_montant`.
+    # Prolongation accordée (années, mois, jours) : jamais négative.
+    annees_accordees = models.PositiveIntegerField(_("années accordées"), default=0)
+    mois_accordes = models.PositiveIntegerField(_("mois accordés"), default=0)
+    jours_accordes = models.PositiveIntegerField(_("jours accordés"), default=0)
+    # Montant additionnel en centimes (jamais négatif), s'ajoute au budget contractuel du projet.
     montant = models.BigIntegerField(_("montant"), null=True, blank=True)
     # Aucune case : l'avenant porte sur le projet entier.
     elements = models.ManyToManyField(
@@ -79,7 +81,11 @@ class Avenant(ModeleEntreprise):
                 fields=["projet", "numero"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_avenant_projet_numero",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(montant__isnull=True) | models.Q(montant__gte=0),
+                name="chk_avenant_montant_positif",
+            ),
         ]
 
     def __str__(self) -> str:

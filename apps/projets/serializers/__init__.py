@@ -178,6 +178,17 @@ class ProjetSerializer(serializers.ModelSerializer):
             "ville",
             "quartier",
             "budget_initial_montant",
+            "budget_contractuel_initial",
+            "budget_contractuel",
+            "montant_avenants",
+            "duree_contractuelle_annees",
+            "duree_contractuelle_mois",
+            "duree_contractuelle_jours",
+            "date_debut_contractuelle",
+            "date_fin_contractuelle",
+            "prolongation_annees",
+            "prolongation_mois",
+            "prolongation_jours",
             "date_debut_prevue",
             "date_fin_prevue",
             "date_debut_baseline",
@@ -308,6 +319,19 @@ class ProjetCreationSerializer(serializers.Serializer):
     budget_initial_montant = serializers.IntegerField(
         min_value=0, required=False, allow_null=True, default=None
     )
+    budget_contractuel_initial = serializers.IntegerField(
+        min_value=0, required=False, allow_null=True, default=None
+    )
+    duree_contractuelle_annees = serializers.IntegerField(
+        min_value=0, max_value=100, required=False, allow_null=True, default=None
+    )
+    duree_contractuelle_mois = serializers.IntegerField(
+        min_value=0, max_value=1200, required=False, allow_null=True, default=None
+    )
+    duree_contractuelle_jours = serializers.IntegerField(
+        min_value=0, max_value=36500, required=False, allow_null=True, default=None
+    )
+    date_debut_contractuelle = serializers.DateField(required=False, allow_null=True, default=None)
     description = serializers.CharField(required=False, allow_blank=True, default="")
     informations_complementaires = serializers.JSONField(required=False)
 
@@ -336,6 +360,12 @@ class ProjetCreationSerializer(serializers.Serializer):
         from apps.core.purger_montants import valider_ecriture_montant
 
         return valider_ecriture_montant(value, request=request, champ="budget_initial_montant")
+
+    def validate_budget_contractuel_initial(self, value):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        from apps.core.purger_montants import valider_ecriture_montant
+
+        return valider_ecriture_montant(value, request=request, champ="budget_contractuel_initial")
 
     def _responsable_coherent(self, value, role_projet):
         """Règle du 16/10/2026 : le CP (ou CT) désigné a ce rôle sur la plateforme."""
@@ -376,6 +406,11 @@ class ProjetCreationSerializer(serializers.Serializer):
         if not peut_voir_montants(getattr(request, "user", None) if request else None, request):
             if "budget_initial_montant" in attrs and attrs["budget_initial_montant"] is None:
                 attrs.pop("budget_initial_montant")
+            if (
+                "budget_contractuel_initial" in attrs
+                and attrs["budget_contractuel_initial"] is None
+            ):
+                attrs.pop("budget_contractuel_initial")
 
         if "client" in attrs and "maitre_ouvrage" in attrs:
             raise serializers.ValidationError(
@@ -786,6 +821,17 @@ class ProjetCreationSerializer(serializers.Serializer):
                 )
         ancien_nom = instance.nom
         ancien_budget = instance.budget_initial_montant
+        ancien_cadre = {
+            "budget_contractuel_initial": instance.budget_contractuel_initial,
+            "duree_contractuelle_annees": instance.duree_contractuelle_annees,
+            "duree_contractuelle_mois": instance.duree_contractuelle_mois,
+            "duree_contractuelle_jours": instance.duree_contractuelle_jours,
+            "date_debut_contractuelle": (
+                instance.date_debut_contractuelle.isoformat()
+                if instance.date_debut_contractuelle
+                else None
+            ),
+        }
         if "informations_complementaires" in validated_data:
             existant = (
                 instance.informations_complementaires
@@ -831,6 +877,33 @@ class ProjetCreationSerializer(serializers.Serializer):
                 utilisateur_id=user.pk if user and user.is_authenticated else None,
                 valeur_avant={"budget_initial_montant": ancien_budget},
                 valeur_apres={"budget_initial_montant": instance.budget_initial_montant},
+                adresse_ip=getattr(request, "META", {}).get("REMOTE_ADDR") if request else None,
+                appareil=getattr(request, "META", {}).get("HTTP_USER_AGENT", "") if request else "",
+            )
+        nouveau_cadre = {
+            "budget_contractuel_initial": instance.budget_contractuel_initial,
+            "duree_contractuelle_annees": instance.duree_contractuelle_annees,
+            "duree_contractuelle_mois": instance.duree_contractuelle_mois,
+            "duree_contractuelle_jours": instance.duree_contractuelle_jours,
+            "date_debut_contractuelle": (
+                instance.date_debut_contractuelle.isoformat()
+                if instance.date_debut_contractuelle
+                else None
+            ),
+        }
+        if nouveau_cadre != ancien_cadre:
+            from apps.audit.services import journaliser
+            from apps.core.enums import ActionAudit
+
+            request = self.context.get("request") if getattr(self, "context", None) else None
+            user = getattr(request, "user", None) if request else None
+            journaliser(
+                action=ActionAudit.MODIFICATION,
+                type_entite="projet",
+                entite_id=instance.pk,
+                utilisateur_id=user.pk if user and user.is_authenticated else None,
+                valeur_avant=ancien_cadre,
+                valeur_apres=nouveau_cadre,
                 adresse_ip=getattr(request, "META", {}).get("REMOTE_ADDR") if request else None,
                 appareil=getattr(request, "META", {}).get("HTTP_USER_AGENT", "") if request else "",
             )

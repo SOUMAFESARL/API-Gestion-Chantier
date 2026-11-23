@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.db import transaction
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
@@ -48,6 +49,11 @@ CHAMPS_FORMULAIRE = (
     "duree_jours_ouvres",
     "duree",
     "budget_initial_montant",
+    "budget_contractuel_initial",
+    "duree_contractuelle_annees",
+    "duree_contractuelle_mois",
+    "duree_contractuelle_jours",
+    "date_debut_contractuelle",
     "description",
     "informations_complementaires",
     "contrat",
@@ -67,8 +73,14 @@ CHAMPS_REPONSE = (
     "peut_renommer",
     "niveaux",
     "decoupage_cree",
-    # Avenants : date et budget contractuels (30/10/2026)
+    # Cadre contractuel & avenants (23/11/2026)
     "jours_accordes",
+    "prolongation_annees",
+    "prolongation_mois",
+    "prolongation_jours",
+    "montant_avenants",
+    "duree_contractuelle",
+    "date_fin_contractuelle_initiale",
     "date_fin_contractuelle",
     "budget_contractuel",
     # Le budget lu sur l'arbre (08/11/2026) : le réalisé valorisé, et ce que le découpage chiffre
@@ -143,9 +155,104 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         fin = attrs.get("date_fin_reelle", getattr(self.instance, "date_fin_reelle", None))
         if debut is not None and fin is not None and fin < debut:
             raise serializers.ValidationError(
-                {"date_fin_reelle": "La fin réelle ne peut pas précéder le début réel."}
+                {"date_fin_reelle": _("La fin réelle ne peut pas précéder le début réel.")}
             )
+        self._valider_cadre_contractuel(attrs)
         return attrs
+
+    def _valider_cadre_contractuel(self, attrs):
+        """Applique la règle d'or : aucune donnée contractuelle sans pièce justificative.
+
+        - I1 : budget contractuel initial ou durée contractuelle exigent un fichier contrat.
+        - I2 : une durée contractuelle posée doit être strictement supérieure à zéro.
+        - I3 : la date de début contractuelle exige un fichier OS de démarrage.
+        - I4 : modifier une date de début contractuelle existante exige un nouvel OS de démarrage.
+        - I5 : budget contractuel initial et durée contractuelle sont verrouillés après pose.
+        """
+        erreurs = {}
+        fichiers_contrat = attrs.get("contrat") or []
+        a_contrat_existant = self.instance is not None and self.instance.contrats.exists()
+        a_contrat_apres = bool(fichiers_contrat) or a_contrat_existant
+
+        # 1. Budget contractuel initial
+        budget_envoye_cle = "budget_contractuel_initial" in self.initial_data
+        budget_envoye = attrs.get("budget_contractuel_initial")
+        if self.instance is not None and self.instance.budget_contractuel_initial is not None:
+            if budget_envoye_cle and budget_envoye != self.instance.budget_contractuel_initial:
+                erreurs["budget_contractuel_initial"] = _(
+                    "Le budget contractuel initial est verrouillé après dépôt du contrat. "
+                    "Enregistrez un avenant accompagné de son ordre de service "
+                    "pour le faire évoluer."
+                )
+        elif budget_envoye_cle and budget_envoye is not None and not a_contrat_apres:
+            erreurs["budget_contractuel_initial"] = _(
+                "Joignez le contrat du marché pour enregistrer le budget contractuel initial."
+            )
+
+        # 2. Durée contractuelle (3 champs : années, mois, jours)
+        champs_duree = (
+            "duree_contractuelle_annees",
+            "duree_contractuelle_mois",
+            "duree_contractuelle_jours",
+        )
+        duree_envoyee_cles = [c for c in champs_duree if c in self.initial_data]
+        duree_non_nulle = any(attrs.get(c) is not None for c in duree_envoyee_cles)
+
+        if self.instance is not None and self.instance.a_duree_contractuelle:
+            for champ in duree_envoyee_cles:
+                if (attrs.get(champ) or 0) != (getattr(self.instance, champ) or 0):
+                    erreurs[champ] = _(
+                        "La durée contractuelle initiale est verrouillée après dépôt du contrat. "
+                        "Enregistrez un avenant accompagné de son ordre de service "
+                        "pour prolonger le délai."
+                    )
+        elif duree_non_nulle:
+            annees = attrs.get("duree_contractuelle_annees") or 0
+            mois = attrs.get("duree_contractuelle_mois") or 0
+            jours = attrs.get("duree_contractuelle_jours") or 0
+            if annees + mois + jours == 0:
+                erreurs["duree_contractuelle_jours"] = _(
+                    "La durée contractuelle doit être supérieure à zéro "
+                    "(renseignez au moins les années, les mois ou les jours)."
+                )
+            elif not a_contrat_apres:
+                erreurs["duree_contractuelle_annees"] = _(
+                    "Joignez le contrat du marché pour enregistrer "
+                    "la durée contractuelle d'exécution."
+                )
+
+        # 3. Date de début contractuelle ↔ OS de démarrage
+        fichier_os_envoye = attrs.get("ordre_service") is not None
+        date_os_cle = "date_debut_contractuelle" in self.initial_data
+        date_os_envoyee = attrs.get("date_debut_contractuelle")
+
+        if self.instance is None:
+            if date_os_cle and date_os_envoyee is not None and not fichier_os_envoye:
+                erreurs["date_debut_contractuelle"] = _(
+                    "Joignez l'ordre de service de démarrage pour définir "
+                    "la date de début contractuelle."
+                )
+        elif date_os_cle:
+            date_actuelle = self.instance.date_debut_contractuelle
+            if date_os_envoyee != date_actuelle:
+                if date_os_envoyee is None and date_actuelle is not None:
+                    erreurs["date_debut_contractuelle"] = _(
+                        "La date de début contractuelle ne peut pas être effacée manuellement."
+                    )
+                elif date_actuelle is None:
+                    if not fichier_os_envoye and not bool(self.instance.ordre_service):
+                        erreurs["date_debut_contractuelle"] = _(
+                            "Joignez l'ordre de service de démarrage pour définir "
+                            "la date de début contractuelle."
+                        )
+                elif not fichier_os_envoye:
+                    erreurs["date_debut_contractuelle"] = _(
+                        "Pour modifier la date de début contractuelle, importez le nouvel "
+                        "ordre de service de démarrage correspondant."
+                    )
+
+        if erreurs:
+            raise serializers.ValidationError(erreurs)
 
     def validate_contrat(self, fichiers):
         if sum(fichier.size for fichier in fichiers) > MAX_LOT:
@@ -272,12 +379,32 @@ class ProjetCreationResponseSerializer(serializers.ModelSerializer):
     jours_accordes = serializers.IntegerField(
         read_only=True, help_text="Jours accordés par les avenants sur le projet entier."
     )
+    prolongation_annees = serializers.IntegerField(read_only=True)
+    prolongation_mois = serializers.IntegerField(read_only=True)
+    prolongation_jours = serializers.IntegerField(read_only=True)
+    montant_avenants = serializers.IntegerField(read_only=True)
+    duree_contractuelle = serializers.SerializerMethodField(
+        help_text="Durée contractuelle initiale (années, mois, jours), ou null sans contrat."
+    )
+    date_fin_contractuelle_initiale = serializers.DateField(
+        read_only=True,
+        allow_null=True,
+        help_text="Début contractuel (OS) + durée contractuelle initiale, sans avenants.",
+    )
     date_fin_contractuelle = serializers.DateField(
-        read_only=True, help_text="L'origine (baseline v0) plus les jours accordés par avenant."
+        read_only=True,
+        allow_null=True,
+        help_text="Début contractuel (OS) + durée contractuelle + prolongations d'avenants.",
     )
     budget_contractuel = serializers.IntegerField(
-        read_only=True, allow_null=True, help_text="Budget initial plus les montants des avenants."
+        read_only=True,
+        allow_null=True,
+        help_text="Budget contractuel initial plus les montants des avenants (null sans contrat).",
     )
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_duree_contractuelle(self, obj) -> dict[str, int] | None:
+        return obj.duree_contractuelle
 
     @extend_schema_field(NiveauProjetSimpleSerializer(many=True))
     def get_niveaux(self, obj):
@@ -551,6 +678,15 @@ class ProjetPatchSerializer(ProjetPostSerializer):
 
             valider_transition_reception(self.instance)
         if self.instance is not None and not self.partial:
+            for champ_contractuel in (
+                "budget_contractuel_initial",
+                "duree_contractuelle_annees",
+                "duree_contractuelle_mois",
+                "duree_contractuelle_jours",
+                "date_debut_contractuelle",
+            ):
+                if champ_contractuel not in self.initial_data:
+                    attrs[champ_contractuel] = getattr(self.instance, champ_contractuel)
             for name, default in (
                 ("maitre_oeuvre", ""),
                 ("description", ""),

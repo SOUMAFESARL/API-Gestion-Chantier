@@ -186,7 +186,7 @@ class TableauDeBordView(APIView):
             # les avenants. `precharger_arbres` a déjà chargé l'arbre : aucune requête de plus.
             budget_consomme = realise_valorise(charger_arbre(p))
             budget_initial = p.budget_initial_montant or 0
-            budget_en_vigueur = p.budget_contractuel or 0
+            budget_en_vigueur = p.budget_reference or 0
 
             # 1. Sous-note Délais (0-100) : 100 si ponctuel, -2 pts par % de retard
             if ecart < 0:

@@ -67,9 +67,9 @@ class Command(BaseCommand):
         call_command("verifier_isolation")
 
         self._etape("Catalogue de la plateforme")
-        from apps.catalogue.models import CatalogueModule
+        from apps.catalogue.models import ModeleRole
 
-        if CatalogueModule._base_manager.exists():
+        if ModeleRole._base_manager.exists():
             self.stdout.write("  Déjà ensemencé : laissé tel quel.")
         else:
             call_command("ensemencer_plateforme")

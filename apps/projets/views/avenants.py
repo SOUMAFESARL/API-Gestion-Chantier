@@ -2,6 +2,7 @@
 
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound
@@ -12,6 +13,7 @@ from rest_framework.views import APIView
 
 from apps.core.droits import peut_voir_montants
 from apps.core.permissions import GardePermissionProjet
+from apps.core.purger_montants import valider_ecriture_montant
 from apps.projets.models import Avenant, Projet
 from apps.projets.services.avenants import avenant_en_dict, enregistrer_avenant, retirer_avenant
 from apps.projets.services.machine_etats import verifier_statut_projet_pour_ecriture
@@ -31,18 +33,68 @@ class AvenantCreationSerializer(serializers.Serializer):
     numero = serializers.CharField(max_length=30)
     date_signature = serializers.DateField()
     objet = serializers.CharField()
-    jours_accordes = serializers.IntegerField(
-        required=False, default=0, min_value=-3650, max_value=3650
+    annees_accordees = serializers.IntegerField(
+        required=False,
+        default=0,
+        min_value=0,
+        max_value=100,
+        error_messages={
+            "min_value": _("Le nombre d'années de prolongation ne peut pas être négatif.")
+        },
     )
-    montant = serializers.IntegerField(required=False, allow_null=True, default=None)
+    mois_accordes = serializers.IntegerField(
+        required=False,
+        default=0,
+        min_value=0,
+        max_value=1200,
+        error_messages={
+            "min_value": _("Le nombre de mois de prolongation ne peut pas être négatif.")
+        },
+    )
+    jours_accordes = serializers.IntegerField(
+        required=False,
+        default=0,
+        min_value=0,
+        max_value=3650,
+        error_messages={
+            "min_value": _("Le nombre de jours de prolongation ne peut pas être négatif.")
+        },
+    )
+    montant = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        min_value=0,
+        error_messages={"min_value": _("Le montant d'un avenant ne peut pas être négatif.")},
+    )
     elements_ids = serializers.ListField(
         child=serializers.UUIDField(),
         required=False,
         default=list,
         help_text="Vide : l'avenant porte sur le projet entier.",
     )
-    document = serializers.FileField(required=False, allow_null=True, default=None)
-    ordre_service = serializers.FileField(required=True, allow_null=False)
+    document = serializers.FileField(
+        required=True,
+        allow_null=False,
+        error_messages={
+            "required": _("Le document d'avenant signé est obligatoire."),
+            "null": _("Le document d'avenant signé est obligatoire."),
+            "empty": _("Le document d'avenant signé ne peut pas être vide."),
+        },
+    )
+    ordre_service = serializers.FileField(
+        required=True,
+        allow_null=False,
+        error_messages={
+            "required": _("L'ordre de service lié à l'avenant est obligatoire."),
+            "null": _("L'ordre de service lié à l'avenant est obligatoire."),
+            "empty": _("L'ordre de service lié à l'avenant ne peut pas être vide."),
+        },
+    )
+
+    def validate_montant(self, value):
+        request = self.context.get("request") if getattr(self, "context", None) else None
+        return valider_ecriture_montant(value, request=request, champ="montant")
 
 
 def _reponse(request, avenant):
@@ -76,7 +128,7 @@ class ProjetAvenantsView(APIView):
         donnees = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
         if hasattr(request.data, "getlist") and "elements_ids" in request.data:
             donnees.setlist("elements_ids", request.data.getlist("elements_ids"))
-        serializer = AvenantCreationSerializer(data=donnees)
+        serializer = AvenantCreationSerializer(data=donnees, context={"request": request})
         serializer.is_valid(raise_exception=True)
         avenant = enregistrer_avenant(projet, **serializer.validated_data, auteur=request.user)
         return Response(_reponse(request, avenant), status=status.HTTP_201_CREATED)

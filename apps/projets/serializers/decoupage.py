@@ -25,6 +25,7 @@ __all__ = [
     "InsertionNiveauSerializer",
     "MesureSerializer",
     "ModeleEnregistrementSerializer",
+    "ModeleModificationPartielleSerializer",
     "ModificationListeSerializer",
     "MotifSerializer",
     "NiveauCreationSerializer",
@@ -104,6 +105,22 @@ class AjoutValeursSerializer(serializers.Serializer):
     groupe = serializers.CharField(required=False, allow_blank=True, default="", max_length=100)
 
 
+def _valider_defauts_dans_types(attrs: dict) -> dict:
+    if "types_projet" in attrs and "par_defaut_pour" in attrs:
+        ensemble_types = set(attrs.get("types_projet") or [])
+        hors_types = [c for c in (attrs.get("par_defaut_pour") or []) if c not in ensemble_types]
+        if hors_types:
+            raise serializers.ValidationError(
+                {
+                    "par_defaut_pour": (
+                        "Un modèle ne peut être par défaut que pour des types de projet auxquels "
+                        f"il est associé ({', '.join(hors_types)})."
+                    )
+                }
+            )
+    return attrs
+
+
 class ModeleEnregistrementSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=150)
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -115,6 +132,25 @@ class ModeleEnregistrementSerializer(serializers.Serializer):
     )
     niveaux = NiveauGabaritSerializer(many=True)
     lignes = serializers.ListField(child=LigneField(), allow_empty=True)
+
+    def validate(self, attrs):
+        return _valider_defauts_dans_types(attrs)
+
+
+class ModeleModificationPartielleSerializer(serializers.Serializer):
+    nom = serializers.CharField(max_length=150, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    types_projet = serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False
+    )
+    par_defaut_pour = serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False
+    )
+    niveaux = NiveauGabaritSerializer(many=True, required=False)
+    lignes = serializers.ListField(child=LigneField(), allow_empty=True, required=False)
+
+    def validate(self, attrs):
+        return _valider_defauts_dans_types(attrs)
 
 
 class MotifSerializer(serializers.Serializer):

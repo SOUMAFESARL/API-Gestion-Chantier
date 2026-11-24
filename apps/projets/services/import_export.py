@@ -610,17 +610,21 @@ def importer_modele_fichier(fichier, *, pour_plateforme: bool = False) -> dict:
         from apps.catalogue.models import ListeValeursPlateforme
 
         listes_connues = {
-            cle_comparaison(l.libelle): {"origine": "PLATEFORME", "id": str(l.pk), "libelle": l.libelle}
-            for l in ListeValeursPlateforme.objects.filter(est_actif=True)
+            cle_comparaison(liste.libelle): {
+                "origine": "PLATEFORME",
+                "id": str(liste.pk),
+                "libelle": liste.libelle,
+            }
+            for liste in ListeValeursPlateforme.objects.filter(est_actif=True)
         }
     else:
         listes_connues = {
-            cle_comparaison(l["libelle"]): {
-                "origine": l["origine"],
-                "id": str(l["id"]),
-                "libelle": l["libelle"],
+            cle_comparaison(liste["libelle"]): {
+                "origine": liste["origine"],
+                "id": str(liste["id"]),
+                "libelle": liste["libelle"],
             }
-            for l in lm.listes_disponibles(avec_valeurs=False)
+            for liste in lm.listes_disponibles(avec_valeurs=False)
         }
 
     niveaux = []

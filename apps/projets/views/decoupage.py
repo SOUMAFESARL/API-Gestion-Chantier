@@ -34,6 +34,7 @@ from apps.projets.serializers.decoupage import (
     InsertionNiveauSerializer,
     MesureSerializer,
     ModeleEnregistrementSerializer,
+    ModeleModificationPartielleSerializer,
     ModificationListeSerializer,
     MotifSerializer,
     NiveauCreationSerializer,
@@ -167,7 +168,7 @@ class ListesView(APIView):
     def post(self, request):
         donnees = CreationListeSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
-        liste = lm.creer_liste(**donnees.validated_data)
+        liste = lm.creer_liste(**donnees.validated_data, auteur=request.user)
         return Response(lm.liste_en_dict(liste), status=status.HTTP_201_CREATED)
 
 
@@ -202,7 +203,9 @@ class ListeDetailView(APIView):
     def patch(self, request, origine, pk):
         donnees = ModificationListeSerializer(data=request.data, partial=True)
         donnees.is_valid(raise_exception=True)
-        liste = lm.modifier_liste_entreprise(_liste_de_url(origine, pk), **donnees.validated_data)
+        liste = lm.modifier_liste_entreprise(
+            _liste_de_url(origine, pk), **donnees.validated_data, auteur=request.user
+        )
         return Response(lm.liste_en_dict(liste))
 
     @schema(summary="Retirer une liste créée par l'entreprise", responses={204: None})
@@ -222,7 +225,8 @@ class ListeValeursView(APIView):
 
     @schema(summary="Ajouter des valeurs à une liste", request=AjoutValeursSerializer)
     def post(self, request, origine, pk):
-        liste = _liste_de_url(origine, pk)  # d'abord : une liste inconnue est un 404, quel que soit le corps
+        # D'abord : une liste inconnue est un 404, quel que soit le corps
+        liste = _liste_de_url(origine, pk)
         donnees = AjoutValeursSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
         resultat = lm.ajouter_valeurs(
@@ -262,7 +266,8 @@ class ListeValeursImporterView(APIView):
 
 
 class ListeModeleExcelView(APIView):
-    """`GET /api/v1/decoupage/listes/modele-excel/` — exemple type Excel à remplir pour une liste."""
+    """`GET /api/v1/decoupage/listes/modele-excel/` — exemple type Excel à remplir pour une
+    liste."""
 
     permission_classes = [IsAuthenticated, APermission.pour("projets.lire")]
 
@@ -312,7 +317,11 @@ class ModelesView(APIView):
     def post(self, request):
         donnees = ModeleEnregistrementSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
-        modele = lm.enregistrer_modele(**donnees.validated_data)
+        valides = {
+            **donnees.validated_data,
+            "niveaux": _niveaux_saisis(donnees.validated_data["niveaux"]),
+        }
+        modele = lm.enregistrer_modele(**valides, auteur=request.user)
         return Response(lm.modele_en_dict(modele), status=status.HTTP_201_CREATED)
 
 
@@ -321,7 +330,7 @@ def _modele_de_url(origine, pk):
 
 
 class ModeleDetailView(APIView):
-    """`GET`/`PUT`/`DELETE /api/v1/decoupage/modeles/{origine}/{id}/`.
+    """`GET`/`PUT`/`PATCH`/`DELETE /api/v1/decoupage/modeles/{origine}/{id}/`.
 
     Un modèle plateforme se lit et se personnalise ; seuls les modèles de l'entreprise se
     modifient ou se suppriment (et cela ne change aucun projet déjà créé, §3.11).
@@ -353,16 +362,32 @@ class ModeleDetailView(APIView):
         modele = self._modele_entreprise(origine, pk)
         donnees = ModeleEnregistrementSerializer(data=request.data)
         donnees.is_valid(raise_exception=True)
-        modele = lm.enregistrer_modele(modele=modele, **donnees.validated_data)
+        valides = {
+            **donnees.validated_data,
+            "niveaux": _niveaux_saisis(donnees.validated_data["niveaux"]),
+        }
+        modele = lm.enregistrer_modele(modele=modele, auteur=request.user, **valides)
         return Response(lm.modele_en_dict(modele))
 
-    @schema(summary="Mettre à jour ce modèle", request=ModeleEnregistrementSerializer)
+    @schema(
+        summary="Mettre à jour partiellement ce modèle",
+        request=ModeleModificationPartielleSerializer,
+    )
     def patch(self, request, origine, pk):
-        return self.put(request, origine, pk)
+        modele = self._modele_entreprise(origine, pk)
+        donnees = ModeleModificationPartielleSerializer(data=request.data, partial=True)
+        donnees.is_valid(raise_exception=True)
+        valides = dict(donnees.validated_data)
+        if "niveaux" in valides:
+            valides["niveaux"] = _niveaux_saisis(valides["niveaux"])
+        modele = lm.enregistrer_modele(modele=modele, auteur=request.user, **valides)
+        return Response(lm.modele_en_dict(modele))
 
     @schema(summary="Supprimer ce modèle de l'entreprise", responses={204: None})
     def delete(self, request, origine, pk):
-        self._modele_entreprise(origine, pk).delete(utilisateur=request.user)
+        lm.retirer_modele_entreprise(
+            self._modele_entreprise(origine, pk), utilisateur=request.user
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -372,9 +397,9 @@ class ModelePersonnaliserView(APIView):
     permission_classes = [IsAuthenticated, APermission.pour("projets.modeles_gerer")]
 
     @schema(summary="Personnaliser un modèle de la plateforme", request=None)
-    def post(self, request, pk):
+    def post(self, request, pk, origine="PLATEFORME"):
         modele = get_object_or_404(ModeleDecoupagePlateforme, pk=pk, est_actif=True)
-        copie = lm.personnaliser_modele(modele)
+        copie = lm.personnaliser_modele(modele, auteur=request.user)
         return Response(lm.modele_en_dict(copie), status=status.HTTP_201_CREATED)
 
 
@@ -402,7 +427,8 @@ class ModeleExcelDecoupageView(APIView):
 
 
 class ModeleImporterFichierView(APIView):
-    """`POST /api/v1/decoupage/modeles/importer-fichier/` — extrait niveaux et lignes d'un Excel/CSV."""
+    """`POST /api/v1/decoupage/modeles/importer-fichier/` — extrait niveaux et lignes d'un
+    Excel/CSV."""
 
     parser_classes = [MultiPartParser]
     permission_classes = [IsAuthenticated, APermission.pour("projets.modeles_gerer")]

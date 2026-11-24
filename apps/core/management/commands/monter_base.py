@@ -15,8 +15,8 @@ Sur une base **vide** (créée, sans table), dans l'ordre :
    passe se lit dans la variable d'environnement `CCD_SUPER_ADMIN_MOTDEPASSE`, jamais sur la
    ligne de commande, qui reste dans l'historique du terminal ;
 6. avec `--demo` (refusé quand `DEBUG` est faux) : pour chaque slug, `creer_entreprise_demo` puis
-   `peupler_donnees_test` puis `completer_donnees_locales`. Deux entreprises (`demo beta`) donnent ce dont la suite d'étanchéité a
-   besoin.
+   `peupler_donnees_test` puis `completer_donnees_locales`. Deux entreprises (`demo beta`) donnent
+   ce dont la suite d'étanchéité a besoin.
 
 Rejouable : chaque étape converge, et une base déjà montée n'est que vérifiée.
 
@@ -67,10 +67,23 @@ class Command(BaseCommand):
         call_command("verifier_isolation")
 
         self._etape("Catalogue de la plateforme")
-        from apps.catalogue.models import ModeleRole
+        from apps.catalogue.models import (
+            ListeValeursPlateforme,
+            ModeleDecoupagePlateforme,
+            ModeleRole,
+        )
 
         if ModeleRole._base_manager.exists():
-            self.stdout.write("  Déjà ensemencé : laissé tel quel.")
+            if (
+                not ModeleDecoupagePlateforme._base_manager.exists()
+                or not ListeValeursPlateforme._base_manager.exists()
+            ):
+                self.stdout.write(
+                    "  Catalogue présent mais découpage plateforme manquant : synchronisation…"
+                )
+                call_command("synchroniser_catalogue_decoupage")
+            else:
+                self.stdout.write("  Déjà ensemencé : laissé tel quel.")
         else:
             call_command("ensemencer_plateforme")
 

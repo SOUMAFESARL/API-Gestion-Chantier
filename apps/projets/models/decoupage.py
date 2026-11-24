@@ -48,12 +48,31 @@ class ModeMesure(models.TextChoices):
 # --------------------------------------------------------------------------
 class ListeValeursEntreprise(ModeleEntreprise):
     libelle = models.CharField(_("libellé"), max_length=100)
+    cle_comparaison = models.CharField(max_length=120, db_index=True, blank=True, default="")
     description = models.TextField(_("description"), blank=True, default="")
     ordre = models.PositiveIntegerField(_("ordre"), default=0)
 
     class Meta:
         db_table = "liste_valeurs_entreprise"
         ordering = ["ordre", "libelle"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["entreprise", "cle_comparaison"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_liste_valeurs_entreprise_cle",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.cle_comparaison = cle_comparaison(self.libelle)
+        update_fields = kwargs.get("update_fields")
+        if (
+            update_fields is not None
+            and "libelle" in update_fields
+            and "cle_comparaison" not in update_fields
+        ):
+            kwargs["update_fields"] = [*update_fields, "cle_comparaison"]
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.libelle
@@ -117,6 +136,7 @@ class ValeurListeEntreprise(ModeleEntreprise):
 # --------------------------------------------------------------------------
 class ModeleDecoupageEntreprise(ModeleEntreprise):
     nom = models.CharField(_("nom"), max_length=150)
+    cle_comparaison = models.CharField(max_length=160, db_index=True, blank=True, default="")
     description = models.TextField(_("description"), blank=True, default="")
     types_projet = models.JSONField(_("types de projet"), default=list, blank=True)
     # Pour ces types, ce modèle pré-remplit le tableau à la place du modèle plateforme.
@@ -135,6 +155,29 @@ class ModeleDecoupageEntreprise(ModeleEntreprise):
     class Meta:
         db_table = "modele_decoupage_entreprise"
         ordering = ["nom"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["entreprise", "cle_comparaison"],
+                condition=models.Q(supprime_le__isnull=True, origine__isnull=True),
+                name="uq_modele_decoupage_entreprise_cle",
+            ),
+            models.UniqueConstraint(
+                fields=["entreprise", "origine"],
+                condition=models.Q(supprime_le__isnull=True, origine__isnull=False),
+                name="uq_modele_decoupage_entreprise_origine",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.cle_comparaison = cle_comparaison(self.nom)
+        update_fields = kwargs.get("update_fields")
+        if (
+            update_fields is not None
+            and "nom" in update_fields
+            and "cle_comparaison" not in update_fields
+        ):
+            kwargs["update_fields"] = [*update_fields, "cle_comparaison"]
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.nom
@@ -165,6 +208,20 @@ class NiveauModeleEntreprise(ModeleEntreprise):
     class Meta:
         db_table = "niveau_modele_entreprise"
         ordering = ["modele", "ordre"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["modele", "ordre"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_niveau_modele_entreprise_ordre",
+            ),
+            models.CheckConstraint(
+                condition=~(
+                    models.Q(liste_plateforme__isnull=False)
+                    & models.Q(liste_entreprise__isnull=False)
+                ),
+                name="chk_niveau_modele_entreprise_une_liste",
+            ),
+        ]
 
 
 class LigneModeleEntreprise(ModeleEntreprise):
@@ -210,7 +267,14 @@ class NiveauProjet(ModeleEntreprise):
                 fields=["projet", "ordre"],
                 condition=models.Q(supprime_le__isnull=True),
                 name="uq_niveau_projet_ordre",
-            )
+            ),
+            models.CheckConstraint(
+                condition=~(
+                    models.Q(liste_plateforme__isnull=False)
+                    & models.Q(liste_entreprise__isnull=False)
+                ),
+                name="chk_niveau_projet_une_liste",
+            ),
         ]
 
     def __str__(self) -> str:

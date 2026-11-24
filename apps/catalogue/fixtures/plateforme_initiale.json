@@ -4112,7 +4112,9 @@
    "supprime_par": null,
    "libelle": "Phases",
    "description": "Les grandes étapes d'un chantier.",
-   "ordre": 1
+   "ordre": 1,
+   "cle_comparaison": "phases",
+   "est_actif": true
   }
  },
  {
@@ -4126,7 +4128,9 @@
    "supprime_par": null,
    "libelle": "Lots",
    "description": "Les lots de travaux, par corps d'état.",
-   "ordre": 2
+   "ordre": 2,
+   "cle_comparaison": "lots",
+   "est_actif": true
   }
  },
  {
@@ -5283,7 +5287,8 @@
     "INFRASTRUCTURE_INDUSTRIELLE"
    ],
    "version": 1,
-   "est_actif": true
+   "est_actif": true,
+   "cle_comparaison": "industriel — phase, installation, lot, activite"
   }
  },
  {
@@ -5304,7 +5309,8 @@
     "VRD"
    ],
    "version": 1,
-   "est_actif": true
+   "est_actif": true,
+   "cle_comparaison": "vrd — phase, troncon, lot, activite"
   }
  },
  {
@@ -5325,7 +5331,8 @@
     "TP_ROUTE"
    ],
    "version": 1,
-   "est_actif": true
+   "est_actif": true,
+   "cle_comparaison": "route — phase, section, lot, activite"
   }
  },
  {
@@ -5344,7 +5351,8 @@
    ],
    "par_defaut_pour": [],
    "version": 1,
-   "est_actif": true
+   "est_actif": true,
+   "cle_comparaison": "villa — lot, activite"
   }
  },
  {
@@ -5365,7 +5373,8 @@
     "TP_GENIE_CIVIL"
    ],
    "version": 1,
-   "est_actif": true
+   "est_actif": true,
+   "cle_comparaison": "genie civil — partie, element, lot, activite"
   }
  },
  {
@@ -5388,7 +5397,8 @@
     "BATIMENT_COMMERCIAL"
    ],
    "version": 1,
-   "est_actif": true
+   "est_actif": true,
+   "cle_comparaison": "batiment — phase, ouvrage, lot, activite"
   }
  },
  {

@@ -54,7 +54,12 @@ from apps.projets.views.calendrier import (
     SemaineTypeView,
 )
 from apps.projets.views.meteo import MeteoProjetView, ReferentielVillesView
-from apps.projets.views.planning import ProjetCourbeView, ProjetPlanningView
+from apps.projets.views.planning import (
+    ProjetCourbeView,
+    ProjetPlanningMsProjectAnalyserView,
+    ProjetPlanningMsProjectImporterView,
+    ProjetPlanningView,
+)
 from apps.projets.views.reprogrammation import (
     ElementHistoriqueDatesView,
     ElementReprogrammerView,
@@ -92,6 +97,8 @@ __all__ = [
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
     "ProjetOrdreServiceView",
+    "ProjetPlanningMsProjectAnalyserView",
+    "ProjetPlanningMsProjectImporterView",
     "ProjetPlanningView",
     "ProjetReprogrammerView",
     "ProjetSanteApercuView",

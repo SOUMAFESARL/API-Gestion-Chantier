@@ -14,6 +14,8 @@ from apps.projets.views import (
     ProjetDetailView,
     ProjetListCreateView,
     ProjetOrdreServiceView,
+    ProjetPlanningMsProjectAnalyserView,
+    ProjetPlanningMsProjectImporterView,
     ProjetPlanningView,
     ProjetSanteApercuView,
     ProjetSanteDetailView,
@@ -370,6 +372,16 @@ urlpatterns = [
         "projets/<uuid:pk>/planning/",
         ProjetPlanningView.as_view(),
         name="projet-planning",
+    ),
+    path(
+        "projets/<uuid:pk>/planning/ms-project/analyser/",
+        ProjetPlanningMsProjectAnalyserView.as_view(),
+        name="projet-planning-ms-project-analyser",
+    ),
+    path(
+        "projets/<uuid:pk>/planning/ms-project/importer/",
+        ProjetPlanningMsProjectImporterView.as_view(),
+        name="projet-planning-ms-project-importer",
     ),
     # Santé du projet
     path(

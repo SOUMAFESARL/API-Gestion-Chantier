@@ -20,18 +20,24 @@ from apps.platform_admin.serializers.decoupage import (
     AjoutValeursSerializer,
     CreationListeSerializer,
     ModelePlateformeEnregistrementSerializer,
+    ModelePlateformeModificationPartielleSerializer,
     ModificationListeSerializer,
     ModificationValeurSerializer,
 )
 from apps.platform_admin.services import decoupage as service
 
 __all__ = [
+    "DecoupageListeActiverView",
+    "DecoupageListeDesactiverView",
     "DecoupageListeDetailView",
     "DecoupageListeModeleExcelView",
     "DecoupageListeValeursImporterView",
     "DecoupageListeValeursView",
     "DecoupageListesView",
+    "DecoupageModeleActiverView",
+    "DecoupageModeleDesactiverView",
     "DecoupageModeleDetailView",
+    "DecoupageModeleDupliquerView",
     "DecoupageModeleExcelView",
     "DecoupageModeleImporterFichierView",
     "DecoupageModelesView",
@@ -61,6 +67,17 @@ def _niveaux(niveaux: list[dict]) -> list[dict]:
     ]
 
 
+def _booleen_query(valeur: str | None) -> bool | None:
+    if valeur is None or valeur == "":
+        return None
+    v = valeur.strip().lower()
+    if v in ("true", "1", "oui"):
+        return True
+    if v in ("false", "0", "non"):
+        return False
+    return None
+
+
 # --------------------------------------------------------------------------
 # Listes de valeurs
 # --------------------------------------------------------------------------
@@ -73,11 +90,26 @@ class DecoupageListesView(APIView):
     @schema(
         summary="Listes de valeurs de la plateforme",
         operation_id="admins_decoupage_listes_liste",
-        parameters=[OpenApiParameter("valeurs", bool, description="Faux : sans les valeurs.")],
+        parameters=[
+            OpenApiParameter("valeurs", bool, description="Faux : sans les valeurs."),
+            OpenApiParameter("est_actif", bool, description="Filtrer par état d'activation."),
+            OpenApiParameter(
+                "recherche",
+                str,
+                description=(
+                    "Recherche sur le libellé ou la description "
+                    "(insensible aux accents et à la casse)."
+                ),
+            ),
+        ],
     )
     def get(self, request):
         avec = request.query_params.get("valeurs", "true").lower() != "false"
-        return Response(service.lister_listes(avec_valeurs=avec))
+        est_actif = _booleen_query(request.query_params.get("est_actif"))
+        recherche = request.query_params.get("recherche") or None
+        return Response(
+            service.lister_listes(avec_valeurs=avec, est_actif=est_actif, recherche=recherche)
+        )
 
     @schema(summary="Créer une liste de la plateforme", request=CreationListeSerializer)
     def post(self, request):
@@ -99,7 +131,8 @@ class DecoupageListeDetailView(APIView):
         return Response(service.lire_liste(pk))
 
     @schema(
-        summary="Renommer, décrire ou réordonner une liste", request=ModificationListeSerializer
+        summary="Renommer, décrire, réordonner ou activer/désactiver une liste",
+        request=ModificationListeSerializer,
     )
     def patch(self, request, pk):
         exiger_superviseur(request)
@@ -114,6 +147,30 @@ class DecoupageListeDetailView(APIView):
         exiger_superviseur(request)
         service.retirer_liste(pk, auteur=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DecoupageListeActiverView(APIView):
+    """`POST /api/v1/admins/decoupage/listes/{id}/activer/`."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [JSONParser]
+
+    @schema(summary="Activer une liste de la plateforme", request=None)
+    def post(self, request, pk):
+        exiger_superviseur(request)
+        return Response(service.activer_liste(pk, auteur=request.user))
+
+
+class DecoupageListeDesactiverView(APIView):
+    """`POST /api/v1/admins/decoupage/listes/{id}/desactiver/`."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [JSONParser]
+
+    @schema(summary="Désactiver une liste de la plateforme", request=None)
+    def post(self, request, pk):
+        exiger_superviseur(request)
+        return Response(service.desactiver_liste(pk, auteur=request.user))
 
 
 class DecoupageListeValeursView(APIView):
@@ -212,9 +269,28 @@ class DecoupageModelesView(APIView):
     @schema(
         summary="Modèles de découpage de la plateforme",
         operation_id="admins_decoupage_modeles_liste",
+        parameters=[
+            OpenApiParameter(
+                "recherche",
+                str,
+                description=(
+                    "Recherche sur le nom ou la description "
+                    "(insensible aux accents et à la casse)."
+                ),
+            ),
+            OpenApiParameter("type_projet", str, description="Filtrer par code de type de projet."),
+            OpenApiParameter("est_actif", bool, description="Filtrer par état d'activation."),
+        ],
     )
     def get(self, request):
-        return Response(service.lister_modeles())
+        recherche = request.query_params.get("recherche") or None
+        type_projet = request.query_params.get("type_projet") or None
+        est_actif = _booleen_query(request.query_params.get("est_actif"))
+        return Response(
+            service.lister_modeles(
+                recherche=recherche, type_projet=type_projet, est_actif=est_actif
+            )
+        )
 
     @schema(
         summary="Créer un modèle de la plateforme",
@@ -230,7 +306,7 @@ class DecoupageModelesView(APIView):
 
 
 class DecoupageModeleDetailView(APIView):
-    """`GET`/`PUT`/`DELETE /api/v1/admins/decoupage/modeles/{id}/`."""
+    """`GET`/`PUT`/`PATCH`/`DELETE /api/v1/admins/decoupage/modeles/{id}/`."""
 
     permission_classes = [EstSuperAdminPlateforme]
     parser_classes = [JSONParser]
@@ -240,7 +316,9 @@ class DecoupageModeleDetailView(APIView):
         return Response(service.lire_modele(pk))
 
     @schema(
-        summary="Mettre à jour un modèle de la plateforme (sa version augmente)",
+        summary=(
+            "Mettre à jour un modèle de la plateforme (sa version augmente si le gabarit change)"
+        ),
         request=ModelePlateformeEnregistrementSerializer,
     )
     def put(self, request, pk):
@@ -251,11 +329,17 @@ class DecoupageModeleDetailView(APIView):
         return Response(service.enregistrer_modele(pk, auteur=request.user, **valides))
 
     @schema(
-        summary="Mettre à jour un modèle de la plateforme (sa version augmente)",
-        request=ModelePlateformeEnregistrementSerializer,
+        summary="Mettre à jour partiellement un modèle de la plateforme (versioning sélectif)",
+        request=ModelePlateformeModificationPartielleSerializer,
     )
     def patch(self, request, pk):
-        return self.put(request, pk)
+        exiger_superviseur(request)
+        donnees = ModelePlateformeModificationPartielleSerializer(data=request.data, partial=True)
+        donnees.is_valid(raise_exception=True)
+        valides = dict(donnees.validated_data)
+        if "niveaux" in valides:
+            valides["niveaux"] = _niveaux(valides["niveaux"])
+        return Response(service.enregistrer_modele(pk, auteur=request.user, **valides))
 
     @schema(
         summary="Retirer un modèle de la plateforme (suppression logique)", responses={204: None}
@@ -264,6 +348,47 @@ class DecoupageModeleDetailView(APIView):
         exiger_superviseur(request)
         service.retirer_modele(pk, auteur=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DecoupageModeleActiverView(APIView):
+    """`POST /api/v1/admins/decoupage/modeles/{id}/activer/`."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [JSONParser]
+
+    @schema(
+        summary="Activer un modèle de la plateforme (sans incrémenter la version)", request=None
+    )
+    def post(self, request, pk):
+        exiger_superviseur(request)
+        return Response(service.activer_modele(pk, auteur=request.user))
+
+
+class DecoupageModeleDesactiverView(APIView):
+    """`POST /api/v1/admins/decoupage/modeles/{id}/desactiver/`."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [JSONParser]
+
+    @schema(
+        summary="Désactiver un modèle de la plateforme (sans incrémenter la version)", request=None
+    )
+    def post(self, request, pk):
+        exiger_superviseur(request)
+        return Response(service.desactiver_modele(pk, auteur=request.user))
+
+
+class DecoupageModeleDupliquerView(APIView):
+    """`POST /api/v1/admins/decoupage/modeles/{id}/dupliquer/`."""
+
+    permission_classes = [EstSuperAdminPlateforme]
+    parser_classes = [JSONParser]
+
+    @schema(summary="Dupliquer un modèle de la plateforme", request=None)
+    def post(self, request, pk):
+        exiger_superviseur(request)
+        copie = service.dupliquer_modele(pk, auteur=request.user)
+        return Response(copie, status=status.HTTP_201_CREATED)
 
 
 class DecoupageModeleExcelView(APIView):

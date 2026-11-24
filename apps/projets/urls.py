@@ -175,8 +175,8 @@ urlpatterns = [
         ModeleImporterFichierView.as_view(),
         name="decoupage-modeles-importer-fichier",
     ),
-    path(
-        "decoupage/modeles/PLATEFORME/<uuid:pk>/personnaliser/",
+    re_path(
+        rf"^decoupage/modeles/(?P<origine>(?i:plateforme))/(?P<pk>{UUID})/personnaliser/$",
         ModelePersonnaliserView.as_view(),
         name="decoupage-modele-personnaliser",
     ),

@@ -53,6 +53,13 @@ class Command(BaseCommand):
                 "remplace pas. Cette commande ne sert que sur une base neuve."
             )
 
+        from apps.catalogue.models.decoupage import (
+            ListeValeursPlateforme,
+            ModeleDecoupagePlateforme,
+            ValeurListePlateforme,
+        )
+        from apps.catalogue.models.referentiel import cle_comparaison
+
         with transaction.atomic():
             for app_label, nom in MODELES:
                 modele = apps.get_model(app_label, nom)
@@ -60,6 +67,25 @@ class Command(BaseCommand):
                 # les migrations, sur une base sans aucune donnée d'entreprise.
                 modele._base_manager.all().delete()
             call_command("loaddata", JEU, verbosity=0)
+
+            for liste in ListeValeursPlateforme._base_manager.all():
+                cle = cle_comparaison(liste.libelle)[:120]
+                if liste.cle_comparaison != cle:
+                    ListeValeursPlateforme._base_manager.filter(pk=liste.pk).update(
+                        cle_comparaison=cle
+                    )
+            for valeur in ValeurListePlateforme._base_manager.all():
+                cle = cle_comparaison(valeur.libelle)[:200]
+                if valeur.cle_comparaison != cle:
+                    ValeurListePlateforme._base_manager.filter(pk=valeur.pk).update(
+                        cle_comparaison=cle
+                    )
+            for modele_dec in ModeleDecoupagePlateforme._base_manager.all():
+                cle = cle_comparaison(modele_dec.nom)[:160]
+                if modele_dec.cle_comparaison != cle:
+                    ModeleDecoupagePlateforme._base_manager.filter(pk=modele_dec.pk).update(
+                        cle_comparaison=cle
+                    )
 
         for app_label, nom in reversed(MODELES):
             modele = apps.get_model(app_label, nom)

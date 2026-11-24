@@ -2,8 +2,8 @@
 
 Les corps reprennent ceux des routes de l'entreprise (`apps.projets.serializers.decoupage`) :
 un même tableau (niveaux et lignes types) construit un modèle chez le super admin comme dans
-l'entreprise (décisions v1.2, §3.10). Seul ajout : un modèle plateforme peut être désactivé
-(`est_actif`), et une liste ou une valeur se corrige.
+l'entreprise (décisions v1.2, §3.10). Seul ajout : un modèle plateforme ou une liste plateforme
+peut être désactivé (`est_actif`), et une liste ou une valeur se corrige.
 """
 
 from rest_framework import serializers
@@ -12,12 +12,14 @@ from apps.projets.serializers.decoupage import (
     AjoutValeursSerializer,
     CreationListeSerializer,
     ModeleEnregistrementSerializer,
+    ModeleModificationPartielleSerializer,
 )
 
 __all__ = [
     "AjoutValeursSerializer",
     "CreationListeSerializer",
     "ModelePlateformeEnregistrementSerializer",
+    "ModelePlateformeModificationPartielleSerializer",
     "ModificationListeSerializer",
     "ModificationValeurSerializer",
 ]
@@ -27,6 +29,12 @@ class ModificationListeSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=100, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     ordre = serializers.IntegerField(required=False, min_value=0)
+    est_actif = serializers.BooleanField(
+        required=False,
+        help_text=(
+            "Faux : la liste n'est plus proposée aux nouvelles liaisons, sans casser l'existant."
+        ),
+    )
 
 
 class ModificationValeurSerializer(serializers.Serializer):
@@ -39,5 +47,12 @@ class ModelePlateformeEnregistrementSerializer(ModeleEnregistrementSerializer):
     est_actif = serializers.BooleanField(
         required=False,
         default=True,
+        help_text="Faux : le modèle n'est plus proposé aux entreprises, sans être retiré.",
+    )
+
+
+class ModelePlateformeModificationPartielleSerializer(ModeleModificationPartielleSerializer):
+    est_actif = serializers.BooleanField(
+        required=False,
         help_text="Faux : le modèle n'est plus proposé aux entreprises, sans être retiré.",
     )

@@ -33,14 +33,34 @@ __all__ = [
 
 class ListeValeursPlateforme(ModeleBase):
     libelle = models.CharField(_("libellé"), max_length=100)
+    cle_comparaison = models.CharField(max_length=120, db_index=True, blank=True, default="")
     description = models.TextField(_("description"), blank=True, default="")
     ordre = models.PositiveIntegerField(_("ordre"), default=0)
+    est_actif = models.BooleanField(_("est actif"), default=True, db_index=True)
 
     class Meta:
         db_table = "catalogue_liste_valeurs"
         verbose_name = _("liste de valeurs plateforme")
         verbose_name_plural = _("listes de valeurs plateforme")
         ordering = ["ordre", "libelle"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cle_comparaison"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_catalogue_liste_valeurs_cle",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.cle_comparaison = cle_comparaison(self.libelle)
+        update_fields = kwargs.get("update_fields")
+        if (
+            update_fields is not None
+            and "libelle" in update_fields
+            and "cle_comparaison" not in update_fields
+        ):
+            kwargs["update_fields"] = [*update_fields, "cle_comparaison"]
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.libelle
@@ -79,6 +99,7 @@ class ValeurListePlateforme(ModeleBase):
 
 class ModeleDecoupagePlateforme(ModeleBase):
     nom = models.CharField(_("nom"), max_length=150)
+    cle_comparaison = models.CharField(max_length=160, db_index=True, blank=True, default="")
     description = models.TextField(_("description"), blank=True, default="")
     # Codes des types de projet pour lesquels le modèle est conçu (référentiel TYPE_PROJET).
     types_projet = models.JSONField(_("types de projet"), default=list, blank=True)
@@ -93,6 +114,24 @@ class ModeleDecoupagePlateforme(ModeleBase):
         verbose_name = _("modèle de découpage plateforme")
         verbose_name_plural = _("modèles de découpage plateforme")
         ordering = ["nom"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cle_comparaison"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_catalogue_modele_decoupage_cle",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.cle_comparaison = cle_comparaison(self.nom)
+        update_fields = kwargs.get("update_fields")
+        if (
+            update_fields is not None
+            and "nom" in update_fields
+            and "cle_comparaison" not in update_fields
+        ):
+            kwargs["update_fields"] = [*update_fields, "cle_comparaison"]
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.nom

@@ -42,12 +42,17 @@ from apps.platform_admin.views import (
     VerificationJetonAdminView,
 )
 from apps.platform_admin.views.decoupage import (
+    DecoupageListeActiverView,
+    DecoupageListeDesactiverView,
     DecoupageListeDetailView,
     DecoupageListeModeleExcelView,
     DecoupageListesView,
     DecoupageListeValeursImporterView,
     DecoupageListeValeursView,
+    DecoupageModeleActiverView,
+    DecoupageModeleDesactiverView,
     DecoupageModeleDetailView,
+    DecoupageModeleDupliquerView,
     DecoupageModeleExcelView,
     DecoupageModeleImporterFichierView,
     DecoupageModelesView,
@@ -262,6 +267,16 @@ urlpatterns = [
         name="admins-decoupage-liste-detail",
     ),
     path(
+        "admins/decoupage/listes/<uuid:pk>/activer/",
+        DecoupageListeActiverView.as_view(),
+        name="admins-decoupage-liste-activer",
+    ),
+    path(
+        "admins/decoupage/listes/<uuid:pk>/desactiver/",
+        DecoupageListeDesactiverView.as_view(),
+        name="admins-decoupage-liste-desactiver",
+    ),
+    path(
         "admins/decoupage/listes/<uuid:pk>/valeurs/",
         DecoupageListeValeursView.as_view(),
         name="admins-decoupage-liste-valeurs",
@@ -295,6 +310,21 @@ urlpatterns = [
         "admins/decoupage/modeles/<uuid:pk>/",
         DecoupageModeleDetailView.as_view(),
         name="admins-decoupage-modele-detail",
+    ),
+    path(
+        "admins/decoupage/modeles/<uuid:pk>/activer/",
+        DecoupageModeleActiverView.as_view(),
+        name="admins-decoupage-modele-activer",
+    ),
+    path(
+        "admins/decoupage/modeles/<uuid:pk>/desactiver/",
+        DecoupageModeleDesactiverView.as_view(),
+        name="admins-decoupage-modele-desactiver",
+    ),
+    path(
+        "admins/decoupage/modeles/<uuid:pk>/dupliquer/",
+        DecoupageModeleDupliquerView.as_view(),
+        name="admins-decoupage-modele-dupliquer",
     ),
     # Gestion des Comptes Administrateurs (Super Admin)
     path("admins/comptes/", ComptesAdministrateursListCreateView.as_view(), name="admins-comptes-liste-creer"),

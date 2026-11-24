@@ -84,6 +84,12 @@ COLONNES_TABLEAUX: dict[str, tuple[str, ...]] = {
     "etapes": ("etape", "echeance", "resp"),
 }
 
+COLONNES_OPTIONNELLES_TABLEAUX: dict[str, tuple[str, ...]] = {
+    "lots": ("element_id", "titulaire_id"),
+    "recos": ("responsable_id",),
+    "intervenants": ("perimetre", "tiers_id", "element_id"),
+}
+
 
 def valider_informations_complementaires(valeur: Any) -> dict[str, Any]:
     """Valide et nettoie la structure JSON des informations complémentaires d'un projet."""
@@ -140,10 +146,16 @@ def valider_informations_complementaires(valeur: Any) -> dict[str, Any]:
                     f"Le tableau « {cle_tbl} » doit être une liste de lignes."
                 )
             lignes_propres: list[dict[str, str]] = []
+            colonnes_opt = COLONNES_OPTIONNELLES_TABLEAUX.get(cle_tbl, ())
             for ligne in lignes[:100]:
                 if not isinstance(ligne, dict):
                     continue
                 normalisee = {col: str(ligne.get(col) or "").strip()[:1000] for col in colonnes}
+                for col in colonnes_opt:
+                    if col in ligne and ligne.get(col) is not None:
+                        val_opt = str(ligne.get(col) or "").strip()[:1000]
+                        if val_opt:
+                            normalisee[col] = val_opt
                 if any(normalisee.values()):
                     lignes_propres.append(normalisee)
             propre[cle_tbl] = lignes_propres

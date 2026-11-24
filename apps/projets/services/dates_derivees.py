@@ -57,14 +57,24 @@ def recalculer_dates_derivees(projet) -> int:
         debut = _extremes((e.date_debut_prevue for e in enfants), min)
         fin = _extremes((e.date_fin_prevue for e in enfants), max)
         if debut is None and fin is None:
-            return
-        nouveau = {
-            "date_debut_prevue": debut,
-            "date_fin_prevue": fin,
-            "date_debut_baseline": _extremes((e.date_debut_baseline for e in enfants), min),
-            "date_fin_baseline": _extremes((e.date_fin_baseline for e in enfants), max),
-            "dates_calculees": True,
-        }
+            # Si les dates venaient d'enfants désormais supprimés ou non datés, effacer les dates calculées.
+            if not element.dates_calculees:
+                return
+            nouveau = {
+                "date_debut_prevue": None,
+                "date_fin_prevue": None,
+                "date_debut_baseline": None,
+                "date_fin_baseline": None,
+                "dates_calculees": False,
+            }
+        else:
+            nouveau = {
+                "date_debut_prevue": debut,
+                "date_fin_prevue": fin,
+                "date_debut_baseline": _extremes((e.date_debut_baseline for e in enfants), min),
+                "date_fin_baseline": _extremes((e.date_fin_baseline for e in enfants), max),
+                "dates_calculees": True,
+            }
         if any(getattr(element, champ) != valeur for champ, valeur in nouveau.items()):
             for champ, valeur in nouveau.items():
                 setattr(element, champ, valeur)

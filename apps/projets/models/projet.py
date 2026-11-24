@@ -47,7 +47,7 @@ class Projet(ModeleEntreprise):
     reference = models.CharField(_("référence"), max_length=30)
     nom = models.CharField(_("nom"), max_length=200)
     nature_projet = models.CharField(
-        _("type de projet (public ou privé)"),
+        _("type de projet"),
         max_length=10,
         choices=NatureProjet.choices,
         blank=True,
@@ -56,7 +56,7 @@ class Projet(ModeleEntreprise):
     )
     # Code d'une entrée des référentiels (plateforme ou entreprise) — plus de liste figée.
     type_projet = models.CharField(
-        _("type d'ouvrage"),
+        _("catégorie d'ouvrage"),
         max_length=60,
         default=TypeProjet.BATIMENT_RESIDENTIEL,
     )
@@ -448,21 +448,34 @@ class AffectationProjet(ModeleEntreprise):
         ]
 
     def get_role_projet_display(self, libelles: dict[str, str] | None = None) -> str:
-        """Le libellé du rôle, lu dans la table `role` ; à défaut celui de l'énumération.
+        """Le libellé du rôle, lu dans la table `role` ; à défaut le rôle de l'utilisateur
+        dans l'entreprise ou l'énumération. Ne renvoie jamais un libellé générique « Autre ».
 
         `libelles` (voir `libelles_des_roles`) évite une requête par affectation quand on en
         affiche plusieurs.
         """
-        if libelles is not None:
-            libelle = libelles.get((self.role_projet or "").upper())
-        else:
-            from apps.accounts.models import Role
+        code = (self.role_projet or "").strip().upper()
+        if code and code not in ("AUTRE", "AUTRE_MEMBRE"):
+            if libelles is not None:
+                libelle = libelles.get(code)
+            else:
+                from apps.accounts.models import Role
 
-            role = Role.objects.filter(code__iexact=self.role_projet).only("libelle").first()
-            libelle = role.libelle if role else None
-        if libelle:
-            return libelle
-        return dict(RoleProjet.choices).get(self.role_projet, self.role_projet)
+                role = Role.objects.filter(code__iexact=code).only("libelle").first()
+                libelle = role.libelle if role else None
+            if libelle:
+                return libelle
+            enum_label = dict(RoleProjet.choices).get(code)
+            if enum_label:
+                return enum_label
+            return code
+        if self.utilisateur_id:
+            from apps.projets.selectors.encadrement import role_entreprise_utilisateur
+
+            _code_ent, libelle_ent = role_entreprise_utilisateur(self.utilisateur, libelles)
+            if libelle_ent:
+                return libelle_ent
+        return ""
 
     def __str__(self) -> str:
         return f"{self.utilisateur} sur {self.projet.nom} ({self.get_role_projet_display()})"

@@ -112,6 +112,8 @@ def representer_case(
         ]
         somme_enfants = int(sum(poids)) if poids else None
     titulaire = arbre.titulaire_id(element)
+    titulaire_effectif = arbre.titulaire(element)
+    titulaire_direct = element.titulaire if element.titulaire_id else None
     porteur, liste_equipes = effectives.get(element.pk, (None, []))
     donnees = {
         **base,
@@ -179,7 +181,11 @@ def representer_case(
         "type_bordereau": element.type_bordereau,
         "type_bordereau_effectif": arbre.type_bordereau(element),
         "titulaire_id": str(element.titulaire_id) if element.titulaire_id else None,
+        "titulaire_nom": titulaire_direct.raison_sociale if titulaire_direct else None,
         "titulaire_effectif_id": str(titulaire) if titulaire else None,
+        "titulaire_effectif_nom": (
+            titulaire_effectif.raison_sociale if titulaire_effectif else None
+        ),
         # Équipes : posées ici, ou héritées de la case la plus proche qui en porte
         "equipes": liste_equipes,
         "equipes_heritees_de": (

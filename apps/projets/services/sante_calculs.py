@@ -291,8 +291,8 @@ def calculer_avancement_temporel_element(
 
 def calculer_temporels_arbre(arbre, resultats, date_reference, calendrier) -> dict:
     """Le temporel de chaque case active : sur ses dates pour une feuille ; pour un parent,
-    la moyenne de ses enfants avec les mêmes poids que le physique — ou ses propres dates si ses
-    enfants sont incomplètement chiffrés ou datés (§9, formule 4)."""
+    la moyenne de ses enfants avec les mêmes poids que le physique — ou moyenne simple si non
+    chiffrés, et adaptation propre si les dates des enfants sont partielles ou absentes (§9)."""
     temporels: dict = {}
 
     def visiter(element):
@@ -307,9 +307,39 @@ def calculer_temporels_arbre(arbre, resultats, date_reference, calendrier) -> di
             total = sum(r.poids for _, r in valeurs)
             moyenne = sum(Decimal(str(t)) * r.poids for t, r in valeurs) / total if total else 0
             temporels[element.pk] = float(round(moyenne, 2))
-        else:
-            temporels[element.pk] = propre
-        return temporels[element.pk]
+            return temporels[element.pk]
+
+        dates_enfants = [(t, r) for t, r in valeurs if t is not None]
+        if dates_enfants:
+            # Dates partielles avec engagement propre du parent : repli sur `propre` pour les
+            # enfants non datés.
+            if propre is not None and len(dates_enfants) < len(valeurs):
+                etendus_ponderes = [
+                    (t if t is not None else propre, r.poids)
+                    for t, r in valeurs
+                    if r and r.poids
+                ]
+                if len(etendus_ponderes) == len(valeurs):
+                    total = sum(p for _, p in etendus_ponderes)
+                    moyenne = sum(Decimal(str(t)) * p for t, p in etendus_ponderes) / total
+                    temporels[element.pk] = float(round(moyenne, 2))
+                    return temporels[element.pk]
+                temporels[element.pk] = propre
+                return propre
+
+            ponderes = [(t, r.poids) for t, r in dates_enfants if r and r.poids]
+            if ponderes:
+                total = sum(p for _, p in ponderes)
+                moyenne = sum(Decimal(str(t)) * p for t, p in ponderes) / total if total else 0
+                temporels[element.pk] = float(round(moyenne, 2))
+                return temporels[element.pk]
+
+            moyenne = sum(Decimal(str(t)) for t, _ in dates_enfants) / Decimal(len(dates_enfants))
+            temporels[element.pk] = float(round(moyenne, 2))
+            return temporels[element.pk]
+
+        temporels[element.pk] = propre
+        return propre
 
     for racine in arbre.racines():
         if racine.est_actif:
@@ -322,33 +352,44 @@ def calculer_avancement_temporel_projet(
     date_reference: date,
     jours_feries: Calendrier | set[date] | frozenset[date],
 ) -> tuple[float, list[str]]:
-    """Temporel du projet : moyenne des racines pondérée par leur poids ; à défaut, ses dates.
+    """Temporel du projet : issu du découpage (moyenne pondérée ou simple des racines actives,
+    adaptation aux dates partielles) ; repli sur les dates du projet si aucune date au découpage.
 
     Rend aussi les avertissements `CASE_SANS_DATES:<intitulé>` des racines sans dates.
     """
     from apps.projets.selectors.arbre import charger_arbre
 
-    arbre = charger_arbre(projet)
+    arbre = charger_arbre(projet, actifs_seulement=True)
     resultats = calculer_arbre(arbre)
     temporels = calculer_temporels_arbre(arbre, resultats, date_reference, jours_feries)
     avertissements = []
-    retenues = []
-    for racine in arbre.racines():
-        if not racine.est_actif:
-            continue
+    racines = [r for r in arbre.racines() if r.est_actif]
+    propre = calculer_avancement_temporel_element(projet, date_reference, jours_feries)
+
+    avec_temporel = []
+    for racine in racines:
         t = temporels.get(racine.pk)
         if t is None:
             avertissements.append(f"CASE_SANS_DATES:{racine.libelle}")
-            continue
-        r = resultats.get(racine.pk)
-        if r and r.poids:
-            retenues.append((t, r.poids))
-    if retenues:
-        total = sum(p for _, p in retenues)
-        valeur = sum(Decimal(str(t)) * p for t, p in retenues) / total
+        avec_temporel.append((racine, t, resultats.get(racine.pk)))
+
+    datees = [(r, t, res) for r, t, res in avec_temporel if t is not None]
+    if not datees:
+        return (propre if propre is not None else 0.0), avertissements
+
+    if len(datees) < len(avec_temporel) and propre is not None:
+        effectives = [(r, t if t is not None else propre, res) for r, t, res in avec_temporel]
+    else:
+        effectives = datees
+
+    ponderees = [(t, res.poids) for _, t, res in effectives if res and res.poids]
+    if ponderees:
+        total = sum(p for _, p in ponderees)
+        valeur = sum(Decimal(str(t)) * p for t, p in ponderees) / total
         return float(round(valeur, 2)), avertissements
-    propre = calculer_avancement_temporel_element(projet, date_reference, jours_feries)
-    return (propre if propre is not None else 0.0), avertissements
+
+    moyenne = sum(Decimal(str(t)) for _, t, _ in effectives) / Decimal(len(effectives))
+    return float(round(moyenne, 2)), avertissements
 
 
 def calculer_deltas_arbre(arbre, resultats, date_reference, calendrier) -> dict:

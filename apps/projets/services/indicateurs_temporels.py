@@ -40,16 +40,21 @@ CHAMPS_DATES = (
 
 
 def _extraire_bornes_dates(objet: Any, date_ref: date) -> tuple[date, date]:
-    """Les dates minimale et maximale d'un projet ou d'une case, date de référence comprise.
-
-    Les cases de l'arbre s'inscrivent dans les dates de leur projet (le parent encadre, §11) :
-    les dates du projet suffisent à borner le calendrier de tout son découpage.
-    """
+    """Les dates minimale et maximale d'un projet (et de son arbre préchargé) ou d'une case,
+    date de référence comprise."""
     dates: list[date] = [date_ref]
     for champ in CHAMPS_DATES:
         val = getattr(objet, champ, None)
         if isinstance(val, date):
             dates.append(val)
+    precharge = getattr(objet, "_arbre_precharge", None)
+    if precharge is not None:
+        elements, _niveaux = precharge
+        for elem in elements:
+            for champ in CHAMPS_DATES:
+                val = getattr(elem, champ, None)
+                if isinstance(val, date):
+                    dates.append(val)
     return min(dates), max(dates)
 
 

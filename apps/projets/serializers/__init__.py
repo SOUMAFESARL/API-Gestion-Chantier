@@ -94,6 +94,9 @@ __all__ = [
 class ChefProjetEnrichiSerializer(serializers.ModelSerializer):
     nom_complet = serializers.SerializerMethodField()
     lien_whatsapp = serializers.SerializerMethodField()
+    role_code = serializers.SerializerMethodField()
+    role_libelle = serializers.SerializerMethodField()
+    fonction_entreprise = serializers.SerializerMethodField()
 
     class Meta:
         model = Utilisateur
@@ -106,7 +109,16 @@ class ChefProjetEnrichiSerializer(serializers.ModelSerializer):
             "telephone",
             "statut",
             "lien_whatsapp",
+            "role_code",
+            "role_libelle",
+            "fonction_entreprise",
         ]
+
+    def _role_entreprise(self, obj: Utilisateur) -> tuple[str, str]:
+        from apps.projets.selectors.encadrement import role_entreprise_utilisateur
+
+        libelles = self.context.get("libelles_roles") if getattr(self, "context", None) else None
+        return role_entreprise_utilisateur(obj, libelles)
 
     def get_nom_complet(self, obj: Utilisateur) -> str:
         return f"{obj.prenom} {obj.nom}".strip() or obj.email
@@ -116,6 +128,15 @@ class ChefProjetEnrichiSerializer(serializers.ModelSerializer):
             return None
         chiffres = re.sub(r"[^\d]", "", str(obj.telephone))
         return f"https://wa.me/{chiffres}" if chiffres else None
+
+    def get_role_code(self, obj: Utilisateur) -> str:
+        return self._role_entreprise(obj)[0]
+
+    def get_role_libelle(self, obj: Utilisateur) -> str:
+        return self._role_entreprise(obj)[1]
+
+    def get_fonction_entreprise(self, obj: Utilisateur) -> str:
+        return self._role_entreprise(obj)[1]
 
 
 class ChefProjetInviteSerializer(serializers.Serializer):
@@ -308,6 +329,7 @@ class ProjetCreationSerializer(serializers.Serializer):
         choices=StatutProjet.choices, required=False, default=StatutProjet.EN_ATTENTE
     )
     client = serializers.PrimaryKeyRelatedField(queryset=Tiers.objects.all(), required=False)
+    client_id = serializers.UUIDField(required=False, allow_null=True)
     maitre_ouvrage = serializers.CharField(max_length=200, required=False)
     maitre_oeuvre = serializers.CharField(
         max_length=200, required=False, allow_blank=True, default=""
@@ -392,7 +414,7 @@ class ProjetCreationSerializer(serializers.Serializer):
 
         if not code_type_projet_valide(value):
             raise serializers.ValidationError(
-                _("Choisissez un type de projet dans la liste, ou ajoutez-le.")
+                _("Choisissez une catégorie d'ouvrage dans la liste, ou ajoutez-la.")
             )
         return value
 
@@ -412,7 +434,19 @@ class ProjetCreationSerializer(serializers.Serializer):
             ):
                 attrs.pop("budget_contractuel_initial")
 
-        if "client" in attrs and "maitre_ouvrage" in attrs:
+        client_id = attrs.pop("client_id", serializers.empty)
+        if client_id is not serializers.empty:
+            if client_id is None:
+                attrs["client"] = None
+            else:
+                tiers_client = Tiers.objects.filter(pk=client_id).first()
+                if tiers_client is None:
+                    raise serializers.ValidationError(
+                        {"client_id": _("Le client / maître d'ouvrage sélectionné est introuvable.")}
+                    )
+                attrs["client"] = tiers_client
+                attrs["maitre_ouvrage"] = tiers_client.raison_sociale
+        elif "client" in attrs and "maitre_ouvrage" in attrs:
             raise serializers.ValidationError(
                 {
                     "maitre_ouvrage": _(
@@ -420,6 +454,24 @@ class ProjetCreationSerializer(serializers.Serializer):
                     )
                 }
             )
+        elif "maitre_ouvrage" in attrs and "client" not in attrs:
+            nom_moa = (attrs.get("maitre_ouvrage") or "").strip()
+            if nom_moa:
+                from apps.core.enums import RoleTiersChoix
+
+                candidats = list(
+                    Tiers.objects.filter(raison_sociale__iexact=nom_moa).prefetch_related("roles")
+                )
+                tiers_trouve = next(
+                    (
+                        t
+                        for t in candidats
+                        if any(r.role == RoleTiersChoix.CLIENT_MOA for r in t.roles.all())
+                    ),
+                    candidats[0] if candidats else None,
+                )
+                if tiers_trouve is not None:
+                    attrs["client"] = tiers_trouve
         if self.instance is None and not attrs.get("maitre_ouvrage") and not attrs.get("client"):
             raise serializers.ValidationError({"maitre_ouvrage": _("Ce champ est obligatoire.")})
         if self.instance is not None:
@@ -792,10 +844,11 @@ class ProjetCreationSerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         # Sérialise les changements de responsables concurrents sur ce projet.
         instance = Projet.objects.select_for_update().get(pk=instance.pk)
-        if "maitre_ouvrage" in validated_data:
+        if "client" in validated_data and validated_data["client"] is not None:
+            if not validated_data.get("maitre_ouvrage"):
+                validated_data["maitre_ouvrage"] = validated_data["client"].raison_sociale
+        elif "maitre_ouvrage" in validated_data and "client" not in validated_data:
             instance.client = None
-        elif "client" in validated_data:
-            instance.maitre_ouvrage = ""
         user = getattr(self.context.get("request"), "user", None)
         for champ, role in (
             ("chef_projet_id", RoleProjet.CHEF_PROJET),

@@ -17,20 +17,30 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.droits import APermission
+from apps.core.droits import APermission, peut_voir_montants
 from apps.core.permissions import (
     GardePermissionProjet,
     filtrer_queryset_par_affectations,
 )
+from apps.core.purger_montants import purger_montants_recursif
 from apps.projets.models import Element, Projet, ProjetContrat
 from apps.projets.selectors.arbre import precharger_arbres
+from apps.projets.selectors.configuration import (
+    configuration_dynamique_projet,
+    dates_reelles_projets_batch,
+    tiers_par_nom_batch,
+)
 from apps.projets.selectors.encadrement import prefetch_encadrement
 from apps.projets.serializers.swagger import (
+    ContratProjetSerializer,
     ProjetCreationResponseSerializer,
     ProjetPatchSerializer,
     ProjetPostSerializer,
 )
-from apps.projets.services.affectations import verifier_peut_gerer_chef_projet
+from apps.projets.services.affectations import (
+    role_par_defaut,
+    verifier_peut_gerer_chef_projet,
+)
 from apps.projets.services.indicateurs_temporels import calendrier_pour_projets
 from apps.projets.views.alertes_retard import AlerteRetardListView, AlerteRetardResoudreView
 from apps.projets.views.arret_chantier import (
@@ -74,11 +84,14 @@ __all__ = [
     "MeteoProjetView",
     "MotifReportListCreateView",
     "ProjetArretChantierListCreateView",
+    "ProjetConfigurationView",
+    "ProjetContratsView",
+    "ProjetCourbeView",
     "ProjetDetailView",
     "ProjetHistoriqueDatesView",
     "ProjetJournalReportsConsolideView",
     "ProjetListCreateView",
-    "ProjetCourbeView",
+    "ProjetOrdreServiceView",
     "ProjetPlanningView",
     "ProjetReprogrammerView",
     "ProjetSanteApercuView",
@@ -89,6 +102,19 @@ __all__ = [
     "TableauDeBordView",
 ]
 
+
+
+def _queryset_projet_enrichi():
+    """Charge un ou plusieurs projets avec encadrement, client et historique des contrats."""
+    return Projet.objects.select_related(
+        "client",
+        "chef_projet",
+        "chef_projet__role",
+        "conducteur_travaux",
+        "conducteur_travaux__role",
+        "cree_par",
+        "cree_par__role",
+    ).prefetch_related("contrats__cree_par", "niveaux", prefetch_encadrement())
 
 
 class ResultList(list):
@@ -140,11 +166,8 @@ class ProjetListCreateView(APIView):
         },
     )
     def get(self, request):
-        qs = (
-            Projet.objects.all()
-            .select_related("client", "chef_projet", "conducteur_travaux", "cree_par")
-            .prefetch_related("contrats", "niveaux", prefetch_encadrement())
-            .annotate(a_un_decoupage=Exists(Element.objects.filter(projet=OuterRef("pk"))))
+        qs = _queryset_projet_enrichi().annotate(
+            a_un_decoupage=Exists(Element.objects.filter(projet=OuterRef("pk")))
         )
         qs = filtrer_queryset_par_affectations(qs, request.user, champ_projet="id", request=request)
         projets = list(qs)
@@ -152,6 +175,9 @@ class ProjetListCreateView(APIView):
         context = {
             "request": request,
             "calendrier": calendrier_pour_projets(projets),
+            "premiers_rapports": dates_reelles_projets_batch(projets),
+            "tiers_par_nom": tiers_par_nom_batch(projets),
+            "detail": False,
         }
         serializer = ProjetCreationResponseSerializer(projets, many=True, context=context)
         return Response(ResultList(serializer.data), status=status.HTTP_200_OK)
@@ -160,18 +186,13 @@ class ProjetListCreateView(APIView):
         summary="Creer un projet depuis le formulaire Nouveau projet",
         tags=["projets"],
         description=(
-            "Nom, type, ville et maitre_ouvrage sont obligatoires. "
-            "Maitre_oeuvre, dates, budget et description sont facultatifs. "
+            "Nom, categorie d'ouvrage (type_projet), ville et maitre_ouvrage (ou client_id) "
+            "sont obligatoires. Maitre_oeuvre, dates, budget et description sont facultatifs. "
             "Reference et duree sont calculees automatiquement. "
             "Statut facultatif, EN_ATTENTE par defaut. "
-            "La reponse expose avancement_reel (pourcentage restant, 100 au depart) "
-            "et indice_sante (null sans depenses reelles disponibles). "
             "Budget en centimes FCFA. Fin strictement apres debut. "
-            "Les champs hors formulaire sont refuses ; lots et equipe "
-            "s'ajoutent ensuite depuis le projet."
-            " Contrat facultatif : envoyer les fichiers dans multipart/form-data, "
-            "en repetant la cle contrat. Formats PDF/JPG/JPEG/PNG ; JEPG accepte. "
-            "Maximum 10 fichiers, 10 Mo chacun et 50 Mo au total."
+            "Contrat du marche unique facultatif : envoyer 1 fichier dans multipart/form-data "
+            "sous la cle contrat (PDF/JPG/JPEG/PNG, max 10 Mo)."
         ),
         request=ProjetPostSerializer,
         responses={201: ProjetCreationResponseSerializer},
@@ -207,15 +228,24 @@ class ProjetListCreateView(APIView):
         if user and user.is_authenticated and obtenir_portee_role(user) == "PROJET":
             from apps.projets.models import AffectationProjet
 
-            AffectationProjet.objects.create(
+            AffectationProjet.objects.get_or_create(
                 projet=projet,
                 utilisateur=user,
-                est_actif=True,
-                role_projet="",
-                cree_par=user,
+                defaults={
+                    "est_actif": True,
+                    "role_projet": role_par_defaut(user),
+                    "cree_par": user,
+                },
             )
 
-        retour = ProjetCreationResponseSerializer(projet, context={"request": request})
+        projet = _queryset_projet_enrichi().get(pk=projet.pk)
+        precharger_arbres([projet])
+        context = {
+            "request": request,
+            "calendrier": calendrier_pour_projets([projet]),
+            "detail": True,
+        }
+        retour = ProjetCreationResponseSerializer(projet, context=context)
         return Response(
             retour.data,
             status=status.HTTP_201_CREATED,
@@ -274,12 +304,7 @@ class ProjetDetailView(APIView):
         },
     )
     def get(self, request, pk):
-        projet = get_object_or_404(
-            Projet.objects.select_related(
-                "client", "chef_projet", "conducteur_travaux", "cree_par"
-            ).prefetch_related("contrats", "niveaux", prefetch_encadrement()),
-            pk=pk,
-        )
+        projet = get_object_or_404(_queryset_projet_enrichi(), pk=pk)
         self.check_object_permissions(request, projet)
         if "ordre_service" in request.query_params:
             if not projet.ordre_service:
@@ -311,9 +336,13 @@ class ProjetDetailView(APIView):
             )
             response["Cache-Control"] = "private, no-store"
             return response
-        # L'arbre sert à quatre champs de la réponse : chargé une fois.
+        # L'arbre sert à plusieurs champs de la réponse : chargé une fois.
         precharger_arbres([projet])
-        context = {"request": request, "calendrier": calendrier_pour_projets([projet])}
+        context = {
+            "request": request,
+            "calendrier": calendrier_pour_projets([projet]),
+            "detail": True,
+        }
         return Response(
             ProjetCreationResponseSerializer(projet, context=context).data,
             status=status.HTTP_200_OK,
@@ -383,16 +412,23 @@ class ProjetDetailView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         projet = serializer.save()
-        return Response(ProjetCreationResponseSerializer(projet, context={"request": request}).data)
+        projet = _queryset_projet_enrichi().get(pk=projet.pk)
+        precharger_arbres([projet])
+        context = {
+            "request": request,
+            "calendrier": calendrier_pour_projets([projet]),
+            "detail": True,
+        }
+        return Response(ProjetCreationResponseSerializer(projet, context=context).data)
 
     @extend_schema(
         summary="Modifier partiellement un projet ou son statut",
         description=(
             "PATCH avec uniquement statut : tout utilisateur authentifie ayant acces "
             "au projet peut changer son etat. EN_COURS reactive le projet. "
-            "Les etats n'interdisent pas les operations. Les autres modifications "
-            "exigent toujours le droit d'ecriture du module projets. "
-            "Contrat : en multipart, les nouveaux fichiers s'ajoutent aux contrats existants."
+            "Les autres modifications exigent le droit d'ecriture du module projets. "
+            "Contrat : en multipart, televerser un nouveau contrat remplace le contrat actif "
+            "et archive la version precedente dans historique_contrats."
         ),
         tags=["projets"],
         request=ProjetPatchSerializer,
@@ -426,10 +462,10 @@ class ProjetDetailView(APIView):
     @extend_schema(
         summary="Remplacer les informations du formulaire",
         description=(
-            "Les quatre champs obligatoires sont requis. "
-            "Les facultatifs omis sont reinitialises."
-            " Le statut omis conserve l'état existant."
-            " Contrat : les nouveaux fichiers s'ajoutent ; les contrats existants sont conserves."
+            "Les champs obligatoires sont requis. "
+            "Les facultatifs omis sont reinitialises. "
+            "Le statut omis conserve l'état existant. "
+            "Contrat : televerser un nouveau contrat remplace l'actif et archive le precedent."
         ),
         tags=["projets"],
         request=ProjetPatchSerializer,
@@ -485,3 +521,64 @@ class ProjetOrdreServiceView(APIView):
         )
         response["Cache-Control"] = "private, no-store"
         return response
+
+
+class ProjetContratsView(APIView):
+    """`GET /api/v1/projets/{id}/contrats/` — contrat actif et historique des versions."""
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @extend_schema(
+        tags=["projets"],
+        summary="Consulter le contrat actif et l'historique des versions d'un projet",
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    def get(self, request, pk):
+        projet = get_object_or_404(
+            Projet.objects.prefetch_related("contrats__cree_par"),
+            pk=pk,
+        )
+        self.check_object_permissions(request, projet)
+        contrats = sorted(
+            [c for c in projet.contrats.all() if c.supprime_le is None],
+            key=lambda c: (-c.version, -(c.cree_le.timestamp() if c.cree_le else 0)),
+        )
+        actif = next((c for c in contrats if c.est_actif), None) or (
+            contrats[0] if contrats else None
+        )
+        ctx = {"request": request}
+        return Response(
+            {
+                "contrat_actif": (
+                    ContratProjetSerializer(actif, context=ctx).data if actif else None
+                ),
+                "historique_contrats": ContratProjetSerializer(
+                    contrats, many=True, context=ctx
+                ).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ProjetConfigurationView(APIView):
+    """`GET /api/v1/projets/{id}/configuration/` — données dynamiques de configuration/fiche."""
+
+    permission_classes = [IsAuthenticated, GardePermissionProjet.pour("projets.lire")]
+
+    @extend_schema(
+        tags=["projets"],
+        summary="Données dynamiques de configuration et de fiche projet",
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    def get(self, request, pk):
+        projet = get_object_or_404(Projet.objects.select_related("client"), pk=pk)
+        self.check_object_permissions(request, projet)
+        precharger_arbres([projet])
+        montants_visibles = peut_voir_montants(request.user, request)
+        donnees = configuration_dynamique_projet(
+            projet,
+            montants_visibles=montants_visibles,
+        )
+        if not montants_visibles:
+            donnees = purger_montants_recursif(donnees)
+        return Response(donnees, status=status.HTTP_200_OK)

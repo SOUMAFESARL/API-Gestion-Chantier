@@ -102,6 +102,12 @@ class Arbre:
     def titulaire_id(self, element):
         return self._herite(element, "titulaire_id")
 
+    def titulaire(self, element):
+        for case in [element, *reversed(self.ancetres(element))]:
+            if case.titulaire_id:
+                return case.titulaire
+        return None
+
     # --- État -----------------------------------------------------------------------------
     def commence(self, element) -> bool:
         """Au moins une feuille en dessous porte une mesure (§1)."""
@@ -169,8 +175,10 @@ def precharger_arbres(projets) -> None:
     elements: dict = defaultdict(list)
     niveaux: dict = defaultdict(list)
     ids = [p.pk for p in projets]
-    for element in Element.objects.filter(projet_id__in=ids).order_by(
-        "profondeur", "ordre", "cree_le"
+    for element in (
+        Element.objects.filter(projet_id__in=ids)
+        .select_related("titulaire")
+        .order_by("profondeur", "ordre", "cree_le")
     ):
         elements[element.projet_id].append(element)
     for niveau in NiveauProjet.objects.filter(projet_id__in=ids).order_by("ordre"):
@@ -192,7 +200,7 @@ def charger_arbre(projet, *, actifs_seulement: bool = False) -> Arbre:
             niveaux=list(niveaux),
             actifs_seulement=actifs_seulement,
         )
-    qs = Element.objects.filter(projet=projet)
+    qs = Element.objects.filter(projet=projet).select_related("titulaire")
     if actifs_seulement:
         qs = qs.filter(est_actif=True)
     niveaux = list(NiveauProjet.objects.filter(projet=projet).order_by("ordre"))

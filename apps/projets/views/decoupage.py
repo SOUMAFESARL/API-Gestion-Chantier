@@ -56,14 +56,12 @@ from apps.projets.services.tableau_demarrage import (
 __all__ = [
     "ElementCloturerView",
     "ElementDeplacerView",
-    "ElementDesactiverView",
     "ElementDetailView",
     "ElementDetaillerView",
     "ElementDupliquerView",
     "ElementHistoriqueView",
     "ElementMesureView",
     "ElementPlanifierView",
-    "ElementReactiverView",
     "ElementRouvrirView",
     "ElementSuspendreView",
     "ListeDetailView",
@@ -923,7 +921,10 @@ class ElementDetailView(APIView):
         )
         return Response(_case(request, element))
 
-    @schema(summary="Supprimer une case sans mesure (et sa branche)", responses={204: None})
+    @schema(
+        summary="Supprimer une case et ses descendants en cascade (bloqué si déjà utilisée)",
+        responses={204: None},
+    )
     def delete(self, request, pk):
         element = _element(request, pk, ecriture=True)
         exiger(request.user, "projets.decouper", element.projet, element, request=request)
@@ -1114,33 +1115,6 @@ class ElementDetaillerView(APIView):
             {"case": _case(request, element), "enfants": [str(e.pk) for e in enfants]},
             status=status.HTTP_201_CREATED,
         )
-
-
-class ElementDesactiverView(APIView):
-    """`POST /api/v1/elements/{id}/desactiver/` — sort des calculs, garde son historique."""
-
-    permission_classes = [IsAuthenticated]
-
-    @schema(summary="Désactiver une case", request=MotifSerializer)
-    def post(self, request, pk):
-        element = _element(request, pk, ecriture=True)
-        exiger(request.user, "projets.decouper", element.projet, element, request=request)
-        donnees = MotifSerializer(data=request.data)
-        donnees.is_valid(raise_exception=True)
-        element = gestes.desactiver_element(
-            element, auteur=request.user, motif=donnees.validated_data["motif"]
-        )
-        return Response(_case(request, element))
-
-
-class ElementReactiverView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @schema(summary="Réactiver une case", request=None)
-    def post(self, request, pk):
-        element = _element(request, pk, ecriture=True)
-        exiger(request.user, "projets.decouper", element.projet, element, request=request)
-        return Response(_case(request, gestes.reactiver_element(element, auteur=request.user)))
 
 
 class ElementSuspendreView(APIView):

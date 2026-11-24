@@ -95,10 +95,27 @@ def attendus_restants(journal, etape=None) -> list[str]:
     return [u for u in attendus_effectifs(journal, etape) if u not in deja]
 
 
+def _synchroniser_debut_reel_projet(rapport) -> None:
+    """Met à jour `date_debut_reelle` du projet dès qu'un rapport est validé ou approuvé."""
+    if not rapport or not rapport.projet_id or not rapport.date_rapport:
+        return
+    from apps.projets.models import Projet
+
+    projet = Projet.objects.filter(pk=rapport.projet_id).only("id", "date_debut_reelle").first()
+    if projet is None:
+        return
+    if projet.date_debut_reelle is None or rapport.date_rapport < projet.date_debut_reelle:
+        Projet.objects.filter(pk=projet.pk).update(
+            date_debut_reelle=rapport.date_rapport,
+            modifie_le=timezone.now(),
+        )
+
+
 def _clore_validation(journal, dernier=None, commentaire="") -> None:
     journal.valide_ct_par = dernier
     journal.valide_ct_le = timezone.now()
     journal.commentaire_ct = commentaire
+    _synchroniser_debut_reel_projet(journal.rapport)
 
 
 def _clore_approbation(journal, dernier, commentaire="") -> None:
@@ -108,6 +125,7 @@ def _clore_approbation(journal, dernier, commentaire="") -> None:
     rapport.valide_le = timezone.now()
     rapport.commentaire_validation = commentaire
     rapport.save()
+    _synchroniser_debut_reel_projet(rapport)
 
 
 def reevaluer(journal, *, dernier=None, commentaire="") -> bool:

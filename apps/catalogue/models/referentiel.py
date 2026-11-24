@@ -26,7 +26,7 @@ __all__ = [
 
 
 class CategorieReferentiel(models.TextChoices):
-    TYPE_PROJET = "TYPE_PROJET", _("Type de projet")
+    TYPE_PROJET = "TYPE_PROJET", _("Catégorie d'ouvrage")
     LOT = "LOT", _("Nom de lot")  # plus exposée : voir la liste « Lots » du découpage
     MODE_EXECUTION = "MODE_EXECUTION", _("Mode d'exécution")
 

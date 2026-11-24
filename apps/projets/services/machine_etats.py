@@ -220,25 +220,32 @@ def evaluer_statuts_arbre(projet: Projet, date_reference: date | None = None) ->
     return len(a_jour)
 
 
-def _dates_reelles(projet: Projet, feuilles, ancien_statut, date_ref: date) -> list[str]:
-    """Les dates réelles du projet suivent ses tâches ; rend les champs modifiés.
+def _dates_reelles(projet: Projet, arbre, ancien_statut, date_ref: date) -> list[str]:
+    """Les dates réelles du projet suivent ses rapports validés/approuvés et ses tâches.
 
-    - début réel : le plus tôt de ceux des tâches, posé une fois, au premier démarrage ;
-    - fin réelle : la plus tard de celles des tâches quand le projet devient « Terminé », et
-      **effacée** s'il se rouvre — comme celle d'une tâche rouverte (§13quinquies.3).
+    - `date_debut_reelle` : plus ancienne date entre le premier `RapportJournalier`
+      validé/approuvé et le plus ancien début réel d'un élément actif ;
+    - `date_fin_reelle` : date de clôture de la dernière tâche clôturée lorsque le projet
+      atteint 100 % (toutes feuilles actives clôturées / `TERMINE`), et effacée s'il se rouvre.
     """
+    from apps.projets.selectors.configuration import calculer_dates_reelles_projet
+
+    debut_calcule, fin_calculee = calculer_dates_reelles_projet(projet, arbre)
+    if projet.statut == StatutProjet.TERMINE and fin_calculee is None:
+        fin_calculee = date_ref
+
     champs = []
-    if projet.date_debut_reelle is None:
-        debuts = [f.date_debut_reelle for f in feuilles if f.date_debut_reelle]
-        if debuts:
-            projet.date_debut_reelle = min(debuts)
-            champs.append("date_debut_reelle")
+    if debut_calcule is not None and (
+        projet.date_debut_reelle is None or debut_calcule < projet.date_debut_reelle
+    ):
+        projet.date_debut_reelle = debut_calcule
+        champs.append("date_debut_reelle")
+
     if projet.statut == StatutProjet.TERMINE:
-        if projet.date_fin_reelle is None:
-            fins = [f.date_fin_reelle for f in feuilles if f.date_fin_reelle]
-            projet.date_fin_reelle = max(fins) if fins else date_ref
+        if projet.date_fin_reelle != fin_calculee:
+            projet.date_fin_reelle = fin_calculee
             champs.append("date_fin_reelle")
-    elif ancien_statut == StatutProjet.TERMINE and projet.date_fin_reelle is not None:
+    elif projet.date_fin_reelle is not None and projet.statut != StatutProjet.RECEPTIONNE:
         projet.date_fin_reelle = None
         champs.append("date_fin_reelle")
     return champs
@@ -344,7 +351,7 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
     if projet.statut != nouveau_statut:
         ancien = ancien_statut
         projet.statut = nouveau_statut
-        champs = ["statut", "modifie_le", *_dates_reelles(projet, feuilles, ancien, date_ref)]
+        champs = ["statut", "modifie_le", *_dates_reelles(projet, arbre, ancien, date_ref)]
         projet.save(update_fields=champs)
         logger.info(
             "Projet %s (%s) : statut mis à jour de %s -> %s",
@@ -361,6 +368,9 @@ def evaluer_statut_projet(projet: Projet, date_reference: date | None = None) ->
             declencheur_id=str(nouveau_statut),
         )
         return True
+    champs_dates = _dates_reelles(projet, arbre, ancien_statut, date_ref)
+    if champs_dates:
+        projet.save(update_fields=[*champs_dates, "modifie_le"])
     return False
 
 

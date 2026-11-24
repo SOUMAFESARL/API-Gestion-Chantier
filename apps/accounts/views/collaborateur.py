@@ -97,8 +97,18 @@ class ParametresCollaborateurListCreateView(APIView):
         # 2. Indexation en mémoire des projets associés pour éviter tout N+1
         projets_par_utilisateur = defaultdict(dict)
         labels_role_projet = {
-            **dict(RoleProjet.choices),
-            **dict(Role.objects.values_list("code", "libelle")),
+            **{k.upper(): v for k, v in dict(RoleProjet.choices).items()},
+            **{
+                (code or "").upper(): libelle
+                for code, libelle in Role.objects.values_list("code", "libelle")
+            },
+        }
+        roles_utilisateurs = {
+            u.id: (
+                ((u.role.code if u.role_id and u.role else u.role_global) or "").upper(),
+                u.role.libelle if u.role_id and u.role else u.get_role_global_display(),
+            )
+            for u in utilisateurs
         }
 
         # Projets où l'utilisateur est chef de projet direct
@@ -113,7 +123,7 @@ class ParametresCollaborateurListCreateView(APIView):
                     "reference": p["reference"],
                     "nom": p["nom"],
                     "role_projet": "CP",
-                    "role_projet_libelle": "Chef de projet",
+                    "role_projet_libelle": labels_role_projet.get("CP", "Chef de Projet"),
                     "statut_projet": p["statut"],
                 }
 
@@ -133,14 +143,20 @@ class ParametresCollaborateurListCreateView(APIView):
         for aff in affectations:
             u_id = aff["utilisateur_id"]
             p_id_str = str(aff["projet_id"])
-            role_code = aff["role_projet"]
+            role_code = (aff["role_projet"] or "").strip().upper()
+            if not role_code or role_code in ("AUTRE", "AUTRE_MEMBRE"):
+                role_code, role_libelle = roles_utilisateurs.get(u_id, ("", ""))
+            else:
+                role_libelle = labels_role_projet.get(
+                    role_code, roles_utilisateurs.get(u_id, (role_code, role_code))[1]
+                )
             # Si déjà présent comme CP, conserver ou enrichir
             projets_par_utilisateur[u_id][p_id_str] = {
                 "id": aff["projet_id"],
                 "reference": aff["projet__reference"],
                 "nom": aff["projet__nom"],
                 "role_projet": role_code,
-                "role_projet_libelle": labels_role_projet.get(role_code, role_code),
+                "role_projet_libelle": role_libelle,
                 "statut_projet": aff["projet__statut"],
             }
 
@@ -393,9 +409,21 @@ def _obtenir_projets_collaborateur(collaborateur):
     """Charge les chantiers associés à un collaborateur (CP ou affectation active)."""
     projets_dict = {}
     labels_role_projet = {
-        **dict(RoleProjet.choices),
-        **dict(Role.objects.values_list("code", "libelle")),
+        **{k.upper(): v for k, v in dict(RoleProjet.choices).items()},
+        **{
+            (code or "").upper(): libelle
+            for code, libelle in Role.objects.values_list("code", "libelle")
+        },
     }
+    code_ent = (
+        (collaborateur.role.code if collaborateur.role_id and collaborateur.role else collaborateur.role_global)
+        or ""
+    ).upper()
+    libelle_ent = (
+        collaborateur.role.libelle
+        if collaborateur.role_id and collaborateur.role
+        else collaborateur.get_role_global_display()
+    )
 
     for p in Projet.objects.filter(chef_projet=collaborateur, supprime_le__isnull=True):
         projets_dict[str(p.id)] = {
@@ -403,7 +431,7 @@ def _obtenir_projets_collaborateur(collaborateur):
             "reference": p.reference,
             "nom": p.nom,
             "role_projet": "CP",
-            "role_projet_libelle": "Chef de projet",
+            "role_projet_libelle": labels_role_projet.get("CP", "Chef de Projet"),
             "statut_projet": p.statut,
         }
 
@@ -412,12 +440,17 @@ def _obtenir_projets_collaborateur(collaborateur):
         est_actif=True,
         projet__supprime_le__isnull=True,
     ).select_related("projet"):
+        role_code = (aff.role_projet or "").strip().upper()
+        if not role_code or role_code in ("AUTRE", "AUTRE_MEMBRE"):
+            role_code, role_libelle = code_ent, libelle_ent
+        else:
+            role_libelle = labels_role_projet.get(role_code, libelle_ent or role_code)
         projets_dict[str(aff.projet_id)] = {
             "id": aff.projet_id,
             "reference": aff.projet.reference,
             "nom": aff.projet.nom,
-            "role_projet": aff.role_projet,
-            "role_projet_libelle": labels_role_projet.get(aff.role_projet, aff.role_projet),
+            "role_projet": role_code,
+            "role_projet_libelle": role_libelle,
             "statut_projet": aff.projet.statut,
         }
 

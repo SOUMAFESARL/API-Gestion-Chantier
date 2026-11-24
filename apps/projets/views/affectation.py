@@ -185,9 +185,9 @@ class ProjetAffectationDetailView(APIView):
         projet = get_object_or_404(Projet, pk=projet_id, supprime_le__isnull=True)
         self.check_object_permissions(request, projet)
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur").prefetch_related(
-                "perimetres"
-            ),
+            AffectationProjet.objects.select_related(
+                "utilisateur", "utilisateur__role"
+            ).prefetch_related("perimetres"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,
@@ -210,9 +210,9 @@ class ProjetAffectationDetailView(APIView):
         verifier_statut_projet_pour_ecriture(projet)
 
         affectation = get_object_or_404(
-            AffectationProjet.objects.select_related("utilisateur").prefetch_related(
-                "perimetres"
-            ),
+            AffectationProjet.objects.select_related(
+                "utilisateur", "utilisateur__role"
+            ).prefetch_related("perimetres"),
             pk=pk,
             projet=projet,
             supprime_le__isnull=True,

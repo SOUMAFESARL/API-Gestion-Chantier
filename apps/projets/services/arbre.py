@@ -22,6 +22,7 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -34,6 +35,7 @@ from apps.projets.selectors.arbre import charger_arbre, objectif_atteint
 __all__ = [
     "LIBELLE_GENERAL",
     "LIBELLE_REALISE_AVANT_DETAIL",
+    "SuppressionElementBloquee",
     "ajouter_element",
     "ajouter_niveau",
     "apercu_deplacement",
@@ -52,6 +54,15 @@ __all__ = [
     "supprimer_element",
     "suspendre_element",
 ]
+
+
+class SuppressionElementBloquee(ErreurConflit):
+    """Refus de suppression d'un élément ou d'un de ses descendants déjà utilisé."""
+
+    code_metier = "suppression_element_bloquee"
+    default_detail = (
+        "Impossible de supprimer cet élément : il ou l'un de ses descendants est déjà utilisé."
+    )
 
 LIBELLE_REALISE_AVANT_DETAIL = "Réalisé avant détail"
 LIBELLE_GENERAL = "Général"
@@ -147,16 +158,35 @@ def _devenir_parent(parent) -> None:
 
 
 def _redevenir_feuille_si_besoin(parent) -> None:
-    """Un parent qui perd son dernier enfant redevient une feuille ; son enveloppe, son montant."""
+    """Un parent qui perd son dernier enfant redevient une feuille :
+    son enveloppe devient son montant, et ses dates calculées (issues des enfants supprimés)
+    sont réinitialisées."""
     if parent is None:
         return
-    if (
-        not parent.enfants.filter(est_actif=True).exists()
-        and parent.enveloppe
-        and not parent.montant
-    ):
+    if parent.enfants.filter(est_actif=True).exists():
+        return
+    champs_maj = []
+    if parent.enveloppe and not parent.montant:
         parent.montant, parent.enveloppe = parent.enveloppe, None
-        parent.save(update_fields=["montant", "enveloppe", "modifie_le"])
+        champs_maj.extend(["montant", "enveloppe"])
+    if parent.dates_calculees:
+        parent.dates_calculees = False
+        parent.date_debut_prevue = None
+        parent.date_fin_prevue = None
+        parent.date_debut_baseline = None
+        parent.date_fin_baseline = None
+        champs_maj.extend(
+            [
+                "dates_calculees",
+                "date_debut_prevue",
+                "date_fin_prevue",
+                "date_debut_baseline",
+                "date_fin_baseline",
+            ]
+        )
+    if champs_maj:
+        champs_maj.append("modifie_le")
+        parent.save(update_fields=champs_maj)
 
 
 def _recalculer(projet) -> None:
@@ -237,6 +267,9 @@ def ajouter_element(
     niveau = _niveau_pour_enfant(arbre, niveaux, parent, niveau)
     _verifier_nom_libre(projet, parent, libelle)
     ordre = champs.pop("ordre", None) or (len(arbre.enfants(parent)) + 1)
+    for champ_texte in ("code", "unite", "mode_execution", "type_bordereau"):
+        if champ_texte in champs and champs[champ_texte] is None:
+            champs[champ_texte] = ""
     parent_etait_feuille = parent is not None and arbre.est_feuille(parent)
     _devenir_parent(parent)
     try:
@@ -1016,55 +1049,179 @@ def inserer_niveau(
 
 
 # --------------------------------------------------------------------------
-# Supprimer, désactiver, suspendre (§10)
+# Supprimer en cascade, suspendre (§10)
 # --------------------------------------------------------------------------
+def _journal_reference_elements(journal, ids_str: set[str]) -> bool:
+    """Vrai si ce journal de chantier référence l'un des éléments de `ids_str`."""
+    from apps.core.enums import StatutRapport
+
+    for pid in journal.perimetre_ids or []:
+        if str(pid) in ids_str:
+            return True
+    saisie = journal.saisie if isinstance(journal.saisie, dict) else {}
+    for section in ("activites", "production"):
+        lignes = saisie.get(section) or []
+        if not isinstance(lignes, list):
+            continue
+        for ligne in lignes:
+            if not isinstance(ligne, dict):
+                continue
+            cible = ligne.get("activite_id") or ligne.get("element_id")
+            if cible and str(cible) in ids_str:
+                return True
+    if journal.rapport.statut != StatutRapport.BROUILLON:
+        photo = journal.photographie if isinstance(journal.photographie, dict) else {}
+        for section, cles in (("activites", ("activite_id", "id")), ("lots", ("id",))):
+            items = photo.get(section) or []
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                for cle in cles:
+                    val = item.get(cle)
+                    if val and str(val) in ids_str:
+                        return True
+    return False
+
+
+def _verifier_suppression_element(element: Element, branche: list[Element]) -> None:
+    """Bloque impérativement la suppression si l'élément ou un descendant est déjà engagé :
+    mesures, rapports journaliers, affectations d'équipes ou opérations de stock."""
+    from apps.chantier.models import JournalChantier
+    from apps.projets.models import AffectationEquipeElement
+    from apps.stock.models import (
+        BonCommande,
+        DemandeApprovisionnement,
+        MouvementStock,
+        SessionInventaire,
+        SeuilStockLot,
+    )
+
+    ids = [c.pk for c in branche]
+    ids_str = {str(pk) for pk in ids}
+    raisons: list[str] = []
+    messages: list[str] = []
+
+    # 1. Mesures ou clôtures enregistrées
+    a_mesures = any(
+        c.cloture
+        or (c.quantite_realisee or 0) > 0
+        or c.pourcentage_declare is not None
+        for c in branche
+    ) or MiseAJourInline.objects.filter(element_id__in=ids).exists()
+    if a_mesures:
+        raisons.append("mesures")
+        messages.append("des mesures ou avancements enregistrés")
+
+    # 2. Rapports journaliers liés (apps/chantier)
+    journaux = (
+        JournalChantier.objects.filter(
+            rapport__projet=element.projet,
+            rapport__supprime_le__isnull=True,
+        )
+        .select_related("rapport")
+        .only("perimetre_ids", "saisie", "photographie", "rapport__statut")
+    )
+    if any(_journal_reference_elements(j, ids_str) for j in journaux):
+        raisons.append("rapports_journaliers")
+        messages.append("des rapports journaliers de chantier")
+
+    # 3. Affectations d'équipes
+    if AffectationEquipeElement.objects.filter(element_id__in=ids).exists():
+        raisons.append("affectations_equipes")
+        messages.append("des affectations d'équipes")
+
+    # 4. Opérations ou seuils de stock (apps/stock)
+    stock_types: list[str] = []
+    if DemandeApprovisionnement.objects.filter(lot_id__in=ids).exists():
+        stock_types.append("demandes d'approvisionnement")
+    if BonCommande.objects.filter(lot_id__in=ids).exists():
+        stock_types.append("bons de commande")
+    if MouvementStock.objects.filter(Q(lot_id__in=ids) | Q(lot_destination_id__in=ids)).exists():
+        stock_types.append("mouvements de stock")
+    if SeuilStockLot.objects.filter(lot_id__in=ids).exists():
+        stock_types.append("seuils de stock")
+    if SessionInventaire.objects.filter(lot_id__in=ids).exists():
+        stock_types.append("sessions d'inventaire")
+    if stock_types:
+        raisons.append("stock")
+        messages.append(f"des éléments de stock ({', '.join(stock_types)})")
+
+    if raisons:
+        detail = (
+            f"Impossible de supprimer « {element.libelle} » : cet élément ou l'un de ses "
+            f"descendants est déjà lié à {', '.join(messages)}."
+        )
+        raise SuppressionElementBloquee(
+            detail,
+            details={
+                "raisons": raisons,
+                "messages": messages,
+                "nb_descendants": len(branche) - 1,
+            },
+        )
+
+
 @transaction.atomic
 def supprimer_element(element: Element, *, auteur=None) -> None:
-    """Une case sans mesure en dessous se supprime avec sa branche ; une case commencée se
-    désactive (motif obligatoire), elle ne se supprime pas."""
+    """Supprime l'élément et tous ses descendants en cascade, puis recalcule le parent et le
+    projet. Refusé (409) si l'élément ou un descendant porte déjà des mesures, rapports
+    journaliers, affectations d'équipes ou données de stock."""
+    from apps.projets.models import AffectationProjet, AlerteRetard, Avenant, PointAvancement
+
     arbre = charger_arbre(element.projet)
     element = arbre.par_id[element.pk]
-    if arbre.commence(element):
-        raise ErreurMetier(
-            "Cette case porte déjà des mesures : désactivez-la plutôt (elle sort des calculs et "
-            "garde son historique).",
-            details={"geste": "DESACTIVER"},
-        )
+    branche = [element, *arbre.descendants(element)]
+    _verifier_suppression_element(element, branche)
+
+    ids = [c.pk for c in branche]
     parent = arbre.par_id.get(element.parent_id)
     _retirer_liens(element, auteur, "LIENS_RETIRES_SUPPRESSION")
-    for case in sorted(
-        [element, *arbre.descendants(element)], key=lambda c: c.profondeur, reverse=True
-    ):
+
+    # Nettoyage des liens non bloquants (périmètres d'affectations, avenants, alertes, relevés).
+    AffectationProjet.perimetres.through.objects.filter(element_id__in=ids).delete()
+    avenants_touches = Avenant.elements.through.objects.filter(element_id__in=ids).exists()
+    if avenants_touches:
+        Avenant.elements.through.objects.filter(element_id__in=ids).delete()
+    PointAvancement.objects.filter(element_id__in=ids).supprimer_logiquement(utilisateur=auteur)
+    AlerteRetard.objects.filter(element_id__in=ids).supprimer_logiquement(utilisateur=auteur)
+
+    for case in sorted(branche, key=lambda c: c.profondeur, reverse=True):
         case.delete(utilisateur=auteur)
+
     _redevenir_feuille_si_besoin(parent)
-    _tracer(element, auteur, "SUPPRESSION", avant={"libelle": element.libelle})
+    if avenants_touches:
+        from apps.projets.services.avenants import recalculer_avenants
+
+        recalculer_avenants(element.projet)
+    _tracer(
+        element,
+        auteur,
+        "SUPPRESSION",
+        avant={"libelle": element.libelle, "descendants_supprimes": len(branche) - 1},
+    )
     _recalculer(element.projet)
+    from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+    declencher_recalcul_sante(
+        projet_id=element.projet_id,
+        declencheur_type="SUPPRESSION_ELEMENT",
+        declencheur_id=element.pk,
+    )
 
 
 @transaction.atomic
 def desactiver_element(element: Element, *, auteur=None, motif: str = "") -> Element:
-    motif = _exiger_motif(motif, "Désactiver une case")
-    element.est_actif = False
-    element.motif = motif
-    element.save(update_fields=["est_actif", "motif", "modifie_le"])
-    # Une case désactivée sort des calculs : les liens de sa branche sont retirés (tracé).
-    _retirer_liens(element, auteur, "LIENS_RETIRES_DESACTIVATION")
-    parent = element.parent
-    _redevenir_feuille_si_besoin(parent)
-    _tracer(element, auteur, "DESACTIVATION", motif=motif)
-    _recalculer(element.projet)
-    return element
+    raise ErreurMetier(
+        "La désactivation d'un élément a été remplacée par sa suppression "
+        "(DELETE /api/v1/elements/{id}/)."
+    )
 
 
 @transaction.atomic
 def reactiver_element(element: Element, *, auteur=None) -> Element:
-    _verifier_nom_libre(element.projet, element.parent, element.libelle, exclure=element)
-    element.est_actif = True
-    element.save(update_fields=["est_actif", "modifie_le"])
-    _devenir_parent(element.parent)
-    _tracer(element, auteur, "REACTIVATION")
-    _recalculer(element.projet)
-    return element
+    raise ErreurMetier("La réactivation d'un élément n'existe plus.")
 
 
 @transaction.atomic

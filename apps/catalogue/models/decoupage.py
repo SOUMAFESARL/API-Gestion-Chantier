@@ -101,8 +101,8 @@ class ModeleDecoupagePlateforme(ModeleBase):
     nom = models.CharField(_("nom"), max_length=150)
     cle_comparaison = models.CharField(max_length=160, db_index=True, blank=True, default="")
     description = models.TextField(_("description"), blank=True, default="")
-    # Codes des types de projet pour lesquels le modèle est conçu (référentiel TYPE_PROJET).
-    types_projet = models.JSONField(_("types de projet"), default=list, blank=True)
+    # Codes des catégories d'ouvrage pour lesquelles le modèle est conçu (référentiel TYPE_PROJET).
+    types_projet = models.JSONField(_("catégories d'ouvrage"), default=list, blank=True)
     # Les types de projet dont ce modèle pré-remplit le tableau de démarrage.
     par_defaut_pour = models.JSONField(_("modèle par défaut pour"), default=list, blank=True)
     # Incrémentée à chaque modification : une copie personnalisée sait dire qu'elle est en retard.

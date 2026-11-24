@@ -996,7 +996,7 @@ def _verifier_defauts_dans_types(types_projet: list[str], par_defaut_pour: list[
         raise ValidationError(
             {
                 "par_defaut_pour": (
-                    "Un modèle ne peut être par défaut que pour des types de projet auxquels "
+                    "Un modèle ne peut être par défaut que pour des catégories d'ouvrage auxquelles "
                     f"il est associé ({', '.join(hors_types)})."
                 )
             }
@@ -1004,7 +1004,7 @@ def _verifier_defauts_dans_types(types_projet: list[str], par_defaut_pour: list[
 
 
 def _exiger_types_connus(codes: list[str]) -> None:
-    """Un modèle plateforme ne cite que des types de projet du référentiel plateforme."""
+    """Un modèle plateforme ne cite que des catégories d'ouvrage du référentiel plateforme."""
     if not codes:
         return
     from apps.catalogue.models import CategorieReferentiel, ReferentielPlateforme
@@ -1017,12 +1017,16 @@ def _exiger_types_connus(codes: list[str]) -> None:
     inconnus = sorted({c for c in codes if c not in connus})
     if inconnus:
         raise ValidationError(
-            {"types_projet": f"Types de projet inconnus de la plateforme : {', '.join(inconnus)}."}
+            {
+                "types_projet": (
+                    f"Catégories d'ouvrage inconnues de la plateforme : {', '.join(inconnus)}."
+                )
+            }
         )
 
 
 def _exiger_types_connus_entreprise(codes: list[str]) -> None:
-    """Un modèle d'entreprise ne cite que des types de projet connus (plateforme ou entreprise)."""
+    """Un modèle d'entreprise ne cite que des catégories d'ouvrage connues (plateforme ou entreprise)."""
     if not codes:
         return
     from apps.catalogue.models import CategorieReferentiel, ReferentielPlateforme
@@ -1042,7 +1046,7 @@ def _exiger_types_connus_entreprise(codes: list[str]) -> None:
     inconnus = sorted({c for c in codes if c not in connus})
     if inconnus:
         raise ValidationError(
-            {"types_projet": f"Types de projet inconnus : {', '.join(inconnus)}."}
+            {"types_projet": f"Catégories d'ouvrage inconnues : {', '.join(inconnus)}."}
         )
 
 

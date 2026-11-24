@@ -180,8 +180,14 @@ class ProjetCourbeView(APIView):
         self.check_object_permissions(request, projet)
         element = None
         if request.query_params.get("element"):
-            element = get_object_or_404(Element, pk=request.query_params["element"], projet=projet)
-            acces = visibilite(charger_arbre(projet), request.user, request)
+            element = get_object_or_404(
+                Element,
+                pk=request.query_params["element"],
+                projet=projet,
+                est_actif=True,
+            )
+            arbre = charger_arbre(projet, actifs_seulement=True)
+            acces = visibilite(arbre, request.user, request)
             if acces.get(element.pk) != COMPLET:
                 raise PermissionDenied("Cette case est en dehors de votre périmètre.")
         return Response(courbe(projet, element))

@@ -113,8 +113,8 @@ def _valider_defauts_dans_types(attrs: dict) -> dict:
             raise serializers.ValidationError(
                 {
                     "par_defaut_pour": (
-                        "Un modèle ne peut être par défaut que pour des types de projet auxquels "
-                        f"il est associé ({', '.join(hors_types)})."
+                        "Un modèle ne peut être par défaut que pour des catégories d'ouvrage "
+                        f"auxquelles il est associé ({', '.join(hors_types)})."
                     )
                 }
             )
@@ -163,7 +163,9 @@ class ElementCreationSerializer(serializers.Serializer):
     libelle = serializers.CharField(max_length=200)
     code = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     mode_mesure = serializers.ChoiceField(choices=ModeMesure.choices, required=False)
-    unite = serializers.ChoiceField(choices=UniteMesure.choices, required=False)
+    unite = serializers.ChoiceField(
+        choices=UniteMesure.choices, required=False, allow_blank=True, allow_null=True
+    )
     quantite_prevue = serializers.DecimalField(
         max_digits=14, decimal_places=3, required=False, allow_null=True, min_value=0
     )
@@ -171,9 +173,9 @@ class ElementCreationSerializer(serializers.Serializer):
     enveloppe = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     date_debut_prevue = serializers.DateField(required=False, allow_null=True)
     date_fin_prevue = serializers.DateField(required=False, allow_null=True)
-    mode_execution = ModeExecutionField(required=False, allow_blank=True)
+    mode_execution = ModeExecutionField(required=False, allow_blank=True, allow_null=True)
     type_bordereau = serializers.ChoiceField(
-        choices=TypeBordereau.choices, required=False, allow_blank=True
+        choices=TypeBordereau.choices, required=False, allow_blank=True, allow_null=True
     )
     titulaire_id = serializers.UUIDField(required=False, allow_null=True)
     motif = serializers.CharField(required=False, allow_blank=True, default="")

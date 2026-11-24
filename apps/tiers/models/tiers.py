@@ -25,7 +25,7 @@ class Tiers(ModeleEntreprise):
     raison_sociale = models.CharField(_("raison sociale"), max_length=200)
     rccm = models.CharField(_("RCCM"), max_length=50, blank=True)
     nif = models.CharField(_("NIF"), max_length=50, blank=True)
-    telephone = models.CharField(_("téléphone"), max_length=20)
+    telephone = models.CharField(_("téléphone"), max_length=30)
     email = models.EmailField(_("email"), blank=True)
     adresse = models.CharField(_("adresse"), max_length=255, blank=True)
     ville = models.CharField(_("ville"), max_length=100, blank=True)
@@ -59,7 +59,11 @@ class RoleTiers(ModeleEntreprise):
         verbose_name = _("rôle de tiers")
         verbose_name_plural = _("rôles de tiers")
         constraints = [
-            models.UniqueConstraint(fields=["tiers", "role"], name="uq_role_tiers"),
+            models.UniqueConstraint(
+                fields=["tiers", "role"],
+                condition=models.Q(supprime_le__isnull=True),
+                name="uq_role_tiers",
+            ),
         ]
 
     def __str__(self) -> str:

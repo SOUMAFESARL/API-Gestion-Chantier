@@ -42,6 +42,9 @@ class IntervenantAffectationSerializer(serializers.Serializer):
     statut = serializers.CharField()
     email = serializers.EmailField(required=False)
     telephone = serializers.CharField(required=False, allow_blank=True)
+    role_code = serializers.CharField(required=False, allow_blank=True)
+    role_libelle = serializers.CharField(required=False, allow_blank=True)
+    fonction_entreprise = serializers.CharField(required=False, allow_blank=True)
 
 
 class PerimetreAffectationSerializer(serializers.Serializer):
@@ -57,9 +60,15 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
     """Représentation détaillée d'une affectation de chantier avec masquage PII (C-05)."""
 
     utilisateur = serializers.SerializerMethodField()
-    role_projet_libelle = serializers.CharField(source="get_role_projet_display", read_only=True)
+    role_projet_libelle = serializers.SerializerMethodField()
     role_plateforme = serializers.SerializerMethodField(
-        help_text="Le rôle du collaborateur sur la plateforme ; celui du projet peut différer."
+        help_text="Le code du rôle du collaborateur sur la plateforme ; celui du projet peut différer."
+    )
+    role_plateforme_libelle = serializers.SerializerMethodField(
+        help_text="Le libellé réel du rôle du collaborateur dans l'entreprise."
+    )
+    fonction_entreprise = serializers.SerializerMethodField(
+        help_text="Alias du libellé réel du rôle du collaborateur dans l'entreprise."
     )
     perimetres = serializers.SerializerMethodField(
         help_text="Les cases de l'arbre où s'exercent ses permissions ; vide : tout le projet."
@@ -80,6 +89,8 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
             "role_projet",
             "role_projet_libelle",
             "role_plateforme",
+            "role_plateforme_libelle",
+            "fonction_entreprise",
             "perimetres",
             "fonction_membre",
             "date_debut",
@@ -90,9 +101,35 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
             "modifie_le",
         ]
 
+    def _libelles_roles(self) -> dict[str, str]:
+        from apps.projets.models.projet import libelles_des_roles
+
+        racine = self.root if self.root is not None else self
+        if not hasattr(racine, "_libelles_roles_cache"):
+            racine._libelles_roles_cache = libelles_des_roles()
+        return racine._libelles_roles_cache
+
+    @extend_schema_field(serializers.CharField())
+    def get_role_projet_libelle(self, obj) -> str:
+        from apps.projets.selectors.encadrement import role_effectif_affectation
+
+        return role_effectif_affectation(obj, self._libelles_roles())[1]
+
     @extend_schema_field(serializers.CharField())
     def get_role_plateforme(self, obj) -> str:
         return code_role_plateforme(obj.utilisateur) if obj.utilisateur_id else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_role_plateforme_libelle(self, obj) -> str:
+        from apps.projets.selectors.encadrement import role_entreprise_utilisateur
+
+        if not obj.utilisateur_id:
+            return ""
+        return role_entreprise_utilisateur(obj.utilisateur, self._libelles_roles())[1]
+
+    @extend_schema_field(serializers.CharField())
+    def get_fonction_entreprise(self, obj) -> str:
+        return self.get_role_plateforme_libelle(obj)
 
     @extend_schema_field(PerimetreAffectationSerializer(many=True))
     def get_perimetres(self, obj):
@@ -142,12 +179,18 @@ class AffectationProjetResponseSerializer(serializers.ModelSerializer):
         u = obj.utilisateur
         if not u:
             return None
+        from apps.projets.selectors.encadrement import role_entreprise_utilisateur
+
+        code_ent, libelle_ent = role_entreprise_utilisateur(u, self._libelles_roles())
         data = {
             "id": u.id,
             "nom": u.nom,
             "prenom": u.prenom or "",
             "nom_complet": f"{u.prenom} {u.nom}".strip() or u.nom,
             "statut": u.statut,
+            "role_code": code_ent,
+            "role_libelle": libelle_ent,
+            "fonction_entreprise": libelle_ent,
         }
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
@@ -241,8 +284,8 @@ class AffectationProjetCreateSerializer(serializers.Serializer):
                 {"fonction_membre": "La fonction de membre ne concerne qu'un invité / consultant."}
             )
 
-        if role_projet == RoleProjet.VISITEUR and not fonction_membre:
-            attrs["fonction_membre"] = "AUTRE"
+        if fonction_membre == "AUTRE":
+            attrs["fonction_membre"] = ""
 
         verifier_role_coherent(user, role_projet)
 
@@ -281,15 +324,8 @@ class AffectationProjetUpdateSerializer(serializers.Serializer):
                 {"fonction_membre": "La fonction de membre ne concerne qu'un invité / consultant."}
             )
 
-        if nouveau_role == RoleProjet.VISITEUR:
-            sans_fonction = "fonction_membre" in attrs and not attrs["fonction_membre"]
-            nouveau_vi = (
-                instance
-                and getattr(instance, "role_projet", None) != RoleProjet.VISITEUR
-                and "fonction_membre" not in attrs
-            )
-            if sans_fonction or nouveau_vi:
-                attrs["fonction_membre"] = "AUTRE"
+        if attrs.get("fonction_membre") == "AUTRE":
+            attrs["fonction_membre"] = ""
 
         date_debut = attrs.get("date_debut")
         date_fin = attrs.get("date_fin")

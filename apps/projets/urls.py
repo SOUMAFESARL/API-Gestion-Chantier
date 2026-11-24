@@ -8,6 +8,8 @@ from apps.projets.views import (
     ArretChantierDetailView,
     MeteoProjetView,
     ProjetArretChantierListCreateView,
+    ProjetConfigurationView,
+    ProjetContratsView,
     ProjetCourbeView,
     ProjetDetailView,
     ProjetListCreateView,
@@ -41,14 +43,12 @@ from apps.projets.views.calendrier import (
 from apps.projets.views.decoupage import (
     ElementCloturerView,
     ElementDeplacerView,
-    ElementDesactiverView,
     ElementDetaillerView,
     ElementDetailView,
     ElementDupliquerView,
     ElementHistoriqueView,
     ElementMesureView,
     ElementPlanifierView,
-    ElementReactiverView,
     ElementRouvrirView,
     ElementSuspendreView,
     ListeDetailView,
@@ -219,6 +219,16 @@ urlpatterns = [
     path("projets/referentiels/villes/", ReferentielVillesView.as_view(), name="projet-villes-ci"),
     path("projets/<uuid:pk>/", ProjetDetailView.as_view(), name="projet-detail"),
     path(
+        "projets/<uuid:pk>/contrats/",
+        ProjetContratsView.as_view(),
+        name="projet-contrats",
+    ),
+    path(
+        "projets/<uuid:pk>/configuration/",
+        ProjetConfigurationView.as_view(),
+        name="projet-configuration",
+    ),
+    path(
         "projets/<uuid:pk>/ordre-service/",
         ProjetOrdreServiceView.as_view(),
         name="projet-ordre-service",
@@ -297,10 +307,6 @@ urlpatterns = [
     path(
         "elements/<uuid:pk>/historique/", ElementHistoriqueView.as_view(), name="element-historique"
     ),
-    path(
-        "elements/<uuid:pk>/desactiver/", ElementDesactiverView.as_view(), name="element-desactiver"
-    ),
-    path("elements/<uuid:pk>/reactiver/", ElementReactiverView.as_view(), name="element-reactiver"),
     path(
         "elements/<uuid:pk>/suspension/", ElementSuspendreView.as_view(), name="element-suspension"
     ),

@@ -37,10 +37,45 @@ def _affectations_vivantes():
             utilisateur__supprime_le__isnull=True,
             utilisateur__statut=StatutUtilisateur.ACTIF,
         )
-        .select_related("utilisateur")
+        .select_related("utilisateur", "utilisateur__role")
         .prefetch_related("perimetres")
         .order_by("cree_le", "id")
     )
+
+
+def role_entreprise_utilisateur(
+    utilisateur, libelles: dict[str, str] | None = None
+) -> tuple[str, str]:
+    """Retourne `(role_code, role_libelle)` réel de la personne dans l'entreprise.
+
+    Ne renvoie JAMAIS un libellé générique « Autre » ou « AUTRE_MEMBRE ».
+    """
+    if utilisateur is None:
+        return "", ""
+    role_obj = getattr(utilisateur, "role", None)
+    if role_obj is not None and getattr(role_obj, "libelle", ""):
+        return (role_obj.code or "").strip().upper(), role_obj.libelle
+    code = (getattr(utilisateur, "role_global", "") or "").strip().upper()
+    if code and code not in ("AUTRE", "AUTRE_MEMBRE"):
+        if libelles and code in libelles:
+            return code, libelles[code]
+        libelle = utilisateur.get_role_global_display()
+        if libelle and libelle.strip().upper() not in ("AUTRE", "AUTRE_MEMBRE"):
+            return code, libelle
+    return code, ""
+
+
+def role_effectif_affectation(
+    affectation, libelles: dict[str, str] | None = None
+) -> tuple[str, str]:
+    """Retourne `(role_code, role_libelle)` réel d'une affectation projet, avec repli sur le
+    vrai rôle dans l'entreprise si `role_projet` est vide ou générique."""
+    code = (getattr(affectation, "role_projet", "") or "").strip().upper()
+    if code and code not in ("AUTRE", "AUTRE_MEMBRE"):
+        libelle = affectation.get_role_projet_display(libelles)
+        if libelle and libelle.strip().upper() not in ("AUTRE", "AUTRE_MEMBRE"):
+            return code, libelle
+    return role_entreprise_utilisateur(getattr(affectation, "utilisateur", None), libelles)
 
 
 def prefetch_encadrement() -> Prefetch:

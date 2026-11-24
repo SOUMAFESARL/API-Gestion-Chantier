@@ -138,7 +138,7 @@ class ModeleDecoupageEntreprise(ModeleEntreprise):
     nom = models.CharField(_("nom"), max_length=150)
     cle_comparaison = models.CharField(max_length=160, db_index=True, blank=True, default="")
     description = models.TextField(_("description"), blank=True, default="")
-    types_projet = models.JSONField(_("types de projet"), default=list, blank=True)
+    types_projet = models.JSONField(_("catégories d'ouvrage"), default=list, blank=True)
     # Pour ces types, ce modèle pré-remplit le tableau à la place du modèle plateforme.
     par_defaut_pour = models.JSONField(_("modèle par défaut pour"), default=list, blank=True)
     # Une copie personnalisée d'un modèle plateforme reste liée à son original par identifiant

@@ -250,7 +250,7 @@ def lister_affectations_projet(projet: Projet, actifs_seulement: bool = False):
     """Renvoie les affectations du projet avec chargement optimisé des relations."""
     qs = (
         AffectationProjet.objects.filter(projet=projet, supprime_le__isnull=True)
-        .select_related("utilisateur")
+        .select_related("utilisateur", "utilisateur__role")
         .prefetch_related("perimetres")
         .order_by("role_projet", "utilisateur__nom", "utilisateur__prenom")
     )

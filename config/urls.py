@@ -13,6 +13,7 @@ from io import StringIO
 
 from django.conf import settings
 from django.core.management import call_command
+from django.db import DatabaseError, connection
 from django.http import JsonResponse
 from django.urls import include, path
 from django.views.decorators.csrf import csrf_exempt
@@ -57,6 +58,89 @@ def _refuser_destructif(request):
     return _refuser_maintenance(request)
 
 
+_TABLES_VERIF_PROPRIETAIRE = (
+    "semaine_type",
+    "projet",
+    "avenant",
+    "historique_date",
+    "liste_valeurs_entreprise",
+    "catalogue_liste_valeurs_plateforme",
+)
+
+
+def _activer_role_proprietaire(out: StringIO) -> bool:
+    """Bascule la session SQL vers le propriétaire des tables si `current_user` en est membre."""
+    try:
+        with connection.cursor() as curseur:
+            curseur.execute(
+                """
+                SELECT current_user,
+                       t.tableowner,
+                       pg_has_role(current_user, t.tableowner, 'MEMBER')
+                FROM pg_tables t
+                WHERE t.schemaname = current_schema()
+                  AND t.tablename = ANY(%s)
+                  AND t.tableowner <> current_user
+                """,
+                [list(_TABLES_VERIF_PROPRIETAIRE)],
+            )
+            lignes = curseur.fetchall()
+            eligibles = sorted({owner for _, owner, membre in lignes if owner and membre})
+            if not eligibles:
+                return False
+            cible = eligibles[0].replace('"', '""')
+            curseur.execute(f'SET ROLE "{cible}"')
+            out.write(f"Rôle PostgreSQL basculé vers « {eligibles[0]} ».\n")
+            return True
+    except DatabaseError:
+        with contextlib.suppress(Exception):
+            connection.rollback()
+        return False
+
+
+def _diagnostic_proprietaires() -> str:
+    """Expose le rôle connecté et les propriétaires SQL en cas d'erreur de migration."""
+    try:
+        with contextlib.suppress(Exception):
+            connection.rollback()
+        with connection.cursor() as curseur:
+            curseur.execute("SELECT current_user, session_user")
+            courant, session = curseur.fetchone()
+            curseur.execute(
+                """
+                SELECT t.tablename,
+                       t.tableowner,
+                       pg_has_role(current_user, t.tableowner, 'MEMBER')
+                FROM pg_tables t
+                WHERE t.schemaname = current_schema()
+                  AND t.tablename = ANY(%s)
+                ORDER BY t.tablename
+                """,
+                [list(_TABLES_VERIF_PROPRIETAIRE)],
+            )
+            tables = curseur.fetchall()
+            curseur.execute(
+                """
+                SELECT r.rolname
+                FROM pg_auth_members m
+                JOIN pg_roles r ON r.oid = m.roleid
+                JOIN pg_roles u ON u.oid = m.member
+                WHERE u.rolname = current_user
+                ORDER BY r.rolname
+                """
+            )
+            membres = [ligne[0] for ligne in curseur.fetchall()]
+        resume_tables = ", ".join(
+            f"{nom}:{owner}(membre={bool(membre)})" for nom, owner, membre in tables
+        )
+        return (
+            f"current_user={courant}; session_user={session}; "
+            f"roles_membres={membres}; tables=[{resume_tables}]"
+        )
+    except Exception as exc:
+        return f"diagnostic_sql_indisponible={exc}"
+
+
 @csrf_exempt
 def migrer_bd_vue(request):
     """Exécute les migrations, contrôle l'isolation et resynchronise le catalogue, sans SSH."""
@@ -69,22 +153,34 @@ def migrer_bd_vue(request):
 
     out = StringIO()
     erreurs = StringIO()
+    role_active = False
     try:
+        role_active = _activer_role_proprietaire(out)
         call_command("migrate", interactive=False, stdout=out, stderr=erreurs)
         call_command("verifier_isolation", stdout=out, stderr=erreurs)
         call_command("synchroniser_catalogue_permissions", stdout=out)
         call_command("propager_roles_systeme", stdout=out)
         return JsonResponse({"statut": "succes", "output": out.getvalue()})
     except Exception as exc:
+        diag_roles = _diagnostic_proprietaires()
+        diagnostic = "\n".join(
+            part for part in (erreurs.getvalue().strip(), diag_roles) if part
+        )
         return JsonResponse(
             {
                 "statut": "erreur",
                 "details": str(exc),
-                "diagnostic": erreurs.getvalue(),
+                "diagnostic": diagnostic,
                 "output": out.getvalue(),
             },
             status=500,
         )
+    finally:
+        if role_active:
+            with contextlib.suppress(Exception):
+                connection.rollback()
+            with contextlib.suppress(Exception), connection.cursor() as curseur:
+                curseur.execute("RESET ROLE")
 
 
 @csrf_exempt

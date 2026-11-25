@@ -17,13 +17,13 @@ from .decoupage import (
     Element,
     LigneModeleEntreprise,
     ListeValeursEntreprise,
-    ModeMesure,
     ModeleDecoupageEntreprise,
+    ModeMesure,
     NiveauModeleEntreprise,
     NiveauProjet,
     ValeurListeEntreprise,
 )
-from .dependance import Dependance
+from .dependance import Dependance, TypeDependance
 from .equipe import (
     AffectationEquipeElement,
     EquipeChantier,
@@ -39,12 +39,11 @@ from .referentiel import ReferentielEntreprise
 from .sante_snapshot import SanteProjetSnapshot
 
 __all__ = [
-    "PointAvancement",
-    "Avenant",
     "AffectationEquipeElement",
     "AffectationProjet",
     "AlerteRetard",
     "ArretChantier",
+    "Avenant",
     "Dependance",
     "Element",
     "EquipeChantier",
@@ -62,12 +61,14 @@ __all__ = [
     "NiveauProjet",
     "ParametresDocuments",
     "PersonneMainOeuvre",
+    "PointAvancement",
     "Projet",
     "ProjetContrat",
     "ReferentielEntreprise",
     "SanteProjetSnapshot",
     "SemaineType",
     "StatutAlerteRetard",
+    "TypeDependance",
     "TypeObjetHistorique",
     "ValeurListeEntreprise",
 ]

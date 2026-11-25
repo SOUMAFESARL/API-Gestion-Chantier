@@ -45,12 +45,14 @@ from apps.projets.views.calendrier import (
 from apps.projets.views.decoupage import (
     ElementCloturerView,
     ElementDeplacerView,
+    ElementDesactiverView,
     ElementDetaillerView,
     ElementDetailView,
     ElementDupliquerView,
     ElementHistoriqueView,
     ElementMesureView,
     ElementPlanifierView,
+    ElementReactiverView,
     ElementRouvrirView,
     ElementSuspendreView,
     ListeDetailView,
@@ -311,6 +313,16 @@ urlpatterns = [
     ),
     path(
         "elements/<uuid:pk>/suspension/", ElementSuspendreView.as_view(), name="element-suspension"
+    ),
+    path(
+        "elements/<uuid:pk>/desactiver/",
+        ElementDesactiverView.as_view(),
+        name="element-desactiver",
+    ),
+    path(
+        "elements/<uuid:pk>/reactiver/",
+        ElementReactiverView.as_view(),
+        name="element-reactiver",
     ),
     path("elements/<uuid:pk>/mesure/", ElementMesureView.as_view(), name="element-mesure"),
     path("elements/<uuid:pk>/cloturer/", ElementCloturerView.as_view(), name="element-cloturer"),

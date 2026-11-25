@@ -6,12 +6,13 @@ Module CDC : 1 (Gestion des Projets).
 
 from datetime import date
 
-from apps.core.contexte import exiger_entreprise
 from django.core.exceptions import ValidationError as ValidationErrorDjango
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
+from apps.core.contexte import exiger_entreprise
 from apps.core.exceptions import ErreurMetier
 from apps.projets.models import (
     Element,
@@ -246,11 +247,11 @@ def planifier_element(
     )
 
     verifier_enfants_contenus(element, date_debut, date_fin)
-    verifier_predecesseurs(element, date_debut)
+    verifier_predecesseurs(element, date_debut, date_fin)
     a_prolonger = prolongations_necessaires(
         element, date_debut, date_fin, charger_arbre(element.projet)
     )
-    a_decaler = decalages_necessaires(element, date_fin)
+    a_decaler = decalages_necessaires(element, date_fin, nouveau_debut=date_debut)
     motif, justif = (None, "")
     if (a_prolonger and prolonger) or (a_decaler and decaler_successeurs is not None):
         motif, justif = _motif_valide(motif_id, justification)
@@ -280,6 +281,7 @@ def planifier_element(
         justification=justif,
         prolonger=prolonger,
         auteur=auteur,
+        nouveau_debut=date_debut,
     )
     recalculer_dates_derivees(element.projet)
     return {"instance": element, "prolongations": prolongations, "decalages": decalages}
@@ -318,7 +320,7 @@ def apercu_reprogrammation(instance, date_debut: date | None, date_fin: date | N
     prolongations, successeurs = [], []
     if isinstance(instance, Element):
         try:
-            verifier_predecesseurs(instance, debut)
+            verifier_predecesseurs(instance, debut, fin)
         except DependanceNonRespectee as erreur:
             refus.append(
                 {
@@ -331,7 +333,7 @@ def apercu_reprogrammation(instance, date_debut: date | None, date_fin: date | N
         prolongations = [
             p.en_dict() for p in prolongations_necessaires(instance, debut, fin, arbre)
         ]
-        for decalage in decalages_necessaires(instance, fin):
+        for decalage in decalages_necessaires(instance, fin, nouveau_debut=debut):
             successeurs.append(
                 {
                     **decalage.en_dict(),
@@ -392,10 +394,12 @@ def reprogrammer_date_instance(
             {"date_fin_prevue": "Les dates de début et de fin prévisionnelles sont requises."}
         )
 
-    if fin_cible <= debut_cible:
+    if fin_cible < debut_cible:
         raise serializers.ValidationError(
             {
-                "date_fin_prevue": "La date de fin prévisionnelle doit être strictement postérieure à la date de début."
+                "date_fin_prevue": _(
+                    "La date de fin prévisionnelle ne peut pas être antérieure à la date de début."
+                )
             }
         )
 
@@ -422,7 +426,7 @@ def reprogrammer_date_instance(
     if type_objet == TypeObjetHistorique.ELEMENT:
         from apps.projets.services.dependances import verifier_predecesseurs
 
-        verifier_predecesseurs(instance, debut_cible)
+        verifier_predecesseurs(instance, debut_cible, fin_cible)
         prolongations = _appliquer_prolongations(
             instance,
             debut_cible,
@@ -493,6 +497,7 @@ def reprogrammer_date_instance(
             justification=justif_propre,
             prolonger=prolonger,
             auteur=auteur,
+            nouveau_debut=debut_cible,
         )
         # Les parents calculés suivent l'enfant qui vient de bouger.
         recalculer_dates_derivees(instance.projet)

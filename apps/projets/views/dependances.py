@@ -1,13 +1,15 @@
-"""Routes des dépendances entre tâches (§13quinquies.5 ; décisions du 30/10/2026).
+"""Routes des dépendances entre tâches (§13quinquies.5 ; amendement 25/11/2026).
 
-Un lien dit « B commence après la fin de A ». Créer ou retirer un lien exige
-`projets.planifier` dans le périmètre **des deux** tâches ; les lire, voir la case en entier.
+Quatre types de lien (`FS`, `SS`, `FF`, `SF`) avec décalage signé en jours ouvrés.
+Créer ou retirer un lien exige `projets.planifier` dans le périmètre **des deux** tâches ;
+les lire exige de voir la case en entier.
 
 Les vues restent sans logique : permission, validation, service, réponse
 (`services.dependances`).
 """
 
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import JSONParser
@@ -30,8 +32,10 @@ def _acces_complet(request, element) -> dict:
     acces = visibilite(charger_arbre(element.projet), request.user, request)
     if acces.get(element.pk) != COMPLET:
         raise PermissionDenied(
-            "Vous ne voyez que l'intitulé de cette case : ses dépendances sont hors de votre "
-            "périmètre."
+            _(
+                "Vous ne voyez que l'intitulé de cette case : ses dépendances sont hors de votre "
+                "périmètre."
+            )
         )
     return acces
 
@@ -40,17 +44,21 @@ def _lien_en_dict(lien) -> dict:
     a, b = lien.predecesseur, lien.successeur
     return {
         "id": str(lien.pk),
+        "type_lien": lien.type_lien,
+        "decalage_jours": lien.decalage_jours,
         "predecesseur": {
             "id": str(a.pk),
             "libelle": a.libelle,
+            "date_debut_prevue": a.date_debut_prevue,
             "date_fin_prevue": a.date_fin_prevue,
         },
         "successeur": {
             "id": str(b.pk),
             "libelle": b.libelle,
             "date_debut_prevue": b.date_debut_prevue,
+            "date_fin_prevue": b.date_fin_prevue,
         },
-        "respectee": service.respectee(a, b),
+        "respectee": service.respectee(lien),
     }
 
 
@@ -67,7 +75,7 @@ class ElementDependancesView(APIView):
         return Response({"element_id": str(element.pk), **service.liens_de_la_case(element, acces)})
 
     @schema(
-        summary="Lier deux tâches (B commence après la fin de A)",
+        summary="Lier deux tâches (FS, SS, FF ou SF avec décalage en jours ouvrés)",
         request=DependanceCreationSerializer,
     )
     def post(self, request, pk):
@@ -84,7 +92,13 @@ class ElementDependancesView(APIView):
             predecesseur, successeur = element, autre
         for case in (predecesseur, successeur):
             exiger(request.user, "projets.planifier", element.projet, case, request=request)
-        lien = service.ajouter_lien(predecesseur, successeur, auteur=request.user)
+        lien = service.ajouter_lien(
+            predecesseur,
+            successeur,
+            type_lien=donnees.validated_data["type_lien"],
+            decalage_jours=donnees.validated_data["decalage_jours"],
+            auteur=request.user,
+        )
         return Response(_lien_en_dict(lien), status=status.HTTP_201_CREATED)
 
 

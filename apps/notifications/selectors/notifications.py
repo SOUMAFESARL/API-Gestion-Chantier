@@ -167,7 +167,7 @@ def obtenir_destinataires_projet_par_permission(
         )
         .filter(Q(date_debut__isnull=True) | Q(date_debut__lte=jour))
         .filter(Q(date_fin__isnull=True) | Q(date_fin__gte=jour))
-        .select_related("utilisateur", "utilisateur__role", "utilisateur__role_personnalise")
+        .select_related("utilisateur", "utilisateur__role")
         .prefetch_related("perimetres")
     )
 

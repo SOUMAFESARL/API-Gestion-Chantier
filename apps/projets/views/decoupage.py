@@ -40,6 +40,7 @@ from apps.projets.serializers.decoupage import (
     NiveauCreationSerializer,
     NiveauModificationSerializer,
     PlanificationSerializer,
+    ReactivationSerializer,
     ReferenceSerializer,
     SuspensionSerializer,
     TableauSerializer,
@@ -56,12 +57,14 @@ from apps.projets.services.tableau_demarrage import (
 __all__ = [
     "ElementCloturerView",
     "ElementDeplacerView",
+    "ElementDesactiverView",
     "ElementDetailView",
     "ElementDetaillerView",
     "ElementDupliquerView",
     "ElementHistoriqueView",
     "ElementMesureView",
     "ElementPlanifierView",
+    "ElementReactiverView",
     "ElementRouvrirView",
     "ElementSuspendreView",
     "ListeDetailView",
@@ -1133,6 +1136,50 @@ class ElementSuspendreView(APIView):
             suspendu=donnees.validated_data["suspendu"],
             auteur=request.user,
             motif=donnees.validated_data["motif"],
+        )
+        return Response(_case(request, element))
+
+
+class ElementDesactiverView(APIView):
+    """`POST /api/v1/elements/{id}/desactiver/` — désactiver une case et ses descendants actifs."""
+
+    permission_classes = [IsAuthenticated]
+
+    @schema(
+        summary="Désactiver une case et sa branche active",
+        request=MotifSerializer,
+    )
+    def post(self, request, pk):
+        element = _element(request, pk, ecriture=True)
+        exiger(request.user, "projets.decouper", element.projet, element, request=request)
+        donnees = MotifSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        element = gestes.desactiver_element(
+            element,
+            auteur=request.user,
+            motif=donnees.validated_data["motif"],
+        )
+        return Response(_case(request, element))
+
+
+class ElementReactiverView(APIView):
+    """`POST /api/v1/elements/{id}/reactiver/` — réactiver une case désactivée."""
+
+    permission_classes = [IsAuthenticated]
+
+    @schema(
+        summary="Réactiver une case désactivée",
+        request=ReactivationSerializer,
+    )
+    def post(self, request, pk):
+        element = _element(request, pk, ecriture=True)
+        exiger(request.user, "projets.decouper", element.projet, element, request=request)
+        donnees = ReactivationSerializer(data=request.data)
+        donnees.is_valid(raise_exception=True)
+        element = gestes.reactiver_element(
+            element,
+            auteur=request.user,
+            inclure_descendants=donnees.validated_data["inclure_descendants"],
         )
         return Response(_case(request, element))
 

@@ -1,7 +1,7 @@
 """Validateurs de fichiers pour le module GED — CCD Digital (F6).
 
 Spécifications validées F6 :
-- Formats autorisés : PDF, JPG, PNG, DOCX, XLSX
+- Formats autorisés : PDF, JPG, PNG, DOC, DOCX, XLS, XLSX
 - Contrôle strict du type MIME réel (magic bytes / inspection structurelle)
 - Taille maximale autorisée : 50 Mo par fichier
 - Empreinte cryptographique : SHA-256
@@ -39,7 +39,9 @@ EXTENSIONS_AUTORISEES: frozenset[str] = frozenset({
     ".jpg",
     ".jpeg",
     ".png",
+    ".doc",
     ".docx",
+    ".xls",
     ".xlsx",
 })
 
@@ -47,14 +49,26 @@ EXTENSIONS_AUTORISEES: frozenset[str] = frozenset({
 MIME_PDF = "application/pdf"
 MIME_JPEG = "image/jpeg"
 MIME_PNG = "image/png"
+MIME_DOC = "application/msword"
 MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+MIME_XLS = "application/vnd.ms-excel"
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+# Signature binaire des conteneurs Microsoft OLE2 (Word .doc / Excel .xls 97-2003)
+_SIGNATURE_OLE2 = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_MARQUEUR_OLE2_WORD = "WordDocument".encode("utf-16le")
+_MARQUEURS_OLE2_EXCEL = (
+    "Workbook".encode("utf-16le"),
+    "Book\x00".encode("utf-16le"),
+)
 
 MIME_TYPES_AUTORISES: frozenset[str] = frozenset({
     MIME_PDF,
     MIME_JPEG,
     MIME_PNG,
+    MIME_DOC,
     MIME_DOCX,
+    MIME_XLS,
     MIME_XLSX,
 })
 
@@ -64,7 +78,9 @@ EXTENSION_MIME_MAPPING: dict[str, set[str]] = {
     ".jpg": {MIME_JPEG},
     ".jpeg": {MIME_JPEG},
     ".png": {MIME_PNG},
+    ".doc": {MIME_DOC},
     ".docx": {MIME_DOCX},
+    ".xls": {MIME_XLS},
     ".xlsx": {MIME_XLSX},
 }
 
@@ -119,7 +135,7 @@ def valider_extension_fichier(nom_fichier: str) -> str:
         raise ValidationError(
             _(
                 "Extension non autorisée. Les formats autorisés sont : "
-                "PDF, JPG, PNG, DOCX, XLSX."
+                "PDF, JPG, PNG, DOC, DOCX, XLS, XLSX."
             ),
             code="extension_non_autorisee",
         )
@@ -177,10 +193,38 @@ def detecter_type_mime(fichier: Any) -> str:
             if hasattr(fichier, "seek"):
                 fichier.seek(0)
 
+    # 5. Formats Microsoft Office 97-2003 (DOC, XLS) basés sur conteneur binaire OLE2
+    if header.startswith(_SIGNATURE_OLE2):
+        try:
+            if hasattr(fichier, "seek"):
+                fichier.seek(0)
+            tampon = b""
+            trouve_word = False
+            trouve_excel = False
+            while True:
+                bloc = fichier.read(65536) if hasattr(fichier, "read") else b""
+                if not bloc:
+                    break
+                fenetre = tampon + bloc
+                if _MARQUEUR_OLE2_WORD in fenetre:
+                    trouve_word = True
+                    break
+                if any(marqueur in fenetre for marqueur in _MARQUEURS_OLE2_EXCEL):
+                    trouve_excel = True
+                    break
+                tampon = fenetre[-64:]
+            if trouve_word:
+                return MIME_DOC
+            if trouve_excel:
+                return MIME_XLS
+        finally:
+            if hasattr(fichier, "seek"):
+                fichier.seek(0)
+
     raise ValidationError(
         _(
             "Contenu de fichier non reconnu ou non autorisé. "
-            "Formats valides acceptés : PDF, JPG, PNG, DOCX, XLSX."
+            "Formats valides acceptés : PDF, JPG, PNG, DOC, DOCX, XLS, XLSX."
         ),
         code="type_mime_invalide",
     )
@@ -219,7 +263,7 @@ def valider_fichier_ged(fichier: Any, nom_fichier: str | None = None) -> dict[st
 
     Vérifie :
     1. Taille du fichier (0 < taille <= 50 Mo)
-    2. Extension du nom de fichier (.pdf, .jpg, .jpeg, .png, .docx, .xlsx)
+    2. Extension du nom de fichier (.pdf, .jpg, .jpeg, .png, .doc, .docx, .xls, .xlsx)
     3. Type MIME réel via magic bytes
     4. Concordance stricte entre l'extension déclarée et le contenu MIME réel
     5. Calcul du hash SHA-256

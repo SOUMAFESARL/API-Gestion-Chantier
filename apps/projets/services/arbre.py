@@ -24,6 +24,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogue.models.referentiel import cle_comparaison
@@ -1213,15 +1214,101 @@ def supprimer_element(element: Element, *, auteur=None) -> None:
 
 @transaction.atomic
 def desactiver_element(element: Element, *, auteur=None, motif: str = "") -> Element:
-    raise ErreurMetier(
-        "La désactivation d'un élément a été remplacée par sa suppression "
-        "(DELETE /api/v1/elements/{id}/)."
+    """Désactive une case et ses descendants actifs, retire leurs dépendances et recalcule."""
+    arbre = charger_arbre(element.projet)
+    element = arbre.par_id[element.pk]
+    if not element.est_actif:
+        raise ErreurMetier(_("Cette case est déjà désactivée."))
+    motif = _exiger_motif(motif, str(_("Désactiver une case")))
+
+    a_desactiver = [c for c in (element, *arbre.descendants(element)) if c.est_actif]
+    _retirer_liens(element, auteur, "LIENS_RETIRES_DESACTIVATION")
+
+    maintenant = timezone.now()
+    ids_descendants = [c.pk for c in a_desactiver if c.pk != element.pk]
+    if ids_descendants:
+        Element.objects.filter(pk__in=ids_descendants).update(
+            est_actif=False, modifie_le=maintenant
+        )
+    element.est_actif = False
+    element.motif = motif
+    element.save(update_fields=["est_actif", "motif", "modifie_le"])
+
+    _tracer(
+        element,
+        auteur,
+        "DESACTIVATION",
+        avant={"est_actif": True},
+        apres={
+            "est_actif": False,
+            "descendants_desactives": len(ids_descendants),
+        },
+        motif=motif,
     )
+    _recalculer(element.projet)
+    from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+    declencher_recalcul_sante(
+        projet_id=element.projet_id,
+        declencheur_type="DESACTIVATION_ELEMENT",
+        declencheur_id=element.pk,
+    )
+    return element
 
 
 @transaction.atomic
-def reactiver_element(element: Element, *, auteur=None) -> Element:
-    raise ErreurMetier("La réactivation d'un élément n'existe plus.")
+def reactiver_element(
+    element: Element,
+    *,
+    auteur=None,
+    inclure_descendants: bool = False,
+) -> Element:
+    """Réactive une case désactivée (et optionnellement ses descendants) si ses ancêtres
+    sont actifs, puis recalcule l'arbre et la santé."""
+    arbre = charger_arbre(element.projet)
+    element = arbre.par_id[element.pk]
+    if element.est_actif:
+        raise ErreurMetier(_("Cette case est déjà active."))
+    ancetre_inactif = next((a for a in arbre.ancetres(element) if not a.est_actif), None)
+    if ancetre_inactif is not None:
+        raise ErreurMetier(
+            _(
+                "Impossible de réactiver « %(libelle)s » tant que son parent "
+                "« %(parent)s » est désactivé : réactivez-le d'abord."
+            )
+            % {"libelle": element.libelle, "parent": ancetre_inactif.libelle}
+        )
+
+    maintenant = timezone.now()
+    ids_descendants: list = []
+    if inclure_descendants:
+        ids_descendants = [d.pk for d in arbre.descendants(element) if not d.est_actif]
+        if ids_descendants:
+            Element.objects.filter(pk__in=ids_descendants).update(
+                est_actif=True, modifie_le=maintenant
+            )
+    element.est_actif = True
+    element.save(update_fields=["est_actif", "modifie_le"])
+
+    _tracer(
+        element,
+        auteur,
+        "REACTIVATION",
+        avant={"est_actif": False},
+        apres={
+            "est_actif": True,
+            "descendants_reactives": len(ids_descendants),
+        },
+    )
+    _recalculer(element.projet)
+    from apps.projets.services.sante_declencheur import declencher_recalcul_sante
+
+    declencher_recalcul_sante(
+        projet_id=element.projet_id,
+        declencheur_type="REACTIVATION_ELEMENT",
+        declencheur_id=element.pk,
+    )
+    return element
 
 
 @transaction.atomic

@@ -22,8 +22,8 @@ from apps.ged.models.exceptions import (
     TailleFichierDepassee,
 )
 
-# Périmètre MVP F6 (§2)
-EXTENSIONS_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png", ".docx", ".xlsx"}
+# Périmètre MVP F6 (§2) + compatibilité pièces jointes F2 (.doc, .xls)
+EXTENSIONS_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".xls", ".xlsx"}
 TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # 50 Mo
 
 

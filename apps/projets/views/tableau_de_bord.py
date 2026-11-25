@@ -6,7 +6,8 @@ Alimentée à 100% par les modèles réels de l'entreprise :
 - Météo en direct & Alertes intempéries (Open-Meteo)
 """
 
-from django.db.models import Sum
+from django.db.models import BigIntegerField, Case, F, Sum, Value, When
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -14,12 +15,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.entreprises.selectors import entreprise_courante
 from apps.chantier.models import RapportJournalier
 from apps.core.droits import APermission, peut_voir_montants
 from apps.core.enums import StatutProjet, StatutRapport
 from apps.core.permissions import filtrer_queryset_par_affectations
 from apps.core.purger_montants import purger_montants_recursif
+from apps.entreprises.selectors import entreprise_courante
 from apps.projets.models import Projet
 from apps.projets.selectors.arbre import charger_arbre, precharger_arbres
 from apps.projets.serializers import TableauDeBordResponseSerializer
@@ -72,8 +73,23 @@ class TableauDeBordView(APIView):
         )
         projets_count = projets_qs.count()
 
-        # Somme des budgets initiaux
-        somme_budgets = projets_qs.aggregate(total=Sum("budget_initial_montant"))["total"] or 0
+        # Somme des budgets de référence (contractuel + avenants si présent, sinon prévisionnel)
+        somme_budgets = (
+            projets_qs.aggregate(
+                total=Sum(
+                    Case(
+                        When(
+                            budget_contractuel_initial__isnull=False,
+                            then=F("budget_contractuel_initial")
+                            + Coalesce(F("montant_avenants"), Value(0)),
+                        ),
+                        default=Coalesce(F("budget_initial_montant"), Value(0)),
+                        output_field=BigIntegerField(),
+                    )
+                )
+            )["total"]
+            or 0
+        )
 
         bons_a_valider_qs = obtenir_bons_a_valider(projets_qs)
         bons_a_valider_count = len(bons_a_valider_qs)

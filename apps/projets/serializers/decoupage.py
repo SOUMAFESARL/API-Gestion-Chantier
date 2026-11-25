@@ -4,11 +4,12 @@ Les réponses sont construites par les services (`listes_modeles`, `tableau_dema
 `selectors.arbre_api`) ; ces sérialiseurs valident ce qui entre et documentent le contrat.
 """
 
+from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.core.enums import TypeBordereau, UniteMesure
-from apps.projets.models import ModeMesure
+from apps.projets.models import ModeMesure, TypeDependance
 from apps.projets.serializers.execution import ModeExecutionField
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "NiveauCreationSerializer",
     "NiveauModificationSerializer",
     "PlanificationSerializer",
+    "ReactivationSerializer",
     "ReferenceSerializer",
     "SuspensionSerializer",
     "TableauSerializer",
@@ -155,6 +157,12 @@ class ModeleModificationPartielleSerializer(serializers.Serializer):
 
 class MotifSerializer(serializers.Serializer):
     motif = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ReactivationSerializer(serializers.Serializer):
+    """Réactivation d'une case désactivée, optionnellement avec ses descendants."""
+
+    inclure_descendants = serializers.BooleanField(required=False, default=False)
 
 
 class ElementCreationSerializer(serializers.Serializer):
@@ -354,16 +362,31 @@ class DqeApplicationSerializer(serializers.Serializer):
 
 
 class DependanceCreationSerializer(serializers.Serializer):
-    """Un lien « B commence après la fin de A » : la case de l'URL est l'une des deux tâches,
-    l'autre est donnée par `predecesseur_id` (elle précède) ou `successeur_id` (elle suit)."""
+    """Un lien (`FS`, `SS`, `FF` ou `SF`) avec décalage signé en jours ouvrés : la case de l'URL
+    est l'une des deux tâches, l'autre est donnée par `predecesseur_id` (elle précède) ou
+    `successeur_id` (elle suit)."""
 
     predecesseur_id = serializers.UUIDField(required=False)
     successeur_id = serializers.UUIDField(required=False)
+    type_lien = serializers.ChoiceField(
+        choices=TypeDependance.choices,
+        required=False,
+        default=TypeDependance.FS,
+    )
+    decalage_jours = serializers.IntegerField(
+        required=False,
+        default=0,
+        min_value=-3650,
+        max_value=3650,
+        help_text=_("Décalage signé en jours ouvrés (positif : attente, négatif : avance)."),
+    )
 
     def validate(self, attrs):
         if bool(attrs.get("predecesseur_id")) == bool(attrs.get("successeur_id")):
             raise serializers.ValidationError(
-                "Indiquez soit la tâche qui précède (`predecesseur_id`), soit celle qui suit "
-                "(`successeur_id`)."
+                _(
+                    "Indiquez soit la tâche qui précède (`predecesseur_id`), soit celle qui suit "
+                    "(`successeur_id`)."
+                )
             )
         return attrs

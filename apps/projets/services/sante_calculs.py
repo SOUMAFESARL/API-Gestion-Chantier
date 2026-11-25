@@ -217,8 +217,16 @@ def calculer_arbre(arbre) -> dict:
     return resultats
 
 
+def _budget_reference_projet(projet):
+    """Budget de référence du projet (contractuel + avenants s'il existe, sinon prévisionnel)."""
+    budget = getattr(projet, "budget_reference", None)
+    if budget is not None:
+        return budget
+    return getattr(projet, "budget_initial_montant", None)
+
+
 def resultat_projet(projet, arbre=None, resultats=None) -> ResultatCase:
-    """La règle de tout parent, appliquée au projet ; son budget tient lieu d'enveloppe."""
+    """Règle de tout parent appliquée au projet ; son budget de référence sert d'enveloppe."""
     from apps.projets.selectors.arbre import charger_arbre
 
     arbre = arbre or charger_arbre(projet)
@@ -226,7 +234,7 @@ def resultat_projet(projet, arbre=None, resultats=None) -> ResultatCase:
     racines = [r for r in arbre.racines() if r.est_actif]
     if not racines:
         return ResultatCase(None, None)
-    return _combiner([resultats[r.pk] for r in racines], projet.budget_initial_montant)
+    return _combiner([resultats[r.pk] for r in racines], _budget_reference_projet(projet))
 
 
 def calculer_avancement_physique_projet(projet) -> tuple[float, str]:
@@ -243,8 +251,16 @@ def couverture_budget_projet(projet) -> dict[str, Any]:
     arbre = charger_arbre(projet)
     feuilles = arbre.feuilles()
     sans_montant = sum(1 for f in feuilles if not f.montant)
-    somme = sum((Decimal(f.montant) for f in feuilles if f.montant), Decimal(0))
-    b_projet = getattr(projet, "budget_initial_montant", None)
+    resultats = calculer_arbre(arbre)
+    somme = sum(
+        (
+            resultats[r.pk].poids
+            for r in arbre.racines()
+            if r.est_actif and resultats.get(r.pk) and resultats[r.pk].poids
+        ),
+        Decimal(0),
+    )
+    b_projet = _budget_reference_projet(projet)
     part = (
         float(round(float(somme) / float(b_projet) * 100.0, 2))
         if b_projet and Decimal(str(b_projet)) > 0

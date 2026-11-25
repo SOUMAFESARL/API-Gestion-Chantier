@@ -15,8 +15,8 @@ Toutes les routes sont sous `/api/v1/`. Format d'erreur unique :
 
 | Règle | Détail |
 |---|---|
-| Un seul type de lien | **B commence après la fin de A** (fin → début), **sans délai** |
-| « Après la fin » | B commence **au plus tôt le lendemain** de la fin prévue de A. Une date de fin compte comme un jour de travail jusqu'au soir |
+| Quatre types de lien + décalage | `FS` (défaut : Fin → Début), `SS` (Début → Début), `FF` (Fin → Fin), `SF` (Début → Fin) + `decalage_jours` signé en jours ouvrés (défaut `0` : positif = attente/séchage, négatif = avance/chevauchement) |
+| « Après la fin » (`FS` sans délai) | B commence **au plus tôt le jour ouvré suivant** la fin prévue de A (sauf si A est un **jalon**, auquel cas B peut commencer le même jour) |
 | Plusieurs prédécesseurs | B commence après la fin du **plus tardif** de ses prédécesseurs |
 | Entre feuilles | Un lien relie deux **tâches du bas** (feuilles) actives d'un même projet, d'une même branche ou de **deux branches** |
 | Pas de boucle | Un lien qui ferait qu'une tâche se suive elle-même est refusé |

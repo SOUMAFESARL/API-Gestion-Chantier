@@ -56,5 +56,5 @@ class FormatFichierNonAutorise(ErreurMetier):
     code_metier = "format_fichier_non_autorise"
     default_detail = _(
         "Le format de fichier n'est pas autorisé. "
-        "Formats autorisés dans le périmètre F6 : PDF, JPG, PNG, DOCX, XLSX."
+        "Formats autorisés dans le périmètre F6 : PDF, JPG, PNG, DOC, DOCX, XLS, XLSX."
     )

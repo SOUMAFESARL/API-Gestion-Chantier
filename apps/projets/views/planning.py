@@ -9,6 +9,8 @@
   Microsoft Project `.xml` dans le découpage et les dépendances du projet.
 """
 
+from decimal import Decimal, InvalidOperation
+
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -20,6 +22,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.droits import peut_voir_montants
 from apps.core.permissions import GardePermissionProjet
 from apps.projets.models import Dependance, Projet
 from apps.projets.selectors.arbre import charger_arbre
@@ -51,6 +54,8 @@ class EtatImportMsProjectSerializer(serializers.Serializer):
     decoupage_existant = serializers.BooleanField()
     remplacement_requis = serializers.BooleanField()
     motif_blocage = serializers.CharField(allow_null=True)
+    peut_voir_montants = serializers.BooleanField(required=False)
+    peut_chiffrer = serializers.BooleanField(required=False)
 
 
 class PlanningCaseSerializer(serializers.Serializer):
@@ -75,14 +80,16 @@ class PlanningCaseSerializer(serializers.Serializer):
 
 
 class PlanningDependanceSerializer(serializers.Serializer):
-    """Une flèche du Gantt : B commence après la fin de A."""
+    """Une flèche du Gantt (`FS`, `SS`, `FF`, `SF`) avec décalage signé en jours ouvrés."""
 
     id = serializers.UUIDField()
     predecesseur_id = serializers.UUIDField()
     successeur_id = serializers.UUIDField()
+    type_lien = serializers.CharField(default="FS")
+    decalage_jours = serializers.IntegerField(default=0)
     respectee = serializers.BooleanField(
         allow_null=True,
-        help_text="Faux : B commence avant la fin de A ; nul : une des deux dates manque.",
+        help_text="Faux : lien non respecté ; nul : une des dates requises manque.",
     )
 
 
@@ -90,6 +97,7 @@ class PlanningSerializer(serializers.Serializer):
     aujourdhui = serializers.DateField()
     projet_debut = serializers.DateField(allow_null=True)
     projet_fin = serializers.DateField(allow_null=True)
+    unite_avancement = serializers.CharField(default="%")
     import_ms_project = EtatImportMsProjectSerializer()
     cases = PlanningCaseSerializer(many=True)
     dependances = PlanningDependanceSerializer(many=True)
@@ -99,6 +107,13 @@ class MsProjectProjetXmlSerializer(serializers.Serializer):
     titre = serializers.CharField(allow_null=True)
     date_debut = serializers.DateField(allow_null=True)
     date_fin = serializers.DateField(allow_null=True)
+    date_debut_baseline = serializers.DateField(allow_null=True)
+    date_fin_baseline = serializers.DateField(allow_null=True)
+    devise_code = serializers.CharField()
+    devise_symbole = serializers.CharField()
+    taux_conversion_suggere = serializers.FloatField(allow_null=True)
+    cout_total_brut = serializers.FloatField(allow_null=True)
+    cout_total_fcfa = serializers.IntegerField(allow_null=True)
 
 
 class MsProjectNiveauSerializer(serializers.Serializer):
@@ -114,10 +129,15 @@ class MsProjectTacheSerializer(serializers.Serializer):
     niveau = serializers.CharField()
     debut = serializers.DateField(allow_null=True)
     fin = serializers.DateField(allow_null=True)
+    debut_baseline = serializers.DateField(allow_null=True)
+    fin_baseline = serializers.DateField(allow_null=True)
     duree_heures = serializers.FloatField(allow_null=True)
     est_jalon = serializers.BooleanField()
     est_feuille = serializers.BooleanField()
+    est_actif = serializers.BooleanField()
     pourcentage_xml = serializers.FloatField(allow_null=True)
+    cout_brut = serializers.FloatField(allow_null=True)
+    cout_fcfa = serializers.IntegerField(allow_null=True)
     enfants = serializers.ListField(child=serializers.DictField())
 
 
@@ -127,6 +147,7 @@ class MsProjectDependanceSerializer(serializers.Serializer):
     successeur_uid = serializers.CharField()
     successeur_libelle = serializers.CharField()
     type = serializers.CharField()
+    decalage_jours = serializers.IntegerField()
     respectee = serializers.BooleanField(allow_null=True)
 
 
@@ -134,6 +155,8 @@ class MsProjectStatistiquesSerializer(serializers.Serializer):
     total_taches = serializers.IntegerField()
     feuilles = serializers.IntegerField()
     jalons = serializers.IntegerField()
+    inactives = serializers.IntegerField()
+    taches_chiffrees = serializers.IntegerField()
     dependances_retenues = serializers.IntegerField()
     dependances_ignorees = serializers.IntegerField()
 
@@ -234,11 +257,20 @@ def _construire_planning(projet: Projet, utilisateur, request) -> dict:
         or projet.date_fin_contractuelle
     )
 
+    voir_montants = peut_voir_montants(utilisateur, request)
+    droit_chiffrer = perimetre_de(utilisateur, projet, request).peut("projets.chiffrer")
+    import_etat = {
+        **etat_import_ms_project(projet),
+        "peut_voir_montants": voir_montants,
+        "peut_chiffrer": droit_chiffrer,
+    }
+
     donnees = {
         "aujourdhui": aujourdhui.isoformat(),
         "projet_debut": _iso(projet_debut),
         "projet_fin": _iso(projet_fin),
-        "import_ms_project": etat_import_ms_project(projet),
+        "unite_avancement": "%",
+        "import_ms_project": import_etat,
         "cases": [case(e) for e in arbre.racines() if e.pk in acces],
         # Les flèches entre tâches que la personne voit toutes deux en entier.
         "dependances": [
@@ -246,12 +278,20 @@ def _construire_planning(projet: Projet, utilisateur, request) -> dict:
                 "id": lien.pk,
                 "predecesseur_id": lien.predecesseur_id,
                 "successeur_id": lien.successeur_id,
+                "type_lien": lien.type_lien,
+                "decalage_jours": lien.decalage_jours,
                 "respectee": respectee(
-                    arbre.par_id[lien.predecesseur_id], arbre.par_id[lien.successeur_id]
+                    arbre.par_id[lien.predecesseur_id],
+                    arbre.par_id[lien.successeur_id],
+                    type_lien=lien.type_lien,
+                    decalage_jours=lien.decalage_jours,
+                    calendrier=calendrier,
                 ),
             }
             for lien in Dependance.objects.filter(projet=projet)
-            if acces.get(lien.predecesseur_id) == COMPLET
+            if lien.predecesseur_id in arbre.par_id
+            and lien.successeur_id in arbre.par_id
+            and acces.get(lien.predecesseur_id) == COMPLET
             and acces.get(lien.successeur_id) == COMPLET
         ],
     }
@@ -278,7 +318,7 @@ def _exiger_permission_ms_project(request, projet: Projet) -> None:
     )
 
 
-def _lire_booleen(valeur) -> bool:
+def _lire_booleen(valeur, *, champ: str = "confirmer_remplacement") -> bool:
     if isinstance(valeur, bool):
         return valeur
     if valeur is None:
@@ -288,9 +328,26 @@ def _lire_booleen(valeur) -> bool:
         return False
     if texte in ("true", "1", "yes", "oui", "on"):
         return True
-    raise ValidationError(
-        {"confirmer_remplacement": _("Valeur booléenne attendue (true ou false).")}
-    )
+    raise ValidationError({champ: _("Valeur booléenne attendue (true ou false).")})
+
+
+def _lire_taux_conversion(valeur) -> Decimal:
+    if valeur is None:
+        return Decimal("1")
+    texte = str(valeur).strip().replace(",", ".")
+    if not texte:
+        return Decimal("1")
+    try:
+        taux = Decimal(texte)
+    except InvalidOperation:
+        raise ValidationError(
+            {"taux_conversion": _("Le taux de conversion doit être un nombre valide.")}
+        ) from None
+    if not taux.is_finite() or taux <= 0:
+        raise ValidationError(
+            {"taux_conversion": _("Le taux de conversion doit être strictement positif.")}
+        )
+    return taux
 
 
 # --------------------------------------------------------------------------
@@ -343,8 +400,9 @@ class ProjetPlanningMsProjectAnalyserView(APIView):
         tags=["projets"],
         description=(
             "Valide et analyse un fichier Microsoft Project `.xml` (20 Mo max, protection "
-            "anti-XXE) afin de prévisualiser les niveaux, tâches, jalons, dépendances FS "
-            "retenues, statistiques et avertissements avant import."
+            "anti-XXE) afin de prévisualiser les niveaux, tâches, jalons, tâches désactivées, "
+            "baselines, coûts éventuels (selon `projets.voir_montants`), dépendances (FS, SS, FF, "
+            "SF avec décalage), statistiques et avertissements avant import."
         ),
         request={
             "multipart/form-data": {
@@ -372,7 +430,14 @@ class ProjetPlanningMsProjectAnalyserView(APIView):
         fichier = request.FILES.get("fichier")
         if fichier is None:
             raise ValidationError({"fichier": _("Joignez un fichier MS Project au format .xml.")})
-        resultat = analyser_ms_project(projet, fichier)
+        voir_montants = peut_voir_montants(request.user, request)
+        droit_chiffrer = perimetre_de(request.user, projet, request).peut("projets.chiffrer")
+        resultat = analyser_ms_project(
+            projet,
+            fichier,
+            peut_voir_montants=voir_montants,
+            peut_chiffrer=droit_chiffrer,
+        )
         return Response(resultat, status=status.HTTP_200_OK)
 
 
@@ -389,11 +454,12 @@ class ProjetPlanningMsProjectImporterView(APIView):
         summary="Importer un planning Microsoft Project (.xml) dans le projet",
         tags=["projets"],
         description=(
-            "Crée les niveaux, tâches, jalons et dépendances Fin→Début depuis un fichier "
-            "Microsoft Project `.xml`. Bloqué (`import_ms_project_bloque`) si l'exécution du "
-            "projet a déjà démarré. Si un découpage non démarré existe déjà, exige "
-            "`confirmer_remplacement=true` (`remplacement_decoupage_requis`) et supprime "
-            "logiquement l'ancien découpage."
+            "Crée les niveaux, tâches, jalons, baselines et dépendances (FS, SS, FF, SF avec "
+            "décalage en jours ouvrés) depuis un fichier Microsoft Project `.xml`. L'import "
+            "optionnel des montants (`importer_montants=true`) exige `projets.chiffrer` sur tout "
+            "le projet. Bloqué (`import_ms_project_bloque`) si l'exécution du projet a déjà "
+            "démarré. Si un découpage non démarré existe déjà, exige `confirmer_remplacement=true` "
+            "(`remplacement_decoupage_requis`) et supprime logiquement l'ancien découpage."
         ),
         request={
             "multipart/form-data": {
@@ -401,6 +467,8 @@ class ProjetPlanningMsProjectImporterView(APIView):
                 "properties": {
                     "fichier": {"type": "string", "format": "binary"},
                     "confirmer_remplacement": {"type": "boolean", "default": False},
+                    "importer_montants": {"type": "boolean", "default": False},
+                    "taux_conversion": {"type": "number", "default": 1},
                 },
                 "required": ["fichier"],
             }
@@ -410,7 +478,10 @@ class ProjetPlanningMsProjectImporterView(APIView):
             400: OpenApiResponse(description="Fichier absent, invalide ou rejeté."),
             401: OpenApiResponse(description="Authentification requise."),
             403: OpenApiResponse(
-                description="Permission projets.decouper ou projets.planifier requise."
+                description=(
+                    "Permission projets.decouper/projets.planifier (ou projets.chiffrer si "
+                    "importer_montants=true) requise."
+                )
             ),
             404: OpenApiResponse(description="Projet absent ou supprimé."),
             409: OpenApiResponse(description="Projet clos (lecture seule)."),
@@ -430,13 +501,31 @@ class ProjetPlanningMsProjectImporterView(APIView):
         fichier = request.FILES.get("fichier")
         if fichier is None:
             raise ValidationError({"fichier": _("Joignez un fichier MS Project au format .xml.")})
-        confirmer = _lire_booleen(request.data.get("confirmer_remplacement"))
+        confirmer = _lire_booleen(
+            request.data.get("confirmer_remplacement"), champ="confirmer_remplacement"
+        )
+        importer_montants = _lire_booleen(
+            request.data.get("importer_montants"), champ="importer_montants"
+        )
+        taux_conversion = _lire_taux_conversion(request.data.get("taux_conversion"))
+
+        if importer_montants and not perimetre_de(request.user, projet, request).peut(
+            "projets.chiffrer"
+        ):
+            raise PermissionDenied(
+                _(
+                    "Importer les montants depuis MS Project exige la permission "
+                    "« projets.chiffrer » sur l'ensemble du projet."
+                )
+            )
 
         resultat = importer_ms_project(
             projet,
             fichier,
             auteur=request.user,
             confirmer_remplacement=confirmer,
+            importer_montants=importer_montants,
+            taux_conversion=taux_conversion,
         )
         projet.refresh_from_db()
         planning = _construire_planning(projet, request.user, request)

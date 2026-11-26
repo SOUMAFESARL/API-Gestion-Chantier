@@ -8,6 +8,7 @@ Table d'entreprise (`ModeleEntreprise` — isolation D9).
 import contextlib
 import hashlib
 import mimetypes
+import re
 from pathlib import Path
 
 from django.conf import settings
@@ -21,6 +22,7 @@ from apps.ged.models.exceptions import (
     SuppressionVersionInterdite,
     TailleFichierDepassee,
 )
+from apps.ged.storage import StockageGed
 
 # Périmètre MVP F6 (§2) + compatibilité pièces jointes F2 (.doc, .xls)
 EXTENSIONS_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".xls", ".xlsx"}
@@ -73,8 +75,18 @@ class VersionDocument(ModeleEntreprise):
     fichier = models.FileField(
         _("fichier"),
         upload_to=chemin_version_document,
+        storage=StockageGed(),
         max_length=500,
-        help_text=_("Fichier physique (formats acceptés : PDF, JPG, PNG, DOCX, XLSX ; max 50 Mo)."),
+        help_text=_(
+            "Fichier physique (formats acceptés : PDF, JPG, PNG, DOC, DOCX, XLS, XLSX ; max 50 Mo)."
+        ),
+    )
+    nom_fichier = models.CharField(
+        _("nom de fichier"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Nom original du fichier déposé (affiché et utilisé en Content-Disposition)."),
     )
     taille = models.PositiveBigIntegerField(
         _("taille"),
@@ -140,6 +152,16 @@ class VersionDocument(ModeleEntreprise):
     def numero(self) -> str:
         """Représentation textuelle de la version (v1, v2...)."""
         return f"v{self.numero_version}"
+
+    @property
+    def nom_fichier_affiche(self) -> str:
+        """Nom lisible du fichier (nom original sinon basename nettoyé du stockage)."""
+        if self.nom_fichier:
+            return self.nom_fichier
+        nom_stocke = Path(getattr(self.fichier, "name", "") or "").name
+        if not nom_stocke:
+            return ""
+        return re.sub(r"^v\d+_", "", nom_stocke) or nom_stocke
 
     @property
     def date(self):
@@ -215,6 +237,12 @@ class VersionDocument(ModeleEntreprise):
 
         # Validation de cohérence de fichier
         self._valider_fichier()
+
+        # Conservation du nom de fichier original avant ajout du préfixe de stockage `v{n}_`
+        if not self.nom_fichier and self.fichier:
+            nom_brut = Path(getattr(self.fichier, "name", "") or "").name
+            if nom_brut:
+                self.nom_fichier = (re.sub(r"^v\d+_", "", nom_brut) or nom_brut)[:255]
 
         # Calcul automatique de la taille si non spécifiée
         if not self.taille and self.fichier and hasattr(self.fichier, "size"):

@@ -45,12 +45,14 @@ from apps.core.contexte import (
     entreprise_courante_id,
 )
 from apps.core.enums import (
+    ActionAudit,
     CategorieDocument,
     StatutRapport,
     TypeEvenementNotification,
     TypeSourceLiaison,
 )
-from apps.ged.models import Document, LiaisonDocument, VersionDocument
+from apps.ged.models import Document, LiaisonDocument, PartageDocument, VersionDocument
+from apps.ged.services.audit import journaliser_evenement_ged
 from apps.ged.services.documents import ajouter_version, creer_document_automatique
 from apps.ged.validators import EXTENSIONS_AUTORISEES, TAILLE_MAX_FICHIER_OCTETS
 from apps.projets.models import Avenant, Element, Projet, ProjetContrat
@@ -67,6 +69,7 @@ __all__ = [
     "archiver_rapport_approuve",
     "archiver_rapport_approuve_par_id",
     "generer_pdf_synthese_rapport",
+    "retirer_documents_avenant",
 ]
 
 _PREFIXE_OS_AVENANT = "Ordre de service — "
@@ -386,6 +389,7 @@ def _archiver_dans_document(
     document_existant: Document | None = None,
     maj_nom_si_different: bool = False,
     cle_regroupement_notif: str | None = None,
+    notifier: bool = True,
 ) -> tuple[Document, VersionDocument, LiaisonDocument, bool]:
     """Crée ou met à jour un document automatique GED de façon atomique et idempotente.
 
@@ -414,6 +418,8 @@ def _archiver_dans_document(
                 fichier=content_file,
                 auteur=createur,
                 commentaire=commentaire,
+                est_appel_systeme=True,
+                notifier=False,
             )
             if maj_nom_si_different and document_existant.nom != nom_final:
                 document_existant.nom = nom_final
@@ -435,27 +441,28 @@ def _archiver_dans_document(
             )
             est_nouvelle_version = False
 
-    if est_nouvelle_version:
-        titre_notif = f"Nouvelle version GED ({doc_resultat.categorie}) : {doc_resultat.nom}"
-        msg_notif = (
-            f"La version v{ver_resultat.numero_version} du document « {doc_resultat.nom} » "
-            f"a été archivée automatiquement sur le chantier {projet.nom}."
-        )
-    else:
-        titre_notif = f"Document archivé en GED ({doc_resultat.categorie}) : {doc_resultat.nom}"
-        msg_notif = (
-            f"Le document « {doc_resultat.nom} » a été archivé automatiquement "
-            f"dans la GED du chantier {projet.nom}."
-        )
+    if notifier:
+        if est_nouvelle_version:
+            titre_notif = f"Nouvelle version GED ({doc_resultat.categorie}) : {doc_resultat.nom}"
+            msg_notif = (
+                f"La version v{ver_resultat.numero_version} du document « {doc_resultat.nom} » "
+                f"a été archivée automatiquement sur le chantier {projet.nom}."
+            )
+        else:
+            titre_notif = f"Document archivé en GED ({doc_resultat.categorie}) : {doc_resultat.nom}"
+            msg_notif = (
+                f"Le document « {doc_resultat.nom} » a été archivé automatiquement "
+                f"dans la GED du chantier {projet.nom}."
+            )
 
-    _notifier_document_archive(
-        projet=projet,
-        document=doc_resultat,
-        auteur=createur,
-        titre=titre_notif,
-        message=msg_notif,
-        regroupement=cle_regroupement_notif,
-    )
+        _notifier_document_archive(
+            projet=projet,
+            document=doc_resultat,
+            auteur=createur,
+            titre=titre_notif,
+            message=msg_notif,
+            regroupement=cle_regroupement_notif,
+        )
     return doc_resultat, ver_resultat, liaison, True
 
 
@@ -466,6 +473,8 @@ def _archiver_dans_document(
 
 def archiver_contrat_projet(
     contrat: ProjetContrat,
+    *,
+    notifier: bool = True,
 ) -> tuple[Document, VersionDocument, LiaisonDocument] | None:
     """Archive automatiquement un `ProjetContrat` en GED (`CONTRATS`, source `F1_CONTRAT`).
 
@@ -559,6 +568,7 @@ def archiver_contrat_projet(
                 document_existant=doc_existant,
                 maj_nom_si_different=bool(contrat.est_actif),
                 cle_regroupement_notif=f"ged_f1_contrat_{projet.pk}",
+                notifier=notifier,
             )
             return doc, ver, liaison
     except Exception:
@@ -591,6 +601,9 @@ def archiver_contrat_projet_par_id(contrat_id: Any, entreprise_id: Any) -> None:
 
 def archiver_ordre_service_projet(
     projet: Projet,
+    *,
+    auteur: Any = None,
+    notifier: bool = True,
 ) -> tuple[Document, VersionDocument, LiaisonDocument] | None:
     """Archive automatiquement `Projet.ordre_service` en GED (`CONTRATS`, source `F1_CONTRAT`).
 
@@ -627,6 +640,9 @@ def archiver_ordre_service_projet(
             )
             doc_existant = liaison_existante.document if liaison_existante else None
 
+            auteur_effectif = (
+                auteur or getattr(projet, "_auteur_ordre_service", None) or projet.cree_par
+            )
             titre_doc = f"Ordre de service de démarrage — {projet.reference}"[:255]
             doc, ver, liaison, _ = _archiver_dans_document(
                 projet=projet,
@@ -636,7 +652,7 @@ def archiver_ordre_service_projet(
                 source_type=TypeSourceLiaison.F1_CONTRAT,
                 source_id=projet.pk,
                 nom_document=titre_doc,
-                createur=projet.cree_par,
+                createur=auteur_effectif,
                 description=(
                     f"Ordre de service de démarrage du chantier {projet.reference} ({projet.nom})."
                 ),
@@ -646,6 +662,7 @@ def archiver_ordre_service_projet(
                 ),
                 document_existant=doc_existant,
                 cle_regroupement_notif=f"ged_f1_os_{projet.pk}",
+                notifier=notifier,
             )
             return doc, ver, liaison
     except Exception:
@@ -656,7 +673,11 @@ def archiver_ordre_service_projet(
         return None
 
 
-def archiver_ordre_service_projet_par_id(projet_id: Any, entreprise_id: Any) -> None:
+def archiver_ordre_service_projet_par_id(
+    projet_id: Any,
+    entreprise_id: Any,
+    auteur_id: Any = None,
+) -> None:
     """Point d'entrée différé (`on_commit`) pour archiver `Projet.ordre_service`."""
     if not projet_id or not entreprise_id:
         return
@@ -668,7 +689,12 @@ def archiver_ordre_service_projet_par_id(projet_id: Any, entreprise_id: Any) -> 
                 .first()
             )
             if projet is not None and projet.ordre_service:
-                archiver_ordre_service_projet(projet)
+                auteur = None
+                if auteur_id:
+                    from apps.accounts.models import Utilisateur
+
+                    auteur = Utilisateur.objects.filter(pk=auteur_id).first()
+                archiver_ordre_service_projet(projet, auteur=auteur)
     except Exception:
         logger.exception(
             "Échec non bloquant dans archiver_ordre_service_projet_par_id (projet=%s)",
@@ -678,6 +704,8 @@ def archiver_ordre_service_projet_par_id(projet_id: Any, entreprise_id: Any) -> 
 
 def archiver_avenant(
     avenant: Avenant,
+    *,
+    notifier: bool = True,
 ) -> list[tuple[Document, VersionDocument, LiaisonDocument]]:
     """Archive le document signé et l'ordre de service d'un `Avenant` en GED (`CONTRATS`).
 
@@ -759,6 +787,7 @@ def archiver_avenant(
                             commentaire=f"Document signé de l'avenant {avenant.numero}",
                             document_existant=doc_avenant_existant,
                             cle_regroupement_notif=cle_notif,
+                            notifier=notifier,
                         )
                         resultats.append((doc, ver, liaison))
                 except Exception:
@@ -797,6 +826,7 @@ def archiver_avenant(
                             ),
                             document_existant=doc_os_existant,
                             cle_regroupement_notif=cle_notif,
+                            notifier=notifier,
                         )
                         resultats.append((doc, ver, liaison))
                 except Exception:
@@ -831,6 +861,63 @@ def archiver_avenant_par_id(avenant_id: Any, entreprise_id: Any) -> None:
             "Échec non bloquant dans archiver_avenant_par_id (avenant=%s)",
             avenant_id,
         )
+
+
+def retirer_documents_avenant(avenant: Avenant, utilisateur: Any = None) -> int:
+    """Retire de la liste active GED les documents automatiques d'un avenant retiré.
+
+    Arbitrage F6 validé : retrait synchronisé (soft-delete via `archiver_retrait_source`),
+    révocation des liens de partage actifs et traçabilité dans `JournalAudit`.
+    """
+    if not avenant:
+        return 0
+    entreprise_id = getattr(avenant, "entreprise_id", None)
+    if not entreprise_id:
+        return 0
+
+    retires = 0
+    try:
+        with _contexte_pour_entreprise(entreprise_id), transaction.atomic():
+            liaisons = list(
+                LiaisonDocument.objects.select_related("document")
+                .filter(
+                    type_source=TypeSourceLiaison.F1_CONTRAT,
+                    objet_id=avenant.pk,
+                    supprime_le__isnull=True,
+                    document__supprime_le__isnull=True,
+                )
+            )
+            maintenant = timezone.now()
+            acteur = (
+                utilisateur
+                if utilisateur is not None and getattr(utilisateur, "is_authenticated", True)
+                else None
+            )
+            for liaison in liaisons:
+                doc = liaison.document
+                doc.archiver_retrait_source(utilisateur=acteur)
+                PartageDocument.objects.filter(document=doc, revoque=False).update(
+                    revoque=True,
+                    revoque_le=maintenant,
+                    revoque_par=acteur,
+                    modifie_le=maintenant,
+                )
+                journaliser_evenement_ged(
+                    action=ActionAudit.SUPPRESSION,
+                    document=doc,
+                    utilisateur=acteur,
+                    details=(
+                        f"Retrait synchronisé suite au retrait de l'avenant n° {avenant.numero}"
+                    ),
+                    extra={"avenant_id": str(avenant.pk), "avenant_numero": avenant.numero},
+                )
+                retires += 1
+    except Exception:
+        logger.exception(
+            "Échec non bloquant du retrait GED synchronisé pour l'avenant %s",
+            getattr(avenant, "pk", None),
+        )
+    return retires
 
 
 # ---------------------------------------------------------------------------
@@ -1067,6 +1154,8 @@ def generer_pdf_synthese_rapport(
 def archiver_rapport_approuve(
     rapport: RapportJournalier,
     fichier_pdf: Any = None,
+    *,
+    notifier: bool = True,
 ) -> dict[str, Any]:
     """Archive en GED un `RapportJournalier` approuvé (F2 -> F6).
 
@@ -1188,6 +1277,7 @@ def archiver_rapport_approuve(
                             ),
                             document_existant=doc_synthese_existant,
                             cle_regroupement_notif=cle_notif,
+                            notifier=notifier,
                         )
                         hashes_rapports.add(sha_pdf)
                         bilan["rapport"] = (doc_r, ver_r, liaison_r)
@@ -1235,6 +1325,7 @@ def archiver_rapport_approuve(
                             ),
                             document_existant=None,
                             cle_regroupement_notif=cle_notif,
+                            notifier=notifier,
                         )
                         hashes_rapports.add(sha_pdf)
                         bilan["rapport"] = (doc_r, ver_r, liaison_r)
@@ -1305,6 +1396,7 @@ def archiver_rapport_approuve(
                         commentaire=legende or f"Photo rapport du {rapport.date_rapport:%d/%m/%Y}",
                         document_existant=None,
                         cle_regroupement_notif=cle_notif,
+                        notifier=notifier,
                     )
                     hashes_photos.add(sha256)
                     bilan["photos"].append((doc_p, ver_p, liaison_p))
@@ -1370,6 +1462,7 @@ def archiver_rapport_approuve(
                         commentaire=f"Pièce jointe rapport du {rapport.date_rapport:%d/%m/%Y}",
                         document_existant=None,
                         cle_regroupement_notif=cle_notif,
+                        notifier=notifier,
                     )
                     hashes_cibles.add(sha256)
                     bilan["pieces_jointes"].append((doc_pj, ver_pj, liaison_pj))

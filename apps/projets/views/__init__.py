@@ -11,7 +11,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import serializers, status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -199,7 +199,7 @@ class ProjetListCreateView(APIView):
             "Statut facultatif, EN_ATTENTE par defaut. "
             "Budget en centimes FCFA. Fin strictement apres debut. "
             "Contrat du marche unique facultatif : envoyer 1 fichier dans multipart/form-data "
-            "sous la cle contrat (PDF/JPG/JPEG/PNG, max 10 Mo)."
+            "sous la cle contrat (PDF/JPG/JPEG/PNG, max 50 Mo)."
         ),
         request=ProjetPostSerializer,
         responses={201: ProjetCreationResponseSerializer},
@@ -314,6 +314,12 @@ class ProjetDetailView(APIView):
         projet = get_object_or_404(_queryset_projet_enrichi(), pk=pk)
         self.check_object_permissions(request, projet)
         if "ordre_service" in request.query_params:
+            from apps.ged.permissions import peut_telecharger_contrat_f1
+
+            if not peut_telecharger_contrat_f1(request.user, request):
+                raise PermissionDenied(
+                    "Vous n'avez pas la permission de consulter les contrats (ged.voir_contrats)."
+                )
             if not projet.ordre_service:
                 raise NotFound("Ce projet n'a pas d'ordre de service de démarrage.")
             try:
@@ -329,6 +335,12 @@ class ProjetDetailView(APIView):
             response["Cache-Control"] = "private, no-store"
             return response
         if "contrat" in request.query_params:
+            from apps.ged.permissions import peut_telecharger_contrat_f1
+
+            if not peut_telecharger_contrat_f1(request.user, request):
+                raise PermissionDenied(
+                    "Vous n'avez pas la permission de consulter les contrats (ged.voir_contrats)."
+                )
             contrat_id = serializers.UUIDField().run_validation(request.query_params["contrat"])
             document = get_object_or_404(ProjetContrat, pk=contrat_id, projet=projet)
             try:
@@ -514,6 +526,12 @@ class ProjetOrdreServiceView(APIView):
     def get(self, request, pk):
         projet = get_object_or_404(Projet, pk=pk)
         self.check_object_permissions(request, projet)
+        from apps.ged.permissions import peut_telecharger_contrat_f1
+
+        if not peut_telecharger_contrat_f1(request.user, request):
+            raise PermissionDenied(
+                "Vous n'avez pas la permission de consulter les contrats (ged.voir_contrats)."
+            )
         if not projet.ordre_service:
             raise NotFound("Ce projet n'a pas d'ordre de service de démarrage.")
         try:
@@ -546,6 +564,12 @@ class ProjetContratsView(APIView):
             pk=pk,
         )
         self.check_object_permissions(request, projet)
+        from apps.ged.permissions import peut_telecharger_contrat_f1
+
+        if not peut_telecharger_contrat_f1(request.user, request):
+            raise PermissionDenied(
+                "Vous n'avez pas la permission de consulter les contrats (ged.voir_contrats)."
+            )
         contrats = sorted(
             [c for c in projet.contrats.all() if c.supprime_le is None],
             key=lambda c: (-c.version, -(c.cree_le.timestamp() if c.cree_le else 0)),

@@ -1,4 +1,26 @@
-"""Views du module « ged ».
+"""Views du module « ged »."""
 
-Gestion documentaire : dossiers, documents, versions, partages, RFI.
-"""
+from apps.ged.views.documents import (
+    DocumentDetailView,
+    DocumentListCreateView,
+    DocumentTelechargerView,
+    DocumentVersionsView,
+    DocumentVersionTelechargerView,
+)
+from apps.ged.views.historique import DocumentHistoriqueView, HistoriqueGlobalGedView
+from apps.ged.views.partages import DocumentPartagesView, PartageDetailView
+from apps.ged.views.public import PartagePublicDetailView, PartagePublicTelechargerView
+
+__all__ = [
+    "DocumentDetailView",
+    "DocumentHistoriqueView",
+    "DocumentListCreateView",
+    "DocumentPartagesView",
+    "DocumentTelechargerView",
+    "DocumentVersionTelechargerView",
+    "DocumentVersionsView",
+    "HistoriqueGlobalGedView",
+    "PartageDetailView",
+    "PartagePublicDetailView",
+    "PartagePublicTelechargerView",
+]

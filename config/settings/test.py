@@ -39,6 +39,7 @@ REST_FRAMEWORK = {
         "inscription_etat": None,
         "invitation_verifier": None,
         "invitation_accepter": None,
+        "partage_public": None,
     },
 }
 

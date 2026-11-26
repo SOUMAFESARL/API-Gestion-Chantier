@@ -6,6 +6,8 @@ Table d'entreprise (`ModeleEntreprise` — isolation D9).
 
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.enums import CategorieDocument
@@ -76,12 +78,18 @@ class Document(ModeleEntreprise):
         db_table = "document"
         verbose_name = _("document")
         verbose_name_plural = _("documents")
-        ordering = ["-est_reference", "-cree_le"]
+        ordering = ["-est_reference", "-modifie_le"]
         indexes = [
             models.Index(fields=["entreprise", "projet", "categorie"], name="idx_doc_ent_proj_cat"),
             models.Index(fields=["projet", "est_reference"], name="idx_doc_proj_ref"),
             models.Index(fields=["projet", "est_automatique"], name="idx_doc_proj_auto"),
             models.Index(fields=["projet", "supprime_le"], name="idx_doc_proj_suppr"),
+            models.Index(
+                fields=["entreprise", "-est_reference", "-modifie_le"],
+                name="idx_doc_ent_tri",
+            ),
+            models.Index(fields=["entreprise", "cree_le"], name="idx_doc_ent_cree_le"),
+            models.Index(Lower("nom"), name="idx_doc_nom_lower"),
         ]
 
     def __str__(self) -> str:
@@ -130,11 +138,30 @@ class Document(ModeleEntreprise):
         elif self.cree_par_id and not self.createur_id:
             self.createur_id = self.cree_par_id
 
-        # Règle F6 §5 : protection absolue des documents automatiques
-        if self.est_automatique and self.supprime_le is not None:
+        # Règle F6 §5 : protection absolue des documents automatiques (hors retrait synchronisé)
+        if (
+            self.est_automatique
+            and self.supprime_le is not None
+            and not getattr(self, "_autoriser_retrait_source", False)
+        ):
             raise DocumentAutomatiqueNonSupprimable()
 
         super().save(*args, **kwargs)
+
+    def archiver_retrait_source(self, *, utilisateur=None):
+        """Retrait synchronisé réservé au module source (ex. retrait d'un avenant F1).
+
+        Contrairement à `delete()`, cette porte système retire de la liste active GED
+        une pièce automatique dont l'objet source officiel a été retiré, en conservant
+        la suppression logique (Socle Commun §3.1).
+        """
+        self.supprime_le = timezone.now()
+        self.supprime_par = utilisateur
+        self._autoriser_retrait_source = True
+        try:
+            self.save(update_fields=["supprime_le", "supprime_par", "modifie_le"])
+        finally:
+            self._autoriser_retrait_source = False
 
     def delete(self, using=None, keep_parents=False, utilisateur=None):
         """Suppression logique protégée : interdite pour les documents automatiques."""

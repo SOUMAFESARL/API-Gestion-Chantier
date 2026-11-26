@@ -72,7 +72,10 @@ def archiver_ordre_service_projet_apres_save(
         return
     if getattr(instance, "supprime_le", None) is not None or not instance.ordre_service:
         return
-    if not created and update_fields is not None and "ordre_service" not in update_fields:
+    os_modifie = bool(getattr(instance, "_ordre_service_modifie", False))
+    if not created and not os_modifie and (
+        update_fields is None or "ordre_service" not in update_fields
+    ):
         return
 
     projet_id = instance.pk
@@ -80,8 +83,16 @@ def archiver_ordre_service_projet_apres_save(
     if not projet_id or not entreprise_id:
         return
 
+    auteur_os = getattr(instance, "_auteur_ordre_service", None)
+    auteur_id = (
+        getattr(auteur_os, "pk", None)
+        if auteur_os is not None and getattr(auteur_os, "is_authenticated", True)
+        else instance.cree_par_id
+    )
+    instance._ordre_service_modifie = False
+
     transaction.on_commit(
-        partial(archiver_ordre_service_projet_par_id, projet_id, entreprise_id)
+        partial(archiver_ordre_service_projet_par_id, projet_id, entreprise_id, auteur_id)
     )
 
 

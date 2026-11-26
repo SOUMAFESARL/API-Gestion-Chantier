@@ -18,8 +18,8 @@ from apps.core.enums import ActionAudit
 from apps.projets.models import ProjetContrat
 
 logger = logging.getLogger(__name__)
-MAX_FICHIER = 10 * 1024 * 1024
-MAX_LOT = 10 * 1024 * 1024
+MAX_FICHIER = 50 * 1024 * 1024
+MAX_LOT = 50 * 1024 * 1024
 NOMBRE_MAX_CONTRATS_ACTIFS = 1
 FORMATS = {
     ".pdf": "application/pdf",
@@ -35,7 +35,7 @@ def valider_fichier_contrat(fichier):
     if extension not in FORMATS:
         raise serializers.ValidationError("Formats acceptes : PDF, JPG, JPEG, PNG (JEPG accepte).")
     if not fichier.size or fichier.size > MAX_FICHIER:
-        raise serializers.ValidationError("Le fichier doit contenir entre 1 octet et 10 Mo.")
+        raise serializers.ValidationError("Le fichier doit contenir entre 1 octet et 50 Mo.")
     try:
         fichier.seek(0)
         if extension == ".pdf":

@@ -171,7 +171,7 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         required=False,
         max_length=NOMBRE_MAX_CONTRATS_ACTIFS,
         help_text=(
-            "Contrat du marché unique (PDF/JPG/JPEG/PNG, max 10 Mo). "
+            "Contrat du marché unique (PDF/JPG/JPEG/PNG, max 50 Mo). "
             "Téléverser un nouveau contrat remplace l'actif précédent et conserve l'historique."
         ),
     )
@@ -179,7 +179,7 @@ class ProjetPostSerializer(ProjetCreationSerializer):
         validators=[valider_fichier_contrat],
         required=False,
         allow_null=True,
-        help_text="Ordre de service de démarrage (PDF/JPG/JPEG/PNG, max 10 Mo).",
+        help_text="Ordre de service de démarrage (PDF/JPG/JPEG/PNG, max 50 Mo).",
     )
 
     def validate(self, attrs):
@@ -294,7 +294,7 @@ class ProjetPostSerializer(ProjetCreationSerializer):
                 "l'actif précédent tout en conservant l'historique des versions."
             )
         if sum(fichier.size for fichier in fichiers) > MAX_LOT:
-            raise serializers.ValidationError("La taille du contrat dépasse 10 Mo.")
+            raise serializers.ValidationError("La taille du contrat dépasse 50 Mo.")
         return fichiers
 
     def _avec_contrats(self, validated_data, operation):
@@ -315,6 +315,8 @@ class ProjetPostSerializer(ProjetCreationSerializer):
                     )
                     projet.ordre_service.save(fichier_os.name, fichier_os, save=False)
                     stockes.append((projet.ordre_service.storage, projet.ordre_service.name))
+                    projet._auteur_ordre_service = user
+                    projet._ordre_service_modifie = True
                     projet.save(
                         update_fields=[
                             "ordre_service",

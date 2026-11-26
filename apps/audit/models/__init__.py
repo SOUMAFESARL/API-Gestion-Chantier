@@ -72,6 +72,10 @@ class JournalAudit(models.Model):
         indexes = [
             models.Index(fields=["type_entite", "entite_id"], name="audit_entite_idx"),
             models.Index(fields=["utilisateur_id", "-horodatage"], name="audit_acteur_idx"),
+            models.Index(
+                fields=["entreprise_id", "type_entite", "-horodatage"],
+                name="audit_ent_type_date_idx",
+            ),
         ]
 
     def __str__(self) -> str:

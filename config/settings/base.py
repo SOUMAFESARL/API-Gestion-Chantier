@@ -197,9 +197,8 @@ DatabaseFeatures.minimum_database_version = (13,)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Photos compressées et documents embarqués du journal (5 + 3 fichiers de 2 Mio).
-# L'API journal contrôle aussi les nombres, types et tailles de chaque fichier.
-DATA_UPLOAD_MAX_MEMORY_SIZE = 24 * 1024 * 1024
+# Plafond multipart 50 Mo (GED F6 + Contrats/OS F1) + marge métadonnées/journal.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 55 * 1024 * 1024
 
 # Plafonds d'import Excel/CSV pour les modèles de découpage, listes de valeurs et tableaux de démarrage.
 IMPORT_EXCEL_TAILLE_MAX_MO = config("IMPORT_EXCEL_TAILLE_MAX_MO", default=20, cast=int)
@@ -347,6 +346,8 @@ REST_FRAMEWORK = {
         # Invitations collaborateurs
         "invitation_verifier": "30/hour",
         "invitation_accepter": "10/hour",
+        # Partage externe temporaire GED (72 h, anonyme)
+        "partage_public": "60/min",
     },
 }
 
@@ -492,6 +493,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 PROJET_CONTRATS_ROOT = config("PROJET_CONTRATS_ROOT", default=str(BASE_DIR / "media_prive"))
+GED_STORAGE_ROOT = config("GED_STORAGE_ROOT", default=PROJET_CONTRATS_ROOT)
 
 TAILLE_MAX_FICHIER_MO = 50  # US-006 : refus 413 au-delà
 PHOTOS_MAX_PAR_RAPPORT = 5  # RG-14

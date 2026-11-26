@@ -37,7 +37,8 @@ Format d'erreur standard : `{"erreur": {"code", "message", "details", "trace_id"
   "origine": "MANUEL",
   "source_liaison": {
     "type_source": "F1_CONTRAT",
-    "objet_id": "uuid"
+    "objet_id": "uuid",
+    "sous_type": "CONTRAT"
   },
   "version_active": {
     "id": "uuid",
@@ -60,11 +61,15 @@ Format d'erreur standard : `{"erreur": {"code", "message", "details", "trace_id"
     "nom_complet": "Moussa Diallo"
   },
   "cree_le": "2026-11-10T10:15:00Z",
-  "modifie_le": "2026-11-20T14:22:00Z"
+  "modifie_le": "2026-11-20T14:22:00Z",
+  "peut_partager": true,
+  "peut_voir_historique": true,
+  "peut_supprimer": true
 }
 ```
 
-- `source_liaison` vaut `null` lorsque `est_automatique` est `false`.
+- `source_liaison` vaut `null` lorsque `est_automatique` est `false`. Pour `F1_CONTRAT`, `sous_type` vaut `"CONTRAT"`, `"ORDRE_SERVICE"` ou `"AVENANT"`.
+- `peut_partager` et `peut_voir_historique` reflètent la règle serveur stricte (AD / DG / DO / CP + `ged.voir_<catégorie>`).
 - Tri par défaut : `est_reference DESC`, `modifie_le DESC` (documents de référence épinglés en tête).
 
 ---

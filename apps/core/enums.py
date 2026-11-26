@@ -208,6 +208,14 @@ class ActionAudit(models.TextChoices):
     VALIDATION = "VALIDATION", "Validation"
     SIGNATURE = "SIGNATURE", "Signature"
     ASSISTANCE = "ASSISTANCE", "Assistance Super Admin"
+    # Actions GED (F6) — toutes <= 20 caractères (colonne journal_audit.action)
+    CONSULTATION = "CONSULTATION", "Consultation"
+    TELECHARGEMENT = "TELECHARGEMENT", "Téléchargement"
+    DEPOT = "DEPOT", "Dépôt"
+    NOUVELLE_VERSION = "NOUVELLE_VERSION", "Nouvelle version"
+    EPINGLAGE = "EPINGLAGE", "Épinglage"
+    PARTAGE = "PARTAGE", "Partage externe"
+    REVOCATION_PARTAGE = "REVOCATION_PARTAGE", "Révocation de partage"
 
 
 class TypeTiers(models.TextChoices):

@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import serializers, status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -169,6 +169,12 @@ class AvenantDocumentView(APIView):
     def get(self, request, pk):
         avenant = get_object_or_404(Avenant.objects.select_related("projet"), pk=pk)
         self.check_object_permissions(request, avenant.projet)
+        from apps.ged.permissions import peut_telecharger_contrat_f1
+
+        if not peut_telecharger_contrat_f1(request.user, request):
+            raise PermissionDenied(
+                "Vous n'avez pas la permission de consulter les contrats (ged.voir_contrats)."
+            )
         if not avenant.document:
             raise NotFound("Cet avenant n'a pas de document joint.")
         try:
@@ -198,6 +204,12 @@ class AvenantOrdreServiceView(APIView):
     def get(self, request, pk):
         avenant = get_object_or_404(Avenant.objects.select_related("projet"), pk=pk)
         self.check_object_permissions(request, avenant.projet)
+        from apps.ged.permissions import peut_telecharger_contrat_f1
+
+        if not peut_telecharger_contrat_f1(request.user, request):
+            raise PermissionDenied(
+                "Vous n'avez pas la permission de consulter les contrats (ged.voir_contrats)."
+            )
         if not avenant.ordre_service:
             raise NotFound("Cet avenant n'a pas d'ordre de service joint.")
         try:

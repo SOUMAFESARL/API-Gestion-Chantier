@@ -199,12 +199,17 @@ def enregistrer_avenant(
 
 @transaction.atomic
 def retirer_avenant(avenant: Avenant, auteur=None) -> None:
-    """Un avenant enregistré par erreur se retire ; l'historique garde sa trace."""
+    """Un avenant enregistré par erreur se retire ; l'historique garde sa trace.
+
+    Synchronise également la GED en retirant les pièces automatiques liées à l'avenant.
+    """
     from apps.core.enums import ActionAudit
+    from apps.ged.services.archivage_auto import retirer_documents_avenant
 
     projet = avenant.projet
     avenant.delete(utilisateur=auteur)
     recalculer_avenants(projet)
+    retirer_documents_avenant(avenant, utilisateur=auteur)
     _tracer(avenant, auteur, ActionAudit.SUPPRESSION, {"numero": avenant.numero})
 
 

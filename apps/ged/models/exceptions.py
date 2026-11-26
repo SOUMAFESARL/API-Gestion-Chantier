@@ -58,3 +58,22 @@ class FormatFichierNonAutorise(ErreurMetier):
         "Le format de fichier n'est pas autorisé. "
         "Formats autorisés dans le périmètre F6 : PDF, JPG, PNG, DOC, DOCX, XLS, XLSX."
     )
+
+
+class DocumentAutomatiqueNonModifiable(ErreurMetier):
+    """Un document archivé automatiquement ne peut être modifié ni versionné manuellement."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code_metier = "document_automatique_non_modifiable"
+    default_detail = _(
+        "Ce document provient automatiquement d'un module métier (Projets, Journal ou Stock) : "
+        "modifiez-le depuis son écran d'origine."
+    )
+
+
+class PartageExpire(ErreurMetier):
+    """Lien de partage externe expiré (> 72 h), révoqué ou dont le document a été retiré."""
+
+    status_code = status.HTTP_410_GONE
+    code_metier = "partage_expire"
+    default_detail = _("Ce lien de partage a expiré ou a été révoqué.")

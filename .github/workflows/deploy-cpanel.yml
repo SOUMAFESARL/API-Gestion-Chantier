@@ -106,7 +106,7 @@ jobs:
     name: Déploiement production sur cPanel
     needs: verifications
 
-    if: ${{ github.ref == 'refs/heads/develop' && github.event_name == 'push' }}
+    if: ${{ github.ref == 'refs/heads/develop' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
 
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -160,16 +160,36 @@ jobs:
       # C'est désormais la **seule** voie des migrations : `passenger_wsgi.py` ne migre plus au
       # démarrage, et l'étape SSH ci-dessous ne tourne pas tant que CPANEL_PROJECT_DIR est vide.
       # Un échec doit donc faire échouer le déploiement, et non passer sous un `|| true`.
-      - name: Déclencher les migrations et la synchronisation des registres (API)
+      - name: Déclencher les migrations, le seed plateforme et la synchronisation (API)
         shell: bash
         env:
           MAINTENANCE_TOKEN: ${{ secrets.MAINTENANCE_TOKEN }}
+          SUPER_ADMIN_EMAIL: ${{ secrets.SUPER_ADMIN_EMAIL }}
+          SUPER_ADMIN_PASSWORD: ${{ secrets.SUPER_ADMIN_PASSWORD }}
         run: |
           set -uo pipefail
           if [ -z "$MAINTENANCE_TOKEN" ]; then
             echo "::error::Secret MAINTENANCE_TOKEN absent : les migrations ne peuvent pas être lancées."
             exit 1
           fi
+
+          PAYLOAD_FILE=$(mktemp)
+          chmod 600 "$PAYLOAD_FILE"
+          trap 'rm -f "$PAYLOAD_FILE" /tmp/migration.json' EXIT
+          python3 - "$PAYLOAD_FILE" <<'PY'
+          import json
+          import os
+          import sys
+
+          payload = {}
+          email = (os.environ.get("SUPER_ADMIN_EMAIL") or "").strip()
+          mot_de_passe = (os.environ.get("SUPER_ADMIN_PASSWORD") or "").strip("\r\n")
+          if email and mot_de_passe:
+              payload["super_admin_email"] = email
+              payload["super_admin_mot_de_passe"] = mot_de_passe
+          with open(sys.argv[1], "w", encoding="utf-8") as fichier:
+              json.dump(payload, fichier)
+          PY
 
           # Passenger redémarre sur tmp/restart.txt : le premier appel paie le démarrage.
           for tentative in 1 2 3 4 5 6; do
@@ -178,10 +198,11 @@ jobs:
               --connect-timeout 15 --max-time 600 \
               -X POST "https://api-chantier.soumafe.com/api/v1/maintenance/migrer-bd/" \
               -H "Content-Type: application/json" \
-              -H "X-Maintenance-Token: $MAINTENANCE_TOKEN") || code="000"
+              -H "X-Maintenance-Token: $MAINTENANCE_TOKEN" \
+              --data-binary @"$PAYLOAD_FILE") || code="000"
 
             if [ "$code" = "200" ] && grep -q '"statut": *"succes"' /tmp/migration.json; then
-              echo "Migrations appliquées (tentative $tentative)."
+              echo "Migrations et seed plateforme appliqués (tentative $tentative)."
               python3 -c "import json; print(json.load(open('/tmp/migration.json'))['output'])"
               exit 0
             fi

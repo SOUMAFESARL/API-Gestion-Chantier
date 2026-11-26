@@ -9,9 +9,11 @@ Convention d'API : tout est préfixé `/api/v1/` (tâche T-005).
 import contextlib
 import hashlib
 import hmac
+import json
 from io import StringIO
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.management import call_command
 from django.db import DatabaseError, connection
 from django.http import JsonResponse
@@ -143,13 +145,22 @@ def _diagnostic_proprietaires() -> str:
 
 @csrf_exempt
 def migrer_bd_vue(request):
-    """Exécute les migrations, contrôle l'isolation et resynchronise le catalogue, sans SSH."""
+    """Exécute les migrations, le seed plateforme idempotent et les synchronisations, sans SSH."""
     refus = _refuser_maintenance(request)
     if refus is not None:
         return refus
 
     if request.method != "POST":
         return JsonResponse({"erreur": "Méthode non autorisée"}, status=405)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}") if request.body else {}
+        if not isinstance(payload, dict):
+            payload = {}
+    except Exception:
+        payload = {}
+
+    from apps.core.services.initialisation import ensemencer_base_plateforme
 
     out = StringIO()
     erreurs = StringIO()
@@ -158,8 +169,14 @@ def migrer_bd_vue(request):
         role_active = _activer_role_proprietaire(out)
         call_command("migrate", interactive=False, stdout=out, stderr=erreurs)
         call_command("verifier_isolation", stdout=out, stderr=erreurs)
-        call_command("synchroniser_catalogue_permissions", stdout=out)
-        call_command("propager_roles_systeme", stdout=out)
+        ensemencer_base_plateforme(
+            out,
+            stderr=erreurs,
+            super_admin_email=payload.get("super_admin_email"),
+            super_admin_mot_de_passe=payload.get("super_admin_mot_de_passe"),
+        )
+        with contextlib.suppress(Exception):
+            cache.clear()
         return JsonResponse({"statut": "succes", "output": out.getvalue()})
     except Exception as exc:
         diag_roles = _diagnostic_proprietaires()

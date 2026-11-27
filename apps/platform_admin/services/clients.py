@@ -1,6 +1,6 @@
 """Services métier pour les actions d'administration sur les entreprises clientes."""
 
-from datetime import date
+from datetime import date, timedelta
 import logging
 import uuid
 
@@ -272,7 +272,6 @@ def modifier_echeance_client_plateforme(
 
         date_formatee = date_fin.strftime("%d/%m/%Y")
         message_dg = (
-            "Bonjour,\n\n"
             "La date de fin de votre abonnement a été modifiée par l'administration de la plateforme.\n"
             f"Nouvelle date de fin : {date_formatee}"
         )
@@ -288,6 +287,116 @@ def modifier_echeance_client_plateforme(
         "Échéance de l'entreprise %s modifiée vers %s par %s",
         ent.slug,
         date_fin,
+        admin_user,
+    )
+    return formater_client_plateforme(ent)
+
+
+def activer_abonnement_client_plateforme(
+    entreprise_id: uuid.UUID | str,
+    motif: str,
+    admin_user=None,
+    adresse_ip: str | None = None,
+    appareil: str = "",
+) -> dict:
+    """Passe manuellement l'abonnement d'une entreprise cliente au statut ACTIF."""
+    ent = Entreprise.objects.filter(pk=entreprise_id).first()
+    if not ent:
+        raise NotFound("Entreprise cliente introuvable.")
+
+    if ent.statut == StatutEntreprise.SUSPENDU:
+        raise ErreurConflit(
+            detail="Réactivez d'abord l'entreprise suspendue avant d'activer son abonnement."
+        )
+    if ent.statut == StatutEntreprise.RESILIE:
+        raise ErreurConflit(detail="Un espace résilié ne peut pas être activé.")
+
+    abonnement = (
+        ent.abonnements.filter(
+            statut__in=[Abonnement.Statut.ACTIF, Abonnement.Statut.ESSAI]
+        ).first()
+        or ent.abonnements.first()
+    )
+    if not abonnement:
+        raise ErreurConflit(detail="Cette entreprise n'a aucun abonnement à activer.")
+    if abonnement.statut == Abonnement.Statut.RESILIE:
+        raise ErreurConflit(
+            detail="Un abonnement résilié ne peut pas être activé directement."
+        )
+    if (
+        abonnement.statut == Abonnement.Statut.ACTIF
+        and abonnement.lecture_seule_depuis is None
+    ):
+        raise ErreurConflit(detail="L'abonnement de cette entreprise est déjà actif.")
+
+    aujourdhui = timezone.localdate()
+    ancien_statut = abonnement.statut
+    ancienne_date_fin = abonnement.date_fin
+    ancienne_fin_essai = abonnement.fin_essai
+
+    with transaction.atomic():
+        abonnement.statut = Abonnement.Statut.ACTIF
+        abonnement.fin_essai = None
+        abonnement.lecture_seule_depuis = None
+        champs_maj = ["statut", "fin_essai", "lecture_seule_depuis", "modifie_le"]
+        if abonnement.date_fin < aujourdhui:
+            abonnement.date_fin = aujourdhui + timedelta(days=30)
+            champs_maj.append("date_fin")
+        abonnement.save(update_fields=champs_maj)
+
+        if ent.statut == StatutEntreprise.EN_ATTENTE:
+            ent.statut = StatutEntreprise.ACTIF
+            ent.save(update_fields=["statut"])
+
+        journaliser_plateforme(
+            action="ACTIVATION_ABONNEMENT",
+            acteur=admin_user,
+            entreprise=ent,
+            detail={
+                "ancien_statut": ancien_statut,
+                "nouveau_statut": Abonnement.Statut.ACTIF,
+                "ancienne_date_fin": ancienne_date_fin.isoformat() if ancienne_date_fin else None,
+                "nouvelle_date_fin": abonnement.date_fin.isoformat(),
+                "ancienne_fin_essai": (
+                    ancienne_fin_essai.isoformat() if ancienne_fin_essai else None
+                ),
+                "motif": motif,
+            },
+            adresse_ip=adresse_ip,
+            appareil=appareil,
+        )
+
+        journaliser_entreprise(
+            entreprise=ent,
+            action="MODIFICATION",
+            type_entite="Abonnement",
+            entite_id=abonnement.id,
+            valeur_apres={
+                "statut": Abonnement.Statut.ACTIF,
+                "date_fin": abonnement.date_fin.isoformat(),
+                "fin_essai": None,
+            },
+            acteur=admin_user,
+            adresse_ip=adresse_ip,
+            appareil=appareil,
+        )
+
+        date_formatee = abonnement.date_fin.strftime("%d/%m/%Y")
+        message_dg = (
+            f"Votre abonnement ({abonnement.plan.libelle}) a été activé par l'administration de la plateforme.\n"
+            f"Date de fin en vigueur : {date_formatee}"
+        )
+        notifier_dg_action_plateforme(
+            entreprise=ent,
+            sujet=SUJET_MODIFICATION_PLATEFORME,
+            message=message_dg,
+            super_admin_email=getattr(admin_user, "email", ""),
+        )
+
+    logger.info(
+        "Abonnement de l'entreprise %s passé à ACTIF (depuis %s) par %s",
+        ent.slug,
+        ancien_statut,
         admin_user,
     )
     return formater_client_plateforme(ent)

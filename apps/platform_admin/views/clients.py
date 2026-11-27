@@ -20,6 +20,7 @@ from apps.platform_admin.selectors.clients import (
     obtenir_fiche_client,
 )
 from apps.platform_admin.serializers.clients import (
+    ActiverAbonnementClientRequestSerializer,
     ChangerPlanClientRequestSerializer,
     ClientPlateformeSerializer,
     ModifierEcheanceClientRequestSerializer,
@@ -29,6 +30,7 @@ from apps.platform_admin.serializers.impersonation import (
     ErreurPlateformeResponseSerializer,
 )
 from apps.platform_admin.services.clients import (
+    activer_abonnement_client_plateforme,
     changer_plan_client_plateforme,
     modifier_echeance_client_plateforme,
     reactiver_client_plateforme,
@@ -43,6 +45,7 @@ from apps.platform_admin.services.notifications import (
 from apps.entreprises.models import Entreprise
 
 __all__ = [
+    "ActiverAbonnementClientPlateformeView",
     "ActiverModuleClientPlateformeView",
     "ChangerPlanClientPlateformeView",
     "ClientsPlateformeListView",
@@ -466,6 +469,45 @@ class ChangerPlanClientPlateformeView(APIView):
         return self.patch(request, client_id)
 
 
+class ActiverAbonnementClientPlateformeView(APIView):
+    """`POST /api/v1/admins/clients/{client_id}/abonnement/activer/` — Passage manuel à ACTIF."""
+
+    permission_classes = [IsAuthenticated, EstSuperAdminPlateforme]
+    serializer_class = ActiverAbonnementClientRequestSerializer
+
+    @extend_schema(
+        tags=["admins-clients"],
+        summary="Activer manuellement l'abonnement d'une entreprise cliente",
+        description=(
+            "Passe l'abonnement de l'entreprise cliente au statut `ACTIF` (hors essai et hors lecture seule). "
+            "Motif obligatoire (10 caractères au moins), journalisé ; le Directeur Général est prévenu par courriel. "
+            "Réservé au superviseur."
+        ),
+        parameters=[PARAM_CLIENT_ID],
+        request=ActiverAbonnementClientRequestSerializer,
+        responses={
+            200: ClientPlateformeSerializer,
+            400: ErreurPlateformeResponseSerializer,
+            403: ErreurPlateformeResponseSerializer,
+            404: ErreurPlateformeResponseSerializer,
+            409: ErreurPlateformeResponseSerializer,
+        },
+    )
+    def post(self, request, client_id):
+        exiger_superviseur(request)
+        serializer = ActiverAbonnementClientRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        client_actualise = activer_abonnement_client_plateforme(
+            entreprise_id=client_id,
+            motif=serializer.validated_data["motif"],
+            admin_user=request.user,
+            adresse_ip=extraire_ip_client(request),
+            appareil=request.headers.get("User-Agent", "")[:255],
+        )
+        return Response(ClientPlateformeSerializer(client_actualise).data, status=status.HTTP_200_OK)
+
+
 class ActiverModuleClientPlateformeView(APIView):
     """`POST /api/v1/admins/clients/{client_id}/modules/{module_id}/activer/` — Active un module pour un client (A-11, A-14, H-02)."""
 
@@ -575,7 +617,6 @@ class ActiverModuleClientPlateformeView(APIView):
                 entreprise=entreprise,
                 sujet=SUJET_MODIFICATION_PLATEFORME,
                 message=(
-                    f"Bonjour,\n\n"
                     f"Le module '{module.libelle}' ({module.code}) a été activé sur votre espace par l'administration de la plateforme.\n"
                     f"Super admin acteur : {email_admin}\n"
                 ),
@@ -659,7 +700,6 @@ class DesactiverModuleClientPlateformeView(APIView):
                 entreprise=entreprise,
                 sujet=SUJET_MODIFICATION_PLATEFORME,
                 message=(
-                    f"Bonjour,\n\n"
                     f"Le module '{module.libelle}' ({module.code}) a été désactivé sur votre espace par l'administration de la plateforme.\n"
                     f"Super admin acteur : {email_admin}\n"
                 ),

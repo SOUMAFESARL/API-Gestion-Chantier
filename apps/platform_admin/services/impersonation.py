@@ -205,7 +205,6 @@ def demarrer_session_assistance(
     # 3. Notification par courriel au DG de l'entreprise (H-01, A-14)
     from apps.platform_admin.services.notifications import notifier_dg_action_plateforme, SUJET_ASSISTANCE
     corps_email = (
-        f"Bonjour,\n\n"
         f"Une session d'assistance a été ouverte sur votre espace par un administrateur de la plateforme.\n\n"
         f"Détails de l'intervention :\n"
         f"- Administrateur plateforme : {super_admin.email}\n"

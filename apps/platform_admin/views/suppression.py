@@ -61,7 +61,6 @@ def _prevenir_dg_avant_suppression(entreprise: Entreprise) -> None:
         logger.info("Suppression de %s : aucun DG actif à prévenir.", entreprise.slug)
         return
     message = (
-        "Bonjour,\n\n"
         f"L'espace de {entreprise.raison_sociale} sur CCD Digital va être supprimé "
         "définitivement par l'administration de la plateforme. Les comptes de vos "
         "collaborateurs et les données de vos projets ne seront plus accessibles.\n\n"

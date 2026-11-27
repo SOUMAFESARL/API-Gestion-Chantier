@@ -2,6 +2,7 @@ from django.urls import path, re_path
 
 from apps.platform_admin.views import (
     ActionsJournalPlateformeView,
+    ActiverAbonnementClientPlateformeView,
     ActiverModuleClientPlateformeView,
     AdminChangerMotDePasseMoiView,
     AdminIdentiteView,
@@ -201,6 +202,11 @@ urlpatterns = [
         "admins/clients/<uuid:client_id>/abonnement/",
         ChangerPlanClientPlateformeView.as_view(),
         name="admins-clients-plateforme-abonnement",
+    ),
+    path(
+        "admins/clients/<uuid:client_id>/abonnement/activer/",
+        ActiverAbonnementClientPlateformeView.as_view(),
+        name="admins-clients-plateforme-abonnement-activer",
     ),
     path(
         "admins/clients/<uuid:client_id>/modules/<uuid:module_id>/activer/",

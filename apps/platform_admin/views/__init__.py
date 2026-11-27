@@ -4,6 +4,7 @@ from .auth import (
     RenouvellementAdminView,
 )
 from .clients import (
+    ActiverAbonnementClientPlateformeView,
     ActiverModuleClientPlateformeView,
     ChangerPlanClientPlateformeView,
     ClientsPlateformeListView,
@@ -58,6 +59,7 @@ from .reinitialisation import (
 
 __all__ = [
     "ActionsJournalPlateformeView",
+    "ActiverAbonnementClientPlateformeView",
     "ActiverModuleClientPlateformeView",
     "AdminChangerMotDePasseMoiView",
     "AdminIdentiteView",

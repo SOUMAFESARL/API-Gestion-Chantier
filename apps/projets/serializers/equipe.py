@@ -9,6 +9,11 @@ from apps.projets.models import (
     MembreEquipeChantier,
     PersonneMainOeuvre,
 )
+from apps.projets.services.referentiels import (
+    code_fonction_equipe_valide,
+    libelle_fonction_equipe,
+    table_fonctions_equipe,
+)
 from apps.tiers.models import Tiers
 
 __all__ = [
@@ -29,7 +34,14 @@ __all__ = [
     "UtilisateurPourEquipeSerializer",
 ]
 
-FONCTIONS = [c[0] for c in MembreEquipeChantier.FONCTION_CHOICES]
+
+def _valider_code_fonction_champ(valeur: str) -> str:
+    code = (valeur or "").strip()
+    if not code:
+        return ""
+    if not code_fonction_equipe_valide(code):
+        raise serializers.ValidationError("Fonction invalide ou non autorisée.")
+    return code
 
 
 class EntrepriseRattachementSerializer(serializers.Serializer):
@@ -138,6 +150,7 @@ class PersonneModificationSerializer(serializers.Serializer):
 # --------------------------------------------------------------------------
 class MembreSerializer(serializers.ModelSerializer):
     personne = PersonneSerializer(read_only=True)
+    fonction_libelle = serializers.SerializerMethodField()
     en_cours = serializers.SerializerMethodField()
 
     class Meta:
@@ -146,11 +159,17 @@ class MembreSerializer(serializers.ModelSerializer):
             "id",
             "personne",
             "fonction",
+            "fonction_libelle",
             "est_chef",
             "date_arrivee",
             "date_depart",
             "en_cours",
         ]
+
+    @extend_schema_field(serializers.CharField())
+    def get_fonction_libelle(self, obj) -> str:
+        table = table_fonctions_equipe(cache=self.context)
+        return libelle_fonction_equipe(obj.fonction, table=table)
 
     @extend_schema_field(serializers.BooleanField())
     def get_en_cours(self, obj) -> bool:
@@ -205,13 +224,13 @@ class EquipeSerializer(serializers.ModelSerializer):
     @extend_schema_field(MembreSerializer(allow_null=True))
     def get_chef(self, obj):
         chef = next((m for m in self._membres(obj) if m.est_chef and m.date_depart is None), None)
-        return MembreSerializer(chef).data if chef else None
+        return MembreSerializer(chef, context=self.context).data if chef else None
 
     @extend_schema_field(MembreSerializer(many=True))
     def get_membres(self, obj):
         historique = self.context.get("historique", False)
         membres = [m for m in self._membres(obj) if historique or m.date_depart is None]
-        return MembreSerializer(membres, many=True).data
+        return MembreSerializer(membres, many=True, context=self.context).data
 
     @extend_schema_field(serializers.IntegerField())
     def get_effectif(self, obj) -> int:
@@ -232,10 +251,13 @@ class MembreCreationSerializer(serializers.Serializer):
     utilisateur_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, allow_empty=False
     )
-    fonction = serializers.ChoiceField(choices=FONCTIONS, required=False, default="OUVRIER")
+    fonction = serializers.CharField(max_length=60, required=False, allow_blank=True, default="")
     est_chef = serializers.BooleanField(required=False, default=False)
     date_arrivee = serializers.DateField(required=False, allow_null=True, default=None)
     date_depart = serializers.DateField(required=False, allow_null=True, default=None)
+
+    def validate_fonction(self, value):
+        return _valider_code_fonction_champ(value)
 
     def validate(self, attrs):
         ids = [i for i in list(dict.fromkeys(attrs.get("personne_ids") or [])) if i]
@@ -256,7 +278,7 @@ class MembreCreationSerializer(serializers.Serializer):
                 }
             )
         total_personnes = len(ids) + len(u_ids)
-        est_chef = attrs.get("est_chef") or attrs.get("fonction") == "CHEF_EQUIPE"
+        est_chef = bool(attrs.get("est_chef"))
         if est_chef and total_personnes > 1:
             raise serializers.ValidationError(
                 {"est_chef": "Une équipe n'a qu'un seul chef : sélectionnez une seule personne."}
@@ -283,10 +305,13 @@ class UtilisateurPourEquipeSerializer(serializers.Serializer):
 
 
 class MembreModificationSerializer(serializers.Serializer):
-    fonction = serializers.ChoiceField(choices=FONCTIONS, required=False)
+    fonction = serializers.CharField(max_length=60, required=False, allow_blank=True)
     est_chef = serializers.BooleanField(required=False)
     date_arrivee = serializers.DateField(required=False)
     date_depart = serializers.DateField(required=False, allow_null=True)
+
+    def validate_fonction(self, value):
+        return _valider_code_fonction_champ(value)
 
 
 class EquipeCreationSerializer(serializers.Serializer):

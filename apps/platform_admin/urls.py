@@ -249,14 +249,14 @@ urlpatterns = [
     # Rôles système (gabarits propagés à toutes les entreprises)
     path("admins/roles-systeme/", RolesSystemeListeView.as_view(), name="admins-roles-systeme"),
     path("admins/roles-systeme/<uuid:pk>/", RoleSystemeDetailView.as_view(), name="admins-roles-systeme-detail"),
-    # Référentiels de la plateforme (types de projet, modes d'exécution)
+    # Référentiels de la plateforme (types de projet, modes d'exécution, fonctions d'équipe)
     re_path(
-        r"^admins/referentiels/(?P<categorie>types-projet|modes-execution)/$",
+        r"^admins/referentiels/(?P<categorie>types-projet|modes-execution|fonctions-equipe)/$",
         ReferentielPlateformeListeView.as_view(),
         name="admins-referentiels",
     ),
     re_path(
-        r"^admins/referentiels/(?P<categorie>types-projet|modes-execution)/(?P<pk>[0-9a-f-]{36})/$",
+        r"^admins/referentiels/(?P<categorie>types-projet|modes-execution|fonctions-equipe)/(?P<pk>[0-9a-f-]{36})/$",
         ReferentielPlateformeDetailView.as_view(),
         name="admins-referentiels-detail",
     ),

@@ -1,4 +1,4 @@
-"""`/api/v1/referentiels/{types-projet|modes-execution}/` — listes dynamiques du module Projets.
+"""`/api/v1/referentiels/{types-projet|modes-execution|fonctions-equipe}/` — listes dynamiques.
 
 Les noms de lot ne passent plus par ici : ce sont les valeurs de la liste « Lots » du découpage
 (`/api/v1/decoupage/listes/`).

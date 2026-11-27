@@ -1,4 +1,4 @@
-"""`/api/v1/admins/referentiels/{types-projet|modes-execution}/` — référentiels plateforme.
+"""`/api/v1/admins/referentiels/{types-projet|modes-execution|fonctions-equipe}/` — plateforme.
 
 Ce qui s'ajoute ici est proposé aussitôt à toutes les entreprises (lu depuis le
 plateforme), qui ne peuvent pas le retirer. Arbitrage du 16/10/2026.

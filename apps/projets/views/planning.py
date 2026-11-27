@@ -61,6 +61,7 @@ class EtatImportMsProjectSerializer(serializers.Serializer):
 class PlanningCaseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     libelle = serializers.CharField()
+    code = serializers.CharField(allow_blank=True)
     numero = serializers.CharField(allow_null=True)
     niveau = serializers.CharField(allow_null=True)
     debut = serializers.DateField(allow_null=True)
@@ -76,6 +77,7 @@ class PlanningCaseSerializer(serializers.Serializer):
     acces = serializers.CharField()
     est_feuille = serializers.BooleanField()
     mode_mesure = serializers.CharField(allow_null=True)
+    montant = serializers.IntegerField(allow_null=True)
     enfants = serializers.ListField(child=serializers.DictField())
 
 
@@ -213,6 +215,7 @@ def _construire_planning(projet: Projet, utilisateur, request) -> dict:
     resultats = calculer_arbre(arbre)
     temporels = calculer_temporels_arbre(arbre, resultats, aujourdhui, calendrier)
     numeros = arbre.numerotation()
+    voir_montants = peut_voir_montants(utilisateur, request)
 
     def case(element):
         debut, fin = _dates_contractuelles(element)
@@ -221,9 +224,18 @@ def _construire_planning(projet: Projet, utilisateur, request) -> dict:
         temporel = temporels.get(element.pk)
         complet = acces[element.pk] == COMPLET
         niveau = arbre.niveau(element)
+        feuille = arbre.est_feuille(element)
+        if complet and voir_montants:
+            if resultat and resultat.poids is not None:
+                montant = int(resultat.poids)
+            else:
+                montant = element.montant if feuille else element.enveloppe
+        else:
+            montant = None
         return {
             "id": str(element.pk),
             "libelle": element.libelle,
+            "code": element.code or "",
             "numero": numeros.get(element.pk),
             "niveau": niveau.libelle if niveau else None,
             "debut": debut if complet else None,
@@ -241,8 +253,9 @@ def _construire_planning(projet: Projet, utilisateur, request) -> dict:
             ),
             "statut": element.statut,
             "acces": acces[element.pk],
-            "est_feuille": arbre.est_feuille(element),
+            "est_feuille": feuille,
             "mode_mesure": element.mode_mesure if complet else None,
+            "montant": montant,
             "enfants": [case(e) for e in arbre.enfants_actifs(element) if e.pk in acces],
         }
 
@@ -257,7 +270,6 @@ def _construire_planning(projet: Projet, utilisateur, request) -> dict:
         or projet.date_fin_contractuelle
     )
 
-    voir_montants = peut_voir_montants(utilisateur, request)
     droit_chiffrer = perimetre_de(utilisateur, projet, request).peut("projets.chiffrer")
     import_etat = {
         **etat_import_ms_project(projet),

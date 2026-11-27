@@ -167,7 +167,7 @@ def contexte_chantier(db, entreprise_demo):
 
     eq_macons = EquipeChantier.objects.create(projet=projet, nom="Équipe Maçonnerie")
     MembreEquipeChantier.objects.create(
-        equipe=eq_macons, personne=p1, fonction="CHEF_EQUIPE", est_chef=True, date_arrivee=debut_aff
+        equipe=eq_macons, personne=p1, fonction="MACON", est_chef=True, date_arrivee=debut_aff
     )
     AffectationEquipeElement.objects.create(equipe=eq_macons, element=lot)
 

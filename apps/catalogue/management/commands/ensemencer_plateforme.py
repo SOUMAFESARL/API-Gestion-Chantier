@@ -58,7 +58,10 @@ class Command(BaseCommand):
             ModeleDecoupagePlateforme,
             ValeurListePlateforme,
         )
-        from apps.catalogue.models.referentiel import cle_comparaison
+        from apps.catalogue.models.referentiel import (
+            cle_comparaison,
+            ensemencer_fonctions_equipe,
+        )
 
         with transaction.atomic():
             for app_label, nom in MODELES:
@@ -67,6 +70,7 @@ class Command(BaseCommand):
                 # les migrations, sur une base sans aucune donnée d'entreprise.
                 modele._base_manager.all().delete()
             call_command("loaddata", JEU, verbosity=0)
+            ensemencer_fonctions_equipe()
 
             for liste in ListeValeursPlateforme._base_manager.all():
                 cle = cle_comparaison(liste.libelle)[:120]

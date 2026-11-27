@@ -25,13 +25,16 @@ __all__ = [
     "CATEGORIES_URL",
     "MODES_DE_BASE",
     "ajouter_entree",
+    "code_fonction_equipe_valide",
     "code_mode_execution_valide",
     "code_type_projet_valide",
     "exiger_mode_de_base",
+    "libelle_fonction_equipe",
     "libelle_mode_execution",
     "lister_referentiel",
     "mode_base",
     "retirer_entree",
+    "table_fonctions_equipe",
     "table_modes_execution",
 ]
 
@@ -39,6 +42,7 @@ __all__ = [
 CATEGORIES_URL = {
     "types-projet": CategorieReferentiel.TYPE_PROJET,
     "modes-execution": CategorieReferentiel.MODE_EXECUTION,
+    "fonctions-equipe": CategorieReferentiel.FONCTION_EQUIPE,
 }
 
 # Les trois modes de base : le rapport journalier raisonne sur eux seuls.
@@ -199,3 +203,55 @@ def code_mode_execution_valide(code: str, table: dict | None = None) -> bool:
     if code in table and table[code][2]:
         return True
     return Element.tous_objets.filter(mode_execution=code).exists()
+
+
+def table_fonctions_equipe(cache: dict | None = None) -> dict[str, tuple[str, str, bool]]:
+    """code → (groupe, libellé, actif) pour le référentiel FONCTION_EQUIPE.
+
+    Les entrées retirées (suppression logique) restent résolues avec ``actif = False`` afin
+    de préserver l'affichage des libellés sur les affectations existantes.
+    """
+    if cache is not None and "table_fonctions_equipe" in cache:
+        return cache["table_fonctions_equipe"]
+    categorie = CategorieReferentiel.FONCTION_EQUIPE
+    table = {
+        e["code"]: (e["groupe"], e["libelle"], True)
+        for e in lister_referentiel(categorie)
+    }
+    for modele in (ReferentielEntreprise, ReferentielPlateforme):
+        retirees = modele.tous_objets.filter(
+            categorie=categorie, supprime_le__isnull=False
+        ).order_by("-supprime_le")
+        for e in retirees:
+            table.setdefault(e.code, (e.groupe, e.libelle, False))
+    if cache is not None:
+        cache["table_fonctions_equipe"] = table
+    return table
+
+
+def libelle_fonction_equipe(code: str, table: dict | None = None) -> str:
+    if not code:
+        return ""
+    if table is None:
+        table = table_fonctions_equipe()
+    if code in table:
+        return table[code][1] or code
+    if code == "CHEF_EQUIPE":
+        return "Chef d'équipe"
+    return code
+
+
+def code_fonction_equipe_valide(code: str, table: dict | None = None) -> bool:
+    """Un code actif du référentiel FONCTION_EQUIPE, ou déjà porté par un membre.
+
+    Refuse explicitement l'ancien code couplé ``CHEF_EQUIPE`` pour toute nouvelle affectation.
+    """
+    if not code or code == "CHEF_EQUIPE":
+        return False
+    from apps.projets.models import MembreEquipeChantier
+
+    if table is None:
+        table = table_fonctions_equipe()
+    if code in table and table[code][2]:
+        return True
+    return MembreEquipeChantier.tous_objets.filter(fonction=code).exists()

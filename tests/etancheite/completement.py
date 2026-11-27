@@ -24,6 +24,7 @@ def completer(slug: str) -> None:
         _demande_inscription(entreprise, slug)
     with contexte_entreprise(entreprise):
         _projets(slug)
+        _ged(slug)
 
 
 def _projets(slug: str) -> None:
@@ -69,6 +70,45 @@ def _projets(slug: str) -> None:
             Element.objects.filter(projet=projet, enfants__isnull=True).order_by("ordre", "pk")[:2]
         )
         Dependance.objects.create(projet=projet, predecesseur=feuilles[0], successeur=feuilles[1])
+
+
+def _ged(slug: str) -> None:
+    import io
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from pypdf import PdfWriter
+
+    from apps.accounts.models import Utilisateur
+    from apps.core.enums import CategorieDocument
+    from apps.ged.models import Document, PartageDocument
+    from apps.ged.services.documents import deposer_document
+    from apps.ged.services.partages import creer_partage_document
+    from apps.projets.models import Projet
+
+    projet = Projet.objects.get(reference="TEST-2026-002")
+    fondateur = Utilisateur.objects.filter(is_owner=True).first()
+    nom_doc = f"Document {MARQUE}"
+    doc = Document.objects.filter(projet=projet, nom=nom_doc).first()
+    if doc is None:
+        tampon = io.BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=200)
+        writer.write(tampon)
+        fichier = SimpleUploadedFile(
+            f"etancheite_{slug}.pdf",
+            tampon.getvalue(),
+            content_type="application/pdf",
+        )
+        doc, _version = deposer_document(
+            projet=projet,
+            categorie=CategorieDocument.PLANS,
+            fichier=fichier,
+            nom=nom_doc,
+            createur=fondateur,
+            notifier=False,
+        )
+    if not PartageDocument.objects.filter(document=doc).exists():
+        creer_partage_document(document=doc, utilisateur=fondateur, destinataire=MARQUE)
 
 
 def _facturation(entreprise, slug: str) -> None:

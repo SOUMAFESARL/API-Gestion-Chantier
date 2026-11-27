@@ -87,10 +87,18 @@ def _exemple(modele, lignes, reference, exemples):
         return reference.pk
     if "equipe" in champs and "projets.EquipeChantier" in exemples:
         lignes = lignes.filter(equipe_id=exemples["projets.EquipeChantier"])
+    elif "document" in champs and "ged.Document" in exemples:
+        lignes = lignes.filter(document_id=exemples["ged.Document"])
     elif "projet" in champs and lignes.filter(projet=reference).exists():
         lignes = lignes.filter(projet=reference)
     elif "rapport" in champs and lignes.filter(rapport__projet=reference).exists():
         lignes = lignes.filter(rapport__projet=reference)
+    if modele._meta.label == "ged.Document":
+        avec_fichier = lignes.filter(nom="Document ETANCHEITE", versions__isnull=False)
+        if avec_fichier.exists():
+            lignes = avec_fichier.distinct()
+        elif lignes.filter(versions__isnull=False).exists():
+            lignes = lignes.filter(versions__isnull=False).distinct()
     if modele is EquipeChantier and lignes.filter(membres__isnull=False).exists():
         # Une équipe qui a des membres : ses enfants servent d'exemples.
         lignes = lignes.filter(membres__isnull=False).distinct()

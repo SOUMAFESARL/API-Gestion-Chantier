@@ -54,6 +54,9 @@ CIBLES: dict[tuple[str, str], str] = {
     ("inscriptions", "pk"): "entreprises.DemandeInscription",
     ("factures", "pk"): "billing.Facture",
     ("statut", "transaction_id"): "billing.PaiementAbonnement.reference_transaction",
+    ("documents", "pk"): "ged.Document",
+    ("versions", "version_id"): "ged.VersionDocument",
+    ("partages", "partage_id"): "ged.PartageDocument",
 }
 
 # Paramètres qui ne désignent pas une ligne : une valeur fixe, valable pour toute entreprise.
@@ -102,6 +105,12 @@ EXCLUSIONS = {
     "^media/(?P<path>.*)$": "fichiers servis par Django en développement seulement (DEBUG)",
     "api/v1/inscription/etat/<uuid:suivi>/": (
         "sonde publique de l'inscription : l'identifiant de suivi, tiré au hasard, est le secret"
+    ),
+    "api/v1/public/partages/<str:jeton>/": (
+        "partage externe public sans compte : le jeton aléatoire tiré au hasard est le secret"
+    ),
+    "api/v1/public/partages/<str:jeton>/telecharger/": (
+        "téléchargement public sans compte : le jeton aléatoire tiré au hasard est le secret"
     ),
 }
 

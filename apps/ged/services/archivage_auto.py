@@ -948,8 +948,19 @@ def generer_pdf_synthese_rapport(
     styles["Normal"].fontSize = 9
     styles["Normal"].leading = 13
 
-    def p(texte: Any, style: str = "Normal") -> Paragraph:
-        return Paragraph(escape(str(texte or "")).replace("\n", "<br/>"), styles[style])
+    def p(
+        texte: Any,
+        style: str = "Normal",
+        *,
+        gras: bool = False,
+        italique: bool = False,
+    ) -> Paragraph:
+        contenu_html = escape(str(texte if texte is not None else "")).replace("\n", "<br/>")
+        if italique:
+            contenu_html = f"<i>{contenu_html}</i>"
+        if gras:
+            contenu_html = f"<b>{contenu_html}</b>"
+        return Paragraph(contenu_html, styles[style])
 
     projet = rapport.projet
     entreprise = getattr(projet, "entreprise", None)
@@ -993,15 +1004,15 @@ def generer_pdf_synthese_rapport(
     )
 
     lignes_entete = [
-        [p("<b>Entreprise</b>"), p(getattr(entreprise, "raison_sociale", "—"))],
-        [p("<b>Chantier</b>"), p(f"{projet.reference} — {projet.nom}")],
-        [p("<b>Localisation</b>"), p(localisation)],
-        [p("<b>Date du rapport</b>"), p(f"{rapport.date_rapport:%d/%m/%Y}")],
-        [p("<b>Statut</b>"), p(f"{rapport.get_statut_display()} (le {valide_le_txt})")],
-        [p("<b>Rédacteur</b>"), p(_nom_utilisateur(rapport.auteur))],
-        [p("<b>Approuvé par</b>"), p(_nom_utilisateur(rapport.valide_par))],
-        [p("<b>Horaires / Météo</b>"), p(f"{horaires_txt} | {meteo_txt}")],
-        [p("<b>Effectif présent</b>"), p(f"{rapport.effectif_present} personne(s)")],
+        [p("Entreprise", gras=True), p(getattr(entreprise, "raison_sociale", None) or "—")],
+        [p("Chantier", gras=True), p(f"{projet.reference} — {projet.nom}")],
+        [p("Localisation", gras=True), p(localisation)],
+        [p("Date du rapport", gras=True), p(f"{rapport.date_rapport:%d/%m/%Y}")],
+        [p("Statut", gras=True), p(f"{rapport.get_statut_display()} (le {valide_le_txt})")],
+        [p("Rédacteur", gras=True), p(_nom_utilisateur(rapport.auteur))],
+        [p("Approuvé par", gras=True), p(_nom_utilisateur(rapport.valide_par))],
+        [p("Horaires / Météo", gras=True), p(f"{horaires_txt} | {meteo_txt}")],
+        [p("Effectif présent", gras=True), p(f"{rapport.effectif_present} personne(s)")],
     ]
     tableau_entete = Table(lignes_entete, colWidths=[45 * mm, 125 * mm])
     tableau_entete.setStyle(
@@ -1050,7 +1061,11 @@ def generer_pdf_synthese_rapport(
                 libelles_act = {}
 
         lignes_travaux = [
-            [p("<b>Tâche / Activité</b>"), p("<b>Mesure du jour</b>"), p("<b>Observation</b>")]
+            [
+                p("Tâche / Activité", gras=True),
+                p("Mesure du jour", gras=True),
+                p("Observation", gras=True),
+            ]
         ]
         for a in activites:
             aid = str(a.get("activite_id") or "")
@@ -1101,7 +1116,12 @@ def generer_pdf_synthese_rapport(
     if signatures:
         contenu.append(p("Circuit d'approbation", "Heading3"))
         lignes_sig = [
-            [p("<b>Étape</b>"), p("<b>Signataire</b>"), p("<b>Date</b>"), p("<b>Commentaire</b>")]
+            [
+                p("Étape", gras=True),
+                p("Signataire", gras=True),
+                p("Date", gras=True),
+                p("Commentaire", gras=True),
+            ]
         ]
         for sig in signatures:
             lignes_sig.append(
@@ -1133,8 +1153,9 @@ def generer_pdf_synthese_rapport(
 
     contenu.append(
         p(
-            "<i>Document généré et archivé automatiquement en GED — CCD Digital.</i>",
+            "Document généré et archivé automatiquement en GED — CCD Digital.",
             "Normal",
+            italique=True,
         )
     )
 

@@ -21,7 +21,12 @@ from rest_framework.exceptions import ValidationError
 from apps.core.enums import ModeExecution
 from apps.projets.models import EquipeChantier, MembreEquipeChantier
 from apps.projets.selectors.arbre_api import equipes_par_case
-from apps.projets.services.referentiels import mode_base, table_modes_execution
+from apps.projets.services.referentiels import (
+    libelle_fonction_equipe,
+    mode_base,
+    table_fonctions_equipe,
+    table_modes_execution,
+)
 
 __all__ = [
     "controler_equipes",
@@ -65,6 +70,7 @@ def equipes_du_journal(cases, jour: date) -> list[dict]:
                 portee["modes_du_jour"].add(base)
     if not portees:
         return []
+    table_fonctions = table_fonctions_equipe()
     membres: dict[str, list[dict]] = {}
     for membre in (
         MembreEquipeChantier.objects.filter(
@@ -78,6 +84,7 @@ def equipes_du_journal(cases, jour: date) -> list[dict]:
                 "personne_id": str(membre.personne_id),
                 "nom": membre.personne.nom_complet,
                 "fonction": membre.fonction,
+                "fonction_libelle": libelle_fonction_equipe(membre.fonction, table_fonctions),
                 "est_chef": membre.est_chef,
             }
         )

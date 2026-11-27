@@ -23,11 +23,14 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.models import ModeleEntreprise
 
 __all__ = [
+    "FONCTION_DEFAUT",
     "AffectationEquipeElement",
     "EquipeChantier",
     "MembreEquipeChantier",
     "PersonneMainOeuvre",
 ]
+
+FONCTION_DEFAUT = "OUVRIER"
 
 
 class PersonneMainOeuvre(ModeleEntreprise):
@@ -108,20 +111,13 @@ class EquipeChantier(ModeleEntreprise):
 
 
 class MembreEquipeChantier(ModeleEntreprise):
-    FONCTION_CHOICES = [
-        ("CHEF_EQUIPE", _("Chef d'équipe")),
-        ("OUVRIER_QUALIFIE", _("Ouvrier qualifié")),
-        ("OUVRIER", _("Ouvrier")),
-        ("MANOEUVRE", _("Manœuvre")),
-        ("CONDUCTEUR_ENGIN", _("Conducteur d'engin")),
-        ("APPRENTI", _("Apprenti")),
-    ]
+    FONCTION_DEFAUT = FONCTION_DEFAUT
 
     equipe = models.ForeignKey(EquipeChantier, on_delete=models.RESTRICT, related_name="membres")
     personne = models.ForeignKey(
         PersonneMainOeuvre, on_delete=models.RESTRICT, related_name="appartenances"
     )
-    fonction = models.CharField(max_length=50, choices=FONCTION_CHOICES, default="OUVRIER")
+    fonction = models.CharField(_("fonction"), max_length=60, default=FONCTION_DEFAUT)
     est_chef = models.BooleanField(_("chef d'équipe"), default=False)
     date_arrivee = models.DateField(_("date d'arrivée"))
     date_depart = models.DateField(_("date de départ"), null=True, blank=True)
@@ -130,10 +126,12 @@ class MembreEquipeChantier(ModeleEntreprise):
         db_table = "membre_equipe_chantier"
         ordering = ["-est_chef", "date_arrivee", "cree_le"]
         constraints = [
-            # Un seul chef d'équipe à la fois.
+            # Un seul chef d'équipe actif à la fois (l'historique des chefs partis est préservé).
             models.UniqueConstraint(
                 fields=["equipe"],
-                condition=models.Q(est_chef=True, supprime_le__isnull=True),
+                condition=models.Q(
+                    est_chef=True, date_depart__isnull=True, supprime_le__isnull=True
+                ),
                 name="uq_membre_equipe_chef",
             ),
             # Une personne n'est qu'une fois membre en cours d'une même équipe.

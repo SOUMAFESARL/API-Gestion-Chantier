@@ -28,6 +28,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.catalogue.models.referentiel import cle_comparaison
 from apps.core.exceptions import ErreurConflit, ErreurMetier
 from apps.projets.models import (
     AffectationEquipeElement,
@@ -35,7 +36,12 @@ from apps.projets.models import (
     MembreEquipeChantier,
     PersonneMainOeuvre,
 )
+from apps.projets.models.equipe import FONCTION_DEFAUT
 from apps.projets.services.main_oeuvre import verifier_partenaire
+from apps.projets.services.referentiels import (
+    code_fonction_equipe_valide,
+    table_fonctions_equipe,
+)
 
 __all__ = [
     "affecter_equipe",
@@ -47,7 +53,31 @@ __all__ = [
     "retirer_membre",
 ]
 
-FONCTION_CHEF = "CHEF_EQUIPE"
+
+def _deduire_fonction_depuis_metier(personne: PersonneMainOeuvre) -> str:
+    """Déduit le code fonction depuis `personne.metier` sur le référentiel FONCTION_EQUIPE."""
+    metier = (personne.metier or "").strip()
+    if not metier:
+        return FONCTION_DEFAUT
+    cle = cle_comparaison(metier)
+    table = table_fonctions_equipe()
+    for code, (_groupe, libelle, actif) in table.items():
+        if not actif or code == "CHEF_EQUIPE":
+            continue
+        if cle_comparaison(libelle) == cle or cle_comparaison(code) == cle:
+            return code
+    return FONCTION_DEFAUT
+
+
+def _valider_fonction(fonction: str) -> str:
+    code = (fonction or "").strip()
+    if code == "CHEF_EQUIPE":
+        raise ValidationError(
+            {"fonction": "Le statut de chef d'équipe se gère indépendamment via « est_chef »."}
+        )
+    if not code_fonction_equipe_valide(code):
+        raise ValidationError({"fonction": "Fonction d'équipe invalide."})
+    return code
 
 
 def _nom_entreprise(tiers) -> str:
@@ -83,14 +113,12 @@ def _verifier_chef(equipe, personne) -> None:
 
 
 def _ceder_la_place_de_chef(equipe, sauf=None) -> None:
-    anciens = equipe.membres.filter(est_chef=True)
+    anciens = equipe.membres.filter(est_chef=True, date_depart__isnull=True)
     if sauf is not None:
         anciens = anciens.exclude(pk=sauf.pk)
     for ancien in anciens:
         ancien.est_chef = False
-        if ancien.fonction == FONCTION_CHEF:
-            ancien.fonction = "OUVRIER_QUALIFIE"
-        ancien.save(update_fields=["est_chef", "fonction", "modifie_le"])
+        ancien.save(update_fields=["est_chef", "modifie_le"])
 
 
 def _avertir_membre(equipe, personne, debut, fin, exclure=None) -> list[dict]:
@@ -213,7 +241,7 @@ def ajouter_membre(
     personne: PersonneMainOeuvre | None = None,
     utilisateur_id=None,
     utilisateur=None,
-    fonction: str = "OUVRIER",
+    fonction: str | None = None,
     est_chef: bool = False,
     date_arrivee: date | None = None,
     date_depart: date | None = None,
@@ -245,17 +273,20 @@ def ajouter_membre(
         raise ValidationError({"date_depart": "Le départ ne précède pas l'arrivée."})
     if equipe.membres.filter(personne=personne, date_depart__isnull=True).exists():
         raise ErreurConflit(f"{personne.nom_complet} fait déjà partie de cette équipe.")
-    if fonction == FONCTION_CHEF:
-        est_chef = True
+    fonction_brute = (fonction or "").strip() if fonction is not None else ""
+    if not fonction_brute:
+        fonction_finale = _deduire_fonction_depuis_metier(personne)
+    else:
+        fonction_finale = _valider_fonction(fonction_brute)
     if est_chef:
         _verifier_chef(equipe, personne)
-        _ceder_la_place_de_chef(equipe)
-        fonction = FONCTION_CHEF
+        if date_depart is None:
+            _ceder_la_place_de_chef(equipe)
     avertissements = _avertir_membre(equipe, personne, debut, date_depart)
     membre = MembreEquipeChantier.objects.create(
         equipe=equipe,
         personne=personne,
-        fonction=fonction,
+        fonction=fonction_finale,
         est_chef=est_chef,
         date_arrivee=debut,
         date_depart=date_depart,
@@ -268,38 +299,40 @@ def ajouter_membre(
 def modifier_membre(
     membre: MembreEquipeChantier, *, donnees: dict
 ) -> tuple[MembreEquipeChantier, list[dict]]:
-    """Fonction, chef d'équipe, dates d'arrivée et de départ. Nommer un chef retire la place à
-    l'ancien ; un chef qui part cesse d'être chef."""
+    """Fonction, chef d'équipe, dates d'arrivée et de départ (découplés)."""
     equipe = membre.equipe
     champs = ["modifie_le"]
-    if donnees.get("fonction") == FONCTION_CHEF:
-        donnees = {**donnees, "est_chef": True}
+    depart_cible = donnees.get("date_depart", membre.date_depart)
     if "est_chef" in donnees and bool(donnees["est_chef"]) != membre.est_chef:
         if donnees["est_chef"]:
-            if membre.date_depart is not None:
+            if depart_cible is not None:
                 raise ErreurMetier("Un membre parti ne devient pas chef de l'équipe.")
             _verifier_chef(equipe, membre.personne)
             _ceder_la_place_de_chef(equipe, sauf=membre)
             membre.est_chef = True
-            membre.fonction = FONCTION_CHEF
-            champs += ["est_chef", "fonction"]
+            champs.append("est_chef")
         else:
             membre.est_chef = False
-            if membre.fonction == FONCTION_CHEF:
-                membre.fonction = "OUVRIER_QUALIFIE"
-            champs += ["est_chef", "fonction"]
-    if "fonction" in donnees and donnees["fonction"] != FONCTION_CHEF and not membre.est_chef:
-        membre.fonction = donnees["fonction"]
-        champs.append("fonction")
+            champs.append("est_chef")
+    elif (
+        "date_depart" in donnees
+        and donnees["date_depart"] is None
+        and membre.date_depart is not None
+        and membre.est_chef
+    ):
+        _verifier_chef(equipe, membre.personne)
+        _ceder_la_place_de_chef(equipe, sauf=membre)
+    if "fonction" in donnees:
+        nouvelle_fonction = (donnees["fonction"] or "").strip()
+        if nouvelle_fonction:
+            membre.fonction = _valider_fonction(nouvelle_fonction)
+            champs.append("fonction")
     for nom in ("date_arrivee", "date_depart"):
         if nom in donnees:
             setattr(membre, nom, donnees[nom])
             champs.append(nom)
     if membre.date_depart and membre.date_depart < membre.date_arrivee:
         raise ValidationError({"date_depart": "Le départ ne précède pas l'arrivée."})
-    if membre.date_depart and membre.est_chef:
-        membre.est_chef = False
-        champs.append("est_chef")
     membre.save(update_fields=list(dict.fromkeys(champs)))
     avertissements = []
     if {"date_arrivee", "date_depart"} & set(donnees):
@@ -321,15 +354,14 @@ def retirer_membre(
     supprimer: bool = False,
     utilisateur=None,
 ) -> None:
-    """Un départ se date (l'historique de l'équipe le garde) ; une erreur de saisie se supprime."""
+    """Un départ se date (l'historique conserve le chef) ; une erreur de saisie se supprime."""
     if supprimer:
         membre.delete(utilisateur=utilisateur)
         return
     membre.date_depart = date_depart or timezone.localdate()
     if membre.date_depart < membre.date_arrivee:
         raise ValidationError({"date_depart": "Le départ ne précède pas l'arrivée."})
-    membre.est_chef = False
-    membre.save(update_fields=["date_depart", "est_chef", "modifie_le"])
+    membre.save(update_fields=["date_depart", "modifie_le"])
 
 
 @transaction.atomic

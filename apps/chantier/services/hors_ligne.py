@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.catalogue.models.referentiel import CategorieReferentiel
 from apps.chantier.models import JournalChantier
 from apps.chantier.serializers import journal as contrats
 from apps.chantier.services.equipes_journal import controler_equipes, equipes_du_journal
@@ -32,7 +33,8 @@ from apps.chantier.services.journal import (
 )
 from apps.core.enums import StatutRapport
 from apps.core.exceptions import ErreurConflit
-from apps.projets.models import EquipeChantier, MembreEquipeChantier
+from apps.projets.models import EquipeChantier
+from apps.projets.services.referentiels import lister_referentiel
 
 __all__ = ["JournalDejaVise", "paquet_hors_ligne", "synchroniser", "trier_lignes"]
 
@@ -64,7 +66,9 @@ def listes() -> dict:
         "decide_par": _choix(contrats.IncidentSerializer, "decide_par"),
         "niveau_blocage": _choix(contrats.BlocageLigneSerializer, "niveau"),
         "nature_blocage": _choix(contrats.BlocageLigneSerializer, "nature"),
-        "fonctions_equipe": [code for code, _ in MembreEquipeChantier.FONCTION_CHOICES],
+        "fonctions_equipe": [
+            e["code"] for e in lister_referentiel(CategorieReferentiel.FONCTION_EQUIPE)
+        ],
     }
 
 

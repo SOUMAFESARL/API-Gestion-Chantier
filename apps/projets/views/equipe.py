@@ -262,7 +262,7 @@ class ProjetEquipeMembreListCreateView(BaseEquipeView):
             )
             membres.append(membre)
             avertissements.extend(avert)
-        serialises = MembreSerializer(membres, many=True).data
+        serialises = MembreSerializer(membres, many=True, context={}).data
         return Response(
             {
                 **serialises[0],
@@ -302,7 +302,9 @@ class ProjetEquipeMembreDetailView(BaseEquipeView):
         membre, avertissements = service.modifier_membre(
             membre, donnees=dict(donnees.validated_data)
         )
-        return Response({**MembreSerializer(membre).data, "avertissements": avertissements})
+        return Response(
+            {**MembreSerializer(membre, context={}).data, "avertissements": avertissements}
+        )
 
     @extend_schema(
         tags=TAGS,

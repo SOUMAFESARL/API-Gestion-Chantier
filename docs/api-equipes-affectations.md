@@ -5,24 +5,34 @@ distinctes des affectations RBAC qui autorisent l'accès au projet. Toutes les
 routes exigent un utilisateur authentifié ayant accès au projet de l'URL.
 Saisir une personne par son nom ne crée ni compte ni droit d'accès.
 
-Routes sous /api/v1/projets/{id}/equipes/ :
-- GET / POST : liste et constitution d'une équipe.
-- GET / DELETE {equipe_id}/ : détail et suppression logique.
-- GET statistiques/ : quatre indicateurs automatiques.
-- GET / POST affectations/ : liste et affectation équipe-activité.
-- DELETE affectations/{affectation_id}/ : retrait de l'affectation.
+Routes sous `/api/v1/projets/{id}/equipes/` :
+- `GET` / `POST` : liste et constitution d'une équipe.
+- `GET` / `PATCH` / `DELETE` `{equipe_id}/` : détail, modification et suppression logique.
+- `POST` `{equipe_id}/membres/` : ajout d'un ou plusieurs membres du registre (`personne_id`, `personne_ids`, `utilisateur_id`, `utilisateur_ids`).
+- `PATCH` / `DELETE` `{equipe_id}/membres/{membre_id}/` : modification indépendante de `fonction`, `est_chef`, `date_arrivee`, `date_depart` ; `DELETE` date le départ (ou `?supprimer=true` en cas d'erreur de saisie).
+- `GET` `statistiques/` : quatre indicateurs automatiques.
+- `GET` / `POST` `affectations/` : liste et affectation équipe-case de l'arbre.
+- `DELETE` `affectations/{affectation_id}/` : retrait de l'affectation.
+
+## Fonctions / métiers d'équipe et statut de chef (`est_chef`)
+
+- Les fonctions d'équipe proviennent du référentiel dynamique `FONCTION_EQUIPE` (`/api/v1/referentiels/fonctions-equipe/` pour l'entreprise, `/api/v1/admins/referentiels/fonctions-equipe/` pour la plateforme).
+- `fonction` et `est_chef` sont strictement découplés : `CHEF_EQUIPE` est refusé comme valeur de `fonction`.
+- Si `fonction` est vide ou absente à l'ajout d'un membre, elle est déduite depuis `personne.metier` (comparaison normalisée sur `FONCTION_EQUIPE`), avec repli sur `OUVRIER`.
+- Nommer ou retirer un chef via `est_chef` n'écrase jamais la fonction métier du membre ni celle du chef sortant.
+- Lors d'un départ daté (`date_depart` posée via `DELETE` ou `PATCH`), `est_chef` est conservé dans l'historique ; la contrainte partielle `uq_membre_equipe_chef` (`est_chef = true AND date_depart IS NULL AND supprime_le IS NULL`) garantit un seul chef actif par équipe tout en préservant l'historique des anciens chefs.
+- `MembreSerializer` et les membres du journal exposent `fonction` (code) et `fonction_libelle` (résolu depuis `FONCTION_EQUIPE`, y compris pour les entrées retirées depuis).
 
 ## Constituer une équipe
 
 ```json
 {
   "nom": "Équipe Maçonnerie B",
-  "nature": "INTERNE",
   "corps_etat": "Maçonnerie / coffrage",
-  "chef": {"nom": "Chef externe"},
+  "entreprise_partenaire_id": null,
   "membres": [
-    {"nom": "Ouvrier 1", "fonction": "OUVRIER"},
-    {"nom": "Ouvrier 2", "fonction": "OUVRIER"}
+    {"personne_id": "<uuid>", "fonction": "MACON", "est_chef": true},
+    {"personne_id": "<uuid>", "fonction": "OUVRIER"}
   ]
 }
 ```

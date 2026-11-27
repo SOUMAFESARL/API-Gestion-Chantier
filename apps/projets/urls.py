@@ -132,12 +132,12 @@ urlpatterns = [
     # Les noms de lot sont la liste « Lots » du découpage (`decoupage/listes/`).
     path("referentiels/droits/", ReferentielDroitsView.as_view(), name="referentiel-droits"),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|modes-execution)/$",
+        r"^referentiels/(?P<categorie>types-projet|modes-execution|fonctions-equipe)/$",
         ReferentielListeView.as_view(),
         name="referentiel-liste",
     ),
     re_path(
-        r"^referentiels/(?P<categorie>types-projet|modes-execution)/(?P<code>[A-Za-z0-9_]+)/$",
+        r"^referentiels/(?P<categorie>types-projet|modes-execution|fonctions-equipe)/(?P<code>[A-Za-z0-9_]+)/$",
         ReferentielEntreeView.as_view(),
         name="referentiel-entree",
     ),

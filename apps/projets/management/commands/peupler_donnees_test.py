@@ -789,7 +789,9 @@ class Command(BaseCommand):
             membres = [
                 {
                     "personne": p,
-                    "fonction": "CHEF_EQUIPE" if i == 0 else self.alea.choice(
+                    "fonction": "OUVRIER_QUALIFIE"
+                    if i == 0
+                    else self.alea.choice(
                         ["OUVRIER_QUALIFIE", "OUVRIER", "OUVRIER", "MANOEUVRE", "APPRENTI"]
                     ),
                     "est_chef": i == 0,

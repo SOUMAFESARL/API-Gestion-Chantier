@@ -18,10 +18,12 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.models import ModeleBase
 
 __all__ = [
+    "FONCTIONS_EQUIPE_INITIALES",
     "CategorieReferentiel",
     "ReferentielPlateforme",
     "cle_comparaison",
     "code_depuis_libelle",
+    "ensemencer_fonctions_equipe",
 ]
 
 
@@ -29,6 +31,42 @@ class CategorieReferentiel(models.TextChoices):
     TYPE_PROJET = "TYPE_PROJET", _("Catégorie d'ouvrage")
     LOT = "LOT", _("Nom de lot")  # plus exposée : voir la liste « Lots » du découpage
     MODE_EXECUTION = "MODE_EXECUTION", _("Mode d'exécution")
+    FONCTION_EQUIPE = "FONCTION_EQUIPE", _("Fonction / métier de chantier")
+
+
+FONCTIONS_EQUIPE_INITIALES: tuple[tuple[str, str, str], ...] = (
+    ("Qualification générale", "OUVRIER_QUALIFIE", "Ouvrier qualifié"),
+    ("Qualification générale", "OUVRIER", "Ouvrier"),
+    ("Qualification générale", "MANOEUVRE", "Manœuvre"),
+    ("Qualification générale", "APPRENTI", "Apprenti"),
+    ("Gros œuvre", "MACON", "Maçon"),
+    ("Gros œuvre", "FERRAILLEUR", "Ferrailleur"),
+    ("Gros œuvre", "COFFREUR", "Coffreur"),
+    ("Gros œuvre", "BETONNEUR", "Bétonneur"),
+    ("Second œuvre & Technique", "ELECTRICIEN", "Électricien"),
+    ("Second œuvre & Technique", "PLOMBIER", "Plombier"),
+    ("Second œuvre & Technique", "CARRELEUR", "Carreleur"),
+    ("Second œuvre & Technique", "PEINTRE", "Peintre"),
+    ("Second œuvre & Technique", "MENUISIER", "Menuisier"),
+    ("Second œuvre & Technique", "SOUDEUR", "Soudeur"),
+    ("Engins & Logistique", "CONDUCTEUR_ENGIN", "Conducteur d'engin"),
+    ("Engins & Logistique", "GRUTIER", "Grutier"),
+    ("Engins & Logistique", "CHAUFFEUR", "Chauffeur"),
+    ("Engins & Logistique", "MAGASINIER", "Magasinier"),
+)
+
+
+def ensemencer_fonctions_equipe(modele=None) -> None:
+    """Ensemence de façon idempotente les fonctions/métiers d'équipe plateforme."""
+    cible = modele or ReferentielPlateforme
+    gestionnaire = getattr(cible, "_base_manager", cible.objects)
+    for ordre, (groupe, code, libelle) in enumerate(FONCTIONS_EQUIPE_INITIALES, start=1):
+        gestionnaire.get_or_create(
+            categorie=CategorieReferentiel.FONCTION_EQUIPE,
+            code=code,
+            supprime_le__isnull=True,
+            defaults={"libelle": libelle, "groupe": groupe, "ordre": ordre},
+        )
 
 
 def cle_comparaison(libelle: str) -> str:
